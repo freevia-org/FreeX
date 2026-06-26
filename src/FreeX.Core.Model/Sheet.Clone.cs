@@ -33,7 +33,6 @@ public sealed partial class Sheet
             ShowZeros                     = ShowZeros,
             FullCalculationOnLoad         = FullCalculationOnLoad,
             PhoneticProperties            = PhoneticProperties,
-            PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
             AutoFilter                    = CloneAutoFilter(AutoFilter),
             SmartTags                     = SmartTags,
             DataConsolidation             = DataConsolidation,
@@ -108,6 +107,10 @@ public sealed partial class Sheet
             ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
         };
 
+        // Multi-area print areas: remap all areas to the new sheet id.
+        if (PrintAreas.Count > 0)
+            copy.SetPrintAreas(PrintAreas.Select(r => RemapRange(r, newId)));
+
         CopyLayoutCollectionsTo(copy);
         CopyCellContentTo(copy, newId);
 
@@ -120,6 +123,8 @@ public sealed partial class Sheet
             copy.Hyperlinks[RemapAddress(address, newId)] = hyperlink;
         foreach (var (address, metadata) in HyperlinkMetadata)
             copy.HyperlinkMetadata[RemapAddress(address, newId)] = metadata;
+        foreach (var (address, runs) in RichTextRuns)
+            copy.RichTextRuns[RemapAddress(address, newId)] = runs;
 
         // Allow-edit ranges (protection)
         copy.ProtectionPermissions.Clear();

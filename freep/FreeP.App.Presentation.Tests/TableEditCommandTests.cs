@@ -1,0 +1,1251 @@
+using FreeP.App.Compositor;
+
+namespace FreeP.App.Compositor.Tests;
+
+/// <summary>
+/// Unit tests for table-edit commands (Wave 9A):
+///   SetTableCellTextCommand, InsertTableRowCommand, DeleteTableRowCommand,
+///   InsertTableColumnCommand, DeleteTableColumnCommand,
+///   MergeTableCellsCommand, SplitTableCellCommand.
+///
+/// Also covers EditingSession table API (active-cell, SetTableCellText, InsertRow/Col, etc.)
+/// and the framework-free TableCellHitTester helper.
+/// </summary>
+public sealed class TableEditCommandTests
+{
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>Creates a presentation with one slide containing a (rows x cols) table.</summary>
+    private static (Presentation p, PresentationCommandBus bus, SlideShape tableShape)
+        MakeTable(int rows = 3, int cols = 3)
+    {
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+
+        var table = new TableShape();
+        for (int c = 0; c < cols; c++)
+            table.ColumnWidthsEmu.Add(914400L); // 1 inch each
+
+        for (int r = 0; r < rows; r++)
+        {
+            var row = new TableRow { HeightEmu = 457200L }; // 0.5 inch each
+            for (int c = 0; c < cols; c++)
+                row.Cells.Add(new TableCell());
+            table.Rows.Add(row);
+        }
+
+        var shape = new SlideShape
+        {
+            Id          = 1,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = 0,
+            OffsetYEmu  = 0,
+            ExtentCxEmu = 914400L * cols,
+            ExtentCyEmu = 457200L * rows,
+            Table       = table,
+        };
+        p.Slides[0].Shapes.Add(shape);
+        return (p, bus, shape);
+    }
+
+    private static (Presentation p, PresentationCommandBus bus, SlideShape tableShape)
+        MakeTableWithText(int rows = 3, int cols = 3)
+    {
+        var (p, bus, shape) = MakeTable(rows, cols);
+        // Populate cells with text "R{r}C{c}"
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                var body = new TextBody();
+                var para = new Paragraph();
+                para.Runs.Add(new Run { Text = $"R{r}C{c}" });
+                body.Paragraphs.Add(para);
+                shape.Table!.Rows[r].Cells[c].TextBody = body;
+            }
+        return (p, bus, shape);
+    }
+
+    private static string CellText(SlideShape shape, int r, int c)
+    {
+        var cell = shape.Table!.Rows[r].Cells[c];
+        if (cell.TextBody is null) return string.Empty;
+        return string.Join("", cell.TextBody.Paragraphs.SelectMany(p => p.Runs).Select(run => run.Text));
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // SetTableCellTextCommand
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void SetTableCellText_Apply_ChangesCellText()
+    {
+        var (p, bus, shape) = MakeTable();
+        var body = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Hello" });
+        body.Paragraphs.Add(para);
+
+        bus.Execute(new SetTableCellTextCommand(0, 1, 1, 1, body));
+
+        CellText(shape, 1, 1).Should().Be("Hello");
+    }
+
+    [Fact]
+    public void SetTableCellText_Revert_RestoresPreviousText()
+    {
+        var (p, bus, shape) = MakeTableWithText();
+        var oldText = CellText(shape, 0, 0); // "R0C0"
+
+        var newBody = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Changed" });
+        newBody.Paragraphs.Add(para);
+
+        bus.Execute(new SetTableCellTextCommand(0, 1, 0, 0, newBody));
+        bus.Undo();
+
+        CellText(shape, 0, 0).Should().Be(oldText);
+    }
+
+    [Fact]
+    public void SetTableCellText_UndoRedo_Works()
+    {
+        var (p, bus, shape) = MakeTable();
+        var body = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Redo" });
+        body.Paragraphs.Add(para);
+
+        bus.Execute(new SetTableCellTextCommand(0, 1, 2, 2, body));
+        bus.Undo();
+        bus.Redo();
+
+        CellText(shape, 2, 2).Should().Be("Redo");
+    }
+
+    [Fact]
+    public void SetTableCellText_OtherCellsUnchanged()
+    {
+        var (p, bus, shape) = MakeTableWithText();
+        var body = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "X" });
+        body.Paragraphs.Add(para);
+
+        bus.Execute(new SetTableCellTextCommand(0, 1, 1, 1, body));
+
+        // Surrounding cells should be unchanged
+        CellText(shape, 0, 0).Should().Be("R0C0");
+        CellText(shape, 2, 2).Should().Be("R2C2");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // InsertTableRowCommand
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void InsertRow_Apply_AddsRowAtIndex()
+    {
+        var (p, bus, shape) = MakeTable(3, 2);
+        bus.Execute(new InsertTableRowCommand(0, 1, 1));
+        shape.Table!.Rows.Should().HaveCount(4);
+        // New row at index 1 should have correct cell count.
+        shape.Table.Rows[1].Cells.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void InsertRow_Apply_PreservesExistingCellContent()
+    {
+        var (p, bus, shape) = MakeTableWithText(2, 2);
+        // Row 0: R0C0, R0C1. Row 1: R1C0, R1C1.
+        bus.Execute(new InsertTableRowCommand(0, 1, 1)); // insert between rows 0 and 1
+        // After: row 0 = original row 0, row 1 = new blank, row 2 = original row 1.
+        CellText(shape, 0, 0).Should().Be("R0C0");
+        CellText(shape, 2, 0).Should().Be("R1C0");
+        CellText(shape, 1, 0).Should().Be(string.Empty); // new row is blank
+    }
+
+    [Fact]
+    public void InsertRow_Revert_RestoresOriginalRowCount()
+    {
+        var (p, bus, shape) = MakeTable(3, 3);
+        bus.Execute(new InsertTableRowCommand(0, 1, 0));
+        bus.Undo();
+        shape.Table!.Rows.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void InsertRow_Revert_RestoresCellContent()
+    {
+        var (p, bus, shape) = MakeTableWithText(2, 2);
+        bus.Execute(new InsertTableRowCommand(0, 1, 1));
+        bus.Undo();
+        CellText(shape, 0, 0).Should().Be("R0C0");
+        CellText(shape, 1, 0).Should().Be("R1C0");
+    }
+
+    [Fact]
+    public void InsertRow_AtEnd_AppendRow()
+    {
+        var (p, bus, shape) = MakeTable(2, 2);
+        bus.Execute(new InsertTableRowCommand(0, 1, 2)); // insert at end
+        shape.Table!.Rows.Should().HaveCount(3);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // DeleteTableRowCommand
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void DeleteRow_Apply_RemovesRowAtIndex()
+    {
+        var (p, bus, shape) = MakeTableWithText(3, 2);
+        bus.Execute(new DeleteTableRowCommand(0, 1, 1)); // delete middle row
+        shape.Table!.Rows.Should().HaveCount(2);
+        CellText(shape, 0, 0).Should().Be("R0C0");
+        CellText(shape, 1, 0).Should().Be("R2C0");
+    }
+
+    [Fact]
+    public void DeleteRow_Revert_RestoresAllRows()
+    {
+        var (p, bus, shape) = MakeTableWithText(3, 2);
+        bus.Execute(new DeleteTableRowCommand(0, 1, 1));
+        bus.Undo();
+        shape.Table!.Rows.Should().HaveCount(3);
+        CellText(shape, 1, 0).Should().Be("R1C0");
+    }
+
+    [Fact]
+    public void DeleteRow_NoOp_WhenSingleRow()
+    {
+        var (p, bus, shape) = MakeTable(1, 2);
+        bus.Execute(new DeleteTableRowCommand(0, 1, 0));
+        shape.Table!.Rows.Should().HaveCount(1); // still one row
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // InsertTableColumnCommand
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void InsertColumn_Apply_AddsColumnAtIndex()
+    {
+        var (p, bus, shape) = MakeTable(2, 3);
+        bus.Execute(new InsertTableColumnCommand(0, 1, 1));
+        shape.Table!.ColumnWidthsEmu.Should().HaveCount(4);
+        foreach (var row in shape.Table.Rows)
+            row.Cells.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public void InsertColumn_Apply_PreservesExistingCellContent()
+    {
+        var (p, bus, shape) = MakeTableWithText(2, 2);
+        bus.Execute(new InsertTableColumnCommand(0, 1, 1)); // insert between cols 0 and 1
+        // After: col 0 = R0C0/R1C0, col 1 = blank, col 2 = R0C1/R1C1
+        CellText(shape, 0, 0).Should().Be("R0C0");
+        CellText(shape, 0, 1).Should().Be(string.Empty); // new col
+        CellText(shape, 0, 2).Should().Be("R0C1");
+    }
+
+    [Fact]
+    public void InsertColumn_Revert_RestoresOriginalColumnCount()
+    {
+        var (p, bus, shape) = MakeTable(2, 3);
+        bus.Execute(new InsertTableColumnCommand(0, 1, 0));
+        bus.Undo();
+        shape.Table!.ColumnWidthsEmu.Should().HaveCount(3);
+        foreach (var row in shape.Table.Rows)
+            row.Cells.Should().HaveCount(3);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // DeleteTableColumnCommand
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void DeleteColumn_Apply_RemovesColumnAtIndex()
+    {
+        var (p, bus, shape) = MakeTableWithText(2, 3);
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 1)); // delete middle col
+        shape.Table!.ColumnWidthsEmu.Should().HaveCount(2);
+        foreach (var row in shape.Table.Rows)
+            row.Cells.Should().HaveCount(2);
+        CellText(shape, 0, 0).Should().Be("R0C0");
+        CellText(shape, 0, 1).Should().Be("R0C2");
+    }
+
+    [Fact]
+    public void DeleteColumn_Revert_RestoresAllColumns()
+    {
+        var (p, bus, shape) = MakeTableWithText(2, 3);
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 1));
+        bus.Undo();
+        shape.Table!.ColumnWidthsEmu.Should().HaveCount(3);
+        CellText(shape, 0, 1).Should().Be("R0C1");
+    }
+
+    [Fact]
+    public void DeleteColumn_NoOp_WhenSingleColumn()
+    {
+        var (p, bus, shape) = MakeTable(2, 1);
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 0));
+        shape.Table!.ColumnWidthsEmu.Should().HaveCount(1);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // MergeTableCellsCommand
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void MergeCells_Apply_SetsAnchorGridSpanAndRowSpan()
+    {
+        var (p, bus, shape) = MakeTable(3, 3);
+        bus.Execute(new MergeTableCellsCommand(0, 1, 0, 0, 1, 1)); // merge 2x2 at top-left
+        var anchor = shape.Table!.Rows[0].Cells[0];
+        anchor.GridSpan.Should().Be(2);
+        anchor.RowSpan.Should().Be(2);
+        anchor.HMerge.Should().BeFalse();
+        anchor.VMerge.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MergeCells_Apply_SetsCoveredCellsHMergeVMerge()
+    {
+        var (p, bus, shape) = MakeTable(3, 3);
+        bus.Execute(new MergeTableCellsCommand(0, 1, 0, 0, 1, 1)); // merge rows 0-1, cols 0-1
+        // Row 0, col 1: same row as anchor → HMerge.
+        shape.Table!.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        shape.Table.Rows[0].Cells[1].VMerge.Should().BeFalse();
+        // Row 1, col 0: below anchor → VMerge.
+        shape.Table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+        shape.Table.Rows[1].Cells[0].HMerge.Should().BeFalse();
+        // Row 1, col 1: below and to the right → VMerge (second row, not anchor's column).
+        shape.Table.Rows[1].Cells[1].VMerge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MergeCells_Apply_ConcatenatesText()
+    {
+        var (p, bus, shape) = MakeTableWithText(2, 2);
+        bus.Execute(new MergeTableCellsCommand(0, 1, 0, 0, 0, 1)); // merge row 0, cols 0-1
+        // Anchor text should contain both "R0C0" and "R0C1"
+        var anchorText = CellText(shape, 0, 0);
+        anchorText.Should().Contain("R0C0");
+        anchorText.Should().Contain("R0C1");
+    }
+
+    [Fact]
+    public void MergeCells_Apply_CoversParameterOrderInvariant()
+    {
+        // r1 > r2 and c1 > c2 should be normalised internally.
+        var (p, bus, shape) = MakeTable(3, 3);
+        bus.Execute(new MergeTableCellsCommand(0, 1, 2, 2, 0, 0)); // reversed corners
+        var anchor = shape.Table!.Rows[0].Cells[0];
+        anchor.GridSpan.Should().Be(3);
+        anchor.RowSpan.Should().Be(3);
+    }
+
+    [Fact]
+    public void MergeCells_Revert_RestoresAllCells()
+    {
+        var (p, bus, shape) = MakeTableWithText(2, 2);
+        bus.Execute(new MergeTableCellsCommand(0, 1, 0, 0, 1, 1));
+        bus.Undo();
+        // All cells should revert to GridSpan=1, RowSpan=1, original text.
+        foreach (var row in shape.Table!.Rows)
+            foreach (var cell in row.Cells)
+            {
+                cell.GridSpan.Should().Be(1);
+                cell.RowSpan.Should().Be(1);
+                cell.HMerge.Should().BeFalse();
+                cell.VMerge.Should().BeFalse();
+            }
+        CellText(shape, 0, 0).Should().Be("R0C0");
+        CellText(shape, 1, 1).Should().Be("R1C1");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // SplitTableCellCommand
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void SplitCell_Apply_ClearsAnchorMerge()
+    {
+        var (p, bus, shape) = MakeTableWithText(2, 2);
+        bus.Execute(new MergeTableCellsCommand(0, 1, 0, 0, 0, 1));
+        bus.Execute(new SplitTableCellCommand(0, 1, 0, 0));
+
+        var anchor = shape.Table!.Rows[0].Cells[0];
+        anchor.GridSpan.Should().Be(1);
+        anchor.RowSpan.Should().Be(1);
+    }
+
+    [Fact]
+    public void SplitCell_Apply_ClearsHMergeOnCoveredCells()
+    {
+        var (p, bus, shape) = MakeTable(2, 3);
+        bus.Execute(new MergeTableCellsCommand(0, 1, 0, 0, 0, 2)); // merge row 0 cols 0-2
+        bus.Execute(new SplitTableCellCommand(0, 1, 0, 0));
+
+        shape.Table!.Rows[0].Cells[1].HMerge.Should().BeFalse();
+        shape.Table.Rows[0].Cells[2].HMerge.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SplitCell_NoOp_WhenCellIsNotMerged()
+    {
+        var (p, bus, shape) = MakeTable(2, 2);
+        // No merge — apply split should be a no-op (no exception, no undo entry recorded).
+        bus.Execute(new SplitTableCellCommand(0, 1, 0, 0));
+        bus.CanUndo.Should().BeFalse("no-op should not push undo entry");
+    }
+
+    [Fact]
+    public void SplitCell_Revert_ReappliesMerge()
+    {
+        var (p, bus, shape) = MakeTable(2, 2);
+        bus.Execute(new MergeTableCellsCommand(0, 1, 0, 0, 1, 1));
+        bus.Execute(new SplitTableCellCommand(0, 1, 0, 0));
+        bus.Undo(); // undo the split → merge should be restored
+        shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        shape.Table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        shape.Table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // EditingSession table API
+    // ════════════════════════════════════════════════════════════════════════════
+
+    private static EditingSession MakeSession(out SlideShape tableShape, int rows = 3, int cols = 3)
+    {
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+
+        var table = new TableShape();
+        for (int c = 0; c < cols; c++)
+            table.ColumnWidthsEmu.Add(914400L);
+        for (int r = 0; r < rows; r++)
+        {
+            var row = new TableRow { HeightEmu = 457200L };
+            for (int c = 0; c < cols; c++)
+                row.Cells.Add(new TableCell());
+            table.Rows.Add(row);
+        }
+
+        tableShape = new SlideShape
+        {
+            Id          = 1,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = 0,
+            OffsetYEmu  = 0,
+            ExtentCxEmu = 914400L * cols,
+            ExtentCyEmu = 457200L * rows,
+            Table       = table,
+        };
+        p.Slides[0].Shapes.Add(tableShape);
+
+        var sess = new EditingSession(p, bus);
+        sess.Select(1); // select the table shape
+        return sess;
+    }
+
+    [Fact]
+    public void EditingSession_SetActiveTableCell_SetsAndClamps()
+    {
+        var sess = MakeSession(out _);
+        sess.SetActiveTableCell(1, 2);
+        sess.ActiveTableCell.Should().Be((1, 2));
+    }
+
+    [Fact]
+    public void EditingSession_SetActiveTableCell_ClampsToValidRange()
+    {
+        var sess = MakeSession(out _, 3, 3);
+        sess.SetActiveTableCell(99, 99);
+        sess.ActiveTableCell.Should().Be((2, 2)); // clamped to last valid
+    }
+
+    [Fact]
+    public void EditingSession_ClearActiveTableCell_SetsNull()
+    {
+        var sess = MakeSession(out _);
+        sess.SetActiveTableCell(0, 0);
+        sess.ClearActiveTableCell();
+        sess.ActiveTableCell.Should().BeNull();
+    }
+
+    [Fact]
+    public void EditingSession_ActiveTableCellChanged_Fires()
+    {
+        var sess = MakeSession(out _);
+        int fired = 0;
+        sess.ActiveTableCellChanged += (_, _) => fired++;
+        sess.SetActiveTableCell(1, 1);
+        fired.Should().Be(1);
+    }
+
+    [Fact]
+    public void EditingSession_SetTableCellText_UpdatesCell()
+    {
+        var sess = MakeSession(out var shape);
+        sess.SetTableCellText(0, 0, "Hello");
+        CellText(shape, 0, 0).Should().Be("Hello");
+    }
+
+    [Fact]
+    public void EditingSession_SetTableCellText_IsUndoable()
+    {
+        var sess = MakeSession(out var shape);
+        sess.SetTableCellText(0, 0, "Hello");
+        sess.Undo();
+        CellText(shape, 0, 0).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void EditingSession_InsertRowBelow_GrowsGrid()
+    {
+        var sess = MakeSession(out var shape, 2, 2);
+        sess.SetActiveTableCell(0, 0);
+        sess.InsertRowBelow();
+        shape.Table!.Rows.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void EditingSession_InsertRowAbove_ShiftsActiveCell()
+    {
+        var sess = MakeSession(out var shape, 3, 2);
+        sess.SetActiveTableCell(1, 0);
+        sess.InsertRowAbove();
+        // Active cell should have shifted down to row 2.
+        sess.ActiveTableCell!.Value.Row.Should().Be(2);
+    }
+
+    [Fact]
+    public void EditingSession_DeleteRow_ShrinkGrid()
+    {
+        var sess = MakeSession(out var shape, 3, 2);
+        sess.SetActiveTableCell(1, 0);
+        sess.DeleteRow();
+        shape.Table!.Rows.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void EditingSession_InsertColumnRight_GrowsGrid()
+    {
+        var sess = MakeSession(out var shape, 2, 2);
+        sess.SetActiveTableCell(0, 0);
+        sess.InsertColumnRight();
+        shape.Table!.ColumnWidthsEmu.Should().HaveCount(3);
+        foreach (var row in shape.Table.Rows)
+            row.Cells.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void EditingSession_DeleteColumn_ShrinkGrid()
+    {
+        var sess = MakeSession(out var shape, 2, 3);
+        sess.SetActiveTableCell(0, 1);
+        sess.DeleteColumn();
+        shape.Table!.ColumnWidthsEmu.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void EditingSession_SplitSelectedCell_Works()
+    {
+        var sess = MakeSession(out var shape, 2, 2);
+        // First merge, then split via session API.
+        sess.MergeTableCells(0, 0, 0, 1);
+        sess.SetActiveTableCell(0, 0);
+        sess.SplitSelectedCell();
+        shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(1);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // GetSelectedTable
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void EditingSession_GetSelectedTable_ReturnsTableWhenTableSelected()
+    {
+        var sess = MakeSession(out var shape);
+        sess.GetSelectedTable().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void EditingSession_GetSelectedTable_ReturnsNullWhenNonTableSelected()
+    {
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var nonTable = new SlideShape
+        {
+            Id   = 10,
+            Kind = SlideShapeKind.AutoShape,
+        };
+        p.Slides[0].Shapes.Add(nonTable);
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+        sess.Select(10);
+        sess.GetSelectedTable().Should().BeNull();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // TableCellHitTester  (framework-free)
+    // ════════════════════════════════════════════════════════════════════════════
+
+    private static SlideShape MakeTableShape(int rows, int cols,
+        long colWidthEmu = 914400L, long rowHeightEmu = 457200L,
+        long offsetX = 0, long offsetY = 0)
+    {
+        var table = new TableShape();
+        for (int c = 0; c < cols; c++)
+            table.ColumnWidthsEmu.Add(colWidthEmu);
+        for (int r = 0; r < rows; r++)
+        {
+            var row = new TableRow { HeightEmu = rowHeightEmu };
+            for (int c = 0; c < cols; c++)
+                row.Cells.Add(new TableCell());
+            table.Rows.Add(row);
+        }
+        return new SlideShape
+        {
+            Id          = 1,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = offsetX,
+            OffsetYEmu  = offsetY,
+            ExtentCxEmu = colWidthEmu * cols,
+            ExtentCyEmu = rowHeightEmu * rows,
+            Table       = table,
+        };
+    }
+
+    // 1 EMU = 1/9525 DIP
+    private const double Dip = 1.0 / 9525.0;
+
+    [Fact]
+    public void TableCellHitTester_HitTest_ReturnsNullOutsideFrame()
+    {
+        var shape = MakeTableShape(2, 2);
+        // Point far outside.
+        var result = FreeP.App.Compositor.TableCellHitTester.HitTest(shape, 1e6, 1e6);
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void TableCellHitTester_HitTest_TopLeftCell()
+    {
+        var shape = MakeTableShape(3, 3, colWidthEmu: 914400L, rowHeightEmu: 457200L);
+        // Click at centre of first cell (DIP).
+        double x = 914400L / 9525.0 * 0.5;
+        double y = 457200L / 9525.0 * 0.5;
+        var result = FreeP.App.Compositor.TableCellHitTester.HitTest(shape, x, y);
+        result.Should().Be((0, 0));
+    }
+
+    [Fact]
+    public void TableCellHitTester_HitTest_BottomRightCell()
+    {
+        var shape = MakeTableShape(3, 3, colWidthEmu: 914400L, rowHeightEmu: 457200L);
+        double colW = 914400L / 9525.0;
+        double rowH = 457200L / 9525.0;
+        double x = colW * 2 + colW * 0.5; // centre of column 2
+        double y = rowH * 2 + rowH * 0.5; // centre of row 2
+        var result = FreeP.App.Compositor.TableCellHitTester.HitTest(shape, x, y);
+        result.Should().Be((2, 2));
+    }
+
+    [Fact]
+    public void TableCellHitTester_HitTest_MiddleCell()
+    {
+        var shape = MakeTableShape(3, 3, colWidthEmu: 914400L, rowHeightEmu: 457200L);
+        double colW = 914400L / 9525.0;
+        double rowH = 457200L / 9525.0;
+        double x = colW * 1 + colW * 0.5;
+        double y = rowH * 1 + rowH * 0.5;
+        var result = FreeP.App.Compositor.TableCellHitTester.HitTest(shape, x, y);
+        result.Should().Be((1, 1));
+    }
+
+    [Fact]
+    public void TableCellHitTester_HitTest_WithTableOffset()
+    {
+        // Table starts at (1 inch, 1 inch) = (914400 EMU, 914400 EMU).
+        var shape = MakeTableShape(2, 2, offsetX: 914400L, offsetY: 914400L);
+        double off = 914400L / 9525.0;
+        double colW = 914400L / 9525.0;
+        double rowH = 457200L / 9525.0;
+        // Click on centre of cell (0,1).
+        double x = off + colW + colW * 0.5;
+        double y = off + rowH * 0.5;
+        var result = FreeP.App.Compositor.TableCellHitTester.HitTest(shape, x, y);
+        result.Should().Be((0, 1));
+    }
+
+    [Fact]
+    public void TableCellHitTester_GetCellRect_ReturnsCorrectBoundsForFirstCell()
+    {
+        var shape = MakeTableShape(2, 3, colWidthEmu: 914400L, rowHeightEmu: 457200L);
+        var rect = FreeP.App.Compositor.TableCellHitTester.GetCellRect(shape, 0, 0);
+        rect.Should().NotBeNull();
+        rect!.Value.X.Should().BeApproximately(0, 0.001);
+        rect.Value.Y.Should().BeApproximately(0, 0.001);
+        rect.Value.Width.Should().BeApproximately(914400L / 9525.0, 0.001);
+        rect.Value.Height.Should().BeApproximately(457200L / 9525.0, 0.001);
+    }
+
+    [Fact]
+    public void TableCellHitTester_GetCellRect_ReturnsNullForOutOfBoundsRow()
+    {
+        var shape = MakeTableShape(2, 2);
+        var rect = FreeP.App.Compositor.TableCellHitTester.GetCellRect(shape, 99, 0);
+        rect.Should().BeNull();
+    }
+
+    [Fact]
+    public void TableCellHitTester_HitTest_HMergeReturnsAnchor()
+    {
+        var shape = MakeTableShape(2, 3, colWidthEmu: 914400L, rowHeightEmu: 457200L);
+        // Manually set up a merge: anchor at (0,0) with GridSpan=2, cells (0,1) as HMerge.
+        shape.Table!.Rows[0].Cells[0].GridSpan = 2;
+        shape.Table.Rows[0].Cells[1].HMerge = true;
+
+        // Click in the area that is "owned" by cell (0,1) but it is HMerge.
+        double colW = 914400L / 9525.0;
+        double rowH = 457200L / 9525.0;
+        double x = colW + colW * 0.5; // centre of slot (0,1)
+        double y = rowH * 0.5;
+        var result = FreeP.App.Compositor.TableCellHitTester.HitTest(shape, x, y);
+        // Should resolve to anchor (0,0).
+        result.Should().Be((0, 0));
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // W2 regression tests — DeleteTableColumnCommand + horizontal merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // Helper: build table [A(gridSpan=2)][HMerge][C] in one row.
+    private static (Presentation p, PresentationCommandBus bus, SlideShape shape) MakeHMergedTable()
+    {
+        // 1 row × 3 grid-columns: cell[0]=anchor(GridSpan=2), cell[1]=HMerge, cell[2]=C
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L); // col 0
+        table.ColumnWidthsEmu.Add(914400L); // col 1
+        table.ColumnWidthsEmu.Add(914400L); // col 2
+
+        var row = new TableRow { HeightEmu = 457200L };
+        row.Cells.Add(new TableCell { GridSpan = 2, TextBody = MakeBody("A") }); // anchor
+        row.Cells.Add(new TableCell { HMerge = true });                           // continuation
+        row.Cells.Add(new TableCell { TextBody = MakeBody("C") });                // independent
+
+        table.Rows.Add(row);
+
+        var shape = new SlideShape
+        {
+            Id          = 1,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = 0, OffsetYEmu  = 0,
+            ExtentCxEmu = 914400L * 3, ExtentCyEmu = 457200L,
+            Table       = table,
+        };
+        p.Slides[0].Shapes.Add(shape);
+        return (p, bus, shape);
+    }
+
+    private static TextBody MakeBody(string text)
+    {
+        var body = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(para);
+        return body;
+    }
+
+    [Fact]
+    public void W2_DeleteCol_InsideAnchorSpan_DecrementsGridSpan()
+    {
+        // Row: [A gridSpan=2][HMerge][C]. Delete col 1 (inside A's span).
+        // Expected: [A gridSpan=1][C], 2 grid columns.
+        var (p, bus, shape) = MakeHMergedTable();
+
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 1));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(2);
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        table.Rows[0].Cells[0].HMerge.Should().BeFalse();
+        CellText(shape, 0, 1).Should().Be("C");
+    }
+
+    [Fact]
+    public void W2_DeleteCol_AnchorColumn_PromotesContinuation()
+    {
+        // Row: [A gridSpan=2][HMerge][C]. Delete col 0 (anchor's leading column).
+        // Expected: [NewAnchor gridSpan=1 (text=A)][C], 2 grid columns.
+        var (p, bus, shape) = MakeHMergedTable();
+
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 0));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(2);
+        table.Rows[0].Cells.Should().HaveCount(2);
+        // Former HMerge continuation is now an independent anchor.
+        table.Rows[0].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        CellText(shape, 0, 1).Should().Be("C");
+    }
+
+    [Fact]
+    public void W2_DeleteCol_Undo_RestoresExactSpans()
+    {
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(3);
+        table.Rows[0].Cells.Should().HaveCount(3);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void W2_DeleteCol_GridIntegrity_AfterDelete()
+    {
+        // In FreeP's model, every row must have exactly one cell per grid column.
+        // After any delete, Cells.Count == ColumnWidthsEmu.Count.
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 0));
+        var table = shape.Table!;
+        int gridWidth = table.ColumnWidthsEmu.Count;
+        table.Rows[0].Cells.Should().HaveCount(gridWidth);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // W3 regression tests — DeleteTableRowCommand + vertical merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // Helper: 2-row × 1-col table with a vertical span.
+    private static (Presentation p, PresentationCommandBus bus, SlideShape shape) MakeVMergedTable()
+    {
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L);
+
+        var row0 = new TableRow { HeightEmu = 457200L };
+        row0.Cells.Add(new TableCell { RowSpan = 2, TextBody = MakeBody("TOP") }); // anchor
+
+        var row1 = new TableRow { HeightEmu = 457200L };
+        row1.Cells.Add(new TableCell { VMerge = true }); // continuation
+
+        table.Rows.Add(row0);
+        table.Rows.Add(row1);
+
+        var shape = new SlideShape
+        {
+            Id          = 2,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = 0, OffsetYEmu  = 0,
+            ExtentCxEmu = 914400L, ExtentCyEmu = 457200L * 2,
+            Table       = table,
+        };
+        p.Slides[0].Shapes.Add(shape);
+        return (p, bus, shape);
+    }
+
+    [Fact]
+    public void W3_DeleteRow_Continuation_DecrementsAnchorRowSpan()
+    {
+        // Row 0 = anchor(RowSpan=2), Row 1 = VMerge. Delete row 1.
+        // Expected: row 0 anchor RowSpan becomes 1; table has 1 row.
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 2, 1));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(1);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(1);
+        table.Rows[0].Cells[0].VMerge.Should().BeFalse();
+    }
+
+    [Fact]
+    public void W3_DeleteRow_Anchor_PromotesContinuation()
+    {
+        // 3-row table: row0=anchor(RowSpan=2), row1=VMerge, row2=independent.
+        // Delete row 0 (the anchor). Row 1's cell must become the new anchor (VMerge cleared,
+        // RowSpan=1), row 2 unchanged.
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L);
+        var r0 = new TableRow { HeightEmu = 457200L };
+        r0.Cells.Add(new TableCell { RowSpan = 2, TextBody = MakeBody("ANCHOR") });
+        var r1 = new TableRow { HeightEmu = 457200L };
+        r1.Cells.Add(new TableCell { VMerge = true });
+        var r2 = new TableRow { HeightEmu = 457200L };
+        r2.Cells.Add(new TableCell { TextBody = MakeBody("IND") });
+        table.Rows.Add(r0); table.Rows.Add(r1); table.Rows.Add(r2);
+        var shape = new SlideShape { Id = 3, Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 914400L, ExtentCyEmu = 457200L * 3,
+            Table = table };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new DeleteTableRowCommand(0, 3, 0));
+
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].VMerge.Should().BeFalse();
+        table.Rows[0].Cells[0].RowSpan.Should().Be(1);
+        CellText(shape, 1, 0).Should().Be("IND");
+    }
+
+    [Fact]
+    public void W3_DeleteRow_Undo_RestoresExactRowSpans()
+    {
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 2, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // W4 regression tests — InsertTableColumnCommand + horizontal merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void W4_InsertCol_InsideAnchorSpan_WidensAnchorAndAddsContinuation()
+    {
+        // Row: [A gridSpan=2][HMerge][C]. Insert at col 1 (inside A's span).
+        // Expected: [A gridSpan=3][HMerge][HMerge][C], 4 grid columns.
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 1, 1));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(4);
+        table.Rows[0].Cells.Should().HaveCount(4);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(3);
+        table.Rows[0].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        table.Rows[0].Cells[2].HMerge.Should().BeTrue();
+        CellText(shape, 0, 3).Should().Be("C");
+    }
+
+    [Fact]
+    public void W4_InsertCol_AtBoundary_AddsIndependentCell()
+    {
+        // Row: [A gridSpan=2][HMerge][C]. Insert at col 2 (boundary before C).
+        // Expected: [A gridSpan=2][HMerge][new cell][C], 4 grid columns.
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 1, 2));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(4);
+        table.Rows[0].Cells.Should().HaveCount(4);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[2].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[2].GridSpan.Should().Be(1);
+        CellText(shape, 0, 3).Should().Be("C");
+    }
+
+    [Fact]
+    public void W4_InsertCol_Undo_RestoresExactStructure()
+    {
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 1, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(3);
+        table.Rows[0].Cells.Should().HaveCount(3);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void W4_InsertCol_GridIntegrity_AfterInsert()
+    {
+        // In FreeP's model, every row must have exactly one cell per grid column (HMerge cells
+        // stay in the list).  After any insert, Cells.Count == ColumnWidthsEmu.Count.
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 1, 1));
+        var table = shape.Table!;
+        int gridWidth = table.ColumnWidthsEmu.Count;
+        table.Rows[0].Cells.Should().HaveCount(gridWidth);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // W5 regression tests — InsertTableRowCommand + vertical merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void W5_InsertRow_InsideVSpan_AddsVMergeContinuationAndWidensAnchor()
+    {
+        // 2-row × 1-col: row0=anchor(RowSpan=2), row1=VMerge. Insert at row 1 (inside span).
+        // Expected: 3 rows, anchor RowSpan=3, inserted row has VMerge=true.
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new InsertTableRowCommand(0, 2, 1));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(3);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(3);
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+        table.Rows[2].Cells[0].VMerge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void W5_InsertRow_AtSpanBoundary_AddsIndependentCell()
+    {
+        // 2-row × 1-col: row0=anchor(RowSpan=2), row1=VMerge. Insert at row 2 (after span).
+        // Expected: 3 rows, anchor RowSpan stays 2, new row has an independent cell.
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new InsertTableRowCommand(0, 2, 2));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(3);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[2].Cells[0].VMerge.Should().BeFalse();
+        table.Rows[2].Cells[0].RowSpan.Should().Be(1);
+    }
+
+    [Fact]
+    public void W5_InsertRow_Undo_RestoresExactSpans()
+    {
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new InsertTableRowCommand(0, 2, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // X1 regression tests — DeleteTableRowCommand + 2-D merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds a 3×3 table with a 2×2 anchor merge at (0,0)-(1,1).
+    ///
+    /// Row 0: [anchor GridSpan=2 RowSpan=2] [HMerge] [C00]
+    /// Row 1: [VMerge]                       [VMerge] [C10]
+    /// Row 2: [C20]                           [C21]   [C22]
+    /// </summary>
+    private static (Presentation p, PresentationCommandBus bus, SlideShape shape) Make2DMergedTable()
+    {
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L); // col 0
+        table.ColumnWidthsEmu.Add(914400L); // col 1
+        table.ColumnWidthsEmu.Add(914400L); // col 2
+
+        // Row 0: anchor (GridSpan=2, RowSpan=2), HMerge continuation, independent cell
+        var row0 = new TableRow { HeightEmu = 457200L };
+        row0.Cells.Add(new TableCell { GridSpan = 2, RowSpan = 2, TextBody = MakeBody("ANCHOR") });
+        row0.Cells.Add(new TableCell { HMerge = true });
+        row0.Cells.Add(new TableCell { TextBody = MakeBody("C00") });
+        table.Rows.Add(row0);
+
+        // Row 1: VMerge, VMerge (both covered by the 2×2 anchor), independent cell
+        var row1 = new TableRow { HeightEmu = 457200L };
+        row1.Cells.Add(new TableCell { VMerge = true });
+        row1.Cells.Add(new TableCell { VMerge = true });
+        row1.Cells.Add(new TableCell { TextBody = MakeBody("C10") });
+        table.Rows.Add(row1);
+
+        // Row 2: three independent cells
+        var row2 = new TableRow { HeightEmu = 457200L };
+        row2.Cells.Add(new TableCell { TextBody = MakeBody("C20") });
+        row2.Cells.Add(new TableCell { TextBody = MakeBody("C21") });
+        row2.Cells.Add(new TableCell { TextBody = MakeBody("C22") });
+        table.Rows.Add(row2);
+
+        var shape = new SlideShape
+        {
+            Id          = 4,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = 0, OffsetYEmu  = 0,
+            ExtentCxEmu = 914400L * 3, ExtentCyEmu = 457200L * 3,
+            Table       = table,
+        };
+        p.Slides[0].Shapes.Add(shape);
+        return (p, bus, shape);
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeAnchorRow_PromotedRowIsValidHorizontalMerge()
+    {
+        // Delete row 0 (the 2×2 anchor row).
+        // Expected: row 1 becomes the new anchor row.
+        //   - cell[0]: VMerge cleared, GridSpan=2, RowSpan=1 (new anchor)
+        //   - cell[1]: VMerge cleared, HMerge=true (continuation of promoted anchor)
+        //   - cell[2]: unchanged (independent)
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 0));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(2);
+
+        // Promoted anchor
+        var promoted = table.Rows[0].Cells[0];
+        promoted.VMerge.Should().BeFalse("promoted cell must not be VMerge");
+        promoted.HMerge.Should().BeFalse("promoted cell is an anchor, not an HMerge");
+        promoted.GridSpan.Should().Be(2, "promoted anchor inherits GridSpan from original anchor");
+        promoted.RowSpan.Should().Be(1, "RowSpan decremented from 2 to 1");
+
+        // Horizontal continuation of promoted anchor — must be HMerge, NOT VMerge
+        var continuation = table.Rows[0].Cells[1];
+        continuation.VMerge.Should().BeFalse("must not remain VMerge after promotion");
+        continuation.HMerge.Should().BeTrue("must become HMerge as horizontal continuation");
+
+        // Independent cell in promoted row unchanged
+        table.Rows[0].Cells[2].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[2].VMerge.Should().BeFalse();
+
+        // Row 2 (now row 1) unchanged
+        CellText(shape, 1, 0).Should().Be("C20");
+        CellText(shape, 1, 1).Should().Be("C21");
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeAnchorRow_NoOrphanVMergeAnywhere()
+    {
+        // After deleting the anchor row the surviving rows must not contain
+        // any VMerge cell that lacks a RowSpan>1 anchor above it.
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 0));
+
+        var table = shape.Table!;
+
+        // Row 0 (was row 1) — no VMerge anywhere
+        foreach (var cell in table.Rows[0].Cells)
+            cell.VMerge.Should().BeFalse("no orphan VMerge in the promoted row");
+
+        // Row 1 (was row 2) — fully independent, no merge flags
+        foreach (var cell in table.Rows[1].Cells)
+        {
+            cell.VMerge.Should().BeFalse();
+            cell.HMerge.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeAnchorRow_GridColumnCountConsistent()
+    {
+        // Every row must have exactly ColumnWidthsEmu.Count cells.
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 0));
+
+        var table = shape.Table!;
+        int gridWidth = table.ColumnWidthsEmu.Count;
+        foreach (var row in table.Rows)
+            row.Cells.Should().HaveCount(gridWidth, "grid column count must be consistent after delete");
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeAnchorRow_Undo_RestoresExactState()
+    {
+        // Undo must fully restore the original 2×2 merge state (full snapshot).
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 0));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(3);
+
+        // Original anchor
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[0].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[0].VMerge.Should().BeFalse();
+
+        // Original HMerge continuation
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        table.Rows[0].Cells[1].VMerge.Should().BeFalse();
+
+        // Original VMerge cells in row 1
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+        table.Rows[1].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[1].Cells[1].VMerge.Should().BeTrue();
+        table.Rows[1].Cells[1].HMerge.Should().BeFalse();
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeBottomRow_AnchorKeepsGridSpan()
+    {
+        // Delete row 1 (the VMerge row of the 2×2 merge).
+        // Expected: the anchor at (0,0) keeps GridSpan=2 and its RowSpan decrements to 1;
+        //           the HMerge continuation at (0,1) is unchanged.
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 1));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(2);
+
+        // Anchor row — RowSpan reduced to 1, GridSpan preserved
+        var anchor = table.Rows[0].Cells[0];
+        anchor.RowSpan.Should().Be(1, "RowSpan decremented from 2 to 1");
+        anchor.GridSpan.Should().Be(2, "horizontal span must be preserved");
+        anchor.VMerge.Should().BeFalse();
+
+        // HMerge continuation in the anchor row must remain HMerge
+        var hcont = table.Rows[0].Cells[1];
+        hcont.HMerge.Should().BeTrue("horizontal continuation must remain HMerge");
+        hcont.VMerge.Should().BeFalse();
+
+        // Row 1 (was row 2) is unchanged
+        table.Rows[1].Cells.Should().HaveCount(3);
+        foreach (var cell in table.Rows[1].Cells)
+        {
+            cell.VMerge.Should().BeFalse();
+            cell.HMerge.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public void X1_ExistingW3_SingleColumnVerticalMerge_StillPasses()
+    {
+        // Regression: the W3 1-column vertical merge scenario must still work after X1 fix.
+        // Row 0 = anchor(RowSpan=2), Row 1 = VMerge. Delete row 0 → row 1 promoted.
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L);
+        var r0 = new TableRow { HeightEmu = 457200L };
+        r0.Cells.Add(new TableCell { RowSpan = 2, TextBody = MakeBody("ANCHOR") });
+        var r1 = new TableRow { HeightEmu = 457200L };
+        r1.Cells.Add(new TableCell { VMerge = true });
+        var r2 = new TableRow { HeightEmu = 457200L };
+        r2.Cells.Add(new TableCell { TextBody = MakeBody("IND") });
+        table.Rows.Add(r0); table.Rows.Add(r1); table.Rows.Add(r2);
+        var shape = new SlideShape { Id = 5, Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 914400L, ExtentCyEmu = 457200L * 3,
+            Table = table };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new DeleteTableRowCommand(0, 5, 0));
+
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].VMerge.Should().BeFalse();
+        table.Rows[0].Cells[0].RowSpan.Should().Be(1);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        CellText(shape, 1, 0).Should().Be("IND");
+    }
+}

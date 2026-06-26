@@ -70,6 +70,8 @@ internal static class CorpusGenerator
                 ("07-customgeom",   GenerateCustomGeom),
                 ("08-effects",      GenerateEffects),
                 ("09-smartart",     GenerateSmartArt),
+                ("11-bevel3d",      GenerateBevel3d),
+                ("12-fills",        GenerateFills),
             };
 
             var errors = 0;
@@ -977,6 +979,235 @@ internal static class CorpusGenerator
                     sh.TextFrame.TextRange.Font.Size = 14;
                     sh.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
                 }
+            }
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Deck 11: Bevel / 3-D shape effects — a:sp3d / a:bevelT / a:scene3d
+    // -----------------------------------------------------------------------
+    private static void GenerateBevel3d(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+            dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+            // Title
+            dynamic tb = slide.Shapes.AddTextbox(1, 20f, 8f, 900f, 35f);
+            tb.TextFrame.TextRange.Text = "Bevel / 3-D Shape Effects";
+            tb.TextFrame.TextRange.Font.Size = 20;
+            tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+            // Shape 1: Rectangle with Circle bevel (Angle preset)
+            dynamic sh1 = slide.Shapes.AddShape(MsoShapeRectangle, 60f, 60f, 200f, 140f);
+            sh1.Name = "BevelCircle";
+            sh1.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent1;
+            sh1.Fill.Solid();
+            sh1.TextFrame.TextRange.Text = "Circle Bevel";
+            sh1.TextFrame.TextRange.Font.Size = 14;
+            sh1.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh1.ThreeD.BevelTopType   = 1;     // msoBevelCircle = 1
+                sh1.ThreeD.BevelTopInset  = 8f;
+                sh1.ThreeD.BevelTopDepth  = 6f;
+                sh1.ThreeD.Depth          = 0f;
+            }
+            catch { /* ThreeD API may vary across PP versions */ }
+
+            // Shape 2: Rounded rectangle with Relaxed Inset bevel + depth
+            dynamic sh2 = slide.Shapes.AddShape(MsoShapeRoundedRectangle, 310f, 60f, 200f, 140f);
+            sh2.Name = "BevelRelaxed";
+            sh2.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent2;
+            sh2.Fill.Solid();
+            sh2.TextFrame.TextRange.Text = "Relaxed Inset";
+            sh2.TextFrame.TextRange.Font.Size = 14;
+            sh2.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh2.ThreeD.BevelTopType   = 2;     // msoBevelRelaxedInset = 2
+                sh2.ThreeD.BevelTopInset  = 10f;
+                sh2.ThreeD.BevelTopDepth  = 10f;
+                sh2.ThreeD.Depth          = 20f;
+            }
+            catch { }
+
+            // Shape 3: Ellipse with Angle bevel + extrusion + material
+            dynamic sh3 = slide.Shapes.AddShape(MsoShapeOval, 560f, 60f, 200f, 140f);
+            sh3.Name = "BevelAngle";
+            sh3.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent3;
+            sh3.Fill.Solid();
+            sh3.TextFrame.TextRange.Text = "Angle + Extrusion";
+            sh3.TextFrame.TextRange.Font.Size = 13;
+            sh3.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh3.ThreeD.BevelTopType   = 5;     // msoBevelAngle = 5
+                sh3.ThreeD.BevelTopInset  = 12f;
+                sh3.ThreeD.BevelTopDepth  = 8f;
+                sh3.ThreeD.Depth          = 40f;
+                sh3.ThreeD.ExtrusionColor.RGB = 0x7030A0;
+            }
+            catch { }
+
+            // Shape 4: Rectangle with Cross bevel + scene camera
+            dynamic sh4 = slide.Shapes.AddShape(MsoShapeRectangle, 60f, 240f, 200f, 140f);
+            sh4.Name = "BevelCross";
+            sh4.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent4;
+            sh4.Fill.Solid();
+            sh4.TextFrame.TextRange.Text = "Cross + Scene3D";
+            sh4.TextFrame.TextRange.Font.Size = 14;
+            sh4.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh4.ThreeD.BevelTopType   = 7;     // msoBevelCross = 7
+                sh4.ThreeD.BevelTopInset  = 6f;
+                sh4.ThreeD.BevelTopDepth  = 6f;
+                // Scene 3D via PresetCamera
+                sh4.ThreeD.SetPresetCamera(20);    // msoCameraOrthographicFront ≈ 20
+            }
+            catch { }
+
+            // Shape 5: Rectangle with contour (no bevel)
+            dynamic sh5 = slide.Shapes.AddShape(MsoShapeRectangle, 310f, 240f, 200f, 140f);
+            sh5.Name = "ContourOnly";
+            sh5.Fill.ForeColor.ObjectThemeColor = 5; // MsoThemeColorAccent1
+            sh5.Fill.Solid();
+            sh5.TextFrame.TextRange.Text = "Contour + Depth";
+            sh5.TextFrame.TextRange.Font.Size = 14;
+            sh5.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh5.ThreeD.Depth          = 60f;
+                sh5.ThreeD.ContourWidth   = 4f;
+                sh5.ThreeD.ContourColor.RGB = 0xC55A11;
+            }
+            catch { }
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Deck 12: Fill depth — multi-stop gradients, picture fill, pattern fill
+    // -----------------------------------------------------------------------
+    private static void GenerateFills(dynamic app, string pptxPath, string refDir)
+    {
+        // PowerPoint COM fill constants
+        const int MsoGradientLinear        = 1;   // msoGradientLinear
+        const int MsoGradientFromCenter    = 4;   // msoGradientFromCenter (radial)
+        const int MsoPatternDiagonalStripe = 6;   // msoPatternDiagonalStripe
+        const int MsoPatternCross          = 51;  // msoPatternCross
+
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+            dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+            // Title
+            dynamic tb = slide.Shapes.AddTextbox(1, 20f, 8f, 900f, 35f);
+            tb.TextFrame.TextRange.Text = "Fill Depth — Gradients / Picture / Pattern";
+            tb.TextFrame.TextRange.Font.Size = 18;
+            tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+            // Shape 1: 3-stop linear gradient (custom stops)
+            dynamic sh1 = slide.Shapes.AddShape(MsoShapeRectangle, 40f, 55f, 200f, 140f);
+            sh1.Name = "Grad3Stop";
+            sh1.TextFrame.TextRange.Text = "3-Stop Linear";
+            sh1.TextFrame.TextRange.Font.Size = 13;
+            sh1.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh1.Fill.TwoColorGradient(MsoGradientLinear, 1);
+                sh1.Fill.GradientStops.Insert(0x0000FF, 0.0f, 1);  // stop 1: red at 0%
+                sh1.Fill.GradientStops[1].Color.RGB = 0xFF0000;
+                sh1.Fill.GradientStops[1].Position = 0.0f;
+                // Try multi-stop: insert middle stop
+                try { sh1.Fill.GradientStops.Insert(0x00FF00, 0.5f, 2); } catch { }
+            }
+            catch
+            {
+                // Fallback: simple 2-color gradient
+                try
+                {
+                    sh1.Fill.TwoColorGradient(MsoGradientLinear, 1);
+                    sh1.Fill.ForeColor.RGB = 0xFF0000;
+                    sh1.Fill.BackColor.RGB = 0x0000FF;
+                }
+                catch { }
+            }
+
+            // Shape 2: Radial gradient (from center)
+            dynamic sh2 = slide.Shapes.AddShape(MsoShapeOval, 270f, 55f, 200f, 140f);
+            sh2.Name = "GradRadial";
+            sh2.TextFrame.TextRange.Text = "Radial";
+            sh2.TextFrame.TextRange.Font.Size = 13;
+            try
+            {
+                sh2.Fill.TwoColorGradient(MsoGradientFromCenter, 1);
+                sh2.Fill.ForeColor.RGB = 0xFFFFFF;
+                sh2.Fill.BackColor.RGB = 0x0070C0;
+            }
+            catch { }
+
+            // Shape 3: Pattern fill — diagonal stripe
+            dynamic sh3 = slide.Shapes.AddShape(MsoShapeRectangle, 500f, 55f, 200f, 140f);
+            sh3.Name = "PatternDiag";
+            sh3.TextFrame.TextRange.Text = "Diag Pattern";
+            sh3.TextFrame.TextRange.Font.Size = 13;
+            try
+            {
+                sh3.Fill.Patterned(MsoPatternDiagonalStripe);
+                sh3.Fill.ForeColor.RGB = 0x0000FF;
+                sh3.Fill.BackColor.RGB = 0xFFFFFF;
+            }
+            catch { }
+
+            // Shape 4: Pattern fill — cross
+            dynamic sh4 = slide.Shapes.AddShape(MsoShapeRectangle, 730f, 55f, 200f, 140f);
+            sh4.Name = "PatternCross";
+            sh4.TextFrame.TextRange.Text = "Cross Pattern";
+            sh4.TextFrame.TextRange.Font.Size = 13;
+            try
+            {
+                sh4.Fill.Patterned(MsoPatternCross);
+                sh4.Fill.ForeColor.RGB = 0xFF0000;
+                sh4.Fill.BackColor.RGB = 0xFFFF00;
+            }
+            catch { }
+
+            // Shape 5 & 6 on row 2 — more gradient presets
+            dynamic sh5 = slide.Shapes.AddShape(MsoShapeRoundedRectangle, 40f, 230f, 200f, 140f);
+            sh5.Name = "GradPreset";
+            sh5.TextFrame.TextRange.Text = "Preset Gradient";
+            sh5.TextFrame.TextRange.Font.Size = 13;
+            try
+            {
+                // msoGradientPresetColors=3, msoGradientSunrise=11
+                sh5.Fill.PresetGradient(MsoGradientLinear, 1, 11);
+            }
+            catch
+            {
+                try
+                {
+                    sh5.Fill.TwoColorGradient(MsoGradientLinear, 1);
+                    sh5.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent1;
+                    sh5.Fill.BackColor.ObjectThemeColor = MsoThemeColorAccent3;
+                }
+                catch { }
             }
 
             SaveAndExport(pres, pptxPath, refDir);

@@ -21,6 +21,7 @@ using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
@@ -33,6 +34,8 @@ using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Shapes;
 
 using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -319,6 +322,9 @@ public sealed partial class MainWindow : Window
     private const double SheetHorizontalScrollbarMaximumWidth = 420;
     private const double SheetHorizontalScrollbarWindowRatio = 0.34;
     private const double SheetTabContourClipTolerance = 0.5;
+    // Left inset of the sheet-tab strip from the row-header edge so the active tab's left vertical
+    // border / rounded corner is fully visible (Windows leaves this gap; Linux was flush, clipping it).
+    private const double SheetTabStripLeadingInset = 4;
     private const uint PortablePdfColumnsPerPage = 8;
     private const uint PortablePdfRowsPerPage = 28;
     private const double ZoomToSelectionDefaultColumnWidth = 80;
@@ -391,6 +397,12 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush PrimaryInk = Brush(25, 31, 40);
     private static readonly IBrush SecondaryInk = Brush(94, 103, 116);
     private static readonly IBrush SelectionBorder = Brush(33, 115, 70);
+    // Shared selection-fill token — byte-identical to the WPF grid's SelectionBrush
+    // (GridView.cs: MakeBrushAlpha(32, 33, 115, 70)). A light translucent green laid over the
+    // selected range so multi-cell selections read like Windows (a faint green wash that keeps the
+    // black cell text legible) instead of an opaque tint. Centralised here as the single Avalonia
+    // grid selection-fill token, deriving its RGB from the SelectionBorder accent.
+    private static readonly IBrush SelectionFill = Brush(32, 33, 115, 70);
     private static readonly IBrush SelectionHeaderBackground = Brush(218, 232, 218);
     private static readonly IBrush SelectionHeaderForeground = Brush(31, 31, 31);
     private static readonly IBrush DrawingObjectBoundsFill = Brush(42, 11, 112, 116);
@@ -4005,7 +4017,11 @@ public sealed partial class MainWindow : Window
         {
             Orientation = Orientation.Horizontal,
             Spacing = 0,
-            Margin = new Thickness(0),
+            // Nudge the whole strip a few px right of the row-header edge so the first (active) tab's
+            // left vertical border clears the header column and is fully visible, matching Windows
+            // (the tab strip starts just right of the header edge rather than flush against it, which
+            // was clipping the active tab's rounded left corner on Linux).
+            Margin = new Thickness(SheetTabStripLeadingInset, 0, 0, 0),
         };
 
         foreach (var tab in _session.SheetTabs)
@@ -4540,9 +4556,15 @@ public sealed partial class MainWindow : Window
 
         ApplyDrawingObjectEffect(shapeControl, drawingObject.Effect);
 
+        // Arrowheads for line-like shapes: overlay filled polygons on a Canvas.
+        var hasArrowheads = drawingObject.ShapeKind.HasValue &&
+            DrawingShapeKindSupport.IsLineLike(drawingObject.ShapeKind.Value) &&
+            ((drawingObject.HeadArrowhead?.IsPresent == true) ||
+             (drawingObject.TailArrowhead?.IsPresent == true));
+
         // Overlay shape text inside the same rotation envelope (text is added as a sibling in a
         // Grid so that ApplyDrawingObjectTransform, called by the caller, rotates both together).
-        if (!string.IsNullOrEmpty(drawingObject.ShapeText))
+        if (hasArrowheads || !string.IsNullOrEmpty(drawingObject.ShapeText))
         {
             var grid = new AvaloniaGrid
             {
@@ -4551,11 +4573,98 @@ public sealed partial class MainWindow : Window
                 IsHitTestVisible = false,
             };
             grid.Children.Add(shapeControl);
-            grid.Children.Add(CreateShapeTextOverlay(drawingObject, w, h));
+            if (hasArrowheads)
+                AddArrowheadOverlays(grid, drawingObject, w, h, strokeBrush);
+            if (!string.IsNullOrEmpty(drawingObject.ShapeText))
+                grid.Children.Add(CreateShapeTextOverlay(drawingObject, w, h));
             return grid;
         }
 
         return shapeControl;
+    }
+
+    /// <summary>
+    /// Adds filled arrowhead Path elements on top of a line/connector visual inside <paramref name="container"/>.
+    /// Uses <see cref="ArrowheadGeometry"/> for the polygon math so the calculation is shared with WPF.
+    /// </summary>
+    private static void AddArrowheadOverlays(
+        AvaloniaGrid container,
+        DrawingObjectBounds d,
+        double w,
+        double h,
+        IBrush? arrowBrush)
+    {
+        if (arrowBrush is null || d.ShapeKind is not { } kind)
+            return;
+
+        const double PtToDip = 96.0 / 72.0;
+        var strokeDip = d.OutlineWidthPoints > 0 ? d.OutlineWidthPoints * PtToDip : 1.5;
+
+        // Pass flipHorizontal/flipVertical as false here: ApplyDrawingObjectTransform sets a
+        // ScaleTransform on the container visual that already flips the entire overlay (and its
+        // arrowhead Path children). Passing the flip flags to LineEndpoints would mirror the
+        // endpoints a second time, landing them at the wrong corners and pointing the wrong way.
+        var (startPt, endPt, dirStartToEnd) = ArrowheadGeometry.LineEndpoints(
+            0, 0, w, h,
+            flipHorizontal: false, flipVertical: false, kind);
+
+        // HeadEnd = start of line, points backward (opposite of travel direction)
+        if (d.HeadArrowhead?.IsPresent == true)
+            AddArrowheadPath(container, d.HeadArrowhead, startPt, dirStartToEnd + Math.PI, strokeDip, arrowBrush);
+
+        // TailEnd = end of line, points forward (same as travel direction)
+        if (d.TailArrowhead?.IsPresent == true)
+            AddArrowheadPath(container, d.TailArrowhead, endPt, dirStartToEnd, strokeDip, arrowBrush);
+    }
+
+    private static void AddArrowheadPath(
+        AvaloniaGrid container,
+        DrawingArrowhead arrowhead,
+        LayoutPoint tip,
+        double directionRadians,
+        double strokeWidth,
+        IBrush brush)
+    {
+        if (arrowhead.Type == DrawingArrowheadType.Oval)
+        {
+            var (center, radius) = ArrowheadGeometry.OvalCenter(arrowhead, tip, directionRadians, strokeWidth);
+            var ellipse = new AvaloniaEllipse
+            {
+                Width = radius * 2,
+                Height = radius * 2,
+                Fill = brush,
+                HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+                Margin = new Thickness(center.X - radius, center.Y - radius, 0, 0),
+                IsHitTestVisible = false,
+            };
+            container.Children.Add(ellipse);
+            return;
+        }
+
+        var pts = ArrowheadGeometry.PolygonPoints(arrowhead, tip, directionRadians, strokeWidth);
+        if (pts.Length < 3)
+            return;
+
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(new Point(pts[0].X, pts[0].Y), isFilled: true);
+            for (var i = 1; i < pts.Length; i++)
+                ctx.LineTo(new Point(pts[i].X, pts[i].Y));
+            ctx.EndFigure(isClosed: true);
+        }
+
+        var path = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = geometry,
+            Fill = brush,
+            Stretch = Stretch.None,
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+            IsHitTestVisible = false,
+        };
+        container.Children.Add(path);
     }
 
     private static AvaloniaEllipse CreateEllipseShapeVisual(
@@ -6114,6 +6223,15 @@ public sealed partial class MainWindow : Window
         var dataBar = ConditionalFormatCellRenderPlanner.PlanDataBar(cell.ConditionalDataBar);
         var icon = ConditionalFormatCellRenderPlanner.PlanIcon(cell.ConditionalIcon);
 
+        // Per-run rich text: resolve raw runs (null props → cell style) via the shared planner.
+        // Only text cells with multiple character-level format variations carry entries here.
+        // Use CellStyle.Default when style is null so run props inherit sensible defaults.
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null;
+        if (_session.ActiveSheet.RichTextRuns.TryGetValue(address, out var rawRuns))
+        {
+            richRuns = CellRichRunLayoutPlanner.Resolve(rawRuns, style ?? CellStyle.Default);
+        }
+
         return CreateInteractiveCellBorder(
             cell.DisplayText,
             background,
@@ -6139,7 +6257,8 @@ public sealed partial class MainWindow : Window
             dataBar,
             icon,
             sparklineLayer,
-            patternBrush: patternBrush);
+            patternBrush: patternBrush,
+            richRuns: richRuns);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -6167,7 +6286,8 @@ public sealed partial class MainWindow : Window
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
         Control? sparklineLayer = null,
-        IBrush? patternBrush = null)
+        IBrush? patternBrush = null,
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null)
     {
         var border = CreateCellBorder(
             text,
@@ -6194,7 +6314,8 @@ public sealed partial class MainWindow : Window
             conditionalDataBar,
             conditionalIcon,
             sparklineLayer,
-            patternBrush: patternBrush);
+            patternBrush: patternBrush,
+            richRuns: richRuns);
         if (address == _session.SelectedRange.End)
             AddAutofillHandleAdorner(border, zoomFactor);
 
@@ -6447,13 +6568,20 @@ public sealed partial class MainWindow : Window
     private static void AddAutofillHandleAdorner(Border border, double zoomFactor)
     {
         var existing = border.Child;
-        var handleSize = Math.Max(4, 6 * zoomFactor);
+        var handleSize = Math.Max(6, 7 * zoomFactor);
         // Detach 'existing' from 'border' before re-parenting it into the new layer Grid.
         // Avalonia (unlike WPF) throws InvalidOperationException if a control still has a
         // visual parent when it is added to a second parent's Children collection.
         border.Child = null;
+        // Fill handle (autofill grip): a full solid-green square straddling the cell's bottom-right
+        // corner so it covers the edge and is easy to grab — matching the WPF grid handle, which is
+        // centred on the corner (DrawSelectionHandle: hx = right - size/2, hy = bottom - size/2, so
+        // half the square overhangs each edge). The negative right/bottom margin pushes it out by half
+        // its size; ClipToBounds is disabled on the layer so the overhang is not cropped.
+        var overhang = handleSize / 2;
         var layer = new AvaloniaGrid
         {
+            ClipToBounds = false,
             Children =
             {
                 existing!,
@@ -6465,7 +6593,7 @@ public sealed partial class MainWindow : Window
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
                     VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
                     IsHitTestVisible = false,
-                    Margin = new Thickness(0, 0, -1, -1),
+                    Margin = new Thickness(0, 0, -overhang, -overhang),
                 }
             }
         };
@@ -6905,7 +7033,8 @@ public sealed partial class MainWindow : Window
         CfIconRenderInstruction? conditionalIcon = null,
         Control? sparklineLayer = null,
         double horizontalPadding = 8,
-        IBrush? patternBrush = null)
+        IBrush? patternBrush = null,
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -6913,8 +7042,22 @@ public sealed partial class MainWindow : Window
         var scaledHorizontalPadding = horizontalPadding * zoomFactor;
         var scaledIndentPadding = indentPadding * zoomFactor;
 
-        // Cell-level super/subscript: shrink font and shift baseline vertically.
-        CellSuperSubScript.Resolve(style, scaledFontSize, out var adjustedFontSize, out var superSubOffsetDip);
+        // Rich text runs override cell-level super/subscript — each run carries its own VertAlign
+        // and RenderedFontSize from the planner.  When runs are present the TextBlock uses Inlines
+        // rather than a single Text string, so cell-level super/sub adjustment is skipped.
+        double adjustedFontSize;
+        double superSubOffsetDip;
+        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
+        {
+            // For rich runs the TextBlock font acts as a fallback only; actual sizes come per Run.
+            adjustedFontSize  = scaledFontSize;
+            superSubOffsetDip = 0;
+        }
+        else
+        {
+            // Cell-level super/subscript: shrink font and shift baseline vertically.
+            CellSuperSubScript.Resolve(style, scaledFontSize, out adjustedFontSize, out superSubOffsetDip);
+        }
 
         // HAlign=Fill: repeat the display text to overflow the cell width then rely on ClipToBounds.
         // Approximate char width as 0.6× font size to determine repetition count; always over-allocate
@@ -6934,11 +7077,9 @@ public sealed partial class MainWindow : Window
         var textMarginTop = superSubOffsetDip;  // negative = up (superscript), positive = down (subscript)
         var textBlock = new TextBlock
         {
-            Text = effectiveText,
             FontSize = adjustedFontSize,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
-            TextDecorations = textDecorations,
             Foreground = foreground,
             TextAlignment = (isFillAlign || textRotation == 255) ? TextAlignment.Left : textAlignment,
             TextWrapping = isFillAlign ? TextWrapping.NoWrap : effectiveTextWrapping,
@@ -6948,6 +7089,23 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = verticalAlignment,
             Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, textMarginTop, scaledHorizontalPadding, 0),
         };
+
+        // Per-run rich text: populate Inlines (one Run per resolved run) when present.
+        // Each Run carries its own font size, weight, style, color, decorations, and baseline
+        // alignment — the planner has already coalesced null props against the cell style.
+        // Otherwise fall back to a single plain-text string (existing path).
+        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
+        {
+            CellRichTextInlinesBuilder.Build(
+                richRuns!,
+                textBlock.Inlines!,
+                color => Brush(color));
+        }
+        else
+        {
+            textBlock.Text = effectiveText;
+            textBlock.TextDecorations = textDecorations;
+        }
 
         var content = CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)
             ? CreateOrientedCellContent(
@@ -6963,6 +7121,22 @@ public sealed partial class MainWindow : Window
                 style)
             : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer, patternBrush);
 
+        // Selected cells get a faint translucent-green wash over their content (matching the WPF grid's
+        // SelectionBrush), so a multi-cell selection reads as a light highlight rather than bare green
+        // gridlines — the wash is drawn ON TOP of any cell fill so styled fills still show through.
+        Control cellContent = content;
+        if (selected)
+        {
+            var overlayHost = new AvaloniaGrid { ClipToBounds = true };
+            overlayHost.Children.Add(content);
+            overlayHost.Children.Add(new AvaloniaRectangle
+            {
+                Fill = SelectionFill,
+                IsHitTestVisible = false,
+            });
+            cellContent = overlayHost;
+        }
+
         return new Border
         {
             Background = background,
@@ -6973,7 +7147,7 @@ public sealed partial class MainWindow : Window
                     ? new Thickness(1)
                     : new Thickness(0),
             ClipToBounds = true,
-            Child = content,
+            Child = cellContent,
         };
     }
 
@@ -8522,18 +8696,10 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetHelpText(sheetBox, UiText.Get("UnhideSheet_SelectTheHiddenWorksheetToMakeVisible"));
         sheetBox.DoubleTapped += (_, _) => Accept();
 
-        var okButton = new Button
-        {
-            Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
-        };
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
-        };
+        var okButton = new Button { Content = "OK" };
+        var cancelButton = new Button { Content = "Cancel" };
+        ApplyDialogButtonChrome(okButton, width: 84, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, width: 84);
         AutomationProperties.SetAutomationId(okButton, "UnhideSheetOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "UnhideSheetCancelButton");
 
@@ -8569,8 +8735,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
@@ -8809,6 +8975,7 @@ public sealed partial class MainWindow : Window
             SelectedIndex = 0,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
+        ApplyClassicTabChrome(tabs);
 
         // ── Shared options ──────────────────────────────────────────────────────
         var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
@@ -10051,6 +10218,9 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(targetBox, "HyperlinkTargetTextBox");
         ApplyDialogTextBoxChrome(targetBox);
 
+        // ScreenTip / Bookmark are surfaced as buttons on Windows (not inline fields).
+        // These backing text boxes hold the current values but are not added to the
+        // visible tree; the buttons below edit them via small popup prompts.
         var screenTipBox = new TextBox
         {
             Text = prefill.ScreenTip,
@@ -10068,6 +10238,18 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(bookmarkBox, UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel"));
         AutomationProperties.SetAutomationId(bookmarkBox, "HyperlinkBookmarkTextBox");
         ApplyDialogTextBoxChrome(bookmarkBox);
+
+        var screenTipButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTip")) };
+        ApplyDialogButtonChrome(screenTipButton, width: 96);
+        AutomationProperties.SetName(screenTipButton, "ScreenTip");
+        AutomationProperties.SetAutomationId(screenTipButton, "HyperlinkScreenTipButton");
+        AutomationProperties.SetHelpText(screenTipButton, "Set the ScreenTip text shown when hovering the hyperlink.");
+
+        var bookmarkButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_Bookmark")) };
+        ApplyDialogButtonChrome(bookmarkButton, width: 96);
+        AutomationProperties.SetName(bookmarkButton, "Bookmark");
+        AutomationProperties.SetAutomationId(bookmarkButton, "HyperlinkBookmarkButton");
+        AutomationProperties.SetHelpText(bookmarkButton, "Choose a bookmark or cell reference within the destination.");
 
         var validationText = new TextBlock
         {
@@ -10131,6 +10313,26 @@ public sealed partial class MainWindow : Window
         linkTypeBox.SelectionChanged += (_, _) => RefreshTargetField();
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
+        screenTipButton.Click += async (_, _) =>
+        {
+            var value = await ShowHyperlinkSubPromptAsync(
+                dialog,
+                UiText.Get("Hyperlink_SetHyperlinkScreenTipTitle"),
+                StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTipTextLabel")),
+                screenTipBox.Text);
+            if (value is not null)
+                screenTipBox.Text = value;
+        };
+        bookmarkButton.Click += async (_, _) =>
+        {
+            var value = await ShowHyperlinkSubPromptAsync(
+                dialog,
+                StripDisplayMnemonic(UiText.Get("Hyperlink_Bookmark")).Replace(".", string.Empty).Trim(),
+                StripDisplayMnemonic(UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel")),
+                bookmarkBox.Text);
+            if (value is not null)
+                bookmarkBox.Text = value;
+        };
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -10179,8 +10381,17 @@ public sealed partial class MainWindow : Window
         // arranged as label/field rows like the Windows dialog's right region.
         targetBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         displayBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-        screenTipBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-        bookmarkBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+
+        // ScreenTip... + Bookmark... sit on one right-aligned row beneath the Address
+        // field (as buttons, not inline fields), matching the Windows dialog.
+        var hyperlinkButtonsRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children = { screenTipButton, bookmarkButton },
+        };
+
         var detailArea = new StackPanel
         {
             Spacing = 10,
@@ -10188,12 +10399,7 @@ public sealed partial class MainWindow : Window
             {
                 CreateHyperlinkField(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_TextToDisplay")) }, displayBox),
                 CreateHyperlinkField(targetLabel, targetBox),
-                CreateHyperlinkField(
-                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTipTextLabel")) },
-                    screenTipBox),
-                CreateHyperlinkField(
-                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel")) },
-                    bookmarkBox),
+                hyperlinkButtonsRow,
             },
         };
 
@@ -10229,6 +10435,75 @@ public sealed partial class MainWindow : Window
         return result;
     }
 
+    // Small modal prompt used by the Insert Hyperlink "ScreenTip..." / "Bookmark..."
+    // buttons to edit their value, mirroring the Windows secondary dialogs.
+    private static async Task<string?> ShowHyperlinkSubPromptAsync(
+        Window owner,
+        string title,
+        string label,
+        string? initialValue)
+    {
+        string? result = null;
+        var prompt = new Window
+        {
+            Title = title,
+            Width = 380,
+            Height = 160,
+            MinWidth = 340,
+            MinHeight = 150,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+        };
+
+        var inputBox = new TextBox { Text = initialValue ?? string.Empty, MinWidth = 300 };
+        ApplyDialogTextBoxChrome(inputBox);
+        AutomationProperties.SetName(inputBox, label);
+
+        var okButton = new Button { Content = UiText.Get("Common_Ok") };
+        ApplyDialogButtonChrome(okButton, width: 84, isDefault: true);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel") };
+        ApplyDialogButtonChrome(cancelButton, width: 84);
+
+        void Accept()
+        {
+            result = inputBox.Text ?? string.Empty;
+            prompt.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => prompt.Close();
+        prompt.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { e.Handled = true; Accept(); }
+            else if (e.Key == Key.Escape) { e.Handled = true; prompt.Close(); }
+        };
+
+        prompt.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = label },
+                inputBox,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Margin = new Thickness(0, 8, 0, 0),
+                    Children = { okButton, cancelButton },
+                },
+            },
+        };
+        prompt.Opened += (_, _) => { inputBox.Focus(); inputBox.SelectAll(); };
+
+        await prompt.ShowDialog(owner);
+        return result;
+    }
+
     private static SortDialogComboItem<HyperlinkTargetKind>[] CreateHyperlinkTypeChoices() =>
     [
         new(UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"), HyperlinkTargetKind.ExistingFileOrWebPage),
@@ -10250,6 +10525,16 @@ public sealed partial class MainWindow : Window
 
     private static string StripDisplayMnemonic(string text) =>
         (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);
+
+    // CheckBox/RadioButton in this Avalonia shell render their string Content literally
+    // (no AccessText, see MainWindow.ParityCapture access-key note), so WPF mnemonic
+    // markers ("_Show legend") would show the underscore. Strip it for string content;
+    // leave non-string content (panels, etc.) untouched. Safe no-op without underscores.
+    private static void StripContentMnemonic(ContentControl control)
+    {
+        if (control.Content is string text)
+            control.Content = StripDisplayMnemonic(text);
+    }
 
     private static string GetHyperlinkTargetLabel(HyperlinkTargetKind linkType) =>
         StripDisplayMnemonic(linkType switch
@@ -10577,7 +10862,7 @@ public sealed partial class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = header,
+                    Text = StripDisplayMnemonic(header),
                     FontWeight = FontWeight.SemiBold,
                 },
                 list,
@@ -11684,19 +11969,28 @@ public sealed partial class MainWindow : Window
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
         tabStrip.Styles.Add(contentPaneStyle);
 
-        // Outlined inactive tabs (classic look). Default + non-selected.
+        // Outlined inactive tabs (classic look). Default + non-selected. The bottom
+        // border is omitted so the tab strip sits flush against the pane below.
         var tabStyle = new Style(s => s.OfType<TabItem>());
         tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, inactiveTabBorder));
         tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
         tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, inactiveTabBackground));
         tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(10, 4)));
+        // No vertical margin keeps the tab row touching the pane (removes the gap);
+        // the small right margin separates adjacent tabs.
         tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, 0)));
         tabStrip.Styles.Add(tabStyle);
 
-        // Selected tab: white background to merge with the content pane.
+        // Selected tab: white body that overlaps the pane's top border by 1px so the
+        // border visually BREAKS under the active tab name and the tab merges into the
+        // pane (matching the Windows classic tab look). The bottom margin of -1 pulls
+        // the white tab down over the gray pane line directly beneath it.
         var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, paneBorder));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, -1)));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));
         tabStrip.Styles.Add(selectedTabStyle);
     }
 
@@ -11704,7 +11998,7 @@ public sealed partial class MainWindow : Window
     {
         var tab = new TabItem
         {
-            Header = header,
+            Header = StripDisplayMnemonic(header),
             Content = new ScrollViewer
             {
                 Content = content,
@@ -11721,7 +12015,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = StripDisplayMnemonic(label) },
                 control,
             },
         };
@@ -11995,20 +12289,12 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(inputBox, label);
         AutomationProperties.SetAutomationId(inputBox, automationId);
 
-        var acceptButton = new Button
-        {
-            Content = acceptText,
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
-        };
+        var acceptButton = new Button { Content = acceptText };
+        ApplyDialogButtonChrome(acceptButton, width: 84, isDefault: true);
         AutomationProperties.SetAutomationId(acceptButton, $"{automationId}AcceptButton");
 
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
-        };
+        var cancelButton = new Button { Content = "Cancel" };
+        ApplyDialogButtonChrome(cancelButton, width: 84);
         AutomationProperties.SetAutomationId(cancelButton, $"{automationId}CancelButton");
 
         void Accept()
@@ -12040,8 +12326,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
                 acceptButton,
+                cancelButton,
             },
         };
 
@@ -12188,7 +12474,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = StripDisplayMnemonic(label) },
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -13232,6 +13518,7 @@ public sealed partial class MainWindow : Window
 
     private static void ApplySortOptionsCheckBoxChrome(CheckBox checkBox)
     {
+        StripContentMnemonic(checkBox);
         checkBox.FontSize = 12;
         checkBox.MinHeight = 18;
         checkBox.Height = 18;
@@ -13241,6 +13528,7 @@ public sealed partial class MainWindow : Window
 
     private static void ApplySortOptionsRadioButtonChrome(RadioButton radioButton)
     {
+        StripContentMnemonic(radioButton);
         radioButton.FontSize = 12;
         radioButton.MinHeight = 18;
         radioButton.Height = 18;
@@ -13327,12 +13615,14 @@ public sealed partial class MainWindow : Window
 
     private static void ApplyDialogCheckBoxChrome(CheckBox cb)
     {
+        StripContentMnemonic(cb);
         cb.MinHeight = 20; cb.MaxHeight = 20;
         cb.FontSize = 12; cb.FontFamily = FormulaBarFontFamily;
     }
 
     private static void ApplyDialogRadioButtonChrome(RadioButton rb)
     {
+        StripContentMnemonic(rb);
         rb.MinHeight = 20; rb.MaxHeight = 20;
         rb.FontSize = 12; rb.FontFamily = FormulaBarFontFamily;
     }
@@ -13722,6 +14012,9 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 0, 0, 16),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            // Space the status lines out vertically to match the Windows dialog,
+            // which renders each line with a blank-line gap between them.
+            LineHeight = 28,
         };
         AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
@@ -13915,7 +14208,7 @@ public sealed partial class MainWindow : Window
     {
         var labelBlock = new TextBlock
         {
-            Text = label,
+            Text = StripDisplayMnemonic(label),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 4),
             FontSize = 12,
@@ -14106,7 +14399,7 @@ public sealed partial class MainWindow : Window
         {
             var labelBlock = new TextBlock
             {
-                Text = label,
+                Text = StripDisplayMnemonic(label),
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
                 FontSize = 12,
@@ -14687,7 +14980,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = StripDisplayMnemonic(label) },
                 control,
             },
         };
@@ -15033,9 +15326,9 @@ public sealed partial class MainWindow : Window
         {
             Title = UiText.Get("ScenarioManager_ScenarioManager"),
             Width = 500,
-            Height = 560,
+            Height = 640,
             MinWidth = 480,
-            MinHeight = 520,
+            MinHeight = 600,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             FontFamily = FormulaBarFontFamily,
@@ -15104,6 +15397,17 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(changingCellsBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCellsAutomationName")));
         AutomationProperties.SetAutomationId(changingCellsBox, "ScenarioManagerChangingCellsBox");
         AutomationProperties.SetHelpText(changingCellsBox, UiText.Get("ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario"));
+
+        // Result cells field (Windows shows both Changing cells and Result cells).
+        var resultCellsBox = new TextBox
+        {
+            MinWidth = 260,
+            IsReadOnly = true,
+        };
+        ApplyDataToolsTextBoxChrome(resultCellsBox);
+        AutomationProperties.SetName(resultCellsBox, "Result cells");
+        AutomationProperties.SetAutomationId(resultCellsBox, "ScenarioManagerResultCellsBox");
+        AutomationProperties.SetHelpText(resultCellsBox, "The worksheet cells whose results the scenario reports.");
 
         var preventChangesBox = new CheckBox
         {
@@ -15362,13 +15666,14 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            // Top margin keeps Close clearly below the "Add/Edit Scenario" group box
+            // instead of overlapping its bottom border.
+            Margin = new Thickness(0, 14, 0, 0),
             Children =
             {
                 closeButton,
             },
         };
-        DockPanel.SetDock(closeButtonRow, Dock.Bottom);
 
         var actionColumn = new StackPanel
         {
@@ -15424,6 +15729,9 @@ public sealed partial class MainWindow : Window
                         StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCells")),
                         changingCellsBox),
                     CreateScenarioManagerField(
+                        "Result cells:",
+                        resultCellsBox),
+                    CreateScenarioManagerField(
                         StripDisplayMnemonic(UiText.Get("ScenarioManager_Comment")),
                         commentBox),
                     new StackPanel
@@ -15438,25 +15746,24 @@ public sealed partial class MainWindow : Window
 
         RefreshDialogPlan(selectedScenarioName);
         nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
-        dialog.Content = new DockPanel
+        dialog.Content = new ScrollViewer
         {
-            Margin = new Thickness(16),
-            Children =
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = new StackPanel
             {
-                closeButtonRow,
-                new StackPanel
+                Margin = new Thickness(16),
+                Spacing = 10,
+                Children =
                 {
-                    Spacing = 10,
-                    Children =
-                    {
-                        statusText,
-                        scenariosHeader,
-                        listWithButtons,
-                        selectionText,
-                        scenarioDetailsText,
-                        addEditGroup,
-                        errorText,
-                    },
+                    statusText,
+                    scenariosHeader,
+                    listWithButtons,
+                    selectionText,
+                    scenarioDetailsText,
+                    addEditGroup,
+                    errorText,
+                    closeButtonRow,
                 },
             },
         };
@@ -15533,7 +15840,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label, FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
                 control,
             },
         };
@@ -15699,8 +16006,8 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
@@ -15771,7 +16078,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label, FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
                 control,
             },
         };
@@ -15927,8 +16234,8 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
-                cancelButton,
                 createButton,
+                cancelButton,
             },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
@@ -15973,7 +16280,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label, FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
                 control,
             },
         };
@@ -16286,13 +16593,13 @@ public sealed partial class MainWindow : Window
             var isCustom = type == DvType.Custom;
             var isAny = type == DvType.Any;
 
-            formula1Label.Text = isList
+            formula1Label.Text = StripDisplayMnemonic(isList
                 ? UiText.Get("DataValidation_Source")
                 : isCustom
                     ? UiText.Get("DataValidation_Formula")
                     : showSecondFormula
                         ? UiText.Get("DataValidation_Minimum")
-                        : UiText.Get("DataValidation_Value");
+                        : UiText.Get("DataValidation_Value"));
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
             AutomationProperties.SetHelpText(
                 formula1Box,
@@ -16754,7 +17061,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static StackPanel CreateDataValidationField(string label, Control control) =>
-        CreateDataValidationField(new TextBlock { Text = label }, control);
+        CreateDataValidationField(new TextBlock { Text = StripDisplayMnemonic(label) }, control);
 
     private static StackPanel CreateDataValidationField(TextBlock label, Control control) =>
         new()
@@ -20583,13 +20890,12 @@ public sealed partial class MainWindow : Window
     }
 
     private WorkbookExportPrintPlan CreateActiveSheetPortablePdfPrintPlan() =>
-        WorkbookExportPrintPlanner.CreatePlan(
+        WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
             _session.Workbook,
             new WorkbookExportPrintIntent(
                 WorkbookExportPrintScope.ActiveSheet,
                 WorkbookExportPrintOutputKind.Pdf,
                 ActiveSheetIndex: ResolveActiveSheetIndex()),
-            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
 
     /// <summary>
@@ -20677,14 +20983,13 @@ public sealed partial class MainWindow : Window
             ? _session.SelectedRange
             : (GridRange?)null;
 
-        return WorkbookExportPrintPlanner.CreatePlan(
+        return WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
             _session.Workbook,
             new WorkbookExportPrintIntent(
                 scope,
                 outputKind,
                 ActiveSheetIndex: ResolveActiveSheetIndex(),
                 SelectedRange: selectedRange),
-            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
     }
 

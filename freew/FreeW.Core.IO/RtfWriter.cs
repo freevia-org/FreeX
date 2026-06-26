@@ -23,6 +23,14 @@ namespace FreeW.Core.IO;
 /// </summary>
 public static class RtfWriter
 {
+    // ---- list-table constants ------------------------------------------------------------------
+    // One \list per ListKind, deterministic IDs. \ls{id} references are emitted per paragraph.
+    // The IDs are chosen to be small positive integers that cannot collide with anything else we emit.
+    // Internal so RtfReader can use them for round-trip MultiLevel detection.
+    internal const int ListIdBullet     = 1; // bullet  (•)
+    internal const int ListIdNumber     = 2; // decimal (1., 2., …)
+    internal const int ListIdMultiLevel = 3; // multilevel decimal (1., 1.1., …)
+
     public static void Write(TextDocument document, Stream stream)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -34,10 +42,17 @@ public static class RtfWriter
         foreach (var block in document.Blocks)
             CollectBlock(block, fonts, colors);
 
+        // Determine which list kinds are actually used so we only emit needed \list entries.
+        bool hasBullet = false, hasNumber = false, hasMultiLevel = false;
+        foreach (var block in document.Blocks)
+            CollectListKinds(block, ref hasBullet, ref hasNumber, ref hasMultiLevel);
+
         var sb = new StringBuilder();
         sb.Append(@"{\rtf1\ansi\ansicpg1252\deff0");
         WriteFontTable(sb, fonts);
         WriteColorTable(sb, colors);
+        if (hasBullet || hasNumber || hasMultiLevel)
+            WriteListTable(sb, hasBullet, hasNumber, hasMultiLevel);
 
         // \uc1: every \uN Unicode escape is followed by exactly one ASCII fallback byte.
         sb.Append(@"\uc1");
@@ -79,6 +94,27 @@ public static class RtfWriter
                 fonts.Intern(f.FontFamily);
             if (!string.IsNullOrEmpty(f.ColorHex))
                 colors.Intern(f.ColorHex);
+            if (!string.IsNullOrEmpty(f.HighlightColorHex))
+                colors.Intern(f.HighlightColorHex);
+        }
+    }
+
+    private static void CollectListKinds(Block block, ref bool hasBullet, ref bool hasNumber, ref bool hasMultiLevel)
+    {
+        IEnumerable<Paragraph> paragraphs = block switch
+        {
+            Paragraph p => [p],
+            Table t => t.Rows.SelectMany(r => r.Cells).SelectMany(c => c.Paragraphs),
+            _ => []
+        };
+        foreach (var p in paragraphs)
+        {
+            switch (p.Formatting.ListKind)
+            {
+                case ListKind.Bullet:     hasBullet     = true; break;
+                case ListKind.Number:     hasNumber     = true; break;
+                case ListKind.MultiLevel: hasMultiLevel = true; break;
+            }
         }
     }
 
@@ -108,6 +144,74 @@ public static class RtfWriter
             sb.Append(@"\blue").Append(b.ToString(CultureInfo.InvariantCulture));
             sb.Append(';');
         }
+        sb.Append('}');
+    }
+
+    /// <summary>
+    /// Emits <c>{\listtable … }{\listoverridetable … }</c> header groups. One <c>\list</c> per
+    /// list kind (Bullet/Number/MultiLevel), each with 9 levels. Each list gets a matching
+    /// <c>\listoverride</c> so paragraphs can reference it via <c>\ls{id}</c>.
+    /// </summary>
+    private static void WriteListTable(StringBuilder sb, bool hasBullet, bool hasNumber, bool hasMultiLevel)
+    {
+        sb.Append(@"{\listtable");
+
+        // Emit one \list per kind that is actually used. Each defines 9 levels (\listlevel) so that
+        // \ilvl 0..8 are valid references from paragraph \ls\ilvl control words.
+        if (hasBullet)
+            WriteListEntry(sb, ListIdBullet, numFmt: 23, levelText: @"\'b7"); // 23 = bullet, •
+        if (hasNumber)
+            WriteListEntry(sb, ListIdNumber, numFmt: 0, levelText: "%1.");    // 0  = decimal
+        if (hasMultiLevel)
+            WriteListEntry(sb, ListIdMultiLevel, numFmt: 0, levelText: null); // multi: per-level text
+
+        sb.Append('}');
+
+        // \listoverridetable: one \listoverride per list, mapping \ls{id} → the list.
+        sb.Append(@"{\listoverridetable");
+        if (hasBullet)
+            WriteListOverride(sb, ListIdBullet);
+        if (hasNumber)
+            WriteListOverride(sb, ListIdNumber);
+        if (hasMultiLevel)
+            WriteListOverride(sb, ListIdMultiLevel);
+        sb.Append('}');
+    }
+
+    private static void WriteListEntry(StringBuilder sb, int listId, int numFmt, string? levelText)
+    {
+        // \listid must be non-zero and unique per document. We use the fixed IDs 1/2/3.
+        // \listhybrid tells Word to use per-level formatting rather than "legacy" mode.
+        sb.Append(@"{\list\listhybrid");
+        sb.Append(@"\listid").Append(listId.ToString(CultureInfo.InvariantCulture));
+
+        for (var level = 0; level < 9; level++)
+        {
+            sb.Append(@"{\listlevel");
+            sb.Append(@"\levelnfc").Append(numFmt.ToString(CultureInfo.InvariantCulture));
+            sb.Append(@"\levelnfcn").Append(numFmt.ToString(CultureInfo.InvariantCulture));
+            sb.Append(@"\leveljc0"); // left-justify list marker
+
+            // Indent: 360 twips (0.25 in) per level for left indent, -360 twips hanging.
+            var leftTwips = (level + 1) * 360;
+            sb.Append(@"\li").Append(leftTwips.ToString(CultureInfo.InvariantCulture));
+            sb.Append(@"\fi-360");
+
+            // Level text: for multilevel use "%{level+1}." so readers can render "1.1." etc.
+            var text = levelText ?? $"%{level + 1}.";
+            sb.Append(@"{\leveltext ").Append(text).Append(";}");
+            sb.Append(@"{\levelnumbers;}");
+            sb.Append('}');
+        }
+        sb.Append('}');
+    }
+
+    private static void WriteListOverride(StringBuilder sb, int listId)
+    {
+        // listoverridecount 0 means no per-level overrides (just maps \ls{id} → \listid{id}).
+        sb.Append(@"{\listoverride\listid").Append(listId.ToString(CultureInfo.InvariantCulture));
+        sb.Append(@"\listoverridecount0");
+        sb.Append(@"\ls").Append(listId.ToString(CultureInfo.InvariantCulture));
         sb.Append('}');
     }
 
@@ -143,6 +247,21 @@ public static class RtfWriter
             case TextAlignment.Right: sb.Append(@"\qr"); break;
             case TextAlignment.Justify: sb.Append(@"\qj"); break;
             default: sb.Append(@"\ql"); break;
+        }
+
+        // List identity: \ls{id}\ilvl{level} map to the \listtable entries above.
+        // Emitted before indents so the indent values the author set override the list-level defaults.
+        if (f.ListKind != ListKind.None)
+        {
+            var listId = f.ListKind switch
+            {
+                ListKind.Number     => ListIdNumber,
+                ListKind.MultiLevel => ListIdMultiLevel,
+                _                   => ListIdBullet
+            };
+            var level = Math.Clamp(f.ListLevel, 0, 8);
+            sb.Append(@"\ls").Append(listId.ToString(CultureInfo.InvariantCulture));
+            sb.Append(@"\ilvl").Append(level.ToString(CultureInfo.InvariantCulture));
         }
 
         // Indents and spacing in twips (points x 20).
@@ -199,6 +318,19 @@ public static class RtfWriter
             case VerticalAlign.Superscript: sb.Append(@"\super"); break;
             case VerticalAlign.Subscript: sb.Append(@"\sub"); break;
         }
+        // CC2: highlight / caps / rtl — previously omitted, causing data-loss on RTF round-trip.
+        if (!string.IsNullOrEmpty(f.HighlightColorHex))
+        {
+            var idx = colors.IndexOf(f.HighlightColorHex);
+            if (idx > 0) // 0 = auto (unset); only emit when the colour is actually in the table
+                sb.Append(@"\highlight").Append(idx.ToString(CultureInfo.InvariantCulture));
+        }
+        if (f.AllCaps)
+            sb.Append(@"\caps");
+        if (f.SmallCaps)
+            sb.Append(@"\scaps");
+        if (f.Rtl)
+            sb.Append(@"\rtlch");
     }
 
     // ---- tables ----------------------------------------------------------------------------------------

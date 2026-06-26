@@ -101,6 +101,93 @@ public sealed class SkiaPdfDocumentExporterTests
         act.Should().Throw<ArgumentException>();
     }
 
+    // -----------------------------------------------------------------------
+    // Page-setup fixture: A4 landscape, 1.0"/0.5" margins, FitToWidth=1,
+    // gridlines on, header with &P.  Exercises the page-setup-aware path
+    // and validates the MediaBox against the expected A4 landscape dimensions.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void PageSetup_LandscapeA4_FitToWidthGridlinesHeader_ProducesCorrectMediaBox()
+    {
+        // Fixture: Landscape A4, 1.0" L/R margins, 0.5" T/B margins,
+        // FitToWidth=1, gridlines on, header with &P token, enough rows
+        // to span 2+ pages, 15 columns.
+        const int rows = 80;
+        const int cols = 15;
+
+        var workbook = new Workbook("PageSetupFixture");
+        var sheet = workbook.AddSheet("Data");
+
+        sheet.PaperSize       = WorksheetPaperSize.A4;
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PageMargins     = new WorksheetPageMargins(Left: 1.0, Right: 1.0, Top: 0.5, Bottom: 0.5);
+        sheet.ScaleToFit      = new WorksheetScaleToFit(null, FitToPagesWide: 1, FitToPagesTall: null);
+        sheet.PrintGridlines  = true;
+        sheet.PageHeader      = new WorksheetHeaderFooter("Left", "Center", "Page &P");
+
+        for (var row = 1u; row <= rows; row++)
+        for (var col = 1u; col <= cols; col++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue($"R{row}C{col}"));
+
+        var exportPlan = CreateExportPlanFromPageSetup(workbook, sheetIndex: 0);
+
+        using var stream = new MemoryStream();
+        var outcome = AvaloniaPdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        outcome.Result.PageCount.Should().BeGreaterThan(1,
+            "80 rows should span more than 1 page on A4 landscape with default row height");
+
+        var pdfBytes = stream.ToArray();
+        var pdfText  = Encoding.Latin1.GetString(pdfBytes);
+
+        pdfText.Should().StartWith("%PDF-", "output must be a valid PDF");
+
+        // A4 landscape: width = 11.69" × 72 ≈ 841.68 pt, height = 8.27" × 72 ≈ 595.44 pt.
+        // The MediaBox must reflect landscape dimensions (width > height).
+        // Parse the first MediaBox from the PDF bytes.
+        var mediaBox = ExtractFirstMediaBox(pdfText);
+        mediaBox.Should().NotBeNull("PDF must contain a MediaBox entry");
+
+        // The width dimension (index 2) must be ≈ 841 pt and height (index 3) ≈ 595 pt.
+        mediaBox![2].Should().BeApproximately(841.68, 2.0,
+            "A4 landscape PDF page width should be ~841 pts");
+        mediaBox[3].Should().BeApproximately(595.44, 2.0,
+            "A4 landscape PDF page height should be ~595 pts");
+        mediaBox![2].Should().BeGreaterThan(mediaBox[3],
+            "landscape page must be wider than tall");
+    }
+
+    [Fact]
+    public void PageSetup_LetterPortrait_DefaultMargins_ProducesCorrectMediaBox()
+    {
+        var workbook = new Workbook("LetterPortrait");
+        var sheet    = workbook.AddSheet("S");
+        sheet.PaperSize       = WorksheetPaperSize.Letter;
+        sheet.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheet.PageMargins     = WorksheetPageMargins.Normal;
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Hello"));
+
+        var exportPlan = CreateExportPlanFromPageSetup(workbook, 0);
+
+        using var stream = new MemoryStream();
+        AvaloniaPdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        var pdfText  = Encoding.Latin1.GetString(stream.ToArray());
+        var mediaBox = ExtractFirstMediaBox(pdfText);
+        mediaBox.Should().NotBeNull("PDF must contain a MediaBox entry");
+
+        // Letter portrait: 8.5" × 11" → 612 pt × 792 pt
+        mediaBox![2].Should().BeApproximately(612, 1.0, "Letter portrait width ~612 pts");
+        mediaBox[3].Should().BeApproximately(792, 1.0, "Letter portrait height ~792 pts");
+        mediaBox[3].Should().BeGreaterThan(mediaBox[2], "portrait page must be taller than wide");
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
     private static PortablePdfExportPlan CreateExportPlan(Workbook workbook, Sheet sheet, GridRange range)
     {
         var printPlan = WorkbookExportPrintPlanner.CreatePlan(
@@ -116,11 +203,59 @@ public sealed class SkiaPdfDocumentExporterTests
         return PortablePdfExportPlanner.CreatePlan(printPlan);
     }
 
+    private static PortablePdfExportPlan CreateExportPlanFromPageSetup(Workbook workbook, int sheetIndex)
+    {
+        var printPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook,
+            new WorkbookExportPrintIntent(
+                WorkbookExportPrintScope.ActiveSheet,
+                WorkbookExportPrintOutputKind.Pdf,
+                ActiveSheetIndex: sheetIndex),
+            WorkbookExportPrintSurface.MacOs);
+
+        printPlan.IsReady.Should().BeTrue(printPlan.StatusText);
+        return PortablePdfExportPlanner.CreatePlan(printPlan);
+    }
+
     private static int ResolveSheetIndex(Workbook workbook, Sheet sheet)
     {
         for (var index = 0; index < workbook.Sheets.Count; index++)
             if (workbook.Sheets[index].Id == sheet.Id)
                 return index;
         return 0;
+    }
+
+    /// <summary>
+    /// Parses the first MediaBox array from the PDF text and returns [x0, y0, width, height].
+    /// Returns null if not found.
+    /// </summary>
+    private static double[]? ExtractFirstMediaBox(string pdfText)
+    {
+        // MediaBox format: /MediaBox [0 0 WidthPt HeightPt]
+        var idx = pdfText.IndexOf("/MediaBox [", StringComparison.Ordinal);
+        if (idx < 0) idx = pdfText.IndexOf("/MediaBox[", StringComparison.Ordinal);
+        if (idx < 0) return null;
+
+        var start = pdfText.IndexOf('[', idx);
+        if (start < 0) return null;
+        var end = pdfText.IndexOf(']', start);
+        if (end < 0) return null;
+
+        var values = pdfText[(start + 1)..end].Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (values.Length < 4) return null;
+
+        if (double.TryParse(values[0], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var x0) &&
+            double.TryParse(values[1], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var y0) &&
+            double.TryParse(values[2], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var w) &&
+            double.TryParse(values[3], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var h))
+        {
+            return [x0, y0, w, h];
+        }
+        return null;
     }
 }

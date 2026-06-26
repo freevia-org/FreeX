@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -306,7 +307,19 @@ public partial class GridView
 
         ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double splitSuperSubBaselineOffsetPx);
 
-        var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
+        // Pre-resolve rich runs (split-pane path).  Same cache-bypass logic as the main pass:
+        // cells with rich runs get a fresh FormattedText so ApplyRichRunFormatting can mutate it.
+        // Use CellStyle.Default when cell.Style is null so null run props inherit sensible defaults.
+        IReadOnlyList<ResolvedCellTextRun>? splitRichRuns = null;
+        if (SheetRichTextRuns is { } richTextMapSplit)
+        {
+            var cellAddrSplit = new CellAddress(ActiveSheetId, cell.Row, cell.Col);
+            if (richTextMapSplit.TryGetValue(cellAddrSplit, out var rawRunsSplit) && rawRunsSplit is { Count: > 0 })
+                splitRichRuns = CellRichRunLayoutPlanner.Resolve(rawRunsSplit, style ?? CellStyle.Default);
+        }
+        var hasSplitRichRuns = splitRichRuns is { Count: > 0 };
+
+        var useDefaultTextLayout = !hasSplitRichRuns && CanUseDefaultFormattedText(style, wrapText);
         var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
         var wrapTextAlignment = TextAlignment.Left;
         var useDefaultWrappedTextLayout = false;
@@ -318,7 +331,7 @@ public partial class GridView
                 CellHAlign.Right => TextAlignment.Right,
                 _ => TextAlignment.Left
             };
-            useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);
+            useDefaultWrappedTextLayout = !hasSplitRichRuns && CanUseDefaultWrappedFormattedText(style);
         }
         FormattedText text;
         if (useDefaultTextLayout)
@@ -347,6 +360,10 @@ public partial class GridView
 
         if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
             text.SetTextDecorations(decorations);
+
+        // Per-run rich text (split-pane path).
+        if (hasSplitRichRuns)
+            ApplyRichRunFormatting(text, splitRichRuns!, _brushCache);
 
         if (wrapText && !useDefaultWrappedTextLayout)
         {
@@ -622,7 +639,24 @@ public partial class GridView
             // Super/subscript: scale font to ~58% and apply a vertical baseline offset.
             ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double superSubBaselineOffsetPx);
 
-            var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
+            // Pre-resolve rich runs so we know whether to bypass the shared FormattedText cache.
+            // The cache must NOT be modified in-place (it is shared across cells), so when this cell
+            // has per-run rich text the default-layout fast-path is suppressed and a fresh
+            // FormattedText is created so that ApplyRichRunFormatting can safely mutate it.
+            // Use CellStyle.Default when cell.Style is null (plain cell, no explicit styling) so
+            // that null run properties inherit sensible defaults (Calibri, 11pt, black).
+            IReadOnlyList<ResolvedCellTextRun>? cellRichRuns = null;
+            if (SheetRichTextRuns is { } richTextMap)
+            {
+                var cellAddr = new CellAddress(ActiveSheetId, cell.Row, cell.Col);
+                if (richTextMap.TryGetValue(cellAddr, out var rawRuns) && rawRuns is { Count: > 0 })
+                    cellRichRuns = CellRichRunLayoutPlanner.Resolve(rawRuns, style ?? CellStyle.Default);
+            }
+            var hasRichRuns = cellRichRuns is { Count: > 0 };
+
+            // When the cell has per-run rich text, force the full (non-cached) FormattedText path so
+            // ApplyRichRunFormatting can mutate font/color ranges without corrupting the shared cache.
+            var useDefaultTextLayout = !hasRichRuns && CanUseDefaultFormattedText(style, wrapText);
             var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
             var wrapTextAlignment = TextAlignment.Left;
             var useDefaultWrappedTextLayout = false;
@@ -634,7 +668,7 @@ public partial class GridView
                     CellHAlign.Right => TextAlignment.Right,
                     _ => TextAlignment.Left
                 };
-                useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);
+                useDefaultWrappedTextLayout = !hasRichRuns && CanUseDefaultWrappedFormattedText(style);
             }
 
             FormattedText text;
@@ -663,6 +697,12 @@ public partial class GridView
 
             if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
+
+            // Per-run rich text: apply per-character-range formatting.
+            // cellRichRuns is pre-resolved above; the formattedText is guaranteed to be a fresh
+            // (non-cached) instance when hasRichRuns == true.
+            if (hasRichRuns)
+                ApplyRichRunFormatting(text, cellRichRuns!, _brushCache);
 
             if (wrapText && !useDefaultWrappedTextLayout)
             {

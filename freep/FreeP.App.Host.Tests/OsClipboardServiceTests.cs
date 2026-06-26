@@ -1,0 +1,683 @@
+using System.Windows;
+using Free.Shared.Drawing;
+using FreeP.App.Compositor;
+using FreeP.App.Host;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Host.Tests;
+
+/// <summary>
+/// Wave 10B — unit tests for <see cref="OsClipboardService"/>.
+///
+/// All tests use <see cref="FakeOsClipboard"/> and <see cref="StubShapeRenderer"/> so no
+/// real OS-clipboard access occurs.  This means the tests run safely in headless CI.
+/// </summary>
+public sealed class OsClipboardServiceTests
+{
+    // ── Fake implementations ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// In-memory clipboard stub.  Tests set HasImage / HasText / ImageBytes / Text before
+    /// calling the service and inspect WasSetCalled / LastDataObject after.
+    ///
+    /// Z1: <see cref="SequenceNumber"/> starts at 1 and is auto-incremented by
+    /// <see cref="SetDataObject"/> (mirroring Windows, which bumps the sequence on every write).
+    /// Tests can also set <see cref="SequenceNumber"/> directly to simulate an external app
+    /// overwriting the clipboard.
+    /// </summary>
+    internal sealed class FakeOsClipboard : IOsClipboard
+    {
+        public bool HasImage   { get; set; }
+        public bool HasText    { get; set; }
+        public byte[]? ImageBytes { get; set; }
+        public string? Text    { get; set; }
+
+        public bool       WasSetCalled { get; private set; }
+        public DataObject? LastDataObject { get; private set; }
+
+        /// <summary>
+        /// Simulates the Windows clipboard sequence number.
+        /// Auto-incremented by <see cref="SetDataObject"/>; may also be set directly
+        /// by tests to simulate an external clipboard write (another app overwrote it).
+        /// </summary>
+        public long SequenceNumber { get; set; } = 1;
+
+        public bool     ContainsImage()   => HasImage;
+        public bool     ContainsText()    => HasText;
+        public byte[]?  GetImagePngBytes() => ImageBytes;
+        public string?  GetText()         => Text;
+
+        public void SetDataObject(DataObject data)
+        {
+            WasSetCalled   = true;
+            LastDataObject = data;
+            // Mimic Windows: every clipboard write bumps the sequence number.
+            SequenceNumber++;
+        }
+    }
+
+    /// <summary>
+    /// Shape renderer stub that returns a fixed 1×1 red PNG (valid minimal PNG).
+    /// Tests can override ReturnEmpty to simulate a failed render.
+    /// </summary>
+    internal sealed class StubShapeRenderer : IShapeRenderer
+    {
+        // Minimal valid 1×1 red PNG (generated via System.Drawing, Base64-encoded).
+        private static readonly byte[] _minimalPng = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+
+        public bool ReturnEmpty { get; set; }
+
+        public byte[] RenderShapesToPng(
+            Presentation              presentation,
+            Slide                     slide,
+            IReadOnlyList<SlideShape> shapes,
+            int widthPx, int heightPx)
+            => ReturnEmpty ? Array.Empty<byte>() : _minimalPng;
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────────
+
+    private static EditingSession MakeSessionWithShape(out SlideShape shape)
+    {
+        var pres  = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+
+        shape = new SlideShape
+        {
+            Id           = 1u,
+            Name         = "TestShape",
+            Kind         = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu   = 914_400,
+            OffsetYEmu   = 457_200,
+            ExtentCxEmu  = 2_743_200,
+            ExtentCyEmu  = 1_828_800,
+            TextBody     = new TextBody()
+        };
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Hello" });
+        shape.TextBody!.Paragraphs.Add(para);
+        slide.Shapes.Add(shape);
+
+        var bus  = new PresentationCommandBus(pres);
+        var sess = new EditingSession(pres, bus);
+        sess.Select(1u);
+        return sess;
+    }
+
+    private static OsClipboardService MakeService(
+        FakeOsClipboard?  clipboard = null,
+        StubShapeRenderer? renderer  = null)
+        => new(clipboard ?? new FakeOsClipboard(), renderer ?? new StubShapeRenderer());
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  Paste-decision logic (pure, no UI)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void DecidePasteAction_OsImagePresent_ReturnsOsImage_WhenPreferOsTrue()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage: true, osHasText: false, internalHasData: false,
+            preferOsClipboard: true);
+
+        action.Should().Be(PasteAction.OsImage);
+    }
+
+    [Fact]
+    public void DecidePasteAction_OsTextOnly_ReturnsOsText_WhenPreferOsTrue()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage: false, osHasText: true, internalHasData: false,
+            preferOsClipboard: true);
+
+        action.Should().Be(PasteAction.OsText);
+    }
+
+    [Fact]
+    public void DecidePasteAction_InternalOnly_ReturnsInternal_WhenPreferOsTrue()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage: false, osHasText: false, internalHasData: true,
+            preferOsClipboard: true);
+
+        action.Should().Be(PasteAction.Internal);
+    }
+
+    [Fact]
+    public void DecidePasteAction_NothingAvailable_ReturnsNothing()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage: false, osHasText: false, internalHasData: false,
+            preferOsClipboard: true);
+
+        action.Should().Be(PasteAction.Nothing);
+    }
+
+    [Fact]
+    public void DecidePasteAction_InternalHasData_PrefersInternal_WhenPreferOsFalse()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage: true, osHasText: true, internalHasData: true,
+            preferOsClipboard: false);
+
+        action.Should().Be(PasteAction.Internal,
+            "when preferOsClipboard=false, internal clipboard wins");
+    }
+
+    [Fact]
+    public void DecidePasteAction_OsImageAndText_ImageWins_WhenPreferOsTrue()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage: true, osHasText: true, internalHasData: false,
+            preferOsClipboard: true);
+
+        action.Should().Be(PasteAction.OsImage,
+            "image takes priority over text in OS-preferred mode");
+    }
+
+    [Fact]
+    public void DecidePasteAction_NothingOnOsButInternalHasData_PreferOsFalse_ReturnsInternal()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage: false, osHasText: false, internalHasData: true,
+            preferOsClipboard: false);
+
+        action.Should().Be(PasteAction.Internal);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  Copy payload builder (with fake renderer, no real clipboard)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    [StaFact]
+    public void BuildDataObject_WithTextShape_ContainsText()
+    {
+        var sess    = MakeSessionWithShape(out _);
+        var svc     = MakeService();
+        var slide   = sess.CurrentSlide!;
+        var shapes  = slide.Shapes.AsReadOnly();
+
+        var dataObj = svc.BuildDataObject(sess.Presentation, slide, shapes);
+
+        // WPF DataObject.SetText stores under UnicodeText (CF_UNICODETEXT).
+        dataObj.GetDataPresent(DataFormats.UnicodeText).Should().BeTrue(
+            "text from shape's TextBody should be placed on the DataObject");
+        var text = (string?)dataObj.GetData(DataFormats.UnicodeText);
+        text.Should().Contain("Hello");
+    }
+
+    [StaFact]
+    public void BuildDataObject_WithStubRenderer_ContainsImage()
+    {
+        var sess   = MakeSessionWithShape(out _);
+        var svc    = MakeService();
+        var slide  = sess.CurrentSlide!;
+        var shapes = slide.Shapes.AsReadOnly();
+
+        var dataObj = svc.BuildDataObject(sess.Presentation, slide, shapes);
+
+        dataObj.GetDataPresent(DataFormats.Bitmap).Should().BeTrue(
+            "renderer produced a PNG that should be placed as bitmap on DataObject");
+    }
+
+    [StaFact]
+    public void BuildDataObject_RendererReturnsEmpty_NoBitmapInDataObject()
+    {
+        var renderer = new StubShapeRenderer { ReturnEmpty = true };
+        var sess     = MakeSessionWithShape(out _);
+        var svc      = new OsClipboardService(new FakeOsClipboard(), renderer);
+        var slide    = sess.CurrentSlide!;
+        var shapes   = slide.Shapes.AsReadOnly();
+
+        var dataObj = svc.BuildDataObject(sess.Presentation, slide, shapes);
+
+        // No image (renderer returned empty), but text still present.
+        dataObj.GetDataPresent(DataFormats.UnicodeText).Should().BeTrue(
+            "text is still placed even when the renderer returns empty");
+        dataObj.GetDataPresent(DataFormats.Bitmap).Should().BeFalse(
+            "no PNG from renderer → no bitmap on DataObject");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  PlaceSelectionOnOsClipboard (no real clipboard via FakeOsClipboard)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    [StaFact]
+    public void PlaceSelectionOnOsClipboard_WithSelection_CallsSetDataObject()
+    {
+        var fake = new FakeOsClipboard();
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        svc.PlaceSelectionOnOsClipboard(sess);
+
+        fake.WasSetCalled.Should().BeTrue("SetDataObject must be called when shapes are selected");
+    }
+
+    [StaFact]
+    public void PlaceSelectionOnOsClipboard_WithNoSelection_DoesNotCallSetDataObject()
+    {
+        var fake = new FakeOsClipboard();
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        svc.PlaceSelectionOnOsClipboard(sess);
+
+        fake.WasSetCalled.Should().BeFalse("no shapes selected → no clipboard write");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  Paste routing (with fake clipboard + fake renderer)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    // Minimal valid 1×1 PNG for image paste tests (same as StubShapeRenderer).
+    private static readonly byte[] _minPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+
+    [StaFact]
+    public void Paste_OsImagePresent_InsertsAPictureShape()
+    {
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1,
+            "an image paste inserts one Picture shape");
+        sess.CurrentSlide!.Shapes.Last().Kind.Should().Be(SlideShapeKind.Picture);
+    }
+
+    [StaFact]
+    public void Paste_OsTextPresent_InsertsTextBox()
+    {
+        var fake = new FakeOsClipboard { HasText = true, Text = "Pasted text" };
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1,
+            "a text paste inserts one AutoShape (textbox)");
+        var inserted = sess.CurrentSlide!.Shapes.Last();
+        inserted.Kind.Should().Be(SlideShapeKind.AutoShape);
+        inserted.TextBody.Should().NotBeNull();
+    }
+
+    [StaFact]
+    public void Paste_InternalClipboardFallback_WhenOsEmpty()
+    {
+        var fake = new FakeOsClipboard();   // empty OS clipboard
+        var sess = MakeSessionWithShape(out _);
+        // Load the internal clipboard with a shape.
+        sess.CopySelectedShapes();
+        sess.ClearSelection();
+        var svc    = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1,
+            "internal clipboard is used when OS clipboard is empty");
+    }
+
+    [StaFact]
+    public void Paste_NothingAvailable_DoesNotChangeShapeCount()
+    {
+        var fake = new FakeOsClipboard();   // empty OS clipboard
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        // No internal clipboard data either.
+        var svc    = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before,
+            "nothing on any clipboard → no shape inserted");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  ExtractText helper
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void ExtractText_MultipleShapesWithText_JoinsWithDoubleNewline()
+    {
+        var s1 = new SlideShape { Id = 1u, Kind = SlideShapeKind.AutoShape, TextBody = new TextBody() };
+        var p1 = new Paragraph(); p1.Runs.Add(new Run { Text = "Foo" }); s1.TextBody!.Paragraphs.Add(p1);
+
+        var s2 = new SlideShape { Id = 2u, Kind = SlideShapeKind.AutoShape, TextBody = new TextBody() };
+        var p2 = new Paragraph(); p2.Runs.Add(new Run { Text = "Bar" }); s2.TextBody!.Paragraphs.Add(p2);
+
+        var text = OsClipboardService.ExtractText(new[] { s1, s2 });
+
+        text.Should().Contain("Foo");
+        text.Should().Contain("Bar");
+    }
+
+    [Fact]
+    public void ExtractText_ShapeWithNoTextBody_IsSkipped()
+    {
+        var s1 = new SlideShape { Id = 1u, Kind = SlideShapeKind.AutoShape }; // no TextBody
+        var text = OsClipboardService.ExtractText(new[] { s1 });
+        text.Should().BeEmpty();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  Y6 — in-app copy→paste round-trip produces an editable shape, not a picture
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Y6: after an in-app copy (CopySelectedShapes + PlaceSelectionOnOsClipboard), a
+    /// subsequent Paste should return the editable deep-copied shape from the INTERNAL
+    /// clipboard, NOT a rasterised picture from the OS clipboard.
+    /// </summary>
+    [StaFact]
+    public void Y6_InAppCopyThenPaste_YieldsEditableShape_NotPicture()
+    {
+        // OS clipboard reports an image (the PNG we placed during copy).
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out var original);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        // Simulate in-app copy: internal clipboard + OS clipboard.
+        sess.CopySelectedShapes();
+        svc.PlaceSelectionOnOsClipboard(sess);
+
+        // The OS clipboard has an image, but it came from THIS app.
+        svc.OwnCopyIsCurrentOnOs.Should().BeTrue(
+            "generation token should be set after PlaceSelectionOnOsClipboard");
+
+        sess.ClearSelection();
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1,
+            "one shape should be pasted");
+
+        var pasted = sess.CurrentSlide!.Shapes.Last();
+        pasted.Kind.Should().NotBe(SlideShapeKind.Picture,
+            "Y6: in-app paste must not flatten to a picture");
+        pasted.Kind.Should().Be(original.Kind,
+            "Y6: pasted shape kind should match the original AutoShape");
+        pasted.Id.Should().NotBe(original.Id,
+            "pasted shape must have a fresh Id");
+    }
+
+    /// <summary>
+    /// Y6 boundary: pasting an image that came from ANOTHER app (no own-copy token)
+    /// still inserts a Picture shape — the external-image path must be unaffected.
+    /// </summary>
+    [StaFact]
+    public void Y6_ExternalImagePaste_StillInsertsPicture()
+    {
+        // OS clipboard has an image but we never called PlaceSelectionOnOsClipboard
+        // → OwnCopyIsCurrentOnOs is false.
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc    = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1);
+        sess.CurrentSlide!.Shapes.Last().Kind.Should().Be(SlideShapeKind.Picture,
+            "Y6 boundary: external image → Picture shape");
+    }
+
+    /// <summary>
+    /// Y6: DecidePasteAction returns Internal when ownCopyIsCurrentOnOs=true even though
+    /// the OS has an image.
+    /// </summary>
+    [Fact]
+    public void Y6_DecidePasteAction_OwnCopyOnOs_PrefersInternal()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage:          true,
+            osHasText:           true,
+            internalHasData:     true,
+            preferOsClipboard:   true,
+            ownCopyIsCurrentOnOs: true);
+
+        action.Should().Be(PasteAction.Internal,
+            "Y6: own-copy token + internal data → Internal wins over OS image");
+    }
+
+    /// <summary>
+    /// Y6: own-copy token with NO internal data still falls through to OsImage.
+    /// </summary>
+    [Fact]
+    public void Y6_DecidePasteAction_OwnCopyOnOs_NoInternal_FallsToOsImage()
+    {
+        var action = OsClipboardService.DecidePasteAction(
+            osHasImage:          true,
+            osHasText:           false,
+            internalHasData:     false,
+            preferOsClipboard:   true,
+            ownCopyIsCurrentOnOs: true);
+
+        action.Should().Be(PasteAction.OsImage,
+            "Y6 boundary: own-copy but no internal data → OsImage (nothing to prefer)");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  Y7 — cut populates OS clipboard BEFORE delete clears selection
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Y7: simulates the corrected Ctrl+X sequence from MainWindow:
+    ///   CopySelectedShapes → PlaceSelectionOnOsClipboard → DeleteSelected
+    /// Verifies that (a) the OS clipboard is written, and (b) paste-after-cut yields
+    /// the cut shapes (editable), not stale OS content.
+    /// </summary>
+    [StaFact]
+    public void Y7_CutSequence_PopulatesOsClipboard_BeforeDelete()
+    {
+        var fake = new FakeOsClipboard();    // empty OS clipboard before cut
+        var sess = MakeSessionWithShape(out var original);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        // Corrected Ctrl+X sequence (mirrors the fixed MainWindow binding).
+        sess.CopySelectedShapes();
+        svc.PlaceSelectionOnOsClipboard(sess);
+        sess.DeleteSelected();
+
+        // (a) OS clipboard was written.
+        fake.WasSetCalled.Should().BeTrue(
+            "Y7: OS clipboard must be populated during the cut sequence");
+
+        // (b) Internal clipboard still has data (CopySelectedShapes ran before Delete).
+        sess.CanPaste.Should().BeTrue(
+            "Y7: internal clipboard must survive DeleteSelected");
+
+        // (c) Paste-after-cut yields the cut shape (editable), not a picture.
+        var before = sess.CurrentSlide!.Shapes.Count;
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1,
+            "Y7: paste-after-cut should insert the cut shapes");
+        sess.CurrentSlide!.Shapes.Last().Kind.Should().NotBe(SlideShapeKind.Picture,
+            "Y7: paste-after-cut must produce an editable shape, not a picture");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  Y8/Y9 — OS-text paste uses InsertTextBox(text) — single command, multi-line
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Y8: the inserted textbox carries the clipboard text as part of the initial shape
+    /// (verified by reading the text back from the model — if the mutation happened
+    /// outside the command bus the undo→redo cycle would lose the text).
+    /// </summary>
+    [StaFact]
+    public void Y8_OsTextPaste_TextIsInShapeBeforeAnyMutation()
+    {
+        const string clipText = "Pasted from clipboard";
+        var fake = new FakeOsClipboard { HasText = true, Text = clipText };
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc    = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1);
+        var inserted = sess.CurrentSlide!.Shapes.Last();
+        inserted.Kind.Should().Be(SlideShapeKind.AutoShape);
+        var body = inserted.TextBody;
+        body.Should().NotBeNull();
+        var allText = string.Concat(body!.Paragraphs.SelectMany(p => p.Runs).Select(r => r.Text));
+        allText.Should().Contain(clipText.Replace("\n", "").Replace("\r", ""),
+            "Y8: clipboard text must be in the shape model after paste");
+    }
+
+    /// <summary>
+    /// Y9: multi-line clipboard text is split into separate paragraphs.
+    /// </summary>
+    [StaFact]
+    public void Y9_MultiLinePaste_SplitsIntoParagraphs()
+    {
+        const string clipText = "Line one\nLine two\nLine three";
+        var fake = new FakeOsClipboard { HasText = true, Text = clipText };
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc = new OsClipboardService(fake, new StubShapeRenderer());
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        var inserted = sess.CurrentSlide!.Shapes.Last();
+        inserted.TextBody.Should().NotBeNull();
+        inserted.TextBody!.Paragraphs.Count.Should().Be(3,
+            "Y9: three newline-separated lines should produce three paragraphs");
+        inserted.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Line one");
+        inserted.TextBody!.Paragraphs[1].Runs[0].Text.Should().Be("Line two");
+        inserted.TextBody!.Paragraphs[2].Runs[0].Text.Should().Be("Line three");
+    }
+
+    /// <summary>
+    /// Y9: empty clipboard text still inserts a valid (empty) textbox with at least one run.
+    /// </summary>
+    [StaFact]
+    public void Y9_EmptyTextPaste_DoesNotInsertBox()
+    {
+        // OsClipboardService.Paste guards IsNullOrEmpty before calling InsertTextBox.
+        var fake = new FakeOsClipboard { HasText = true, Text = "" };
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc    = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        // Empty text → guard in Paste() → no shape inserted.
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before,
+            "Y9: empty OS text should not insert a textbox");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  Z1 — own-copy token invalidated by external clipboard write (sequence number)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Z1 (a): in-app copy followed immediately by in-app paste (sequence number unchanged)
+    /// still prefers the internal editable clipboard (existing Y6 behavior preserved).
+    /// </summary>
+    [StaFact]
+    public void Z1_InAppCopyThenPaste_SequenceUnchanged_PrefersInternal()
+    {
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out var original);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        // Simulate in-app copy: internal clipboard + OS clipboard.
+        sess.CopySelectedShapes();
+        svc.PlaceSelectionOnOsClipboard(sess);
+
+        // OwnCopyIsCurrentOnOs should be true: sequence number matches.
+        svc.OwnCopyIsCurrentOnOs.Should().BeTrue(
+            "Z1: sequence number matches our last write → own copy is current");
+
+        sess.ClearSelection();
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1);
+        var pasted = sess.CurrentSlide!.Shapes.Last();
+        pasted.Kind.Should().NotBe(SlideShapeKind.Picture,
+            "Z1 (a): sequence unchanged → own-copy still current → editable shape, not picture");
+        pasted.Kind.Should().Be(original.Kind);
+    }
+
+    /// <summary>
+    /// Z1 (b): in-app copy, then an external app overwrites the OS clipboard (fake sequence
+    /// number bumped).  Paste must detect the external change and return OsImage, NOT the
+    /// stale internal shape.  This is the regression scenario.
+    /// </summary>
+    [StaFact]
+    public void Z1_ExternalClipboardChangeAfterInAppCopy_PastesExternalImage_NotStaleShape()
+    {
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        // In-app copy: internal clipboard + OS clipboard.
+        sess.CopySelectedShapes();
+        svc.PlaceSelectionOnOsClipboard(sess);
+
+        svc.OwnCopyIsCurrentOnOs.Should().BeTrue("own copy should be current right after copy");
+
+        // Simulate another app writing to the clipboard (bumps sequence number).
+        fake.SequenceNumber++;
+        // The OS clipboard now contains an external image (already set via HasImage=true).
+
+        // OwnCopyIsCurrentOnOs must now be false.
+        svc.OwnCopyIsCurrentOnOs.Should().BeFalse(
+            "Z1: sequence number changed by external app → own copy is stale");
+
+        sess.ClearSelection();
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1,
+            "an external image was on the OS clipboard → one shape inserted");
+        var pasted = sess.CurrentSlide!.Shapes.Last();
+        pasted.Kind.Should().Be(SlideShapeKind.Picture,
+            "Z1 (b): external clipboard change → paste must use external image (Picture), NOT stale internal shape");
+    }
+
+    /// <summary>
+    /// Z1 (c): external image with no prior in-app copy (own-copy token never set)
+    /// → paste returns OsImage.  Sanity check that the baseline path is unaffected.
+    /// </summary>
+    [StaFact]
+    public void Z1_ExternalImageWithNoPriorInAppCopy_PastesOsImage()
+    {
+        // OS clipboard has an image but we never called PlaceSelectionOnOsClipboard.
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc    = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.OwnCopyIsCurrentOnOs.Should().BeFalse(
+            "Z1 (c): no in-app copy ever done → own copy is never current");
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1);
+        sess.CurrentSlide!.Shapes.Last().Kind.Should().Be(SlideShapeKind.Picture,
+            "Z1 (c): external image, no prior in-app copy → Picture");
+    }
+}

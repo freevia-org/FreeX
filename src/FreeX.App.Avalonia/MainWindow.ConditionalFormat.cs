@@ -275,9 +275,9 @@ public sealed partial class MainWindow
         {
             Title = existingRule is null ? UiText.Get("ConditionalFormat_NewRuleTitle") : UiText.Get("ConditionalFormat_EditRuleTitle"),
             Width = 640,
-            Height = 470,
+            Height = 380,
             MinWidth = 600,
-            MinHeight = 400,
+            MinHeight = 340,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -826,6 +826,7 @@ public sealed partial class MainWindow
 
     private static void ApplyCfCheckBoxChrome(CheckBox cb)
     {
+        StripContentMnemonic(cb);
         cb.FontSize = 12;
         cb.FontFamily = FormulaBarFontFamily;
         cb.MinHeight = 20;
@@ -1199,13 +1200,20 @@ public sealed partial class MainWindow
                 FontFamily = FormulaBarFontFamily,
                 Padding = new Thickness(5, 3),
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                TextTrimming = global::Avalonia.Media.TextTrimming.CharacterEllipsis,
+                ClipToBounds = true,
                 [AvaloniaGrid.ColumnProperty] = column,
             };
 
+        // Columns sum to less than the rules-frame inner width (560 dialog − 24 margin − 2 border ≈ 534),
+        // and the final "Stop If True" column is a star so it absorbs the remainder and can never spill
+        // past the frame's right border (the Linux overflow bug). ClipToBounds keeps any long header text
+        // inside its own cell.
         var headerGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("34,200,95,170,84"),
+            ColumnDefinitions = new ColumnDefinitions("32,190,90,150,*"),
             Background = Brush(243, 243, 243),
+            ClipToBounds = true,
             Children =
             {
                 HeaderCell("#", 0),

@@ -264,14 +264,17 @@ public sealed partial class XlsxFileAdapter
             if (frozenRows > 0 || frozenCols > 0)
                 xlSheet.SheetView.Freeze((int)frozenRows, (int)frozenCols);
 
-            if (sheet.PrintArea is { } printArea)
+            if (sheet.PrintAreas.Count > 0)
             {
                 xlSheet.PageSetup.PrintAreas.Clear();
-                xlSheet.PageSetup.PrintAreas.Add(
-                    (int)printArea.Start.Row,
-                    (int)printArea.Start.Col,
-                    (int)printArea.End.Row,
-                    (int)printArea.End.Col);
+                foreach (var printArea in sheet.PrintAreas)
+                {
+                    xlSheet.PageSetup.PrintAreas.Add(
+                        (int)printArea.Start.Row,
+                        (int)printArea.Start.Col,
+                        (int)printArea.End.Row,
+                        (int)printArea.End.Col);
+                }
             }
 
             var pageOrientation = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PageOrientation, WorksheetPageOrientation.Portrait);

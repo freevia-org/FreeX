@@ -19,6 +19,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
+    private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
 
     public int RemovedRowCount { get; private set; }
 
@@ -63,6 +64,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             _threadedCommentSnapshot = [];
             _hyperlinkSnapshot = [];
             _hyperlinkMetadataSnapshot = [];
+            _richTextRunsSnapshot = [];
             return new CommandOutcome(true);
         }
 
@@ -73,6 +75,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         _threadedCommentSnapshot = CaptureDictionary(sheet.ThreadedComments, allInRangeAddresses);
         _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, allInRangeAddresses);
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, allInRangeAddresses);
+        _richTextRunsSnapshot = CaptureDictionary(sheet.RichTextRuns, allInRangeAddresses);
 
         // ── 3. Clear the entire in-range area ─────────────────────────────
         foreach (var address in allInRangeAddresses)
@@ -116,6 +119,10 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
 
                 if (_hyperlinkMetadataSnapshot.TryGetValue(source, out var hyperlinkMetadata))
                     sheet.HyperlinkMetadata[target] = hyperlinkMetadata;
+
+                // Rich text runs
+                if (_richTextRunsSnapshot.TryGetValue(source, out var richRuns))
+                    sheet.RichTextRuns[target] = richRuns;
             }
 
             targetRow++;
@@ -148,6 +155,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, allInRangeAddresses);
         RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, allInRangeAddresses);
+        RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot, allInRangeAddresses);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -224,6 +232,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         sheet.ThreadedComments.Remove(address);
         sheet.Hyperlinks.Remove(address);
         sheet.HyperlinkMetadata.Remove(address);
+        sheet.RichTextRuns.Remove(address);
     }
 
     private static void RestoreCellSnapshot(Sheet sheet, CellSnapshot snapshot)

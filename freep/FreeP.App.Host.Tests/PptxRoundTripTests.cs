@@ -265,6 +265,141 @@ public sealed class PptxRoundTripTests : IDisposable
         grad.AngleDegrees.Should().BeApproximately(90.0, 0.1);
     }
 
+    [Fact]
+    public void RoundTrip_MultiStopGradientFill_ThreeStops()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var stops = new[]
+        {
+            new GradientStop(0.0,  new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00))),
+            new GradientStop(0.5,  new ThemeAwareColor(new SrgbColor(0x00, 0xFF, 0x00))),
+            new GradientStop(1.0,  new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF))),
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "Grad3Shape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Linear, angleDegrees: 45.0),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "Grad3Shape");
+        s.Fill.Should().BeOfType<ShapeFill.Gradient>();
+        var grad = (ShapeFill.Gradient)s.Fill!;
+        grad.Stops.Should().HaveCount(3, "all 3 stops must survive round-trip");
+        grad.Kind.Should().Be(GradientKind.Linear);
+        grad.AngleDegrees.Should().BeApproximately(45.0, 0.1);
+        grad.Stops[0].Color.Resolved.R.Should().Be(0xFF);
+        grad.Stops[1].Color.Resolved.G.Should().Be(0xFF);
+        grad.Stops[2].Color.Resolved.B.Should().Be(0xFF);
+        grad.Stops[0].Position.Should().BeApproximately(0.0, 0.001);
+        grad.Stops[1].Position.Should().BeApproximately(0.5, 0.001);
+        grad.Stops[2].Position.Should().BeApproximately(1.0, 0.001);
+    }
+
+    [Fact]
+    public void RoundTrip_RadialGradientFill()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var stops = new[]
+        {
+            new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF))),
+            new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00))),
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "RadialShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Ellipse,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Radial, angleDegrees: 0.0),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "RadialShape");
+        s.Fill.Should().BeOfType<ShapeFill.Gradient>();
+        var grad = (ShapeFill.Gradient)s.Fill!;
+        grad.Kind.Should().Be(GradientKind.Radial);
+        grad.Stops.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void RoundTrip_PictureFill()
+    {
+        // Minimal 1x1 PNG (89 bytes)
+        var pngBytes = new byte[]
+        {
+            0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A, // PNG signature
+            0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52, // IHDR chunk
+            0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,
+            0x08,0x02,0x00,0x00,0x00,0x90,0x77,0x53,
+            0xDE,0x00,0x00,0x00,0x0C,0x49,0x44,0x41, // IDAT chunk
+            0x54,0x08,0xD7,0x63,0xF8,0xCF,0xC0,0x00,
+            0x00,0x00,0x02,0x00,0x01,0xE2,0x21,0xBC,
+            0x33,0x00,0x00,0x00,0x00,0x49,0x45,0x4E, // IEND chunk
+            0x44,0xAE,0x42,0x60,0x82
+        };
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "PicFillShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Picture(pngBytes, "image/png", tile: false),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "PicFillShape");
+        s.Fill.Should().BeOfType<ShapeFill.Picture>("picture fill must survive round-trip");
+        var pic = (ShapeFill.Picture)s.Fill!;
+        pic.ImageBytes.Should().NotBeEmpty("image bytes must be preserved");
+        pic.Tile.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RoundTrip_PatternFill()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "PatternShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Pattern(
+                preset: "diagStripe",
+                foregroundColor: new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)),
+                backgroundColor: new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF))),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "PatternShape");
+        s.Fill.Should().BeOfType<ShapeFill.Pattern>("pattern fill must survive round-trip");
+        var pat = (ShapeFill.Pattern)s.Fill!;
+        pat.Preset.Should().Be("diagStripe");
+        pat.ForegroundColor.Resolved.B.Should().Be(0xFF);
+        pat.BackgroundColor.Resolved.R.Should().Be(0xFF);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // 4. Outline round-trip
     // ─────────────────────────────────────────────────────────────────────────────
@@ -1002,5 +1137,345 @@ public sealed class PptxRoundTripTests : IDisposable
 
         var rt = reloaded.Slides[0].Shapes.Single(s => s.Kind == SlideShapeKind.Table).Table!;
         rt.Flags.BandRow.Should().BeFalse("absent bandRow attribute must default to false (Q7)");
+    }
+}
+
+/// <summary>
+/// Regression tests for bugs U5/U6/U7/U8 (3D shape XML order + schema validity)
+/// and U1/U4 (motion animation delay + packed path strings).
+/// </summary>
+public sealed class Shape3dAndMotionRegressionTests
+{
+    private static (Presentation pres, SlideShape shape) MakeShapeWithEffects()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        var shape = new SlideShape
+        {
+            Id = 5, Name = "3DShape", Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914400, OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200, ExtentCyEmu = 1828800,
+        };
+        slide.Shapes.Add(shape);
+        return (pres, shape);
+    }
+
+    // ── helper: open a PPTX zip MemoryStream and parse slide1.xml ───────────────
+
+    private static System.Xml.Linq.XDocument LoadSlide1Xml(MemoryStream pptxStream)
+    {
+        pptxStream.Position = 0;
+        using var zip = new System.IO.Compression.ZipArchive(pptxStream, System.IO.Compression.ZipArchiveMode.Read, leaveOpen: true);
+        var entry = zip.GetEntry("ppt/slides/slide1.xml")!;
+        using var sr = entry.Open();
+        return System.Xml.Linq.XDocument.Load(sr);
+    }
+
+    // ── U5: scene3d MUST precede sp3d in the written XML ────────────────────────
+
+    [Fact]
+    public void U5_SpPr_Scene3dPrecedesSp3d_InXml()
+    {
+        var (pres, shape) = MakeShapeWithEffects();
+        shape.Effects = new ShapeEffects
+        {
+            BevelTop = new BevelInfo { WidthEmu = 76200, HeightEmu = 76200 },
+            Scene3d  = new Scene3dInfo
+            {
+                CameraPreset = "orthographicFront",
+                LightRig     = "threePt",
+                LightRigDir  = "t",
+            },
+        };
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        // Inspect slide XML to verify element order inside spPr.
+        var doc = LoadSlide1Xml(ms);
+        System.Xml.Linq.XNamespace ns = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        System.Xml.Linq.XNamespace a  = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        // Find the spPr that actually contains 3D elements (skip empty placeholder spPr elements).
+        var spPr = doc.Descendants(ns + "spPr")
+            .First(el => el.Descendants().Any(e => e.Name.LocalName is "scene3d" or "sp3d"));
+        var children = spPr.Elements().Select(e => e.Name.LocalName).ToList();
+
+        var scene3dIdx = children.IndexOf("scene3d");
+        var sp3dIdx    = children.IndexOf("sp3d");
+
+        scene3dIdx.Should().BeGreaterThanOrEqualTo(0, "scene3d must be present");
+        sp3dIdx.Should().BeGreaterThanOrEqualTo(0, "sp3d must be present");
+        scene3dIdx.Should().BeLessThan(sp3dIdx, "scene3d must precede sp3d per CT_ShapeProperties order (U5)");
+    }
+
+    // ── U7: camera is always emitted (even when CameraPreset is empty) ───────────
+
+    [Fact]
+    public void U7_Scene3d_AlwaysEmitsCamera_WhenCameraPresetEmpty()
+    {
+        var (pres, shape) = MakeShapeWithEffects();
+        // Simulate a lightRig-only scene (CameraPreset empty, as produced by
+        // ReadScene3d when only <a:lightRig> was present in the original file).
+        shape.Effects = new ShapeEffects
+        {
+            Scene3d = new Scene3dInfo
+            {
+                CameraPreset = string.Empty,
+                LightRig     = "threePt",
+                LightRigDir  = "t",
+            },
+        };
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        var doc = LoadSlide1Xml(ms);
+        System.Xml.Linq.XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var scene3d = doc.Descendants(a + "scene3d").First();
+
+        var camera = scene3d.Element(a + "camera");
+        camera.Should().NotBeNull("CT_Scene3D requires <a:camera> minOccurs=1 (U7)");
+        camera!.Attribute("prst")?.Value.Should().Be("orthographicFront",
+            "default preset must be emitted when CameraPreset is empty");
+    }
+
+    // ── U6: bare <a:lightRig/> must NOT be emitted when rig/dir are absent ───────
+
+    [Fact]
+    public void U6_Scene3d_OmitsLightRig_WhenRigOrDirEmpty()
+    {
+        var (pres, shape) = MakeShapeWithEffects();
+        // Scene with camera only — no light rig data (LightRig/LightRigDir empty).
+        shape.Effects = new ShapeEffects
+        {
+            Scene3d = new Scene3dInfo
+            {
+                CameraPreset = "perspectiveFront",
+                LightRig     = string.Empty,
+                LightRigDir  = string.Empty,
+            },
+        };
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        var doc = LoadSlide1Xml(ms);
+        System.Xml.Linq.XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var scene3d = doc.Descendants(a + "scene3d").First();
+
+        // Camera must be present.
+        scene3d.Element(a + "camera").Should().NotBeNull("camera is always required");
+        // lightRig must be absent — a bare <a:lightRig/> is schema-invalid (U6).
+        scene3d.Element(a + "lightRig").Should().BeNull(
+            "lightRig must be omitted when rig/dir are empty to avoid schema-invalid bare element");
+    }
+
+    // ── U7+U6 combined: full scene3d round-trips correctly ───────────────────────
+
+    [Fact]
+    public void U7_U6_Scene3d_FullRoundTrip()
+    {
+        var (pres, shape) = MakeShapeWithEffects();
+        shape.Effects = new ShapeEffects
+        {
+            Scene3d = new Scene3dInfo
+            {
+                CameraPreset = "perspectiveRelaxed",
+                LightRig     = "threePt",
+                LightRigDir  = "t",
+            },
+        };
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var fx = loaded.Slides[0].Shapes.Single(s => s.Name == "3DShape").Effects;
+        fx.Should().NotBeNull();
+        fx!.Scene3d.Should().NotBeNull();
+        fx.Scene3d!.CameraPreset.Should().Be("perspectiveRelaxed");
+        fx.Scene3d.LightRig.Should().Be("threePt");
+        fx.Scene3d.LightRigDir.Should().Be("t");
+    }
+
+    // ── U8: zero-width bevel must round-trip as 0, not become the 76200 default ──
+
+    [Fact]
+    public void U8_Bevel_ZeroWidthHeight_RoundTrips()
+    {
+        var (pres, shape) = MakeShapeWithEffects();
+        shape.Effects = new ShapeEffects
+        {
+            BevelTop = new BevelInfo { WidthEmu = 0, HeightEmu = 0, PresetName = "circle" },
+        };
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var fx = loaded.Slides[0].Shapes.Single(s => s.Name == "3DShape").Effects;
+        fx.Should().NotBeNull();
+        fx!.BevelTop.Should().NotBeNull();
+        fx.BevelTop!.WidthEmu.Should().Be(0,
+            "explicit zero bevel width must round-trip as 0, not restore to the 76200 default (U8)");
+        fx.BevelTop.HeightEmu.Should().Be(0,
+            "explicit zero bevel height must round-trip as 0, not restore to the 76200 default (U8)");
+    }
+
+    // ── U1: motion animation DelayMs round-trips ──────────────────────────────────
+
+    [Fact]
+    public void U1_MotionAnimation_DelayMs_RoundTrips()
+    {
+        // The writer coerces the FIRST animation in a click group to OnClick.
+        // To test delay on a motion animation, it must be the SECOND animation
+        // in a click group (AfterPrevious with non-zero delay).
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2, Name = "Leader", Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 3, Name = "Mover", Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+        });
+
+        // First animation in the click group (OnClick leader).
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId    = 2,
+            Kind       = AnimationKind.Entrance,
+            Preset     = AnimationPreset.Appear,
+            Trigger    = AnimationTrigger.OnClick,
+            DurationMs = 500,
+        });
+
+        // Second animation: motion, AfterPrevious + delay — the bug case.
+        var motion = new MotionPath { Origin = "parent" };
+        motion.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+        motion.Segments.Add(MotionPathSegment.LineTo(0.5, 0));
+
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId    = 3,
+            Kind       = AnimationKind.Motion,
+            Trigger    = AnimationTrigger.AfterPrevious,
+            DurationMs = 1000,
+            DelayMs    = 750,
+            Motion     = motion,
+        });
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var anim = loaded.Slides[0].Animations.Single(a => a.Kind == AnimationKind.Motion);
+        anim.DelayMs.Should().Be(750, "motion animation DelayMs must survive round-trip (U1)");
+        anim.Trigger.Should().Be(AnimationTrigger.AfterPrevious,
+            "AfterPrevious trigger must survive round-trip");
+    }
+
+    // ── U4: packed path strings ("M0 0 L.5 0 E") parse to correct segments ───────
+
+    [Fact]
+    public void U4_ParseMotionPath_PackedString_TwoSegments()
+    {
+        // "M0 0 L.5 0 E" — command letter glued to first number (packed PowerPoint format).
+        // Should parse to: MoveTo(0,0), LineTo(0.5,0), Close — 3 segments.
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 3, Name = "PackedMover", Kind = SlideShapeKind.AutoShape,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+        });
+
+        // We inject the packed path directly by writing a raw PPTX with it.
+        // Simplest approach: verify via a spaced-then-packed round-trip using the reader directly.
+        // Write a normal animation, then read back a hand-built XML stream with a packed path.
+        var packedPathXml = BuildPackedPathPptxBytes(slide.Shapes[0].Id);
+        var loaded = PptxPackageReader.Read(new MemoryStream(packedPathXml));
+
+        var anim = loaded.Slides[0].Animations.SingleOrDefault(a => a.Kind == AnimationKind.Motion);
+        anim.Should().NotBeNull("motion animation must be parsed from packed path XML (U4)");
+        anim!.Motion.Should().NotBeNull();
+
+        var segs = anim.Motion!.Segments;
+        segs.Should().HaveCountGreaterThanOrEqualTo(2, "packed 'M0 0 L.5 0' must produce at least 2 segments");
+        segs[0].Kind.Should().Be(MotionPathSegmentKind.Move, "first segment is MoveTo");
+        segs[0].X.Should().BeApproximately(0, 1e-4);
+        segs[0].Y.Should().BeApproximately(0, 1e-4);
+        segs[1].Kind.Should().Be(MotionPathSegmentKind.Line, "second segment is LineTo");
+        segs[1].X.Should().BeApproximately(0.5, 1e-4);
+        segs[1].Y.Should().BeApproximately(0, 1e-4);
+    }
+
+    // ── U4 helper: build a minimal .pptx byte array with a packed motion path ────
+
+    private static byte[] BuildPackedPathPptxBytes(uint shapeId)
+    {
+        // Write a normal presentation with a spaced motion path, then patch the
+        // slide1.xml entry inside the zip to use a packed path ("M0 0 L.5 0 E").
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = shapeId, Name = "PackedMover", Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+        });
+
+        var motion = new MotionPath { Origin = "parent" };
+        motion.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+        motion.Segments.Add(MotionPathSegment.LineTo(0.5, 0));
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = shapeId, Kind = AnimationKind.Motion,
+            Trigger = AnimationTrigger.OnClick, DurationMs = 500, Motion = motion,
+        });
+
+        var srcMs = new MemoryStream();
+        PptxPackageWriter.Write(pres, srcMs);
+
+        // Open the zip, read slide1.xml, patch the path= attribute, rewrite into a new zip.
+        srcMs.Position = 0;
+        var dstMs = new MemoryStream();
+        using (var srcZip = new System.IO.Compression.ZipArchive(srcMs, System.IO.Compression.ZipArchiveMode.Read, leaveOpen: true))
+        using (var dstZip = new System.IO.Compression.ZipArchive(dstMs, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in srcZip.Entries)
+            {
+                var dstEntry = dstZip.CreateEntry(entry.FullName, System.IO.Compression.CompressionLevel.Fastest);
+                using var srcStream = entry.Open();
+                using var dstStream = dstEntry.Open();
+
+                if (entry.FullName == "ppt/slides/slide1.xml")
+                {
+                    // Patch path= attribute to use packed form.
+                    var xml = new System.IO.StreamReader(srcStream).ReadToEnd();
+                    var patched = System.Text.RegularExpressions.Regex.Replace(
+                        xml,
+                        @"path=""[^""]*""",
+                        @"path=""M0 0 L.5 0 E""");
+                    var bytes = System.Text.Encoding.UTF8.GetBytes(patched);
+                    dstStream.Write(bytes, 0, bytes.Length);
+                }
+                else
+                {
+                    srcStream.CopyTo(dstStream);
+                }
+            }
+        }
+
+        return dstMs.ToArray();
     }
 }

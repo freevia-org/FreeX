@@ -5,6 +5,7 @@ namespace FreeP.App.Host;
 /// the same model that drives FreeX and FreeW, proving the ribbon library is app-neutral.
 ///
 /// Tabs: Home, Insert (Wave 3 + 5B), Design (Wave 5B), Transitions, Animations, Slide Show (Wave 4C).
+/// Wave 12A: Arrange group added to the Home tab (Group/Ungroup, z-order, Align).
 /// </summary>
 internal static class FreePRibbon
 {
@@ -41,6 +42,37 @@ internal static class FreePRibbon
                     g.IconToggle("freep.italic", "Italic", RibbonCommandIconKind.Italic, "2");
                     g.IconToggle("freep.underline", "Underline", RibbonCommandIconKind.Underline, "3");
                 });
+                // ── Wave 12A: Arrange group ───────────────────────────────────────────────
+                tab.Group("arrange", "Arrange", "R", 70, g =>
+                {
+                    // Group / Ungroup
+                    g.Large("freep.arrange.group",   "Group",   RibbonCommandIconKind.Group,   "G");
+                    g.Medium("freep.arrange.ungroup", "Ungroup", RibbonCommandIconKind.Ungroup, "U");
+                    g.Separator();
+                    // Z-order
+                    g.Medium("freep.arrange.bring-to-front",  "Bring to Front",  RibbonCommandIconKind.ArrowUp,   "F");
+                    g.Medium("freep.arrange.bring-forward",   "Bring Forward",   RibbonCommandIconKind.ArrowUp,   "O");
+                    g.Medium("freep.arrange.send-backward",   "Send Backward",   RibbonCommandIconKind.ArrowDown, "K");
+                    g.Medium("freep.arrange.send-to-back",    "Send to Back",    RibbonCommandIconKind.ArrowDown, "B");
+                    g.Separator();
+                    // Align (six buttons — vertical reuse arrow/effects icons as fallback)
+                    g.Medium("freep.arrange.align-left",      "Align Left",     RibbonCommandIconKind.AlignLeft,    "L");
+                    g.Medium("freep.arrange.align-center-h",  "Center Horiz.",  RibbonCommandIconKind.AlignCenter,  "H");
+                    g.Medium("freep.arrange.align-right",     "Align Right",    RibbonCommandIconKind.AlignRight,   "R");
+                    g.Medium("freep.arrange.align-top",       "Align Top",      RibbonCommandIconKind.ArrowUp,      "T");
+                    g.Medium("freep.arrange.align-middle",    "Center Vert.",   RibbonCommandIconKind.Align,        "M");
+                    g.Medium("freep.arrange.align-bottom",    "Align Bottom",   RibbonCommandIconKind.ArrowDown,    "E");
+                    g.Separator();
+                    // Distribute
+                    g.Medium("freep.arrange.distribute-h",    "Distribute Horiz.", RibbonCommandIconKind.AlignCenter, "D");
+                    g.Medium("freep.arrange.distribute-v",    "Distribute Vert.",  RibbonCommandIconKind.Align,       "V");
+                });
+                // Wave 12B: Editing group — Find & Replace.
+                tab.Group("editing", "Editing", "E", 70, g =>
+                {
+                    g.Large("freep.find",    "Find",    RibbonCommandIconKind.Search,  "F");
+                    g.Medium("freep.replace", "Replace", RibbonCommandIconKind.Refresh, "H");
+                });
             })
             .Tab("insert", "Insert", "N", tab =>
             {
@@ -56,13 +88,21 @@ internal static class FreePRibbon
                     g.Medium("freep.insert-table-4x4", "4×4", RibbonCommandIconKind.Table, "4");
                     // NOTE: interactive row/col picker (hover-grid) is deferred to a later wave.
                 });
-                // Wave 5B: Charts group.
+                // Wave 5B: Charts group (9B: "Edit Data" button added).
                 tab.Group("charts", "Charts", "H", 93, g =>
                 {
-                    g.Medium("freep.insert-chart-column", "Column", RibbonCommandIconKind.ChartColumn, "C");
-                    g.Medium("freep.insert-chart-bar",    "Bar",    RibbonCommandIconKind.ChartColumn, "B");
-                    g.Medium("freep.insert-chart-line",   "Line",   RibbonCommandIconKind.ChartLine,   "L");
-                    g.Medium("freep.insert-chart-pie",    "Pie",    RibbonCommandIconKind.ChartPie,    "P");
+                    g.Medium("freep.insert-chart-column", "Column",    RibbonCommandIconKind.ChartColumn, "C");
+                    g.Medium("freep.insert-chart-bar",    "Bar",       RibbonCommandIconKind.ChartColumn, "B");
+                    g.Medium("freep.insert-chart-line",   "Line",      RibbonCommandIconKind.ChartLine,   "L");
+                    g.Medium("freep.insert-chart-pie",    "Pie",       RibbonCommandIconKind.ChartPie,    "P");
+                    // Wave 9B: Edit selected chart's data via grid dialog.
+                    g.Medium("freep.chart.edit-data",     "Edit Data", RibbonCommandIconKind.ChartTitle,  "E");
+                });
+                // Wave 11A: Links group — Insert / Remove hyperlink.
+                tab.Group("links", "Links", "L", 92, g =>
+                {
+                    g.Large("freep.insert-link", "Hyperlink", RibbonCommandIconKind.Link, "K");
+                    g.Medium("freep.remove-link", "Remove Link", RibbonCommandIconKind.Delete, "R");
                 });
                 tab.Group("illustrations", "Illustrations", "I", 90, g =>
                 {
@@ -84,10 +124,12 @@ internal static class FreePRibbon
                     g.Medium("freep.theme.slice",   "Slice",   RibbonCommandIconKind.Color, "S");
                 });
                 // Customize group — slide size options.
+                // Wave 10B: "Slide Size…" button opens the custom-size dialog.
                 tab.Group("customize", "Customize", "Z", 90, g =>
                 {
-                    g.Large("freep.slide-size-16x9", "Widescreen (16:9)", RibbonCommandIconKind.Page, "W");
-                    g.Large("freep.slide-size-4x3",  "Standard (4:3)",   RibbonCommandIconKind.Page, "S");
+                    g.Large("freep.slide-size-16x9",  "Widescreen (16:9)", RibbonCommandIconKind.Page, "W");
+                    g.Large("freep.slide-size-4x3",   "Standard (4:3)",   RibbonCommandIconKind.Page, "S");
+                    g.Medium("freep.slide-size-custom", "Slide Size…",     RibbonCommandIconKind.Page, "C");
                 });
             })
             // ── Wave 4C: Transitions tab ───────────────────────────────────────────────

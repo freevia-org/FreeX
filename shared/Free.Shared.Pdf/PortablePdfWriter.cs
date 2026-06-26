@@ -76,6 +76,9 @@ public static class PortablePdfWriter
                 case PdfText text:
                     AppendText(content, text.X, text.Y, text.FontSize, FontResource(text.Face), text.Color, text.Text);
                     break;
+                case PdfLine line:
+                    AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, line.Color, line.LineWidth);
+                    break;
             }
         }
 
@@ -158,6 +161,23 @@ public static class PortablePdfWriter
         AppendRgb(content, color, "RG");
         content.AppendLine($"{FormatNumber(lineWidth)} w");
         content.AppendLine($"{FormatNumber(x)} {FormatNumber(y)} {FormatNumber(width)} {FormatNumber(height)} re S");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendLine(
+        StringBuilder content,
+        double x1,
+        double y1,
+        double x2,
+        double y2,
+        PdfColor color,
+        double lineWidth)
+    {
+        content.AppendLine("q");
+        AppendRgb(content, color, "RG");
+        content.AppendLine($"{FormatNumber(lineWidth)} w");
+        content.AppendLine($"{FormatNumber(x1)} {FormatNumber(y1)} m");
+        content.AppendLine($"{FormatNumber(x2)} {FormatNumber(y2)} l S");
         content.AppendLine("Q");
     }
 

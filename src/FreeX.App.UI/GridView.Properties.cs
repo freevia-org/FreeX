@@ -285,6 +285,35 @@ public partial class GridView
         set => SetValue(WorksheetBackgroundProperty, value);
     }
 
+    /// <summary>
+    /// The <see cref="SheetId"/> of the active sheet, used by the rich-text renderer to look up
+    /// <see cref="SheetRichTextRuns"/> entries (which are keyed by full <see cref="CellAddress"/>).
+    /// </summary>
+    public static readonly DependencyProperty ActiveSheetIdProperty =
+        DependencyProperty.Register(nameof(ActiveSheetId), typeof(SheetId), typeof(GridView),
+            new FrameworkPropertyMetadata(default(SheetId), FrameworkPropertyMetadataOptions.AffectsRender));
+    public SheetId ActiveSheetId
+    {
+        get => (SheetId)GetValue(ActiveSheetIdProperty);
+        set => SetValue(ActiveSheetIdProperty, value);
+    }
+
+    /// <summary>
+    /// Per-cell rich-text run map for the active sheet, keyed by <see cref="CellAddress"/>.
+    /// When populated, the WPF renderer applies per-character-range formatting to the cell's
+    /// <see cref="System.Windows.Media.FormattedText"/> via <c>ApplyRichRunFormatting</c>.
+    /// </summary>
+    public static readonly DependencyProperty SheetRichTextRunsProperty =
+        DependencyProperty.Register(nameof(SheetRichTextRuns),
+            typeof(IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>),
+            typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>? SheetRichTextRuns
+    {
+        get => (IReadOnlyDictionary<CellAddress, IReadOnlyList<CellTextRun>>?)GetValue(SheetRichTextRunsProperty);
+        set => SetValue(SheetRichTextRunsProperty, value);
+    }
+
     public static readonly DependencyProperty SparklinesProperty =
         DependencyProperty.Register(nameof(Sparklines), typeof(IReadOnlyList<SparklineModel>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));

@@ -428,7 +428,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     shape.Height,
                     shape.OutlineWidthPoints,
                     shape.OutlineHasNoFill,
-                    shape.OutlineDash),
+                    shape.OutlineDash,
+                    shape.HeadArrowhead,
+                    shape.TailArrowhead),
                 shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
@@ -514,7 +516,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         double shapeHeightPixels = 0,
         double outlineWidthPoints = 0,
         bool outlineHasNoFill = false,
-        DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid)
+        DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid,
+        DrawingArrowhead? headArrowhead = null,
+        DrawingArrowhead? tailArrowhead = null)
     {
         return new XElement(spreadsheetDrawingNs + "spPr",
             ToDrawingTransform(rotationDegrees, flipHorizontal, flipVertical, drawingNs,
@@ -528,7 +532,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 ? ToGradientFill(gradientStartColor, gradientEndColor, gradientFillDirection, drawingNs)
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
             ToLineProperties(outlineThemeColor, outlineColor, drawingNs,
-                outlineWidthPoints, outlineHasNoFill, outlineDash),
+                outlineWidthPoints, outlineHasNoFill, outlineDash, headArrowhead, tailArrowhead),
             ToEffectList(effectPreset, drawingNs),
             ToScene3dProperties(effectPreset, drawingNs),
             ToShape3dProperties(effectPreset, drawingNs));
@@ -656,7 +660,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace drawingNs,
         double outlineWidthPoints = 0,
         bool outlineHasNoFill = false,
-        DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid)
+        DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid,
+        DrawingArrowhead? headArrowhead = null,
+        DrawingArrowhead? tailArrowhead = null)
     {
         // Explicitly no border: write <a:ln><a:noFill/></a:ln>
         if (outlineHasNoFill)
@@ -686,7 +692,41 @@ internal static class XlsxWorksheetDrawingObjectWriter
             fill,
             prstDashVal is not null
                 ? new XElement(drawingNs + "prstDash", new XAttribute("val", prstDashVal))
-                : null);
+                : null,
+            ToArrowheadElement(drawingNs, "headEnd", headArrowhead),
+            ToArrowheadElement(drawingNs, "tailEnd", tailArrowhead));
+    }
+
+    private static XElement? ToArrowheadElement(XNamespace drawingNs, string elementName, DrawingArrowhead? arrowhead)
+    {
+        if (arrowhead is null || !arrowhead.IsPresent)
+            return null;
+
+        var typeVal = arrowhead.Type switch
+        {
+            DrawingArrowheadType.Triangle => "triangle",
+            DrawingArrowheadType.Arrow => "arrow",
+            DrawingArrowheadType.Stealth => "stealth",
+            DrawingArrowheadType.Diamond => "diamond",
+            DrawingArrowheadType.Oval => "oval",
+            _ => "none"
+        };
+        var wVal = arrowhead.Width switch
+        {
+            DrawingArrowheadSize.Small => "sm",
+            DrawingArrowheadSize.Large => "lg",
+            _ => "med"
+        };
+        var lenVal = arrowhead.Length switch
+        {
+            DrawingArrowheadSize.Small => "sm",
+            DrawingArrowheadSize.Large => "lg",
+            _ => "med"
+        };
+        return new XElement(drawingNs + elementName,
+            new XAttribute("type", typeVal),
+            new XAttribute("w", wVal),
+            new XAttribute("len", lenVal));
     }
 
     private static XElement? ToSolidFill(
@@ -773,6 +813,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
             DrawingShapeKind.LineCallout => "lineCallout1",
             DrawingShapeKind.Chevron => "chevron",
             DrawingShapeKind.HomePlate => "homePlate",
+            DrawingShapeKind.Cylinder => "can",
             _ => "rect"
         };
 

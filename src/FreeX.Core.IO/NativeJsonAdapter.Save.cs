@@ -195,6 +195,8 @@ public sealed partial class NativeJsonAdapter
                 IgnoredErrorsMetadata = ToWorksheetIgnoredErrorsMetadataDto(s.IgnoredErrorsMetadata),
                 AdditionalViews = ToWorksheetAdditionalViewsDto(s.AdditionalViews),
                 PrimaryViewMetadata = FromWorksheetPrimaryViewMetadata(s.PrimaryViewMetadata),
+                // Persist as multi-area array (new) plus legacy single-area field for back-compat.
+                PrintAreas = s.PrintAreas.Count > 0 ? s.PrintAreas.Select(r => r.ToString()).ToArray() : null,
                 PrintArea = s.PrintArea?.ToString(),
                 PageOrientation = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
                 PaperSize = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),
@@ -272,6 +274,7 @@ public sealed partial class NativeJsonAdapter
                     .Where(pair => IsValidAddressOnSheet(pair.Key, s.Id) && pair.Value is not null)
                     .Select(pair => ToHyperlinkDto(s, pair))
                     .ToList(),
+                RichTextRuns = ToRichTextRunDtos(s),
                 AllowEditRanges = s.AllowEditRanges
                     .Where(range => IsValidRangeOnSheet(range, s.Id))
                     .Select(range => range.ToString())

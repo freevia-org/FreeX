@@ -26,7 +26,14 @@ public static class SlideCloner
             Id      = Guid.NewGuid().ToString("N"), // new identity so it is truly a distinct slide
             LayoutId   = slide.LayoutId,
             Background = slide.Background,           // ShapeFill is immutable — share reference
-            Notes      = slide.Notes is null ? null : CloneTextBody(slide.Notes)
+            Notes      = slide.Notes is null ? null : CloneTextBody(slide.Notes),
+            HfVisibility = slide.HfVisibility is null ? null : new HfFlags
+            {
+                ShowFooter   = slide.HfVisibility.ShowFooter,
+                ShowDate     = slide.HfVisibility.ShowDate,
+                ShowSlideNum = slide.HfVisibility.ShowSlideNum,
+                ShowHeader   = slide.HfVisibility.ShowHeader,
+            },
         };
 
         foreach (var shape in slide.Shapes)
@@ -35,6 +42,9 @@ public static class SlideCloner
         copy.Transition = slide.Transition is null ? null : CloneTransition(slide.Transition);
         foreach (var anim in slide.Animations)
             copy.Animations.Add(CloneAnimation(anim));
+
+        foreach (var comment in slide.Comments)
+            copy.Comments.Add(CloneComment(comment));
 
         return copy;
     }
@@ -59,10 +69,12 @@ public static class SlideCloner
             Outline        = shape.Outline,   // immutable — share
             Placeholder    = shape.Placeholder is null ? null : ClonePlaceholder(shape.Placeholder),
             Picture        = shape.Picture,   // byte[] treated as immutable
+            Media          = shape.Media,     // MediaInfo bytes are immutable once loaded — share reference
             LegacyFxpKind  = shape.LegacyFxpKind,
             TextBody       = shape.TextBody is null ? null : CloneTextBody(shape.TextBody),
             Table          = shape.Table  is null ? null : CloneTable(shape.Table),
             Chart          = shape.Chart  is null ? null : CloneChart(shape.Chart),
+            Hyperlink      = CloneHyperlink(shape.Hyperlink),
         };
 
         foreach (var child in shape.Children)
@@ -124,7 +136,21 @@ public static class SlideCloner
         Underline     = run.Underline,
         Strikethrough = run.Strikethrough,
         Color         = run.Color,           // ThemeAwareColor is a struct — copied by value
+        Hyperlink     = CloneHyperlink(run.Hyperlink),
+        Field = run.Field is null ? null : new FieldRun
+        {
+            FieldType  = run.Field.FieldType,
+            CachedText = run.Field.CachedText,
+            FontFamily = run.Field.FontFamily,
+            FontSizePt = run.Field.FontSizePt,
+            Bold       = run.Field.Bold,
+            Italic     = run.Field.Italic,
+            Color      = run.Field.Color,
+        },
     };
+
+    private static Hyperlink? CloneHyperlink(Hyperlink? h) =>
+        h is null ? null : new Hyperlink { Url = h.Url, TargetSlideId = h.TargetSlideId, Tooltip = h.Tooltip };
 
     private static TableShape CloneTable(TableShape src)
     {
@@ -212,6 +238,18 @@ public static class SlideCloner
         Delete            = a.Delete,
     };
 
+    private static SlideComment CloneComment(SlideComment c) => new()
+    {
+        AuthorId = c.AuthorId,
+        Author   = c.Author,
+        Initials = c.Initials,
+        Text     = c.Text,
+        DateTime = c.DateTime,
+        Xemu     = c.Xemu,
+        Yemu     = c.Yemu,
+        Idx      = c.Idx,
+    };
+
     private static SlideTransition CloneTransition(SlideTransition t) => new()
     {
         Kind            = t.Kind,
@@ -221,14 +259,32 @@ public static class SlideCloner
         AdvanceAfterMs  = t.AdvanceAfterMs,
     };
 
-    private static ShapeAnimation CloneAnimation(ShapeAnimation a) => new()
+    private static ShapeAnimation CloneAnimation(ShapeAnimation a)
     {
-        ShapeId    = a.ShapeId,
-        Kind       = a.Kind,
-        Preset     = a.Preset,
-        Trigger    = a.Trigger,
-        DelayMs    = a.DelayMs,
-        DurationMs = a.DurationMs,
-        Direction  = a.Direction,
-    };
+        var copy = new ShapeAnimation
+        {
+            ShapeId       = a.ShapeId,
+            Kind          = a.Kind,
+            Preset        = a.Preset,
+            Trigger       = a.Trigger,
+            DelayMs       = a.DelayMs,
+            DurationMs    = a.DurationMs,
+            Direction     = a.Direction,
+            TriggerShapeId = a.TriggerShapeId,
+        };
+
+        if (a.Motion is not null)
+        {
+            var mp = new MotionPath
+            {
+                Origin   = a.Motion.Origin,
+                PtsTypes = a.Motion.PtsTypes,
+            };
+            foreach (var seg in a.Motion.Segments)
+                mp.Segments.Add(seg); // MotionPathSegment is immutable (init-only props)
+            copy.Motion = mp;
+        }
+
+        return copy;
+    }
 }

@@ -18,6 +18,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
     private readonly FillCellsDirection _direction;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
+    private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
 
     public string Label => _direction switch
     {
@@ -46,6 +47,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
 
         _snapshot = [];
         _hyperlinkSnapshot = [];
+        _richTextRunsSnapshot = [];
         foreach (var target in targets)
         {
             _snapshot.Add((target, sheet.GetCell(target)?.Clone(), sheet.GetStyleOnly(target.Row, target.Col)));
@@ -55,6 +57,10 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 oldTarget,
                 sheet.HyperlinkMetadata.TryGetValue(target, out var oldMetadata),
                 oldMetadata));
+            _richTextRunsSnapshot.Add((
+                target,
+                sheet.RichTextRuns.TryGetValue(target, out var oldRuns),
+                oldRuns));
 
             var source = GetSourceAddress(target);
             var sourceCell = sheet.GetCell(source);
@@ -67,6 +73,7 @@ public sealed class FillCellsCommand : IWorkbookCommand
                     sheet.ClearStyleOnly(target.Row, target.Col);
                 sheet.Hyperlinks.Remove(target);
                 sheet.HyperlinkMetadata.Remove(target);
+                sheet.RichTextRuns.Remove(target);
                 continue;
             }
 
@@ -80,6 +87,11 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 sheet.HyperlinkMetadata[target] = sourceMetadata;
             else
                 sheet.HyperlinkMetadata.Remove(target);
+
+            if (sheet.RichTextRuns.TryGetValue(source, out var sourceRuns))
+                sheet.RichTextRuns[target] = sourceRuns;
+            else
+                sheet.RichTextRuns.Remove(target);
         }
 
         return new CommandOutcome(true, AffectedCells: targets);
@@ -118,6 +130,17 @@ public sealed class FillCellsCommand : IWorkbookCommand
                 sheet.HyperlinkMetadata[address] = metadata;
             else
                 sheet.HyperlinkMetadata.Remove(address);
+        }
+
+        if (_richTextRunsSnapshot is null)
+            return;
+
+        foreach (var (address, hadRuns, runs) in _richTextRunsSnapshot)
+        {
+            if (hadRuns && runs is not null)
+                sheet.RichTextRuns[address] = runs;
+            else
+                sheet.RichTextRuns.Remove(address);
         }
     }
 

@@ -37,6 +37,11 @@ public static class PptxPackageWriter
     private const string ChartRelType       = PptxChartWriter.ChartRelType;
     private const string NotesSlideRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
     private const string NotesMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
+    private const string HyperlinkRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string CommentsRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
+    private const string VideoRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
+    private const string AudioRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
 
     // SmartArt diagram relationship types (slide rels point to the named sub-parts)
     private const string DiagramDataRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
@@ -59,6 +64,12 @@ public static class PptxPackageWriter
     private const string ChartCT         = PptxChartWriter.ChartCT;
     private const string NotesSlideCT    = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
     private const string NotesMasterCT   = "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
+    private const string CommentsCT      = "application/vnd.openxmlformats-officedocument.presentationml.comments+xml";
+    private const string CommentAuthorsCT = "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml";
+
+    // p14 section extension
+    private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 
     // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -92,16 +103,31 @@ public static class PptxPackageWriter
                 new SlideLayout { Id = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank, MasterId = masters[0].Id }
             };
 
-        // Collect media extensions used across all slides (for Q2 content-type Defaults).
+        // Collect media extensions used across all slides (for [Content_Types].xml Defaults).
         var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in presentation.Slides)
         {
             foreach (var shape in AllShapes(slide.Shapes))
             {
-                if (shape.Kind == SlideShapeKind.Picture && shape.Picture?.Bytes is { Length: > 0 })
+                if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
+                    && shape.Picture?.Bytes is { Length: > 0 })
                 {
                     var ct = shape.Picture.ContentType ?? "image/png";
                     mediaExtensions.Add(ContentTypeToExtension(ct));
+                }
+
+                // HH1: also register picture-fill images so their extension gets a Default
+                if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
+                {
+                    var ct = picFill.ContentType ?? "image/png";
+                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                }
+
+                // II1: register audio/video file extensions for Media shapes
+                if (shape.Kind == SlideShapeKind.Media && shape.Media?.Bytes is { Length: > 0 } && shape.Media.ContentType is not null)
+                {
+                    var mediaExt = MediaContentTypeToExtension(shape.Media.ContentType);
+                    mediaExtensions.Add(mediaExt);
                 }
             }
         }
@@ -187,6 +213,12 @@ public static class PptxPackageWriter
         var sldIdElements = new List<XElement>();
         uint sldIdCounter = 256;
 
+        // Build the GLOBAL author map once before the slide loop so that every per-slide
+        // BuildCommentsXml call uses consistent (globally-assigned) author ids.
+        // Keys are (author-name, initials); ids are 0-based in first-encounter order across
+        // all slides (same order BuildCommentAuthorsXml would produce).
+        var globalAuthorMap = BuildGlobalAuthorMap(presentation.Slides);
+
         // Emit a single minimal notesMaster if any slide has notes.
         bool hasSomeNotes = presentation.Slides.Any(s => s.Notes is not null);
         if (hasSomeNotes)
@@ -209,8 +241,11 @@ public static class PptxPackageWriter
             var layout = layouts.FirstOrDefault(l => l.Id == slide.LayoutId) ?? layouts[0];
             var layoutPath = layoutPaths.TryGetValue(layout.Id, out var lp2) ? lp2 : layoutPaths.Values.First();
 
-            // Write media (images) into the archive, get back rel-id map
-            var mediaRelIds = WriteSlideMedia(archive, slide, si + 1);
+            // Write media (images) into the archive, get back rel-id maps
+            var (mediaRelIds, fillBlipRelIds) = WriteSlideMedia(archive, slide, si + 1);
+
+            // Write media audio/video files for Media shapes
+            var mediaFileRelIds = WriteSlideMediaFiles(archive, slide, si + 1);
 
             // Write charts into the archive, get back rel-id map
             var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex);
@@ -221,29 +256,50 @@ public static class PptxPackageWriter
             {
                 "rId1", // always reserved for slide layout
             };
-            foreach (var (_, mediaRelId, _) in mediaRelIds)  usedRelIds.Add(mediaRelId);
-            foreach (var (_, chartRelId, _) in chartRelIds)  usedRelIds.Add(chartRelId);
+            foreach (var (_, mediaRelId, _) in mediaRelIds)      usedRelIds.Add(mediaRelId);
+            foreach (var (_, mediaFileRelId, _, _) in mediaFileRelIds) usedRelIds.Add(mediaFileRelId);
+            foreach (var (_, fillBlipRelId, _) in fillBlipRelIds) usedRelIds.Add(fillBlipRelId);
+            foreach (var (_, chartRelId, _) in chartRelIds)       usedRelIds.Add(chartRelId);
 
             var (smartArtSlideRels, smartArtRelIdRemap) = WriteSlideSmartArt(archive, slide, usedRelIds);
 
-            // Combined shapeId→relId map for shape element building (images + charts)
+            // Combined shapeId→relId map for shape element building (picture shapes + charts)
             var mediaById = new Dictionary<uint, string>();
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
             foreach (var (id, relId, _) in chartRelIds)  mediaById[id] = relId;
+            // Media file rel IDs use synthetic key: shape.Id | 0x80000000
+            foreach (var (id, relId, _, _) in mediaFileRelIds)  mediaById[id | 0x80000000u] = relId;
+
+            // Fill-blip relId map (shapeId -> relId) for ShapeFill.Picture fills
+            var fillBlipById = new Dictionary<uint, string>();
+            foreach (var (id, relId, _) in fillBlipRelIds)  fillBlipById[id] = relId;
+
+            // Collect hyperlinks from this slide and assign rel IDs.
+            // hlinkRelIds maps hyperlink key (url or "slide:"+slideId) to the rels r:id.
+            var hlinkRelIds = new Dictionary<string, string>(StringComparer.Ordinal);
+            var hlinkRelEntries = new List<(string relId, string relType, string target, bool external)>();
+            CollectHyperlinkRels(slide, presentation.Slides, si + 1, hlinkRelIds, hlinkRelEntries);
 
             // Slide xml
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById, smartArtRelIdRemap));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById));
 
-            // Slide rels: rId1=layout, images, charts, SmartArt, optional notesSlide
+            // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
             var slideRels = new RelsDoc();
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
             foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, mediaFileRelId, mediaFilePath, isVideo) in mediaFileRelIds)
+                slideRels.Add(mediaFileRelId, isVideo ? VideoRelType : AudioRelType, $"../media/{mediaFilePath.Split('/').Last()}");
+            foreach (var (_, fillBlipRelId, fillBlipPath) in fillBlipRelIds)
+                slideRels.Add(fillBlipRelId, ImageRelType, $"../media/{fillBlipPath.Split('/').Last()}");
             foreach (var (_, chartRelId, chartPath) in chartRelIds)
                 slideRels.Add(chartRelId, ChartRelType, $"../charts/{chartPath.Split('/').Last()}");
             // SmartArt diagram part rels (dm/lo/qs/cs each get their own rel entry in slide rels)
             foreach (var (relId, relType, target) in smartArtSlideRels)
                 slideRels.Add(relId, relType, target);
+            // Hyperlink rels (external with TargetMode=External; internal slide rels without)
+            foreach (var (hlRelId, hlRelType, hlTarget, isExternal) in hlinkRelEntries)
+                slideRels.Add(hlRelId, hlRelType, hlTarget, isExternal);
 
             // Write notes slide and add rel when the slide has speaker notes
             if (slide.Notes is not null)
@@ -261,6 +317,15 @@ public static class PptxPackageWriter
                 slideRels.Add(notesRelId, NotesSlideRelType, $"../notesSlides/notesSlide{si + 1}.xml");
             }
 
+            // Write comments part and add rel when the slide has comments
+            if (slide.Comments.Count > 0)
+            {
+                var cmPath  = $"ppt/comments/comment{si + 1}.xml";
+                var cmRelId = $"rIdCm{si + 1}";
+                WriteEntry(archive, cmPath, BuildCommentsXml(slide.Comments, globalAuthorMap));
+                slideRels.Add(cmRelId, CommentsRelType, $"../comments/comment{si + 1}.xml");
+            }
+
             WriteRels(archive, slidePath, slideRels);
 
             presRels.Add(slideRelId, SlideRelType, $"slides/slide{si + 1}.xml");
@@ -268,6 +333,11 @@ public static class PptxPackageWriter
                 new XAttribute("id", sldIdCounter++),
                 new XAttribute(R + "id", slideRelId)));
         }
+
+        // --- 8b. commentAuthors.xml (if any slides have comments) ---
+        bool hasSomeComments = presentation.Slides.Any(s => s.Comments.Count > 0);
+        if (hasSomeComments)
+            WriteEntry(archive, "ppt/commentAuthors.xml", BuildCommentAuthorsXml(presentation.Slides));
 
         // --- 9. Presentation rels ---
         presRels.Add("rId1", PresPropsRelType, "presProps.xml");
@@ -279,8 +349,14 @@ public static class PptxPackageWriter
         }
         presRels.Add($"rId{masterRelIdStart + masters.Count}", ViewPropsRelType, "viewProps.xml");
         presRels.Add($"rId{masterRelIdStart + masters.Count + 1}", TableStylesRelType, "tableStyles.xml");
+        int extraPresRelOffset = 2; // next available offset after tableStyles
         if (hasSomeNotes)
-            presRels.Add($"rId{masterRelIdStart + masters.Count + 2}", NotesMasterRelType, "notesMasters/notesMaster1.xml");
+        {
+            presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", NotesMasterRelType, "notesMasters/notesMaster1.xml");
+            extraPresRelOffset++;
+        }
+        if (hasSomeComments)
+            presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", CommentAuthorsRelType, "commentAuthors.xml");
 
         WriteRels(archive, "ppt/presentation.xml", presRels);
 
@@ -308,6 +384,15 @@ public static class PptxPackageWriter
             ["svg"]  = "image/svg+xml",
             ["wmf"]  = "image/x-wmf",
             ["emf"]  = "image/x-emf",
+            // Audio/video types (II1: required so media parts have a declared content type)
+            ["mp4"]  = "video/mp4",
+            ["mov"]  = "video/quicktime",
+            ["avi"]  = "video/x-msvideo",
+            ["wmv"]  = "video/x-ms-wmv",
+            ["mp3"]  = "audio/mpeg",
+            ["m4a"]  = "audio/mp4",
+            ["wav"]  = "audio/wav",
+            ["wma"]  = "audio/x-ms-wma",
         };
 
     private static XDocument BuildContentTypesXml(
@@ -377,6 +462,18 @@ public static class PptxPackageWriter
             }
         }
 
+        // Comments content types
+        bool hasSomeComments = p.Slides.Any(s => s.Comments.Count > 0);
+        if (hasSomeComments)
+        {
+            overrides.Add(Override(CT, "/ppt/commentAuthors.xml", CommentAuthorsCT));
+            for (int si = 0; si < p.Slides.Count; si++)
+            {
+                if (p.Slides[si].Comments.Count > 0)
+                    overrides.Add(Override(CT, $"/ppt/comments/comment{si + 1}.xml", CommentsCT));
+            }
+        }
+
         // Collect SmartArt diagram part content types (from the stored DiagramPart objects)
         var seenSmartArtParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in p.Slides)
@@ -415,32 +512,108 @@ public static class PptxPackageWriter
     private static XDocument BuildPresentationXml(
         Presentation p,
         List<XElement> sldIdElements,
-        List<(string relId, string masterPath)> masterRelIds) =>
-        new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(P + "presentation",
-                NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
-                new XAttribute("saveSubsetFonts", "1"),
-                new XElement(P + "sldMasterIdLst",
-                    masterRelIds.Select((mr, i) =>
-                        new XElement(P + "sldMasterId",
-                            new XAttribute("id", 2147483648u + (uint)i),
-                            new XAttribute(R + "id", mr.relId)))),
-                new XElement(P + "sldIdLst", sldIdElements),
-                new XElement(P + "sldSz",
-                    new XAttribute("cx", p.SlideSizeCxEmu),
-                    new XAttribute("cy", p.SlideSizeCyEmu),
-                    new XAttribute("type", "screen16x9")),
-                new XElement(P + "notesSz",
-                    new XAttribute("cx", 6858000),
-                    new XAttribute("cy", 9144000))));
+        List<(string relId, string masterPath)> masterRelIds)
+    {
+        var presEl = new XElement(P + "presentation",
+            NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
+            new XAttribute("saveSubsetFonts", "1"),
+            new XElement(P + "sldMasterIdLst",
+                masterRelIds.Select((mr, i) =>
+                    new XElement(P + "sldMasterId",
+                        new XAttribute("id", 2147483648u + (uint)i),
+                        new XAttribute(R + "id", mr.relId)))),
+            new XElement(P + "sldIdLst", sldIdElements),
+            new XElement(P + "sldSz",
+                new XAttribute("cx", p.SlideSizeCxEmu),
+                new XAttribute("cy", p.SlideSizeCyEmu),
+                new XAttribute("type", "screen16x9")),
+            new XElement(P + "notesSz",
+                new XAttribute("cx", 6858000),
+                new XAttribute("cy", 9144000)));
+
+        // Emit p14:sectionLst inside p:extLst when sections are present.
+        if (p.Sections.Count > 0)
+        {
+            // Build a map from sldId rId → the numeric id counter (mirroring WriteArchive).
+            // sldIdElements were built with ids 256, 257, … in WriteArchive order.
+            // We re-derive the mapping by matching the r:id attribute of each sldId element.
+            var rIdToNumId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            uint counter = 256;
+            foreach (var el in sldIdElements)
+            {
+                var rId = el.Attribute(R + "id")?.Value;
+                if (rId is not null)
+                    rIdToNumId[rId] = counter.ToString();
+                counter++;
+            }
+
+            // Build a map from Slide.Id (rId) → numeric sldId
+            // sldIdElements[i] has r:id = "rId{i+2}" (because presRels starts at rId2 for slides)
+            // Use Slide order index to match.
+            // Actually, sldIdElements[i].Attribute("id") already holds the numeric id.
+            var slideRIdToNumId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < sldIdElements.Count; i++)
+            {
+                var rId   = sldIdElements[i].Attribute(R + "id")?.Value;
+                var numId = sldIdElements[i].Attribute("id")?.Value;
+                if (rId is not null && numId is not null)
+                    slideRIdToNumId[rId] = numId;
+            }
+
+            // Build a map from Slide.Id (presentation-level rId) → numeric sldId.
+            // Slide.Id is set to the rId during ReadSlide; on new slides it is a GUID.
+            // We need Slide index → numeric sldId.
+            var sldIdByIndex = new List<string>();
+            foreach (var el in sldIdElements)
+                sldIdByIndex.Add(el.Attribute("id")?.Value ?? string.Empty);
+
+            // Section membership refers to Slide.Id.  Convert Slide.Id → numeric sldId.
+            // Slide.Id = rId during read; but for new slides it is a GUID.
+            // Use the robust approach: map Slide.Id to numeric sldId via index.
+            var slideIdToNumericSldId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < p.Slides.Count && i < sldIdByIndex.Count; i++)
+                slideIdToNumericSldId[p.Slides[i].Id] = sldIdByIndex[i];
+
+            var sectionElements = p.Sections.Select(sec =>
+            {
+                // Translate each section member's Slide.Id to the freshly-assigned
+                // write-time numeric sldId via slideIdToNumericSldId.
+                // Members that no longer exist in the presentation are skipped so we
+                // never emit a dangling p14:sldId reference.
+                var translatedSldIds = sec.SlideIds
+                    .Where(slideIdToNumericSldId.ContainsKey)
+                    .Select(slideId => slideIdToNumericSldId[slideId]);
+
+                var sldIdLstEl = new XElement(P14 + "sldIdLst",
+                    translatedSldIds.Select(assignedId => new XElement(P14 + "sldId",
+                        new XAttribute("id", assignedId))));
+
+                return (XElement)new XElement(P14 + "section",
+                    new XAttribute("name", sec.Name),
+                    new XAttribute("id",   sec.Id),
+                    sldIdLstEl);
+            }).ToList();
+
+            presEl.Add(new XElement(P + "extLst",
+                new XElement(P + "ext",
+                    new XAttribute("uri", SectionExtUri),
+                    new XElement(P14 + "sectionLst",
+                        new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+                        sectionElements))));
+        }
+
+        return new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), presEl);
+    }
 
     // ── slide.xml ────────────────────────────────────────────────────────────────
 
     private static XDocument BuildSlideXml(
         Slide slide, PresentationColorScheme scheme,
         Dictionary<uint, string> mediaById,
-        Dictionary<uint, Dictionary<string, string>> smartArtRelIdRemap)
+        Dictionary<uint, Dictionary<string, string>> smartArtRelIdRemap,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null,
+        Dictionary<uint, string>? fillBlipById = null)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -456,8 +629,13 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         slide.Shapes
-                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap))
+                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById))
                             .OfType<XElement>())),
+                // II2: p:hf is NOT valid on p:sld (CT_Slide schema has no hf element);
+                // it is only valid on slideMaster/slideLayout/handoutMaster/notesMaster.
+                // We intentionally do NOT emit p:hf here to avoid PowerPoint repair.
+                // HfVisibility is preserved on the model for read-back from real .pptx files
+                // that carry it on the master/layout (which the reader already handles).
                 BuildTransitionEl(slide.Transition),
                 BuildTimingEl(slide.Animations)));
     }
@@ -543,6 +721,107 @@ public static class PptxPackageWriter
                     new XAttribute("accent5", "accent5"), new XAttribute("accent6", "accent6"),
                     new XAttribute("hlink", "hlink"), new XAttribute("folHlink", "folHlink"))));
 
+    // ── commentAuthors.xml ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a globally-consistent map from (author-name, initials) → numeric id.
+    /// Authors are assigned ids 0, 1, 2 … in first-encounter order across ALL slides.
+    /// This single source of truth is shared by both BuildCommentAuthorsXml and
+    /// BuildCommentsXml so the two parts always agree on author ids.
+    /// </summary>
+    private static Dictionary<(string name, string initials), int> BuildGlobalAuthorMap(List<Slide> slides)
+    {
+        var map    = new Dictionary<(string name, string initials), int>();
+        int nextId = 0;
+        foreach (var slide in slides)
+        {
+            foreach (var cm in slide.Comments)
+            {
+                var key = (cm.Author, cm.Initials);
+                if (!map.ContainsKey(key))
+                    map[key] = nextId++;
+            }
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// Builds a ppt/commentAuthors.xml using the pre-built global author map.
+    /// Authors are keyed by (name, initials) with ids 0, 1, 2, … in first-encounter order.
+    /// </summary>
+    private static XDocument BuildCommentAuthorsXml(List<Slide> slides)
+    {
+        var authorMap = BuildGlobalAuthorMap(slides);
+
+        // Track the highest comment idx seen per author (for the lastIdx attribute).
+        var authorLastIdx = new Dictionary<int, int>();
+        foreach (var kv in authorMap)
+            authorLastIdx[kv.Value] = 0;
+
+        foreach (var slide in slides)
+        {
+            foreach (var cm in slide.Comments)
+            {
+                var key = (cm.Author, cm.Initials);
+                if (authorMap.TryGetValue(key, out var authorId) && cm.Idx > authorLastIdx[authorId])
+                    authorLastIdx[authorId] = cm.Idx;
+            }
+        }
+
+        var authorElements = authorMap.Select(kv =>
+            new XElement(P + "cmAuthor",
+                new XAttribute("id",       kv.Value),
+                new XAttribute("name",     kv.Key.name),
+                new XAttribute("initials", kv.Key.initials),
+                new XAttribute("lastIdx",  authorLastIdx[kv.Value]),
+                new XAttribute("clrIdx",   kv.Value % 8)));
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(P + "cmAuthorLst",
+                NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
+                authorElements));
+    }
+
+    // ── comments/commentN.xml ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a ppt/comments/commentN.xml for a single slide's comments.
+    /// Uses the GLOBAL author map so authorId values are consistent with commentAuthors.xml.
+    /// Comment indices (idx) are always renumbered sequentially (1-based) per slide on write
+    /// to prevent duplicate-idx collisions when the model has stale/cloned Idx values.
+    /// </summary>
+    private static XDocument BuildCommentsXml(
+        List<SlideComment> comments,
+        Dictionary<(string name, string initials), int> globalAuthorMap)
+    {
+        var cmElements = comments.Select((cm, i) =>
+        {
+            // Look up author id in the GLOBAL map (not locally re-derived).
+            globalAuthorMap.TryGetValue((cm.Author, cm.Initials), out var authorId);
+
+            var dtStr = cm.DateTime?.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)
+                        ?? System.DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+            // Always renumber idx sequentially (1-based) per slide to avoid duplicate-idx
+            // collisions when the model contains stale/cloned Idx values (BB5 fix).
+            return (XElement)new XElement(P + "cm",
+                new XAttribute("authorId", authorId),
+                new XAttribute("dt",       dtStr),
+                new XAttribute("idx",      i + 1),
+                new XElement(P + "pos",
+                    new XAttribute("x", cm.Xemu),
+                    new XAttribute("y", cm.Yemu)),
+                new XElement(P + "text", cm.Text));
+        });
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(P + "cmLst",
+                NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
+                cmElements));
+    }
+
     // ── p:transition ─────────────────────────────────────────────────────────────
 
     private static XElement? BuildTransitionEl(SlideTransition? transition)
@@ -588,13 +867,20 @@ public static class PptxPackageWriter
     {
         if (animations.Count == 0) return null;
 
-        // Build the main sequence build steps.
-        // Each animation that is OnClick starts a new click group; With/After attach to the previous group.
-        // Structure: p:timing > p:tnLst > p:par > p:cTn > p:childTnLst > p:seq > p:cTn > p:childTnLst > p:par*
-        // Each outer p:par = one click group; each inner p:par = one build item.
+        // Split animations into main-sequence and trigger groups.
+        var mainAnims    = animations.Where(a => a.TriggerShapeId is null).ToList();
+        var triggerAnims = animations
+            .Where(a => a.TriggerShapeId is not null)
+            .GroupBy(a => a.TriggerShapeId!.Value)
+            .ToList();
 
+        uint nodeId = 1;
+
+        // ── Main sequence ─────────────────────────────────────────────────────
+
+        // Build click-groups for the main sequence.
         var clickGroups = new List<List<ShapeAnimation>>();
-        foreach (var anim in animations)
+        foreach (var anim in mainAnims)
         {
             if (anim.Trigger == AnimationTrigger.OnClick || clickGroups.Count == 0)
                 clickGroups.Add(new List<ShapeAnimation> { anim });
@@ -602,20 +888,18 @@ public static class PptxPackageWriter
                 clickGroups[^1].Add(anim);
         }
 
-        uint nodeId = 1;
-
-        var seqChildTnLstItems = new List<XElement>();
+        var seqChildItems = new List<XElement>();
         foreach (var group in clickGroups)
-            seqChildTnLstItems.Add(BuildClickGroupEl(group, ref nodeId));
+            seqChildItems.Add(BuildClickGroupEl(group, ref nodeId));
 
-        var seqEl = new XElement(P + "seq",
+        var mainSeqEl = new XElement(P + "seq",
             new XAttribute("concurrent", "1"),
             new XAttribute("nextAc", "seek"),
             new XElement(P + "cTn",
                 new XAttribute("id", nodeId++),
                 new XAttribute("dur", "indefinite"),
                 new XAttribute("nodeType", "mainSeq"),
-                new XElement(P + "childTnLst", seqChildTnLstItems)));
+                new XElement(P + "childTnLst", seqChildItems)));
 
         var outerParCTn = new XElement(P + "cTn",
             new XAttribute("id", nodeId++),
@@ -628,23 +912,79 @@ public static class PptxPackageWriter
                     new XAttribute("evt", "onBegin"),
                     new XAttribute("delay", "indefinite"),
                     new XElement(P + "tn", new XAttribute("val", "0")))),
-            new XElement(P + "childTnLst", seqEl));
+            new XElement(P + "childTnLst", mainSeqEl));
 
-        // Wrap in the outer interactive par
         var outerPar = new XElement(P + "par",
             new XElement(P + "cTn",
                 new XAttribute("id", nodeId++),
                 new XAttribute("fill", "hold"),
                 new XElement(P + "stCondLst",
-                    new XElement(P + "cond",
-                        new XAttribute("delay", "0"))),
+                    new XElement(P + "cond", new XAttribute("delay", "0"))),
                 new XElement(P + "childTnLst",
-                    new XElement(P + "par",
-                        outerParCTn))));
+                    new XElement(P + "par", outerParCTn))));
+
+        // ── Trigger sequences ─────────────────────────────────────────────────
+
+        var triggerPars = new List<XElement>();
+        foreach (var group in triggerAnims)
+        {
+            var trigSpid = group.Key;
+            var trigSeqEl = BuildTriggerSequenceEl(group.ToList(), trigSpid, ref nodeId);
+            triggerPars.Add(trigSeqEl);
+        }
+
+        // Combine all top-level children into tnLst.
+        var tnLstChildren = new List<XElement> { outerPar };
+        tnLstChildren.AddRange(triggerPars);
 
         return new XElement(P + "timing",
-            new XElement(P + "tnLst",
-                outerPar));
+            new XElement(P + "tnLst", tnLstChildren));
+    }
+
+    /// <summary>
+    /// Builds a trigger (interactive) sequence for animations that fire when shapeId is clicked.
+    /// Emits a p:par > p:cTn > p:childTnLst > p:seq (with onClick stCond targeting triggerShapeId).
+    /// </summary>
+    private static XElement BuildTriggerSequenceEl(List<ShapeAnimation> anims, uint triggerShapeId, ref uint nodeId)
+    {
+        // Build click-groups within this trigger sequence.
+        var clickGroups = new List<List<ShapeAnimation>>();
+        foreach (var anim in anims)
+        {
+            if (anim.Trigger == AnimationTrigger.OnClick || clickGroups.Count == 0)
+                clickGroups.Add(new List<ShapeAnimation> { anim });
+            else
+                clickGroups[^1].Add(anim);
+        }
+
+        var seqChildItems = new List<XElement>();
+        foreach (var group in clickGroups)
+            seqChildItems.Add(BuildClickGroupEl(group, ref nodeId));
+
+        // The trigger p:seq has stCondLst/cond evt="onClick" tgtEl/spTgt spid=triggerShapeId.
+        var trigSeqEl = new XElement(P + "seq",
+            new XAttribute("concurrent", "1"),
+            new XAttribute("nextAc", "seek"),
+            new XElement(P + "cTn",
+                new XAttribute("id", nodeId++),
+                new XAttribute("dur", "indefinite"),
+                new XAttribute("nodeType", "interactiveSeq"),
+                new XElement(P + "stCondLst",
+                    new XElement(P + "cond",
+                        new XAttribute("evt", "onClick"),
+                        new XAttribute("delay", "0"),
+                        new XElement(P + "tgtEl",
+                            new XElement(P + "spTgt",
+                                new XAttribute("spid", triggerShapeId))))),
+                new XElement(P + "childTnLst", seqChildItems)));
+
+        return new XElement(P + "par",
+            new XElement(P + "cTn",
+                new XAttribute("id", nodeId++),
+                new XAttribute("fill", "hold"),
+                new XElement(P + "stCondLst",
+                    new XElement(P + "cond", new XAttribute("delay", "0"))),
+                new XElement(P + "childTnLst", trigSeqEl)));
     }
 
     private static XElement BuildClickGroupEl(List<ShapeAnimation> group, ref uint nodeId)
@@ -653,7 +993,6 @@ public static class PptxPackageWriter
         for (int i = 0; i < group.Count; i++)
         {
             var anim = group[i];
-            // First item in group: OnClick trigger (delay=indefinite); subsequent: WithPrevious or AfterPrevious
             var itemTrigger = i == 0 ? AnimationTrigger.OnClick : anim.Trigger;
             buildItems.Add(BuildBuildItemEl(anim, itemTrigger, ref nodeId));
         }
@@ -672,6 +1011,10 @@ public static class PptxPackageWriter
 
     private static XElement BuildBuildItemEl(ShapeAnimation anim, AnimationTrigger triggerOverride, ref uint nodeId)
     {
+        // Motion-path animation: emit p:animMotion instead of p:set.
+        if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
+            return BuildMotionBuildItemEl(anim, triggerOverride, ref nodeId);
+
         var (presetClass, presetId) = PptxAnimationMap.AnimationPresetToOoxml(anim.Preset, anim.Kind);
         var subtypeAttr = PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction);
 
@@ -690,14 +1033,12 @@ public static class PptxPackageWriter
             new XAttribute("nodeType", "withEffect"),
         };
 
-        // Duration on the inner animation cTn
         var animCTn = new XElement(P + "cTn",
             new XAttribute("id", nodeId++),
             new XAttribute("dur", anim.DurationMs),
             new XElement(P + "stCondLst",
                 new XElement(P + "cond", new XAttribute("delay", "0"))));
 
-        // p:set element (most common — covers Appear and others)
         var setEl = new XElement(P + "set",
             new XElement(P + "cBhvr",
                 new XElement(P + "cTn",
@@ -720,6 +1061,81 @@ public static class PptxPackageWriter
                             new XElement(P + "stCondLst",
                                 new XElement(P + "cond", new XAttribute("delay", "0"))),
                             new XElement(P + "childTnLst", animCTn, setEl))))));
+    }
+
+    /// <summary>
+    /// Emits a motion-path build item as a p:par containing p:animMotion.
+    /// </summary>
+    private static XElement BuildMotionBuildItemEl(ShapeAnimation anim, AnimationTrigger triggerOverride, ref uint nodeId)
+    {
+        string delayStr = triggerOverride == AnimationTrigger.OnClick
+            ? "indefinite"
+            : anim.DelayMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var pathStr = BuildMotionPathString(anim.Motion!);
+
+        var animMotionEl = new XElement(P + "animMotion",
+            new XAttribute("origin", anim.Motion!.Origin),
+            new XAttribute("path", pathStr),
+            anim.Motion.PtsTypes is not null
+                ? new XAttribute("ptsTypes", anim.Motion.PtsTypes)
+                : null,
+            new XElement(P + "cBhvr",
+                new XElement(P + "cTn",
+                    new XAttribute("id", nodeId++),
+                    new XAttribute("dur", anim.DurationMs),
+                    new XElement(P + "stCondLst",
+                        new XElement(P + "cond", new XAttribute("delay", "0")))),
+                new XElement(P + "tgtEl",
+                    new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId)))));
+
+        return new XElement(P + "par",
+            new XElement(P + "cTn",
+                new XAttribute("id", nodeId++),
+                new XAttribute("presetClass", "path"),
+                new XAttribute("presetID", "1"),
+                new XAttribute("presetSubtype", "0"),
+                new XAttribute("fill", "hold"),
+                new XAttribute("grpId", "0"),
+                new XAttribute("nodeType", "withEffect"),
+                new XElement(P + "stCondLst",
+                    new XElement(P + "cond", new XAttribute("delay", delayStr))),
+                new XElement(P + "childTnLst",
+                    new XElement(P + "par",
+                        new XElement(P + "cTn",
+                            new XAttribute("id", nodeId++),
+                            new XAttribute("fill", "hold"),
+                            new XElement(P + "stCondLst",
+                                new XElement(P + "cond", new XAttribute("delay", "0"))),
+                            new XElement(P + "childTnLst", animMotionEl))))));
+    }
+
+    /// <summary>
+    /// Serializes a <see cref="MotionPath"/> back to the OOXML path mini-language string.
+    /// </summary>
+    private static string BuildMotionPathString(MotionPath mp)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var seg in mp.Segments)
+        {
+            switch (seg.Kind)
+            {
+                case MotionPathSegmentKind.Move:
+                    sb.Append(System.FormattableString.Invariant($"M {seg.X:F6} {seg.Y:F6} "));
+                    break;
+                case MotionPathSegmentKind.Line:
+                    sb.Append(System.FormattableString.Invariant($"L {seg.X:F6} {seg.Y:F6} "));
+                    break;
+                case MotionPathSegmentKind.Cubic:
+                    sb.Append(System.FormattableString.Invariant(
+                        $"C {seg.X1:F6} {seg.Y1:F6} {seg.X2:F6} {seg.Y2:F6} {seg.X:F6} {seg.Y:F6} "));
+                    break;
+                case MotionPathSegmentKind.Close:
+                    sb.Append("E ");
+                    break;
+            }
+        }
+        return sb.ToString().TrimEnd();
     }
 
     // ── slideLayout.xml ──────────────────────────────────────────────────────────
@@ -948,37 +1364,54 @@ public static class PptxPackageWriter
 
     private static XElement? BuildShapeEl(
         SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
-        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null) =>
+        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null,
+        Dictionary<uint, string>? fillBlipById = null) =>
         shape.Kind switch
         {
             SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap),
-            SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme),
+            SlideShapeKind.Media   => BuildMediaPicEl(shape, mediaById),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById),
+            SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds, fillBlipById),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
             SlideShapeKind.SmartArt when shape.SmartArt is not null =>
                 BuildSmartArtGraphicFrameEl(shape,
                     smartArtRelIdRemap?.GetValueOrDefault(shape.Id)),
-            _ => BuildSpEl(shape, scheme)
+            _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById)
         };
 
-    private static XElement BuildSpEl(SlideShape shape, PresentationColorScheme scheme) =>
-        new XElement(P + "sp",
+    private static XElement BuildSpEl(SlideShape shape, PresentationColorScheme scheme,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null,
+        Dictionary<uint, string>? fillBlipById = null)
+    {
+        string? fillBlipRelId = null;
+        fillBlipById?.TryGetValue(shape.Id, out fillBlipRelId);
+        return new XElement(P + "sp",
             new XElement(P + "nvSpPr",
-                CnvPr(shape.Id, shape.Name),
+                CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, allSlides),
                 new XElement(P + "cNvSpPr"),
                 new XElement(P + "nvPr",
                     shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
-            BuildSpPrEl(shape, scheme),
-            shape.TextBody is not null ? BuildTxBodyEl(shape.TextBody, scheme) : null);
+            BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId),
+            shape.TextBody is not null ? BuildTxBodyEl(shape.TextBody, scheme, hlinkRelIds, allSlides) : null);
+    }
 
-    private static XElement BuildCxnSpEl(SlideShape shape, PresentationColorScheme scheme) =>
-        new XElement(P + "cxnSp",
+    private static XElement BuildCxnSpEl(SlideShape shape, PresentationColorScheme scheme,
+        Dictionary<string, string>? hlinkRelIds = null,
+        Dictionary<uint, string>? fillBlipById = null)
+    {
+        string? fillBlipRelId = null;
+        fillBlipById?.TryGetValue(shape.Id, out fillBlipRelId);
+        return new XElement(P + "cxnSp",
             new XElement(P + "nvCxnSpPr",
-                CnvPr(shape.Id, shape.Name),
+                CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, null),
                 new XElement(P + "cNvCxnSpPr"),
                 new XElement(P + "nvPr")),
-            BuildSpPrEl(shape, scheme));
+            BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId));
+    }
 
     private static XElement BuildPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
     {
@@ -997,9 +1430,51 @@ public static class PptxPackageWriter
             BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
     }
 
+    private static XElement BuildMediaPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
+    {
+        // Poster image rel id (written by WriteSlideMedia with the shape's Id key)
+        mediaById.TryGetValue(shape.Id, out var posterRelId);
+        // II4: do NOT fall back to a hard-coded "rIdMedia1" — that would emit a dangling
+        // r:embed reference when no poster was written for this shape, causing repair.
+        // If no real poster rel exists, omit the blipFill entirely.
+
+        // Media file rel id (written by WriteSlideMediaFiles using shape.Id | 0x80000000 key)
+        mediaById.TryGetValue(shape.Id | 0x80000000u, out var mediaFileRelId);
+        mediaFileRelId ??= "rIdVid1";
+
+        bool isVideo = shape.Media?.IsVideo ?? true;
+        var mediaFileEl = isVideo
+            ? new XElement(A + "videoFile", new XAttribute(R + "link", mediaFileRelId))
+            : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
+
+        // KK1: a:blipFill is REQUIRED by CT_Picture (minOccurs=1). When no poster image
+        // is available emit a minimal VALID blipFill — just a:stretch/a:fillRect, no a:blip —
+        // so there is no dangling r:embed relationship and the element is schema-compliant.
+        // (CT_BlipFillProperties: a:blip is optional; a:stretch is valid without it.)
+        // When a real poster rel exists, emit the blip with r:embed as before (II4).
+        XElement blipFillEl = posterRelId is not null
+            ? new XElement(P + "blipFill",
+                new XElement(A + "blip", new XAttribute(R + "embed", posterRelId)),
+                new XElement(A + "stretch", new XElement(A + "fillRect")))
+            : new XElement(P + "blipFill",
+                new XElement(A + "stretch", new XElement(A + "fillRect")));
+
+        return new XElement(P + "pic",
+            new XElement(P + "nvPicPr",
+                CnvPr(shape.Id, shape.Name),
+                new XElement(P + "cNvPicPr"),
+                new XElement(P + "nvPr",
+                    mediaFileEl)),
+            blipFillEl,
+            BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
+    }
+
     private static XElement BuildGrpSpEl(
         SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
-        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null) =>
+        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null,
+        Dictionary<uint, string>? fillBlipById = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape.Id, shape.Name),
@@ -1007,12 +1482,22 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
             shape.Children
-                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap))
+                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById))
                 .OfType<XElement>());
 
     /// <summary>
     /// Builds the <c>&lt;p:grpSpPr&gt;</c> required for <c>&lt;p:grpSp&gt;</c>.
     /// CT_GroupShapeProperties requires an a:xfrm with chOff/chExt and must NOT contain a prstGeom.
+    ///
+    /// FF1 fix: FreeP stores group children with ABSOLUTE slide offsets (the compositor and reader
+    /// treat child coords as absolute with no group transform applied).  PowerPoint maps a child's
+    /// rendered position as: groupOff + (childOff - chOff) * (ext / chExt).
+    /// To make that identity for absolute coords we must emit chOff == off and chExt == ext, so:
+    ///   rendered = groupOff + (childAbsOff - groupOff) * 1 = childAbsOff  ✓
+    /// The old chOff=(0,0) was wrong: it displaced every child by the group origin in PowerPoint.
+    ///
+    /// FF3 fix: clamp ext/chExt cx and cy to a minimum of 1 EMU to prevent PowerPoint from
+    /// dividing by zero when a degenerate (zero-size) group is encountered.
     /// </summary>
     private static XElement BuildGrpSpPrEl(SlideShape shape)
     {
@@ -1021,16 +1506,25 @@ public static class PptxPackageWriter
             xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
         if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
         if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
+
+        // FF3: clamp to ≥1 EMU so PowerPoint never divides by chExt=0.
+        long extCx = Math.Max(1L, shape.ExtentCxEmu);
+        long extCy = Math.Max(1L, shape.ExtentCyEmu);
+
         xfrm.Add(new XElement(A + "off",   new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
-        xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
-        // Child coordinate space: use the group's own extent as the identity child space.
-        xfrm.Add(new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")));
-        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", extCx),             new XAttribute("cy", extCy)));
+        // FF1: chOff == off so the group→child transform is identity for absolute child coords.
+        xfrm.Add(new XElement(A + "chOff", new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
+        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", extCx),             new XAttribute("cy", extCy)));
 
         return new XElement(P + "grpSpPr", xfrm);
     }
 
-    private static XElement BuildSpPrEl(SlideShape shape, PresentationColorScheme scheme, string? forcePrst = null)
+    private static XElement BuildSpPrEl(
+        SlideShape shape,
+        PresentationColorScheme scheme,
+        string? forcePrst = null,
+        string? fillBlipRelId = null)
     {
         var xfrm = new XElement(A + "xfrm");
         if (shape.RotationDeg != 0)
@@ -1052,9 +1546,11 @@ public static class PptxPackageWriter
         return new XElement(P + "spPr",
             xfrm,
             geomEl,
-            shape.Fill is not null ? BuildFillEl(shape.Fill, scheme) : null,
+            shape.Fill is not null ? BuildFillEl(shape.Fill, scheme, fillBlipRelId) : null,
             shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null,
-            shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null);
+            shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null,
+            shape.Effects is not null ? BuildScene3dEl(shape.Effects) : null,
+            shape.Effects is not null ? BuildSp3dEl(shape.Effects) : null);
     }
 
     private static XElement BuildCustGeomEl(List<CustomGeometryPath> paths)
@@ -1159,6 +1655,88 @@ public static class PptxPackageWriter
             effectLst.Add(new XElement(A + "softEdge", new XAttribute("rad", fx.SoftEdgeRadEmu)));
 
         return effectLst;
+    }
+
+    // ── a:sp3d element ────────────────────────────────────────────────────────
+
+    private static XElement? BuildSp3dEl(ShapeEffects fx)
+    {
+        bool hasSp3d = fx.BevelTop is not null || fx.BevelBottom is not null
+            || fx.ExtrusionHeightEmu != 0 || fx.ContourWidthEmu != 0
+            || !string.IsNullOrEmpty(fx.PrstMaterial)
+            || fx.ExtrusionColor.HasValue || fx.ContourColor.HasValue;
+
+        if (!hasSp3d) return null;
+
+        var sp3d = new XElement(A + "sp3d");
+
+        if (fx.ExtrusionHeightEmu != 0)
+            sp3d.Add(new XAttribute("extrusionH", fx.ExtrusionHeightEmu));
+        if (fx.ContourWidthEmu != 0)
+            sp3d.Add(new XAttribute("contourW", fx.ContourWidthEmu));
+        if (!string.IsNullOrEmpty(fx.PrstMaterial))
+            sp3d.Add(new XAttribute("prstMaterial", fx.PrstMaterial));
+
+        if (fx.BevelTop is not null)
+        {
+            var bevelT = new XElement(A + "bevelT");
+            // Always emit w/h so an explicit 0 round-trips correctly (omitting matches the 76200 default).
+            bevelT.Add(new XAttribute("w", fx.BevelTop.WidthEmu));
+            bevelT.Add(new XAttribute("h", fx.BevelTop.HeightEmu));
+            if (!string.IsNullOrEmpty(fx.BevelTop.PresetName))
+                bevelT.Add(new XAttribute("prst", fx.BevelTop.PresetName));
+            sp3d.Add(bevelT);
+        }
+
+        if (fx.BevelBottom is not null)
+        {
+            var bevelB = new XElement(A + "bevelB");
+            // Always emit w/h so an explicit 0 round-trips correctly (omitting matches the 76200 default).
+            bevelB.Add(new XAttribute("w", fx.BevelBottom.WidthEmu));
+            bevelB.Add(new XAttribute("h", fx.BevelBottom.HeightEmu));
+            if (!string.IsNullOrEmpty(fx.BevelBottom.PresetName))
+                bevelB.Add(new XAttribute("prst", fx.BevelBottom.PresetName));
+            sp3d.Add(bevelB);
+        }
+
+        if (fx.ExtrusionColor.HasValue)
+            sp3d.Add(new XElement(A + "extrusionClr",
+                new XElement(A + "srgbClr", new XAttribute("val", FmtColor(fx.ExtrusionColor.Value)))));
+
+        if (fx.ContourColor.HasValue)
+            sp3d.Add(new XElement(A + "contourClr",
+                new XElement(A + "srgbClr", new XAttribute("val", FmtColor(fx.ContourColor.Value)))));
+
+        return sp3d;
+    }
+
+    // ── a:scene3d element ─────────────────────────────────────────────────────
+
+    private static XElement? BuildScene3dEl(ShapeEffects fx)
+    {
+        if (fx.Scene3d is null) return null;
+
+        var scene3d = new XElement(A + "scene3d");
+
+        // CT_Scene3D requires <a:camera> (minOccurs=1). Always emit one; use the
+        // schema-valid default preset when the model has no camera data (e.g. a
+        // lightRig-only scene read from an older file).
+        var cameraPreset = !string.IsNullOrEmpty(fx.Scene3d.CameraPreset)
+            ? fx.Scene3d.CameraPreset
+            : "orthographicFront";
+        scene3d.Add(new XElement(A + "camera",
+            new XAttribute("prst", cameraPreset)));
+
+        // CT_LightRig requires both rig= and dir=. Only emit <a:lightRig> when
+        // both attributes are present; a bare <a:lightRig/> is schema-invalid.
+        if (!string.IsNullOrEmpty(fx.Scene3d.LightRig) && !string.IsNullOrEmpty(fx.Scene3d.LightRigDir))
+        {
+            scene3d.Add(new XElement(A + "lightRig",
+                new XAttribute("rig", fx.Scene3d.LightRig),
+                new XAttribute("dir", fx.Scene3d.LightRigDir)));
+        }
+
+        return scene3d;
     }
 
     // ── Table / graphicFrame elements ─────────────────────────────────────────────
@@ -1419,25 +1997,95 @@ public static class PptxPackageWriter
 
     // ── Fill elements ─────────────────────────────────────────────────────────────
 
-    private static XElement? BuildFillEl(ShapeFill fill, PresentationColorScheme scheme) =>
+    /// <param name="blipRelId">
+    /// When the fill is a <see cref="ShapeFill.Picture"/>, the relationship id to embed
+    /// (previously registered in the slide rels). Null means picture fill cannot be written.
+    /// </param>
+    private static XElement? BuildFillEl(
+        ShapeFill fill,
+        PresentationColorScheme scheme,
+        string? blipRelId = null) =>
         fill switch
         {
             ShapeFill.None => new XElement(A + "noFill"),
             ShapeFill.Solid s => new XElement(A + "solidFill", BuildColorEl(s.Color)),
             ShapeFill.Gradient g => BuildGradFillEl(g),
+            ShapeFill.Picture p when blipRelId is not null => BuildBlipFillEl(p, blipRelId),
+            ShapeFill.Pattern pat => BuildPattFillEl(pat),
             _ => null
         };
 
-    private static XElement BuildGradFillEl(ShapeFill.Gradient g) =>
-        new XElement(A + "gradFill",
-            new XElement(A + "gsLst",
-                new XElement(A + "gs", new XAttribute("pos", "0"),
-                    new XElement(A + "solidFill", BuildColorEl(g.StartColor))),
-                new XElement(A + "gs", new XAttribute("pos", "100000"),
-                    new XElement(A + "solidFill", BuildColorEl(g.EndColor)))),
-            new XElement(A + "lin",
+    private static XElement BuildGradFillEl(ShapeFill.Gradient g)
+    {
+        // HH2: stops MUST be in ascending position order per OOXML CT_GradientStopList.
+        // HH3: a:gsLst requires at least 2 stops; synthesise when model has fewer.
+        var stops = g.Stops.OrderBy(s => s.Position).ToList();
+        if (stops.Count == 0)
+        {
+            // No stops at all: emit white@0 → black@100k
+            stops = new List<GradientStop>
+            {
+                new GradientStop(0.0, ThemeAwareColor.White),
+                new GradientStop(1.0, ThemeAwareColor.Black),
+            };
+        }
+        else if (stops.Count == 1)
+        {
+            // Duplicate the single stop at position 0 and 100000
+            var singleColor = stops[0].Color;
+            stops = new List<GradientStop>
+            {
+                new GradientStop(0.0, singleColor),
+                new GradientStop(1.0, singleColor),
+            };
+        }
+
+        var gsLst = new XElement(A + "gsLst");
+        foreach (var stop in stops)
+        {
+            int pos = (int)Math.Round(stop.Position * 100000);
+            gsLst.Add(new XElement(A + "gs",
+                new XAttribute("pos", pos),
+                new XElement(A + "solidFill", BuildColorEl(stop.Color))));
+        }
+
+        XElement kindEl;
+        if (g.Kind == GradientKind.Radial)
+        {
+            kindEl = new XElement(A + "path",
+                new XAttribute("path", "circle"),
+                new XElement(A + "fillToRect",
+                    new XAttribute("l", "50000"),
+                    new XAttribute("t", "50000"),
+                    new XAttribute("r", "50000"),
+                    new XAttribute("b", "50000")));
+        }
+        else
+        {
+            kindEl = new XElement(A + "lin",
                 new XAttribute("ang", (long)Math.Round(g.AngleDegrees * 60000)),
-                new XAttribute("scaled", "0")));
+                new XAttribute("scaled", "0"));
+        }
+
+        return new XElement(A + "gradFill", gsLst, kindEl);
+    }
+
+    private static XElement BuildBlipFillEl(ShapeFill.Picture p, string blipRelId)
+    {
+        var blipFill = new XElement(A + "blipFill",
+            new XElement(A + "blip", new XAttribute(R + "embed", blipRelId)));
+        if (p.Tile)
+            blipFill.Add(new XElement(A + "tile"));
+        else
+            blipFill.Add(new XElement(A + "stretch", new XElement(A + "fillRect")));
+        return blipFill;
+    }
+
+    private static XElement BuildPattFillEl(ShapeFill.Pattern pat) =>
+        new XElement(A + "pattFill",
+            new XAttribute("prst", pat.Preset),
+            new XElement(A + "fgClr", BuildColorEl(pat.ForegroundColor)),
+            new XElement(A + "bgClr", BuildColorEl(pat.BackgroundColor)));
 
     private static XElement BuildColorEl(ThemeAwareColor color)
     {
@@ -1498,7 +2146,9 @@ public static class PptxPackageWriter
 
     // ── TextBody elements ─────────────────────────────────────────────────────────
 
-    private static XElement BuildTxBodyEl(TextBody body, PresentationColorScheme scheme)
+    private static XElement BuildTxBodyEl(TextBody body, PresentationColorScheme scheme,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null)
     {
         // Write anchor only when explicitly set; omit when null (inherited from layout/master).
         var bodyPr = new XElement(A + "bodyPr");
@@ -1526,10 +2176,12 @@ public static class PptxPackageWriter
         return new XElement(P + "txBody",
             bodyPr,
             BuildLstStyleEl(body.LstStyle),
-            body.Paragraphs.Select(p => BuildParaEl(p)));
+            body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides)));
     }
 
-    private static XElement BuildParaEl(Paragraph para)
+    private static XElement BuildParaEl(Paragraph para,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null)
     {
         var pPr = new XElement(A + "pPr");
         bool hasPPr = false;
@@ -1573,12 +2225,27 @@ public static class PptxPackageWriter
 
         return new XElement(A + "p",
             hasPPr ? pPr : null,
-            para.Runs.Select(BuildRunEl));
+            para.Runs.Select(r => BuildRunEl(r, hlinkRelIds, allSlides)));
     }
 
-    private static XElement BuildRunEl(Run run)
+    private static XElement BuildRunEl(Run run,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null)
     {
         if (run.Text == "\n") return new XElement(A + "br");
+
+        // Field run: emit a:fld instead of a:r
+        if (run.Field is not null)
+        {
+            var fld = run.Field;
+            var fldId = Guid.NewGuid().ToString("B").ToUpperInvariant();
+            var fldRPrAttrs = BuildFieldRPrAttrs(fld);
+            return new XElement(A + "fld",
+                new XAttribute("id", fldId),
+                new XAttribute("type", fld.FieldType),
+                fldRPrAttrs is not null ? new XElement(A + "rPr", fldRPrAttrs) : null,
+                new XElement(A + "t", run.Text));
+        }
 
         var rPr = new XElement(A + "rPr",
             new XAttribute("lang", "en-US"),
@@ -1595,7 +2262,24 @@ public static class PptxPackageWriter
         if (run.FontFamily is not null)
             rPr.Add(new XElement(A + "latin", new XAttribute("typeface", run.FontFamily)));
 
+        // Run-level hyperlink
+        if (run.Hyperlink is not null)
+        {
+            var hlinkEl = BuildHlinkClickEl(run.Hyperlink, hlinkRelIds, allSlides);
+            if (hlinkEl is not null) rPr.Add(hlinkEl);
+        }
+
         return new XElement(A + "r", rPr, new XElement(A + "t", run.Text));
+    }
+
+    private static IEnumerable<XAttribute>? BuildFieldRPrAttrs(FieldRun fld)
+    {
+        var attrs = new List<XAttribute>();
+        if (fld.FontSizePt.HasValue)
+            attrs.Add(new XAttribute("sz", (int)Math.Round(fld.FontSizePt.Value * 100)));
+        if (fld.Bold)   attrs.Add(new XAttribute("b", "1"));
+        if (fld.Italic) attrs.Add(new XAttribute("i", "1"));
+        return attrs.Count > 0 ? attrs : null;
     }
 
     private static XElement BuildPhEl(Placeholder ph)
@@ -1624,33 +2308,167 @@ public static class PptxPackageWriter
         return el;
     }
 
+    // ── Hyperlink rel collection ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Walks all shapes and runs in <paramref name="slide"/>, collects unique hyperlinks, assigns
+    /// monotonically-increasing rel IDs ("rIdHlinkN"), and populates:
+    /// <list type="bullet">
+    ///   <item><paramref name="hlinkRelIds"/> — maps hyperlink key → rel ID (for use in BuildShapeEl/BuildRunEl)</item>
+    ///   <item><paramref name="entries"/> — list of (relId, relType, target, isExternal) for the slide rels file</item>
+    /// </list>
+    /// For external URLs the rel type is the hyperlink rel type with TargetMode=External.
+    /// For internal slide jumps the rel type is the slide rel type (no TargetMode).
+    /// </summary>
+    private static void CollectHyperlinkRels(
+        Slide slide, List<Slide> allSlides, int slideIndex,
+        Dictionary<string, string> hlinkRelIds,
+        List<(string relId, string relType, string target, bool external)> entries)
+    {
+        int counter = 1;
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Hyperlink is not null)
+                EnsureHlinkRel(shape.Hyperlink, allSlides, slideIndex, hlinkRelIds, entries, ref counter);
+
+            if (shape.TextBody is not null)
+            {
+                foreach (var para in shape.TextBody.Paragraphs)
+                    foreach (var run in para.Runs)
+                        if (run.Hyperlink is not null)
+                            EnsureHlinkRel(run.Hyperlink, allSlides, slideIndex, hlinkRelIds, entries, ref counter);
+            }
+        }
+    }
+
+    private static void EnsureHlinkRel(
+        Hyperlink hlink, List<Slide> allSlides, int slideIndex,
+        Dictionary<string, string> hlinkRelIds,
+        List<(string relId, string relType, string target, bool external)> entries,
+        ref int counter)
+    {
+        string key = HlinkKey(hlink, allSlides);
+        if (string.IsNullOrEmpty(key)) return;
+        if (hlinkRelIds.ContainsKey(key)) return; // already registered
+
+        var relId = $"rIdHlink{counter++}";
+        hlinkRelIds[key] = relId;
+
+        if (hlink.Url is not null)
+        {
+            // External hyperlink — TargetMode="External"
+            entries.Add((relId, HyperlinkRelType, hlink.Url, external: true));
+        }
+        else if (hlink.TargetSlideId is not null)
+        {
+            // Internal slide jump — find the target slide index.
+            int targetIdx = allSlides.FindIndex(s => s.Id == hlink.TargetSlideId);
+            string target = targetIdx >= 0
+                ? $"../slides/slide{targetIdx + 1}.xml"
+                : "../slides/slide1.xml"; // fallback
+            entries.Add((relId, SlideRelType, target, external: false));
+        }
+    }
+
     // ── Media writing ─────────────────────────────────────────────────────────────
 
-    private static List<(uint shapeId, string relId, string mediaPath)> WriteSlideMedia(
-        ZipArchive archive, Slide slide, int slideIndex)
+    /// <summary>
+    /// Writes all media (picture shapes + picture fill blips) for a slide.
+    /// Returns two lists: one for picture shapes, one for fill blips (both as (shapeId, relId, mediaPath)).
+    /// </summary>
+    private static (
+        List<(uint shapeId, string relId, string mediaPath)> pictureShapeMedia,
+        List<(uint shapeId, string relId, string mediaPath)> fillBlipMedia)
+    WriteSlideMedia(ZipArchive archive, Slide slide, int slideIndex)
     {
-        var result = new List<(uint, string, string)>();
+        var pictureResult = new List<(uint, string, string)>();
+        var fillBlipResult = new List<(uint, string, string)>();
         int mediaIdx = 1;
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
-            if (shape.Kind != SlideShapeKind.Picture || shape.Picture?.Bytes is not { Length: > 0 } bytes)
+            // Picture shape OR media-shape poster image.
+            if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
+                && shape.Picture?.Bytes is { Length: > 0 } picBytes)
+            {
+                var ct = shape.Picture.ContentType ?? "image/png";
+                var ext = ContentTypeToExtension(ct);
+                var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
+
+                var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
+                using (var es = entry.Open())
+                    es.Write(picBytes);
+
+                var relId = $"rIdMedia{mediaIdx}";
+                pictureResult.Add((shape.Id, relId, mediaPath));
+                mediaIdx++;
                 continue;
+            }
 
-            var ct = shape.Picture.ContentType ?? "image/png";
-            var ext = ContentTypeToExtension(ct);
-            var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
+            // Picture fill on autoshape/connector
+            if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
+            {
+                var ct = picFill.ContentType ?? "image/png";
+                var ext = ContentTypeToExtension(ct);
+                var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
 
-            var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
-            using (var es = entry.Open())
-                es.Write(bytes);
+                var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
+                using (var es = entry.Open())
+                    es.Write(picFill.ImageBytes);
 
-            var relId = $"rIdMedia{mediaIdx}";
-            result.Add((shape.Id, relId, mediaPath));
-            mediaIdx++;
+                var relId = $"rIdMedia{mediaIdx}";
+                fillBlipResult.Add((shape.Id, relId, mediaPath));
+                mediaIdx++;
+            }
+        }
+
+        return (pictureResult, fillBlipResult);
+    }
+
+    /// <summary>
+    /// Writes audio/video bytes for Media shapes. Returns (shapeId, relId, mediaPath, isVideo) tuples.
+    /// The relId uses prefix "rIdVid" to avoid collision with the "rIdMedia" image prefix.
+    /// </summary>
+    private static List<(uint shapeId, string relId, string mediaPath, bool isVideo)> WriteSlideMediaFiles(
+        ZipArchive archive, Slide slide, int slideIndex)
+    {
+        var result = new List<(uint, string, string, bool)>();
+        int n = 1;
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Kind != SlideShapeKind.Media) continue;
+            var media = shape.Media;
+            if (media is null || media.Bytes.Length == 0) continue; // link-only: no file to write
+
+            var ext = media.ContentType switch
+            {
+                "video/mp4"       => "mp4",
+                "video/quicktime" => "mov",
+                "video/x-msvideo" => "avi",
+                "video/x-ms-wmv"  => "wmv",
+                "audio/mpeg"      => "mp3",
+                "audio/mp4"       => "m4a",
+                "audio/wav"       => "wav",
+                "audio/x-ms-wma"  => "wma",
+                _                 => "mp4"
+            };
+            var mediaPath = $"ppt/media/slide{slideIndex}_video{n}.{ext}";
+            var relId     = $"rIdVid{n}";
+
+            WriteRawEntry(archive, mediaPath, media.Bytes);
+            result.Add((shape.Id, relId, mediaPath, media.IsVideo));
+            n++;
         }
 
         return result;
+    }
+
+    private static void WriteRawEntry(ZipArchive archive, string path, byte[] bytes)
+    {
+        var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
+        using var stream = entry.Open();
+        stream.Write(bytes, 0, bytes.Length);
     }
 
     // ── Chart writing ─────────────────────────────────────────────────────────────
@@ -1882,6 +2700,52 @@ public static class PptxPackageWriter
     private static XElement CnvPr(uint id, string name) =>
         new XElement(P + "cNvPr", new XAttribute("id", id), new XAttribute("name", name));
 
+    /// <summary>
+    /// Builds a cNvPr element and, when the shape carries a hyperlink, appends an a:hlinkClick child.
+    /// </summary>
+    private static XElement CnvPrWithHlink(uint id, string name, Hyperlink? hlink,
+        Dictionary<string, string>? hlinkRelIds, List<Slide>? allSlides)
+    {
+        var el = new XElement(P + "cNvPr", new XAttribute("id", id), new XAttribute("name", name));
+        if (hlink is not null)
+        {
+            var hlinkEl = BuildHlinkClickEl(hlink, hlinkRelIds, allSlides);
+            if (hlinkEl is not null) el.Add(hlinkEl);
+        }
+        return el;
+    }
+
+    /// <summary>
+    /// Builds an <c>a:hlinkClick</c> element for the given hyperlink, resolving to the stored rel ID.
+    /// Returns null when no rel ID could be found for the hyperlink target.
+    /// </summary>
+    private static XElement? BuildHlinkClickEl(Hyperlink hlink,
+        Dictionary<string, string>? hlinkRelIds, List<Slide>? allSlides)
+    {
+        if (hlinkRelIds is null) return null;
+
+        string key = HlinkKey(hlink, allSlides);
+        if (!hlinkRelIds.TryGetValue(key, out var relId)) return null;
+
+        var el = new XElement(A + "hlinkClick", new XAttribute(R + "id", relId));
+        if (!string.IsNullOrEmpty(hlink.Tooltip))
+            el.Add(new XAttribute("tooltip", hlink.Tooltip));
+
+        // Internal slide jump: add the action attribute.
+        if (hlink.TargetSlideId is not null)
+            el.Add(new XAttribute("action", "ppaction://hlinksldjump"));
+
+        return el;
+    }
+
+    /// <summary>Compute the canonical key used in the hlinkRelIds dictionary for a Hyperlink.</summary>
+    private static string HlinkKey(Hyperlink h, List<Slide>? allSlides)
+    {
+        if (h.Url is not null) return "ext:" + h.Url;
+        if (h.TargetSlideId is not null) return "slide:" + h.TargetSlideId;
+        return string.Empty;
+    }
+
     private static IEnumerable<object?> GrpSpHeader() => new object?[]
     {
         new XElement(P + "nvGrpSpPr",
@@ -1923,6 +2787,21 @@ public static class PptxPackageWriter
             _ => "png"
         };
 
+    // II1: maps audio/video content types to their file extensions (mirrors WriteSlideMediaFiles switch)
+    private static string MediaContentTypeToExtension(string ct) =>
+        ct.ToLowerInvariant() switch
+        {
+            "video/mp4"       => "mp4",
+            "video/quicktime" => "mov",
+            "video/x-msvideo" => "avi",
+            "video/x-ms-wmv"  => "wmv",
+            "audio/mpeg"      => "mp3",
+            "audio/mp4"       => "m4a",
+            "audio/wav"       => "wav",
+            "audio/x-ms-wma"  => "wma",
+            _                 => "mp4"
+        };
+
     private static string ToLayoutTypeStr(SlideLayoutType type) =>
         type switch
         {
@@ -1954,9 +2833,10 @@ public static class PptxPackageWriter
 
     private sealed class RelsDoc
     {
-        private readonly List<(string id, string type, string target)> _rels = new();
+        private readonly List<(string id, string type, string target, bool external)> _rels = new();
 
-        public void Add(string id, string type, string target) => _rels.Add((id, type, target));
+        public void Add(string id, string type, string target, bool external = false)
+            => _rels.Add((id, type, target, external));
 
         public XDocument ToXDocument() =>
             new XDocument(
@@ -1965,10 +2845,15 @@ public static class PptxPackageWriter
                 // not a prefixed namespace (PowerPoint rejects r:Relationships).
                 new XElement(PkgRels + "Relationships",
                     _rels.Select(r =>
-                        new XElement(PkgRels + "Relationship",
+                    {
+                        var el = new XElement(PkgRels + "Relationship",
                             new XAttribute("Id", r.id),
                             new XAttribute("Type", r.type),
-                            new XAttribute("Target", r.target)))));
+                            new XAttribute("Target", r.target));
+                        if (r.external)
+                            el.Add(new XAttribute("TargetMode", "External"));
+                        return el;
+                    })));
 
         // Re-expose PkgRels from outer class
         private static readonly XNamespace PkgRels = PptxPackageWriter.PkgRels;

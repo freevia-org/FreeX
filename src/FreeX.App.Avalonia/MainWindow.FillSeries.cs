@@ -230,7 +230,7 @@ public sealed partial class MainWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
         var labelBlock = new TextBlock
         {
-            Text = label,
+            Text = StripDisplayMnemonic(label),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,

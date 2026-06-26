@@ -249,6 +249,9 @@ public sealed partial class MainWindow
         rangeBox.BorderBrush = Brush(130, 130, 130);
         rangeBox.BorderThickness = new Thickness(1);
         rangeBox.VerticalContentAlignment = VerticalAlignment.Center;
+        // Lighter selection highlight so the (auto-selected) range text stays readable in black —
+        // Avalonia's default accent selection is too dark for black text (matches Windows' lighter selection).
+        rangeBox.SelectionBrush = Brush(173, 214, 255);
         AutomationProperties.SetName(rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationNameKey));
         AutomationProperties.SetAutomationId(rangeBox, CreateTableDialogPlanner.RangeBoxAutomationId);
         AutomationProperties.SetHelpText(rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationHelpTextKey));
@@ -278,7 +281,7 @@ public sealed partial class MainWindow
 
         var headersBox = new CheckBox
         {
-            Content = UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey),
+            Content = StripDisplayMnemonic(UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey)),
             IsChecked = true,
             Margin = new Thickness(0, 0, 0, 16),
             MinHeight = 20,
@@ -360,7 +363,7 @@ public sealed partial class MainWindow
             {
                 new TextBlock
                 {
-                    Text = UiText.Get(CreateTableDialogPlanner.RangeLabelKey),
+                    Text = StripDisplayMnemonic(UiText.Get(CreateTableDialogPlanner.RangeLabelKey)),
                     Margin = new Thickness(0, 0, 0, 4),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,

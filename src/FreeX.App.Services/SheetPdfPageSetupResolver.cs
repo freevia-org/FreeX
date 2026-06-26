@@ -1,0 +1,255 @@
+using FreeX.Core.Calc;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Services;
+
+/// <summary>
+/// Converts a sheet's OOXML page-setup fields into PDF-native geometry (points at 72 dpi) and into the
+/// <see cref="PortablePdfDocumentOptions"/> the PDF content builder consumes. Also derives the
+/// <see cref="WorkbookExportPrintPageCapacity"/> (rows/columns per page) from the same page setup so
+/// <see cref="WorkbookExportPrintPlanner"/> can paginate correctly for each sheet.
+///
+/// <para>
+/// All dimension math converts inches → PDF points (1 inch = 72 pt). Paper dimensions come from
+/// <see cref="WorksheetPageLayout.GetPageSizeInches"/>, which already handles the landscape swap.
+/// Margin math is inset-from-paper: the content body rect is further reduced by header/footer band
+/// reservations (<see cref="Sheet.HeaderMargin"/> / <see cref="Sheet.FooterMargin"/>).
+/// </para>
+///
+/// <para>
+/// Row/column pagination capacity mirrors the shared <c>PagePaginationPlanner</c> math at 96 dpi so
+/// the row-page / column-page counts computed here match what the print-preview planner would produce.
+/// The per-sheet capacity is fed into <see cref="WorkbookExportPrintPlanner"/> so each sheet breaks
+/// correctly rather than using the hardcoded 28 × 8 fallback.
+/// </para>
+/// </summary>
+public static class SheetPdfPageSetupResolver
+{
+    /// <summary>Points per inch in PDF user space.</summary>
+    public const double PdfPointsPerInch = 72.0;
+
+    /// <summary>
+    /// Layout DPI assumed by the shared pagination planner (96 dpi screen pixels). Row heights and
+    /// column widths are stored in screen pixels / character units at this resolution.
+    /// </summary>
+    private const double LayoutDpi = 96.0;
+
+    /// <summary>
+    /// Fallback row height in pixels used when a row has no recorded height (matches
+    /// <c>PagePaginationPlanner.NominalRowHeight</c>).
+    /// </summary>
+    private const double NominalRowHeightPx = 20.0;
+
+    /// <summary>
+    /// Minimum column width in pixels used as a floor for columns with no recorded width (matches
+    /// <c>PagePaginationPlanner.MinimumPrintColumnWidth</c>).
+    /// </summary>
+    private const double MinimumColumnWidthPx = 40.0;
+
+    // -----------------------------------------------------------------------
+    // Public API
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns per-page PDF dimensions (points) and margin/header-footer geometry for a sheet,
+    /// driven by its page setup (paper size, orientation, margins, header/footer margins).
+    /// The returned <see cref="PortablePdfDocumentOptions"/> uses <c>null</c> for
+    /// <see cref="PortablePdfDocumentOptions.HeaderHeightPoints"/> / row/column width constraints;
+    /// those fields retain their defaults so callers that do not need them are unaffected.
+    /// </summary>
+    public static PortablePdfDocumentOptions ResolveOptions(Sheet sheet)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        var (pageWidthPt, pageHeightPt, marginLeftPt, marginRightPt, marginTopPt, marginBottomPt,
+             headerBandPt, footerBandPt) = ComputePdfGeometry(sheet);
+
+        _ = headerBandPt;  // acknowledged; header/footer band placement is handled by builder
+        _ = footerBandPt;
+
+        // The "margin" stored in PortablePdfDocumentOptions is used as a uniform inset for all
+        // four sides in the old builder. We derive the true per-side values here; the new
+        // page-setup-aware builder uses the individual values directly. For compat we pass the
+        // smallest of the four margins so the fallback builder doesn't over-inset.
+        var uniformMarginPt = Math.Min(Math.Min(marginLeftPt, marginRightPt),
+                                        Math.Min(marginTopPt, marginBottomPt));
+
+        // The header height is the top margin minus the top body margin, i.e. the gap from the
+        // header text to the grid. For the PDF options struct we compute the combined top+header
+        // reservation so the grid starts at the right Y.
+        var headerHeightPt = marginTopPt - Math.Max(0, sheet.HeaderMargin * PdfPointsPerInch);
+        var effectiveHeaderHeight = Math.Max(0, headerHeightPt);
+
+        return new PortablePdfDocumentOptions(
+            PageWidthPoints: pageWidthPt,
+            PageHeightPoints: pageHeightPt,
+            MarginPoints: uniformMarginPt,
+            HeaderHeightPoints: effectiveHeaderHeight);
+    }
+
+    /// <summary>
+    /// Derives the row/column page capacity for a sheet from its page setup (paper, orientation,
+    /// margins, scale-to-fit, actual row heights + column widths). The capacity is passed to
+    /// <see cref="WorkbookExportPrintPlanner"/> so it slices the sheet into the correct number of pages.
+    /// </summary>
+    public static WorkbookExportPrintPageCapacity ResolveCapacity(Sheet sheet, GridRange printRange)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        // Compute the printable body area in pixels at layout DPI (matching the shared planner).
+        var (_, _, marginLeftPt, marginRightPt, marginTopPt, marginBottomPt,
+             headerBandPt, footerBandPt) = ComputePdfGeometry(sheet);
+
+        // Convert PDF-points margins to layout-pixels (96 dpi).
+        var marginLeftPx  = marginLeftPt  * (LayoutDpi / PdfPointsPerInch);
+        var marginRightPx = marginRightPt * (LayoutDpi / PdfPointsPerInch);
+        var marginTopPx   = marginTopPt   * (LayoutDpi / PdfPointsPerInch);
+        var marginBottomPx = marginBottomPt * (LayoutDpi / PdfPointsPerInch);
+        var headerBandPx  = headerBandPt  * (LayoutDpi / PdfPointsPerInch);
+        var footerBandPx  = footerBandPt  * (LayoutDpi / PdfPointsPerInch);
+
+        var (pageWidthPt, pageHeightPt, _, _, _, _, _, _) = ComputePdfGeometry(sheet);
+        var pageWidthPx  = pageWidthPt  * (LayoutDpi / PdfPointsPerInch);
+        var pageHeightPx = pageHeightPt * (LayoutDpi / PdfPointsPerInch);
+
+        var printableWidthPx  = Math.Max(1.0, pageWidthPx  - marginLeftPx - marginRightPx);
+        var printableHeightPx = Math.Max(1.0, pageHeightPx - marginTopPx  - marginBottomPx
+                                              - headerBandPx - footerBandPx);
+
+        // Average row height across the print range.
+        var avgRowHeightPx = AverageRowHeightPx(
+            sheet, printRange.Start.Row, printRange.End.Row);
+
+        // Average column width across the print range (in pixels).
+        var avgColWidthPx = AverageColumnWidthPx(
+            sheet, printRange.Start.Col, printRange.End.Col);
+
+        var baseRowsPerPage   = Math.Max(1u, (uint)Math.Floor(printableHeightPx / avgRowHeightPx));
+        var baseColsPerPage   = Math.Max(1u, (uint)Math.Floor(printableWidthPx  / avgColWidthPx));
+
+        // Apply scale-to-fit (explicit percent or fit-to-pages).
+        var scaleToFit = sheet.ScaleToFit;
+        if (scaleToFit.ScalePercent is { } pct && pct is >= 10 and <= 400)
+        {
+            baseRowsPerPage = Math.Max(1u, (uint)Math.Floor(baseRowsPerPage * (100d / pct)));
+            baseColsPerPage = Math.Max(1u, (uint)Math.Floor(baseColsPerPage * (100d / pct)));
+        }
+        else
+        {
+            // fit-to-pages: enough rows/cols per page so that the total page count matches the
+            // requested wide × tall.
+            if (scaleToFit.FitToPagesTall is { } tall and >= 1)
+            {
+                var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
+                if (bodyRows > 0)
+                    baseRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)tall));
+            }
+
+            if (scaleToFit.FitToPagesWide is { } wide and >= 1)
+            {
+                var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
+                if (bodyCols > 0)
+                    baseColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)wide));
+            }
+        }
+
+        return new WorkbookExportPrintPageCapacity(baseRowsPerPage, baseColsPerPage);
+    }
+
+    /// <summary>
+    /// Returns the effective PDF page size (width, height) in points for a sheet, honoring the
+    /// paper-size code and orientation.
+    /// </summary>
+    public static (double WidthPoints, double HeightPoints) ResolvePageSizePoints(Sheet sheet)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        var size = WorksheetPageLayout.GetPageSizeInches(sheet.PaperSize, sheet.PageOrientation);
+        return (size.Width * PdfPointsPerInch, size.Height * PdfPointsPerInch);
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal geometry helpers
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Computes all PDF-points geometry for a sheet's page setup in one pass.
+    /// Returns (pageW, pageH, marginL, marginR, marginT, marginB, headerBand, footerBand).
+    /// headerBand and footerBand are the additional space reserved inside the margins for the
+    /// header and footer text bands (= margin − header/footer margin edge).
+    /// </summary>
+    internal static (
+        double PageWidthPt,
+        double PageHeightPt,
+        double MarginLeftPt,
+        double MarginRightPt,
+        double MarginTopPt,
+        double MarginBottomPt,
+        double HeaderBandPt,
+        double FooterBandPt) ComputePdfGeometry(Sheet sheet)
+    {
+        var size = WorksheetPageLayout.GetPageSizeInches(sheet.PaperSize, sheet.PageOrientation);
+        var pageW = size.Width  * PdfPointsPerInch;
+        var pageH = size.Height * PdfPointsPerInch;
+        var margins = sheet.PageMargins;
+        var mL = margins.Left   * PdfPointsPerInch;
+        var mR = margins.Right  * PdfPointsPerInch;
+        var mT = margins.Top    * PdfPointsPerInch;
+        var mB = margins.Bottom * PdfPointsPerInch;
+
+        // The header band is the distance from the top of the page to the start of the cell grid.
+        // Excel defines HeaderMargin as the distance from the top edge of the paper to the header
+        // text; the cell grid starts at the Top margin. So the header band height (above the grid)
+        // is max(0, TopMargin - HeaderMargin).
+        var headerEdgePt = sheet.HeaderMargin * PdfPointsPerInch;
+        var footerEdgePt = sheet.FooterMargin * PdfPointsPerInch;
+        var headerBand   = Math.Max(0.0, headerEdgePt);          // reservation for header text area
+        var footerBand   = Math.Max(0.0, footerEdgePt);          // reservation for footer text area
+
+        return (pageW, pageH, mL, mR, mT, mB, headerBand, footerBand);
+    }
+
+    private static double AverageRowHeightPx(Sheet sheet, uint startRow, uint endRow)
+    {
+        var fallback = sheet.DefaultRowHeight > 0 ? sheet.DefaultRowHeight : NominalRowHeightPx;
+        if (endRow < startRow) return fallback;
+
+        var total = 0.0;
+        var count = endRow - startRow + 1;
+        for (var row = startRow; row <= endRow; row++)
+            total += sheet.RowHeights.TryGetValue(row, out var h) && h > 0 ? h : fallback;
+
+        return total / count;
+    }
+
+    private static double AverageColumnWidthPx(Sheet sheet, uint startCol, uint endCol)
+    {
+        var fallbackChars = sheet.DefaultColumnWidth > 0 ? sheet.DefaultColumnWidth : 8.43;
+        var fallbackPx = Math.Max(MinimumColumnWidthPx, ColumnWidthPixelMapper.ColumnWidthToPixels(fallbackChars));
+        if (endCol < startCol) return fallbackPx;
+
+        var total = 0.0;
+        var count = endCol - startCol + 1;
+        for (var col = startCol; col <= endCol; col++)
+        {
+            var chars = sheet.ColumnWidths.TryGetValue(col, out var w) && w > 0 ? w : fallbackChars;
+            var px = ColumnWidthPixelMapper.ColumnWidthToPixels(chars);
+            total += Math.Max(MinimumColumnWidthPx, px);
+        }
+
+        return total / count;
+    }
+
+    private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat)
+    {
+        if (end < start) return 0;
+        var count = end - start + 1;
+        if (repeat is not { } range || range.End < start || range.Start > end)
+            return count;
+
+        var overlapStart = Math.Max(start, range.Start);
+        var overlapEnd   = Math.Min(end,   range.End);
+        return overlapEnd >= overlapStart
+            ? count - (overlapEnd - overlapStart + 1)
+            : count;
+    }
+}

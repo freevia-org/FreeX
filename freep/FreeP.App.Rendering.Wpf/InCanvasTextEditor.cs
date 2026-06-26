@@ -1,30 +1,35 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using ModelParagraph = FreeP.Core.Model.Paragraph;
+using ModelRun       = FreeP.Core.Model.Run;
 
 namespace FreeP.App.Rendering.Wpf;
 
 /// <summary>
-/// Manages an in-canvas text-editing overlay for <see cref="SlideCanvas"/>.
+/// Manages an in-canvas rich-text editing overlay for <see cref="SlideCanvas"/>.
+///
+/// Wave 10A: replaced the plain <see cref="TextBox"/> with a WPF <see cref="RichTextBox"/> so
+/// per-run formatting (bold/italic/underline/font/size/color) is preserved during editing.
 ///
 /// When the user double-clicks a shape that has a <see cref="TextBody"/>, this class:
 /// <list type="number">
-///   <item>Activates an overlay <see cref="TextBox"/> positioned over the shape.</item>
-///   <item>Populates it with the shape's plain text.</item>
-///   <item>On commit (Escape / focus-loss), writes back via the EditingSession command bus
-///         so the change is undoable.</item>
+///   <item>Converts the shape's <see cref="TextBody"/> → <see cref="FlowDocument"/> and loads
+///         it into a <see cref="RichTextBox"/> positioned over the shape.</item>
+///   <item>While focused, the ribbon's Bold/Italic/Underline/Font/Size/Color commands are
+///         routed here (via <see cref="ApplyBold"/>, <see cref="ApplyItalic"/>,
+///         <see cref="ApplyUnderline"/>, <see cref="ApplyFont"/>, <see cref="ApplyFontSize"/>,
+///         <see cref="ApplyColor"/>) and applied to the current Selection.</item>
+///   <item>On commit (Escape / focus-loss), converts the <see cref="FlowDocument"/> back to
+///         a <see cref="TextBody"/> and issues a <see cref="SetShapeTextBodyCommand"/> so
+///         the change is one undoable step.</item>
 /// </list>
 ///
-/// Scope: single text box, plain-text multi-line. Per-run rich formatting is not edited
-/// here (out of scope for Wave 3C); existing run formatting is preserved.
-///
-/// The overlay is added to a <see cref="Canvas"/> that is positioned on top of
-/// <see cref="SlideCanvas"/> by the caller (MainWindow seam).
-///
-/// IME / RTL / bidirectional text input: deferred.
+/// IME / RTL / per-run super-subscript: deferred.
 /// </summary>
 public sealed class InCanvasTextEditor
 {
@@ -32,9 +37,10 @@ public sealed class InCanvasTextEditor
     private readonly EditingSession  _editor;
     private readonly Canvas          _overlay;
 
-    private TextBox?  _textBox;
-    private uint      _editingShapeId;
-    private bool      _active;
+    private RichTextBox?  _richBox;
+    private TextBody?     _originalTextBody;   // snapshot for change detection
+    private uint          _editingShapeId;
+    private bool          _active;
 
     public InCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Canvas overlay)
     {
@@ -45,13 +51,16 @@ public sealed class InCanvasTextEditor
         _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
     }
 
-    // ── Public surface ────────────────────────────────────────────────────────────────────────
+    // ── Public surface ────────────────────────────────────────────────────────
 
+    /// <summary>True while a shape's text is being edited in the RichTextBox overlay.</summary>
     public bool IsActive => _active;
+
+    /// <summary>The id of the shape currently being edited, or 0 if not active.</summary>
     public uint ActiveShapeId => _editingShapeId;
 
     /// <summary>
-    /// Activates the text editor for the given shape. Caller checks shape has a TextBody.
+    /// Activates the rich-text editor for the given shape. Caller checks shape has a TextBody.
     /// </summary>
     public void Activate(uint shapeId)
     {
@@ -65,84 +74,151 @@ public sealed class InCanvasTextEditor
         var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
         if (shape?.TextBody is null) return;
 
-        _editingShapeId = shapeId;
-        _active         = true;
+        _editingShapeId   = shapeId;
+        _active           = true;
+        _originalTextBody = TextBodyFlowDocumentConverter.ToFlowDocument(shape.TextBody)
+                            is var _ ? CloneTextBody(shape.TextBody) : null;
+        // Simpler: just keep a deep clone for change detection.
+        _originalTextBody = CloneTextBody(shape.TextBody);
 
-        var xf    = _canvas.CurrentTransform;
-        var b     = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation);
+        var xf = _canvas.CurrentTransform;
+        var b  = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation);
 
-        double x = b.Left  * xf.Scale + xf.OffsetX;
-        double y = b.Top   * xf.Scale + xf.OffsetY;
-        double w = b.Width * xf.Scale;
+        double x = b.Left   * xf.Scale + xf.OffsetX;
+        double y = b.Top    * xf.Scale + xf.OffsetY;
+        double w = b.Width  * xf.Scale;
         double h = b.Height * xf.Scale;
 
-        _textBox = new TextBox
+        // Determine fallback font size from first run, or 14pt.
+        double fallbackPt = shape.TextBody.Paragraphs
+            .SelectMany(p => p.Runs)
+            .FirstOrDefault(r => r.FontSizePt.HasValue)?.FontSizePt ?? 14.0;
+
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(shape.TextBody, fallbackPt);
+
+        _richBox = new RichTextBox(doc)
         {
-            AcceptsReturn    = true,
-            TextWrapping     = TextWrapping.Wrap,
-            Background       = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
-            BorderBrush      = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
-            BorderThickness  = new Thickness(1.5),
-            FontSize         = 14,
-            Text             = shape.PlainText,
-            MinWidth         = Math.Max(40, w),
-            MinHeight        = Math.Max(20, h),
-            Width            = Math.Max(40, w),
-            Height           = Math.Max(20, h),
+            AcceptsReturn         = true,
+            Background            = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+            BorderBrush           = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
+            BorderThickness       = new Thickness(1.5),
+            MinWidth              = Math.Max(40, w),
+            MinHeight             = Math.Max(20, h),
+            Width                 = Math.Max(40, w),
+            Height                = Math.Max(20, h),
+            // Disable the spell-check red squiggles (distracting in a slide editor).
+            SpellCheck            = { IsEnabled = false },
+            // Disable the built-in formatting shortcuts (Ctrl+B/I/U) so the ribbon stays in control.
+            IsUndoEnabled         = false,   // undo is managed by our bus, not the RTB undo stack
+            VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
         };
 
-        Canvas.SetLeft(_textBox, x);
-        Canvas.SetTop (_textBox, y);
+        Canvas.SetLeft(_richBox, x);
+        Canvas.SetTop (_richBox, y);
 
-        _textBox.LostFocus += (_, _) => Commit();
-        _textBox.KeyDown   += OnTextBoxKeyDown;
+        _richBox.LostFocus += (_, _) => Commit();
+        _richBox.KeyDown   += OnRichBoxKeyDown;
+        // Intercept built-in Ctrl+B/I/U so they go through our format methods.
+        _richBox.PreviewKeyDown += OnRichBoxPreviewKeyDown;
 
-        _overlay.Children.Add(_textBox);
-        _textBox.Focus();
-        _textBox.SelectAll();
-
-        // Suppress the double-click selection from propagating to gesture handler
+        _overlay.IsHitTestVisible = true;
+        _overlay.Children.Add(_richBox);
+        _richBox.Focus();
+        _richBox.SelectAll();
     }
 
     /// <summary>Commits the current text edit (if active) to the command bus and hides the overlay.</summary>
     public void Commit()
     {
-        if (!_active || _textBox is null) return;
+        if (!_active || _richBox is null) return;
 
-        var newText = _textBox.Text ?? string.Empty;
-        _overlay.Children.Remove(_textBox);
-        _textBox = null;
+        var doc  = _richBox.Document;
+        _overlay.Children.Remove(_richBox);
+        _overlay.IsHitTestVisible = false;
+        _richBox = null;
         _active  = false;
 
-        // Write back via EditingSession
+        // Rebuild model TextBody from the FlowDocument.
         var slide = _editor.CurrentSlide;
         if (slide is null) return;
         var shape = slide.Shapes.FirstOrDefault(s => s.Id == _editingShapeId);
         if (shape is null) return;
 
-        // Only issue a command if text changed
-        if (shape.PlainText == newText) return;
+        var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, shape.TextBody);
 
-        // Use SetShapeText command (write via AddShape of a clone is too heavy;
-        // we issue a ToggleBold trick-free approach: directly mutate via bus with a dedicated helper).
-        // Since EditingSession does not expose SetShapeText directly, we use the
-        // SetRunFontCommand trick: replace all runs.  The cleanest approach that
-        // keeps it undoable is to use the Bus directly with a SetShapeTextCommand.
-        // SetShapeTextCommand is implemented below in this file for the bus.
-        _editor.Bus.Execute(new SetShapeTextCommand(
-            _editor.CurrentSlideIndex, _editingShapeId, newText));
+        // Only issue a command if content actually changed.
+        if (TextBodiesEqual(_originalTextBody, newBody)) return;
+
+        _editor.Bus.Execute(new SetShapeTextBodyCommand(
+            _editor.CurrentSlideIndex, _editingShapeId, newBody));
     }
 
     /// <summary>Cancels the edit without committing.</summary>
     public void Cancel()
     {
-        if (!_active || _textBox is null) return;
-        _overlay.Children.Remove(_textBox);
-        _textBox = null;
+        if (!_active || _richBox is null) return;
+        _overlay.Children.Remove(_richBox);
+        _overlay.IsHitTestVisible = false;
+        _richBox = null;
         _active  = false;
     }
 
-    // ── Double-click detection ────────────────────────────────────────────────────────────────
+    // ── Ribbon format application (10A SEAM) ──────────────────────────────────
+    // These are called by the ribbon routing in MainWindow / FreePRibbonCommands
+    // when IsActive is true, so formatting applies to the selection inside the RTB.
+
+    /// <summary>Toggles bold on the current RichTextBox selection. No-op if not active.</summary>
+    public void ApplyBold()
+    {
+        if (_richBox is null) return;
+        EditingCommands.ToggleBold.Execute(null, _richBox);
+    }
+
+    /// <summary>Toggles italic on the current RichTextBox selection. No-op if not active.</summary>
+    public void ApplyItalic()
+    {
+        if (_richBox is null) return;
+        EditingCommands.ToggleItalic.Execute(null, _richBox);
+    }
+
+    /// <summary>Toggles underline on the current RichTextBox selection. No-op if not active.</summary>
+    public void ApplyUnderline()
+    {
+        if (_richBox is null) return;
+        EditingCommands.ToggleUnderline.Execute(null, _richBox);
+    }
+
+    /// <summary>Sets font family on the current RichTextBox selection. No-op if not active or null.</summary>
+    public void ApplyFont(string? fontFamily)
+    {
+        if (_richBox is null || string.IsNullOrEmpty(fontFamily)) return;
+        _richBox.Selection.ApplyPropertyValue(
+            TextElement.FontFamilyProperty,
+            new FontFamily(fontFamily));
+    }
+
+    /// <summary>Sets font size (pt) on the current RichTextBox selection. No-op if not active.</summary>
+    public void ApplyFontSize(double? sizePt)
+    {
+        if (_richBox is null || sizePt is null) return;
+        _richBox.Selection.ApplyPropertyValue(
+            TextElement.FontSizeProperty,
+            sizePt.Value * (96.0 / 72.0));
+    }
+
+    /// <summary>Sets text color on the current RichTextBox selection. No-op if not active.</summary>
+    public void ApplyColor(ThemeAwareColor? color)
+    {
+        if (_richBox is null || color is null) return;
+        var wpfColor = TextBodyFlowDocumentConverter.ResolveModelColor(color);
+        if (wpfColor is null) return;
+        _richBox.Selection.ApplyPropertyValue(
+            TextElement.ForegroundProperty,
+            new SolidColorBrush(wpfColor.Value));
+    }
+
+    // ── Double-click detection ────────────────────────────────────────────────
 
     private void OnCanvasMouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -165,7 +241,7 @@ public sealed class InCanvasTextEditor
         e.Handled = true;
     }
 
-    private void OnTextBoxKeyDown(object sender, KeyEventArgs e)
+    private void OnRichBoxKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
@@ -173,9 +249,170 @@ public sealed class InCanvasTextEditor
             e.Handled = true;
         }
     }
+
+    /// <summary>
+    /// Intercept Ctrl+B/I/U before the RichTextBox processes them, so formatting goes
+    /// through the ribbon-aware Apply* methods (which keep the ribbon toggle state in sync).
+    /// </summary>
+    private void OnRichBoxPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0) return;
+
+        if (e.Key == Key.B) { ApplyBold();      e.Handled = true; }
+        else if (e.Key == Key.I) { ApplyItalic();    e.Handled = true; }
+        else if (e.Key == Key.U) { ApplyUnderline(); e.Handled = true; }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static bool TextBodiesEqual(TextBody? a, TextBody? b)
+    {
+        if (a is null && b is null) return true;
+        if (a is null || b is null) return false;
+        if (a.Paragraphs.Count != b.Paragraphs.Count) return false;
+
+        for (int pi = 0; pi < a.Paragraphs.Count; pi++)
+        {
+            var pa = a.Paragraphs[pi];
+            var pb = b.Paragraphs[pi];
+            if (pa.Runs.Count != pb.Runs.Count) return false;
+            if (pa.Align != pb.Align) return false;
+
+            for (int ri = 0; ri < pa.Runs.Count; ri++)
+            {
+                var ra = pa.Runs[ri];
+                var rb = pb.Runs[ri];
+                if (ra.Text != rb.Text
+                    || ra.Bold != rb.Bold
+                    || ra.Italic != rb.Italic
+                    || ra.Underline != rb.Underline
+                    || ra.Strikethrough != rb.Strikethrough
+                    || ra.FontFamily != rb.FontFamily
+                    || ra.FontSizePt != rb.FontSizePt
+                    || !ColorsEqual(ra.Color, rb.Color))   // Y3: include Color in change detection
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Compares two <see cref="ThemeAwareColor"/> values for equality.
+    /// Both the resolved sRGB AND the scheme-color ref (slot + modifiers) must match.
+    /// Two null colors are equal; a null and a non-null are not.
+    /// </summary>
+    private static bool ColorsEqual(ThemeAwareColor? a, ThemeAwareColor? b)
+    {
+        if (a is null && b is null) return true;
+        if (a is null || b is null) return false;
+        if (a.Resolved != b.Resolved) return false;
+
+        // Compare scheme refs: if both null → equal; otherwise both must carry the same slot + mods.
+        if (a.SchemeColor is null && b.SchemeColor is null) return true;
+        if (a.SchemeColor is null || b.SchemeColor is null) return false;
+        return a.SchemeColor.Slot    == b.SchemeColor.Slot
+            && a.SchemeColor.LumMod  == b.SchemeColor.LumMod
+            && a.SchemeColor.LumOff  == b.SchemeColor.LumOff
+            && a.SchemeColor.Tint    == b.SchemeColor.Tint
+            && a.SchemeColor.Shade   == b.SchemeColor.Shade;
+    }
+
+    private static TextBody? CloneTextBody(TextBody? src) =>
+        SetShapeTextBodyCommand.CloneTextBody(src);
 }
 
-// ── SetShapeTextCommand ────────────────────────────────────────────────────────────────────────
+// ── SetShapeTextBodyCommand ───────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Replaces the entire <see cref="TextBody"/> of a shape with a new one (preserving per-run
+/// formatting). Stores the previous body for undo. Undoable (one step per edit session).
+/// </summary>
+internal sealed class SetShapeTextBodyCommand : IPresentationCommand
+{
+    private readonly int      _slideIndex;
+    private readonly uint     _shapeId;
+    private readonly TextBody _newBody;
+
+    // Undo snapshot.
+    private TextBody? _previousBody;
+
+    public SetShapeTextBodyCommand(int slideIndex, uint shapeId, TextBody newBody)
+    {
+        _slideIndex = slideIndex;
+        _shapeId    = shapeId;
+        _newBody    = newBody ?? throw new ArgumentNullException(nameof(newBody));
+    }
+
+    public string Label => "Edit Rich Text";
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = GetShape(presentation);
+        if (shape is null) return;
+
+        _previousBody = CloneTextBody(shape.TextBody);
+        shape.TextBody = CloneTextBody(_newBody);
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = GetShape(presentation);
+        if (shape is null) return;
+        shape.TextBody = CloneTextBody(_previousBody);
+    }
+
+    private SlideShape? GetShape(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count) return null;
+        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(s => s.Id == _shapeId);
+    }
+
+    /// <summary>Deep-clones a <see cref="TextBody"/>. Exposed internally for change-detection in the editor.</summary>
+    internal static TextBody? CloneTextBody(TextBody? src)
+    {
+        if (src is null) return null;
+        var clone = new TextBody
+        {
+            Wrap          = src.Wrap,
+            Anchor        = src.Anchor,
+            AutoFit       = src.AutoFit,
+            InsetLeftPt   = src.InsetLeftPt,
+            InsetRightPt  = src.InsetRightPt,
+            InsetTopPt    = src.InsetTopPt,
+            InsetBottomPt = src.InsetBottomPt,
+        };
+        foreach (var p in src.Paragraphs)
+        {
+            var cp = new ModelParagraph
+            {
+                Align         = p.Align,
+                Level         = p.Level,
+                BulletKind    = p.BulletKind,
+                BulletChar    = p.BulletChar,
+                SpaceBeforePt = p.SpaceBeforePt,
+                SpaceAfterPt  = p.SpaceAfterPt,
+            };
+            foreach (var r in p.Runs)
+            {
+                cp.Runs.Add(new ModelRun
+                {
+                    Text          = r.Text,
+                    FontFamily    = r.FontFamily,
+                    FontSizePt    = r.FontSizePt,
+                    Bold          = r.Bold,
+                    Italic        = r.Italic,
+                    Underline     = r.Underline,
+                    Strikethrough = r.Strikethrough,
+                    Color         = r.Color,
+                });
+            }
+            clone.Paragraphs.Add(cp);
+        }
+        return clone;
+    }
+}
+
+// ── SetShapeTextCommand (legacy — kept for compatibility) ─────────────────────────────────────────
 
 /// <summary>
 /// Replaces the entire text content of a shape's TextBody with a new plain-text string.
@@ -206,10 +443,7 @@ internal sealed class SetShapeTextCommand : IPresentationCommand
         var shape = GetShape(presentation);
         if (shape is null) return;
 
-        // Save undo snapshot (shallow clone of TextBody is sufficient — TextBody is mutable)
-        _previousTextBody = CloneTextBody(shape.TextBody);
-
-        // Apply new text
+        _previousTextBody = SetShapeTextBodyCommand.CloneTextBody(shape.TextBody);
         ApplyText(shape, _newText);
     }
 
@@ -256,8 +490,8 @@ internal sealed class SetShapeTextCommand : IPresentationCommand
 
         foreach (var line in lines)
         {
-            var para = new Paragraph();
-            para.Runs.Add(new Run
+            var para = new ModelParagraph();
+            para.Runs.Add(new ModelRun
             {
                 Text       = line,
                 FontFamily = fontFamily,
@@ -269,47 +503,5 @@ internal sealed class SetShapeTextCommand : IPresentationCommand
             });
             shape.TextBody.Paragraphs.Add(para);
         }
-    }
-
-    private static TextBody? CloneTextBody(TextBody? src)
-    {
-        if (src is null) return null;
-        var clone = new TextBody
-        {
-            Wrap     = src.Wrap,
-            Anchor   = src.Anchor,
-            InsetLeftPt   = src.InsetLeftPt,
-            InsetRightPt  = src.InsetRightPt,
-            InsetTopPt    = src.InsetTopPt,
-            InsetBottomPt = src.InsetBottomPt
-        };
-        foreach (var p in src.Paragraphs)
-        {
-            var cp = new Paragraph
-            {
-                Align         = p.Align,
-                Level         = p.Level,
-                BulletKind    = p.BulletKind,
-                BulletChar    = p.BulletChar,
-                SpaceBeforePt = p.SpaceBeforePt,
-                SpaceAfterPt  = p.SpaceAfterPt,
-            };
-            foreach (var r in p.Runs)
-            {
-                cp.Runs.Add(new Run
-                {
-                    Text       = r.Text,
-                    FontFamily = r.FontFamily,
-                    FontSizePt = r.FontSizePt,
-                    Bold       = r.Bold,
-                    Italic     = r.Italic,
-                    Underline  = r.Underline,
-                    Strikethrough = r.Strikethrough,
-                    Color      = r.Color
-                });
-            }
-            clone.Paragraphs.Add(cp);
-        }
-        return clone;
     }
 }

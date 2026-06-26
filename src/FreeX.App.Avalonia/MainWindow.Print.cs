@@ -81,6 +81,7 @@ public sealed partial class MainWindow
 
     private static void ApplyPrintRadioButtonChrome(RadioButton rb)
     {
+        StripContentMnemonic(rb);
         rb.MinHeight = 20;
         rb.MaxHeight = 20;
         rb.FontSize = 12;
@@ -89,6 +90,7 @@ public sealed partial class MainWindow
 
     private static void ApplyPrintCheckBoxChrome(CheckBox cb)
     {
+        StripContentMnemonic(cb);
         cb.MinHeight = 20;
         cb.MaxHeight = 20;
         cb.FontSize = 12;
@@ -405,10 +407,9 @@ public sealed partial class MainWindow
         if (_isSaving)
             return;
 
-        var jobPlan = PrintJobPlanner.CreatePlan(
+        var jobPlan = PrintJobPlanner.CreatePlanFromPageSetup(
             _session.Workbook,
             request,
-            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
 
         if (!jobPlan.IsReady)

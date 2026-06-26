@@ -185,6 +185,12 @@ internal static class NativeJsonVisualDtoMapper
         OutlineWidthPoints = shape.OutlineWidthPoints,
         OutlineHasNoFill = shape.OutlineHasNoFill,
         OutlineDash = ValidEnumOrDefault(shape.OutlineDash, DrawingShapeOutlineDash.Solid),
+        HeadArrowhead = shape.HeadArrowhead is { IsPresent: true } ha
+            ? new ArrowheadDto { Type = ha.Type, Width = ha.Width, Length = ha.Length }
+            : null,
+        TailArrowhead = shape.TailArrowhead is { IsPresent: true } ta
+            ? new ArrowheadDto { Type = ta.Type, Width = ta.Width, Length = ta.Length }
+            : null,
         ShapeText = shape.ShapeText,
         ShapeTextFontSizePoints = shape.ShapeTextFontSizePoints,
         ShapeTextBold = shape.ShapeTextBold,
@@ -239,6 +245,12 @@ internal static class NativeJsonVisualDtoMapper
                 OutlineWidthPoints = shapeDto.OutlineWidthPoints,
                 OutlineHasNoFill = shapeDto.OutlineHasNoFill,
                 OutlineDash = ValidEnumOrDefault(shapeDto.OutlineDash, DrawingShapeOutlineDash.Solid),
+                HeadArrowhead = shapeDto.HeadArrowhead is { } ha && ha.Type != DrawingArrowheadType.None
+                    ? new DrawingArrowhead(ha.Type, ha.Width, ha.Length)
+                    : null,
+                TailArrowhead = shapeDto.TailArrowhead is { } ta && ta.Type != DrawingArrowheadType.None
+                    ? new DrawingArrowhead(ta.Type, ta.Width, ta.Length)
+                    : null,
                 ShapeText = shapeDto.ShapeText,
                 ShapeTextFontSizePoints = shapeDto.ShapeTextFontSizePoints,
                 ShapeTextBold = shapeDto.ShapeTextBold,
@@ -385,6 +397,9 @@ internal class DrawingShapeDto
     public double OutlineWidthPoints { get; set; }
     public bool OutlineHasNoFill { get; set; }
     public DrawingShapeOutlineDash OutlineDash { get; set; } = DrawingShapeOutlineDash.Solid;
+    // ── Arrowheads for line-like shapes ──────────────────────────────────
+    public ArrowheadDto? HeadArrowhead { get; set; }
+    public ArrowheadDto? TailArrowhead { get; set; }
     // ── Shape text ────────────────────────────────────────────────────────
     public string? ShapeText { get; set; }
     public double ShapeTextFontSizePoints { get; set; }
@@ -402,4 +417,11 @@ internal class ThemeColorReferenceDto
 {
     public WorkbookThemeColorSlot Slot { get; set; }
     public double Tint { get; set; }
+}
+
+internal class ArrowheadDto
+{
+    public DrawingArrowheadType Type { get; set; }
+    public DrawingArrowheadSize Width { get; set; } = DrawingArrowheadSize.Medium;
+    public DrawingArrowheadSize Length { get; set; } = DrawingArrowheadSize.Medium;
 }

@@ -4,7 +4,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeP.Core.Model;
-using FreeP.App.Compositor;
+using FreeP.App.Compositor; // SnapGuideLine (Wave 12B)
 
 namespace FreeP.App.Rendering.Wpf;
 
@@ -33,6 +33,7 @@ public sealed class SelectionAdorner : Adorner
     private static readonly Brush RotateHandleFill;
     private static readonly Pen   RotateHandleBorder;
     private static readonly Pen MarqueePen;
+    private static readonly Pen SnapGuidePen;    // Wave 12B — snap guide lines
 
     static SelectionAdorner()
     {
@@ -62,6 +63,10 @@ public sealed class SelectionAdorner : Adorner
             DashStyle = DashStyles.Dash
         };
         MarqueePen.Freeze();
+
+        // Wave 12B: snap guide lines — thin magenta lines, PowerPoint-style.
+        SnapGuidePen = new Pen(new SolidColorBrush(Color.FromArgb(0xCC, 0xE9, 0x1E, 0x63)), 1.0);
+        SnapGuidePen.Freeze();
     }
 
     // ── State owned by CanvasGestureHandler ───────────────────────────────────────────────────
@@ -77,6 +82,10 @@ public sealed class SelectionAdorner : Adorner
 
     /// <summary>Active marquee rect in screen coords (null = no marquee).</summary>
     private Rect? _marqueeRect;
+
+    // Wave 12B: active snap guide lines (cleared when gesture ends).
+    private IReadOnlyList<SnapGuideLine>? _snapGuides;
+    private SlideTransform _snapTransform = SlideTransform.Identity;
 
     // ── Construction ──────────────────────────────────────────────────────────────────────────
 
@@ -111,11 +120,27 @@ public sealed class SelectionAdorner : Adorner
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Wave 12B: Updates the transient snap guide lines shown during a move/resize gesture.
+    /// Pass null or an empty list to clear guides.  <paramref name="transform"/> is used
+    /// to convert slide-DIP guide positions to screen space.
+    /// </summary>
+    public void UpdateSnapGuides(IReadOnlyList<SnapGuideLine>? guides, SlideTransform transform)
+    {
+        _snapGuides   = guides;
+        _snapTransform = transform;
+        InvalidateVisual();
+    }
+
     // ── Rendering ─────────────────────────────────────────────────────────────────────────────
 
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+
+        // Wave 12B: Draw snap guide lines (drawn first so they're behind selection rects).
+        if (_snapGuides is { Count: > 0 })
+            DrawSnapGuides(dc, _snapGuides, _snapTransform);
 
         // Draw marquee
         if (_marqueeRect.HasValue)
@@ -136,6 +161,32 @@ public sealed class SelectionAdorner : Adorner
         if (_previewRect.HasValue)
         {
             DrawPreviewRect(dc, _previewRect.Value, _previewRotationDeg);
+        }
+    }
+
+    // Wave 12B: guide line rendering.
+    private void DrawSnapGuides(
+        DrawingContext dc,
+        IReadOnlyList<SnapGuideLine> guides,
+        SlideTransform xf)
+    {
+        double w = ActualWidth;
+        double h = ActualHeight;
+
+        foreach (var g in guides)
+        {
+            if (g.IsHorizontal)
+            {
+                // Horizontal guide: a full-width line at screen-Y derived from guide DIP position.
+                double screenY = g.Position * xf.Scale + xf.OffsetY;
+                dc.DrawLine(SnapGuidePen, new Point(0, screenY), new Point(w, screenY));
+            }
+            else
+            {
+                // Vertical guide: a full-height line at screen-X.
+                double screenX = g.Position * xf.Scale + xf.OffsetX;
+                dc.DrawLine(SnapGuidePen, new Point(screenX, 0), new Point(screenX, h));
+            }
         }
     }
 

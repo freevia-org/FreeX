@@ -607,6 +607,124 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void Compose_MultiStopGradientFill_AllStopsResolved()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var stops = new[]
+        {
+            new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00))),
+            new GradientStop(0.5, new ThemeAwareColor(new SrgbColor(0x00, 0xFF, 0x00))),
+            new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF))),
+        };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 900000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Linear, angleDegrees: 90.0)
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Fill.Should().BeOfType<ResolvedFill.Gradient>();
+        var grad = (ResolvedFill.Gradient)shapeOp.Fill;
+        grad.Stops.Should().HaveCount(3, "all 3 stops must be resolved");
+        grad.Kind.Should().Be(GradientKind.Linear);
+        grad.Stops[0].Color.R.Should().Be(0xFF);
+        grad.Stops[1].Color.G.Should().Be(0xFF);
+        grad.Stops[2].Color.B.Should().Be(0xFF);
+        grad.Stops[0].Position.Should().BeApproximately(0.0, 0.001);
+        grad.Stops[1].Position.Should().BeApproximately(0.5, 0.001);
+        grad.Stops[2].Position.Should().BeApproximately(1.0, 0.001);
+    }
+
+    [Fact]
+    public void Compose_RadialGradientFill_KindPreserved()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var stops = new[]
+        {
+            new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF))),
+            new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00))),
+        };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 900000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Radial, angleDegrees: 0.0)
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Fill.Should().BeOfType<ResolvedFill.Gradient>();
+        var grad = (ResolvedFill.Gradient)shapeOp.Fill;
+        grad.Kind.Should().Be(GradientKind.Radial);
+        grad.Stops.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Compose_PictureFill_BytesPassedThrough()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // fake PNG header
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 900000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Picture(imageBytes, "image/png", tile: false)
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Fill.Should().BeOfType<ResolvedFill.Picture>();
+        var pic = (ResolvedFill.Picture)shapeOp.Fill;
+        pic.ImageBytes.Should().BeEquivalentTo(imageBytes);
+        pic.Tile.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Compose_PatternFill_ColorsAndPresetResolved()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 900000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Pattern(
+                "cross",
+                new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)),
+                new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF)))
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Fill.Should().BeOfType<ResolvedFill.PatternFill>();
+        var pat = (ResolvedFill.PatternFill)shapeOp.Fill;
+        pat.Preset.Should().Be("cross");
+        pat.ForegroundColor.B.Should().Be(0xFF);
+        pat.BackgroundColor.R.Should().Be(0xFF);
+    }
+
+    [Fact]
     public void Compose_VisibleOutline_ResolvedCorrectly()
     {
         var p = MakePresentation();
@@ -1040,5 +1158,192 @@ public sealed class SlideCompositorTests
         // row 1 = band 1 (after first row header, row 1 is band index 0 = Band1H)
         var fill1 = table.ComputeEffectiveFill(1, 0, table.Rows[1].Cells[0]);
         fill1.Should().Be(band1Fill, "second row (first data row) should use Band1H fill");
+    }
+
+    // ─── II3: slidenum field always shows correct slide number ────────────────
+
+    /// <summary>
+    /// A 3-slide deck with a slidenum field on each slide: compositing slide at
+    /// index 2 (0-based) must render "3", not "1".
+    /// Regression guard for the EnsureOps bug that left slideIndex=0 (default).
+    /// </summary>
+    [Fact]
+    public void Compose_SlidenuFieldOnThirdSlide_RendersThree()
+    {
+        // Arrange: 3-slide presentation; each slide has a slidenum field.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        for (int i = 0; i < 3; i++)
+        {
+            var slide = new Slide();
+            var para  = new Paragraph();
+            para.Runs.Add(new Run
+            {
+                Text  = (i + 1).ToString(),
+                Field = new FieldRun { FieldType = "slidenum", CachedText = (i + 1).ToString() }
+            });
+            var body = new TextBody();
+            body.Paragraphs.Add(para);
+            slide.Shapes.Add(new SlideShape
+            {
+                Id          = (uint)(i + 1),
+                Kind        = SlideShapeKind.AutoShape,
+                OffsetXEmu  = 914400,
+                OffsetYEmu  = 6400000,
+                ExtentCxEmu = 4572000,
+                ExtentCyEmu = 457200,
+                TextBody    = body
+            });
+            p.Slides.Add(slide);
+        }
+
+        // Act: compose slide at 0-based index 2 (third slide).
+        var thirdSlide = p.Slides[2];
+        var ops        = SlideCompositor.Compose(p, thirdSlide, slideIndex: 2);
+        var shapeOp    = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: rendered text must be "3", not "1".
+        var runText = string.Concat(shapeOp.Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+        runText.Should().Be("3",
+            "slidenum field on slide index 2 must render slide number 3");
+    }
+
+    [Fact]
+    public void Compose_SlidenuField_IndexZeroGivesOne_IndexTwoGivesThree()
+    {
+        // Confirm that the slideIndex parameter is the only difference between
+        // "shows 1" (old bug: always index 0) and "shows 3" (correct: index 2).
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "?",
+            Field = new FieldRun { FieldType = "slidenum", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        string TextAt(int idx) =>
+            string.Concat(SlideCompositor.Compose(p, slide, idx)
+                .OfType<DrawOp.Shape>().Single()
+                .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        TextAt(0).Should().Be("1", "index 0 → slide 1");
+        TextAt(2).Should().Be("3", "index 2 → slide 3");
+    }
+
+    // ─── II6: empty-cache field fallback ─────────────────────────────────────
+
+    [Fact]
+    public void ResolveField_DatetimeEmptyCache_RendersDateString_NotTypeToken()
+    {
+        // A datetime field with no cached text must NOT render the literal token
+        // "datetime1" — it should render something date-like.
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "",
+            Field = new FieldRun { FieldType = "datetime1", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops    = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().NotBe("datetime1",
+            "empty-cache datetime field must not render the raw field-type token");
+        runText.Should().MatchRegex(@"\d",
+            "empty-cache datetime field should contain at least one digit (a date)");
+    }
+
+    [Fact]
+    public void ResolveField_FooterEmptyCache_RendersEmpty_NotTypeToken()
+    {
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "",
+            Field = new FieldRun { FieldType = "footer", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops     = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().BeEmpty(
+            "empty-cache footer field must render empty, not the raw type token 'footer'");
+    }
+
+    [Fact]
+    public void ResolveField_WithCachedText_AlwaysUsesCacheOverFallback()
+    {
+        // A field that HAS cached text must always render the cache, regardless of type.
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "Custom Footer",
+            Field = new FieldRun { FieldType = "footer", CachedText = "Custom Footer" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops     = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().Be("Custom Footer",
+            "fields with non-empty cached text must always render the cache");
     }
 }

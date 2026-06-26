@@ -36,6 +36,15 @@ public sealed class Presentation
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public PresentationProperties Properties { get; } = new();
 
+    // ── Sections ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Named slide sections in presentation order. Each section groups a run of slides by
+    /// their sldId integer values. Empty when the presentation has no sections.
+    /// Stored in ppt/presentation.xml inside a p14:sectionLst extension.
+    /// </summary>
+    public List<PresentationSection> Sections { get; } = new();
+
     // ── Factory ───────────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -85,6 +85,32 @@ public sealed record PrintJobPlan(
 /// </summary>
 public static class PrintJobPlanner
 {
+    /// <summary>
+    /// Creates a print job plan where pagination is derived from each sheet's own page setup (paper
+    /// size, orientation, margins, scale-to-fit, and actual row/column sizes). Prefer this overload
+    /// for the Avalonia/Skia PDF export path to ensure pages match Excel's layout.
+    /// </summary>
+    public static PrintJobPlan CreatePlanFromPageSetup(
+        Workbook workbook,
+        PrintJobRequest request,
+        WorkbookExportPrintSurface? surface = null)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var exportPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook,
+            new WorkbookExportPrintIntent(
+                request.Scope,
+                WorkbookExportPrintOutputKind.Pdf,
+                request.ActiveSheetIndex,
+                request.SelectedRange,
+                request.IgnorePrintAreas),
+            surface);
+
+        return BuildJobPlan(request, exportPlan);
+    }
+
     public static PrintJobPlan CreatePlan(
         Workbook workbook,
         PrintJobRequest request,
@@ -106,6 +132,11 @@ public static class PrintJobPlanner
             pageCapacity,
             surface);
 
+        return BuildJobPlan(request, exportPlan);
+    }
+
+    private static PrintJobPlan BuildJobPlan(PrintJobRequest request, WorkbookExportPrintPlan exportPlan)
+    {
         if (!exportPlan.IsReady)
         {
             return Invalid(

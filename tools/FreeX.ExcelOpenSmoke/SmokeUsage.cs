@@ -28,6 +28,10 @@ internal static class SmokeUsage
                                             Generate Excel-authored cell-styling baseline fixtures through
                                             COM (borders, diagonal, fills/gradients, alignment/rotation,
                                             merged cells, fonts). Writes to generated-excel-cellstyle/.
+              --generate-excel-richtext-corpus-fixtures
+                                            Generate Excel-authored per-run rich-text cell fixtures through
+                                            COM (subscript H₂O, superscript X², bold+color, mixed sizes).
+                                            Writes to generated-excel-richtext/.
               --freex-resave-before-excel   For user inputs, corpus rows, and generated FreeX fixtures,
                                             load/save through FreeX before Excel validation.
               --corpus-manifest <csv>       Add existing .xlsx/.xlsm rows from the XLSX corpus manifest.

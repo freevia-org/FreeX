@@ -213,7 +213,7 @@ public sealed partial class MainWindow
     {
         var objectRadio = new RadioButton
         {
-            Content = UiText.Get("MoveChart_ObjectInSheet"),
+            Content = StripDisplayMnemonic(UiText.Get("MoveChart_ObjectInSheet")),
             GroupName = "MoveChartTarget",
             IsChecked = current.TargetKind == ChartMoveTargetKind.ObjectInSheet,
             MinHeight = 20,
@@ -225,7 +225,7 @@ public sealed partial class MainWindow
 
         var newSheetRadio = new RadioButton
         {
-            Content = UiText.Get("MoveChart_NewChartSheet"),
+            Content = StripDisplayMnemonic(UiText.Get("MoveChart_NewChartSheet")),
             GroupName = "MoveChartTarget",
             IsChecked = current.TargetKind == ChartMoveTargetKind.NewSheet,
             MinHeight = 20,
@@ -399,7 +399,7 @@ public sealed partial class MainWindow
 
         var fillLineGroup = new GroupBox
         {
-            Header = UiText.Get("ChartDialog_FillLineGroup"),
+            Header = StripDisplayMnemonic(UiText.Get("ChartDialog_FillLineGroup")),
             Content = fillLineStack,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 10),
@@ -408,7 +408,7 @@ public sealed partial class MainWindow
         // ---- "Legend" group controls ---------------------------------------------------------------
         var showLegendCheck = new CheckBox
         {
-            Content = UiText.Get("ChartAreaLegend_ShowLegend"),
+            Content = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_ShowLegend")),
             IsChecked = current.ShowLegend,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -431,7 +431,7 @@ public sealed partial class MainWindow
 
         var overlayCheck = new CheckBox
         {
-            Content = UiText.Get("ChartAreaLegend_OverlayLegend"),
+            Content = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_OverlayLegend")),
             IsChecked = current.LegendOverlay,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -518,7 +518,7 @@ public sealed partial class MainWindow
 
         var legendGroup = new GroupBox
         {
-            Header = UiText.Get("ChartAreaLegend_LegendGroup"),
+            Header = StripDisplayMnemonic(UiText.Get("ChartAreaLegend_LegendGroup")),
             Content = legendStack,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 10),
@@ -526,6 +526,11 @@ public sealed partial class MainWindow
 
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
         var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog");
+        // Explicit size so the headless parity capture (which reads dialog.Bounds verbatim) shows the full
+        // two-group layout + OK/Cancel without clipping and without a stray scrollbar track on the right.
+        dialog.SizeToContent = SizeToContent.Manual;
+        dialog.Width = 432;
+        dialog.Height = 760;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>
@@ -583,9 +588,8 @@ public sealed partial class MainWindow
             {
                 new ScrollViewer
                 {
-                    MaxHeight = 520,
                     HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                     Content = bodyStack,
                 },
                 buttonRow,

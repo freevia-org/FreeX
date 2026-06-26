@@ -225,7 +225,7 @@ public sealed partial class MainWindow
 
         var existingRangesGroup = new GroupBox
         {
-            Header = UiText.Get("AllowEditRange_ExistingRangesLabel"),
+            Header = StripDisplayMnemonic(UiText.Get("AllowEditRange_ExistingRangesLabel")),
             Content = existingRangesGroupContent,
             Margin = new Thickness(0, 4, 0, 8),
         };
@@ -233,7 +233,7 @@ public sealed partial class MainWindow
         // WPF: second GroupBox with "Range" header containing the cell-reference textbox.
         var rangeGroup = new GroupBox
         {
-            Header = UiText.Get("AllowEditRange_RangeLabel"),
+            Header = StripDisplayMnemonic(UiText.Get("AllowEditRange_RangeLabel")),
             Content = new Border { Padding = new Thickness(4), Child = rangeBox },
             Margin = new Thickness(0, 0, 0, 6),
         };

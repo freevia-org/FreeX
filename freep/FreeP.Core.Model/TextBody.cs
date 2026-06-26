@@ -1,5 +1,26 @@
 namespace FreeP.Core.Model;
 
+/// <summary>
+/// A hyperlink target.  Exactly one of <see cref="Url"/> or <see cref="TargetSlideId"/> is set.
+/// </summary>
+public sealed class Hyperlink
+{
+    /// <summary>External URL (http/https/mailto).  Set for external hyperlinks.</summary>
+    public string? Url { get; set; }
+
+    /// <summary>
+    /// Internal slide jump target.  Value is the <see cref="Slide.Id"/> of the destination slide.
+    /// Set for in-presentation jump links (<c>ppaction://hlinksldjump</c>).
+    /// </summary>
+    public string? TargetSlideId { get; set; }
+
+    /// <summary>Optional tooltip text shown on hover.</summary>
+    public string? Tooltip { get; set; }
+
+    /// <summary>True if this is an external link (Url is set).</summary>
+    public bool IsExternal => Url is not null;
+}
+
 /// <summary>Horizontal text alignment within a paragraph.</summary>
 public enum TextAlign
 {
@@ -17,6 +38,30 @@ public enum BulletKind
     Auto = 1,     // numbered/auto list
     Char = 2,     // single character bullet (e.g. "•")
     Image = 3     // image bullet (future)
+}
+
+/// <summary>
+/// A field run inside a paragraph — corresponds to <c>a:fld</c> in OOXML.
+/// Examples: type="slidenum", type="datetime1", type="footer".
+/// The <see cref="CachedText"/> is the value baked in by PowerPoint on save (used as
+/// the deterministic default for rendering without a live date/slide-number source).
+/// </summary>
+public sealed class FieldRun
+{
+    /// <summary>Field type string from a:fld type= attribute, e.g. "slidenum", "datetime1", "datetime14".</summary>
+    public string FieldType { get; set; } = string.Empty;
+
+    /// <summary>Cached text baked by PowerPoint (the value rendered if no live resolver is available).</summary>
+    public string CachedText { get; set; } = string.Empty;
+
+    /// <summary>Font/formatting properties (same as Run). May be null → inherit.</summary>
+    public string? FontFamily { get; set; }
+    public double? FontSizePt { get; set; }
+    public bool Bold { get; set; }
+    public bool Italic { get; set; }
+
+    /// <summary>Explicit color or null to inherit.</summary>
+    public SrgbColor? Color { get; set; }
 }
 
 /// <summary>
@@ -39,6 +84,15 @@ public sealed class Run
 
     /// <summary>Run color, or null to inherit.</summary>
     public ThemeAwareColor? Color { get; set; }
+
+    /// <summary>Hyperlink on this run, or null.  Corresponds to <c>a:hlinkClick</c> inside <c>a:rPr</c>.</summary>
+    public Hyperlink? Hyperlink { get; set; }
+
+    /// <summary>
+    /// When non-null this run is an <c>a:fld</c> field run. The <see cref="Text"/>
+    /// field holds the cached text for rendering; the field type is here.
+    /// </summary>
+    public FieldRun? Field { get; set; }
 }
 
 /// <summary>

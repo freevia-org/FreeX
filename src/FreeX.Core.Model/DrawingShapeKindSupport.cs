@@ -48,7 +48,8 @@ public static class DrawingShapeKindSupport
             DrawingShapeKind.OvalCallout or
             DrawingShapeKind.LineCallout or
             DrawingShapeKind.Chevron or
-            DrawingShapeKind.HomePlate => true,
+            DrawingShapeKind.HomePlate or
+            DrawingShapeKind.Cylinder => true,
             _ => false
         };
 

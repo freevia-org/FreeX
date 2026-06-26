@@ -1469,8 +1469,8 @@ public static class MailMerge
         {
             Formatting = source.Formatting,
             StyleId = source.StyleId,
-            BookmarkName = source.BookmarkName
         };
+        clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run, row));
         return clone;
@@ -1539,8 +1539,8 @@ public static class MailMerge
         {
             Formatting = source.Formatting,
             StyleId = source.StyleId,
-            BookmarkName = source.BookmarkName
         };
+        clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRunWithRules(run, row, state, recordIndex));
         return clone;

@@ -271,7 +271,12 @@ public sealed class AvaloniaShellSourceTests
         normalizedOverwriteDialog.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
         source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"PdfExportOverwriteReplaceButton\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"PdfExportOverwriteCancelButton\")");
-        source.Should().Contain("WorkbookExportPrintPlanner.CreatePlan(");
+        // The PDF export plan is created via the page-setup-aware overload (honours paper size / margins /
+        // fit-to-page); the test accepts either the legacy or the new entry point so a future refactor does not
+        // break a purely cosmetic name constraint.
+        (source.Contains("WorkbookExportPrintPlanner.CreatePlan(") ||
+         source.Contains("WorkbookExportPrintPlanner.CreatePlanFromPageSetup("))
+            .Should().BeTrue("MainWindow must call WorkbookExportPrintPlanner to build the export-print plan");
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
         source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
         // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
@@ -2310,12 +2315,27 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.SelectionPane\", () => ShowSelectionPaneParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertSlicer\", () => ShowInsertSlicerParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertTimeline\", () => ShowInsertTimelineParityDialogAsync()),");
-        parityCaptureSource.Should().Contain("(\"dialog.PivotTableOptions\", () => ShowPivotTableOptionsParityDialogAsync()),");
-        parityCaptureSource.Should().Contain("(\"dialog.PivotFieldFilter\", () => ShowPivotFieldFilterParityDialogAsync()),");
-        parityCaptureSource.Should().Contain("(\"dialog.PivotValueFieldSettings\", () => ShowPivotValueFieldSettingsParityDialogAsync()),");
+        // The multi-tab dialogs are registered through the per-tab capture table (ParityTabDialogOpeners),
+        // which emits one PNG per tab/category in addition to the default surface.
+        parityCaptureSource.Should().Contain("private IReadOnlyList<(string SurfaceId, Func<Task> Opener, string[] TabNames)> ParityTabDialogOpeners() =>");
+        parityCaptureSource.Should().Contain("await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames)");
+        parityCaptureSource.Should().Contain("private async Task<IReadOnlyList<ParitySurfaceResult>> CaptureModalTabsAsync(");
+        parityCaptureSource.Should().Contain("(\"dialog.FormatCells\", () => ShowFormatCellsDialogAsync(),");
+        parityCaptureSource.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Fill\", \"Border\", \"Protection\"]),");
+        parityCaptureSource.Should().Contain("(\"dialog.FindReplace\", () => ShowFindDialogAsync(),");
+        // PageSetup stays a single default surface (tab counts differ across shells), not per-tab.
+        parityCaptureSource.Should().Contain("(\"dialog.PageSetup\", () => ShowPageSetupDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.PivotTableOptions\", () => ShowPivotTableOptionsParityDialogAsync(),");
+        parityCaptureSource.Should().Contain("(\"dialog.PivotFieldFilter\", () => ShowPivotFieldFilterParityDialogAsync(),");
+        parityCaptureSource.Should().Contain("(\"dialog.PivotValueFieldSettings\", () => ShowPivotValueFieldSettingsParityDialogAsync(),");
+        parityCaptureSource.Should().Contain("(\"dialog.Options\", () => ShowOptionsDialogAsync(),");
+        // Conditional-format manage seeds example rules so its list renders rows.
+        parityCaptureSource.Should().Contain("(\"dialog.ConditionalFormatManage\", () => ShowManageConditionalFormatsParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("private async Task ShowManageConditionalFormatsParityDialogAsync()");
+        parityCaptureSource.Should().Contain("ConditionalFormatPresetFactory.BuildApplyCommand(preset, sheet.Id, ruleRange, value: \"100\")");
         parityCaptureSource.Should().Contain("(\"dialog.AllowEditRanges\", () => ShowAllowEditRangesParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.ProtectSheet\", () => ShowProtectSheetDialogAsync()),");
-        parityCaptureSource.Should().Contain("(\"dialog.ProtectWorkbook\", () => ShowProtectWorkbookDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ProtectWorkbook\", () => ShowProtectWorkbookParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerDialogAsync()),");
 
         parityCaptureSource.Should().Contain("private Task ShowInsertHyperlinkParityDialogAsync()");
@@ -2509,6 +2529,29 @@ public sealed class AvaloniaShellSourceTests
         {
             avaloniaCaptureSource.Should().Contain(dialogId);
             wpfCaptureSource.Should().Contain(dialogId);
+        }
+
+        // The multi-tab / multi-category dialogs declare an identical, position-ordered tab-name list in
+        // each shell, so the comparison runner pairs `dialog.<Name>.<TabName>` one-for-one. The capture
+        // builds each per-tab PNG name as $"{surfaceId}.{tabName}", so assert each tab name appears in the
+        // tab-name array (the literal `"<TabName>"`) in both sources.
+        var tabNamesById = new (string DialogId, string[] TabNames)[]
+        {
+            ("dialog.FormatCells", ["Number", "Alignment", "Font", "Fill", "Border", "Protection"]),
+            ("dialog.FindReplace", ["Find", "Replace"]),
+            ("dialog.PivotTableOptions", ["LayoutAndFormat", "TotalsAndFilters", "Display", "Printing", "Data", "AltText"]),
+            ("dialog.PivotFieldFilter", ["SelectItems", "LabelFilters", "ValueFilters"]),
+            ("dialog.PivotValueFieldSettings", ["SummarizeValuesBy", "ShowValuesAs", "NumberFormat"]),
+            ("dialog.Options", ["General", "Formulas", "Proofing", "Save", "Language", "EaseOfAccess", "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View"]),
+        };
+
+        foreach (var (_, tabNames) in tabNamesById)
+        {
+            foreach (var tabName in tabNames)
+            {
+                avaloniaCaptureSource.Should().Contain($"\"{tabName}\"");
+                wpfCaptureSource.Should().Contain($"\"{tabName}\"");
+            }
         }
     }
 

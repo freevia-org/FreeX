@@ -29,7 +29,8 @@ namespace FreeW.App.Avalonia.Ribbon;
 ///   <item><c>freew.grow-font</c> — bump font size up one ladder step</item>
 ///   <item><c>freew.shrink-font</c> — bump font size down one ladder step</item>
 ///   <item><c>freew.clear-formatting</c> — reset run formatting to default</item>
-///   <item><c>freew.font-color</c> — set selection foreground colour (value = RRGGBB hex)</item>
+///   <item><c>freew.font-color</c> — dropdown opener for the colour palette (no-op on click; colour is set by per-colour sub-commands)</item>
+///   <item><c>freew.font-color.*</c> — per-colour sub-commands (automatic, black, red, …) registered from <see cref="FreeWRibbon.FontColors"/></item>
 ///   <item><c>freew.change-case</c> — cycle text case lower → Title → UPPER</item>
 ///   <item><c>freew.select-all</c> — select the whole document</item>
 ///   <item><c>freew.show-hide-para</c> — toggle paragraph mark display</item>
@@ -89,8 +90,14 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.grow-font",        new RelayCommand(editor.GrowFont));
         r.Register("freew.shrink-font",      new RelayCommand(editor.ShrinkFont));
         r.Register("freew.clear-formatting", new RelayCommand(editor.ClearFormatting));
-        r.Register("freew.font-color",       new RelayValueCommand(value => editor.SetFontColor(value)));
-        r.Register("freew.change-case",      new RelayCommand(editor.ChangeCase));
+        // Font Color — the ribbon control is a Dropdown whose button click opens the colour flyout.
+        // Each palette entry is its own command so the button never executes with a null value.
+        // "freew.font-color" itself is registered as a no-op so the registry completeness check
+        // (which checks every ribbon control's CommandId) continues to pass.
+        r.Register("freew.font-color", new RelayCommand(() => { /* flyout opener — no direct action */ }));
+        RegisterFontColorPalette(r, editor);
+
+        r.Register("freew.change-case",   new RelayCommand(editor.ChangeCase));
 
         // ── Paragraph ────────────────────────────────────────────────────────
         r.Register("freew.bullets",          new RelayCommand(() => editor.ToggleList(ListKind.Bullet)));
@@ -149,5 +156,31 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
 
         return r;
+    }
+
+    /// <summary>
+    /// Registers the per-colour sub-commands for the Font Color palette dropdown.
+    /// Each command id matches an entry in <see cref="FreeWRibbon.FontColors"/> and calls
+    /// <see cref="DocumentView.SetFontColor"/> with the appropriate RRGGBB hex string
+    /// (or <c>null</c> for the "Automatic" entry, which restores the default run colour).
+    /// </summary>
+    private static void RegisterFontColorPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        // Maps command-id suffix → CSS hex colour (null = automatic/default).
+        // Colours chosen to match Word's standard palette.
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new RelayCommand(() => ed.SetFontColor(hex)));
+
+        Add(r, editor, "freew.font-color.automatic", null);
+        Add(r, editor, "freew.font-color.black",     "#000000");
+        Add(r, editor, "freew.font-color.dark-red",  "#C00000");
+        Add(r, editor, "freew.font-color.red",       "#FF0000");
+        Add(r, editor, "freew.font-color.orange",    "#FF6600");
+        Add(r, editor, "freew.font-color.yellow",    "#FFFF00");
+        Add(r, editor, "freew.font-color.green",     "#00B050");
+        Add(r, editor, "freew.font-color.blue",      "#0070C0");
+        Add(r, editor, "freew.font-color.dark-blue", "#00008B");
+        Add(r, editor, "freew.font-color.purple",    "#7030A0");
+        Add(r, editor, "freew.font-color.white",     "#FFFFFF");
     }
 }

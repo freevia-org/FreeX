@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 using System.Linq;
 
@@ -474,5 +475,85 @@ public partial class GridView
             : new FontFamily(key.FontName);
 
         return new Typeface(fontFamily, fontStyle, fontWeight, key.Stretch);
+    }
+
+    /// <summary>
+    /// Applies per-run rich-text formatting to an already-constructed <see cref="FormattedText"/>.
+    /// Each <see cref="ResolvedCellTextRun"/> is mapped to a contiguous character range
+    /// [<c>offset</c>, <c>offset + Text.Length</c>) and the WPF range APIs are invoked to override
+    /// font weight, style, size, foreground brush, and text decorations.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The method is a no-op when <paramref name="runs"/> is empty or null.
+    /// </para>
+    /// <para>
+    /// <b>Superscript / subscript baseline:</b>
+    /// <see cref="FormattedText"/> has no per-range baseline-offset API, so for super/sub runs
+    /// only the font size is reduced (to <see cref="ResolvedCellTextRun.RenderedFontSize"/>).
+    /// The vertical position of individual glyphs within the line is therefore approximate:
+    /// they sit on the same baseline as the rest of the run but at a smaller point size, which
+    /// visually reads as raised/lowered relative to full-size neighbours.
+    /// For exact per-run baseline shifting, the caller would need to split the FormattedText and
+    /// draw each segment at a different Y — deferred to a future wave if needed.
+    /// </para>
+    /// </remarks>
+    /// <param name="text">The <see cref="FormattedText"/> to decorate in-place.</param>
+    /// <param name="runs">Resolved runs from <see cref="CellRichRunLayoutPlanner.Resolve"/>.</param>
+    /// <param name="brushCache">Shared brush cache; may be null (brushes are created on demand).</param>
+    internal static void ApplyRichRunFormatting(
+        FormattedText text,
+        IReadOnlyList<ResolvedCellTextRun> runs,
+        Dictionary<CellColor, SolidColorBrush>? brushCache)
+    {
+        if (runs.Count == 0) return;
+
+        var offset = 0;
+        foreach (var run in runs)
+        {
+            var len = run.Text.Length;
+            if (len == 0) { continue; }
+
+            // Clamp to actual text length (guard against round-trip mismatch).
+            var textLen = text.Text.Length;
+            if (offset >= textLen) break;
+            var safeLen = Math.Min(len, textLen - offset);
+
+            // Font weight and style.
+            text.SetFontWeight(run.Bold ? FontWeights.Bold : FontWeights.Normal, offset, safeLen);
+            text.SetFontStyle(run.Italic ? FontStyles.Italic : FontStyles.Normal, offset, safeLen);
+
+            // Font size (includes super/sub scaling from the planner).
+            text.SetFontSize(run.RenderedFontSize, offset, safeLen);
+
+            // Font family (per-run font name).
+            var fontFamily = CloudFontFamilies.Value.TryGetValue(run.FontName, out var cloudFam)
+                ? cloudFam
+                : new FontFamily(run.FontName);
+            text.SetFontFamily(fontFamily, offset, safeLen);
+
+            // Foreground color.
+            var brush = BrushForCellColor(run.FontColor, brushCache);
+            text.SetForegroundBrush(brush, offset, safeLen);
+
+            // Text decorations (underline, strikethrough).
+            var decorations = BuildRunTextDecorations(run);
+            if (decorations is not null)
+                text.SetTextDecorations(decorations, offset, safeLen);
+
+            offset += len;
+        }
+    }
+
+    private static TextDecorationCollection? BuildRunTextDecorations(ResolvedCellTextRun run)
+    {
+        if (!run.Underline && !run.Strikethrough) return null;
+        var list = new TextDecorationCollection();
+        if (run.Underline)
+            list.Add(TextDecorations.Underline);
+        if (run.Strikethrough)
+            list.Add(TextDecorations.Strikethrough);
+        list.Freeze();
+        return list;
     }
 }

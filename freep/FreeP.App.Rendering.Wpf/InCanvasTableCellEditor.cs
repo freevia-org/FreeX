@@ -1,0 +1,461 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using Free.Shared.Drawing; // SlideShapeKind
+using FreeP.App.Compositor; // TableCellHitTester, EditingSession
+using FreeP.Core.Model;
+
+namespace FreeP.App.Rendering.Wpf;
+
+/// <summary>
+/// Manages in-canvas text editing for individual table cells.
+///
+/// On single-click of a table shape: selects the shape AND sets the active cell
+/// (hit-tested from the click point).  Draws a thin highlight rectangle around the
+/// active cell on the overlay canvas.
+///
+/// On double-click of a table cell: opens a <see cref="TextBox"/> positioned over
+/// the cell (same approach as <see cref="InCanvasTextEditor"/> for shapes).  On commit
+/// (Escape / focus-loss) writes the text back via <c>SetTableCellText</c> on the bus.
+///
+/// Right-click: surfaces a context menu (Insert Row Above/Below, Insert Column
+/// Left/Right, Delete Row, Delete Column, Merge Cells, Split Cell).
+///
+/// Tab navigation is not implemented (deferred).
+/// </summary>
+public sealed class InCanvasTableCellEditor
+{
+    private readonly SlideCanvas    _canvas;
+    private readonly EditingSession _editor;
+    private readonly Canvas         _overlay;
+
+    // ── Cell-edit state ───────────────────────────────────────────────────────
+
+    private RichTextBox? _cellTextBox;
+    private TextBody?    _cellOriginalBody;  // snapshot for change detection
+    private bool         _cellEditActive;
+    private int          _editRow;
+    private int          _editCol;
+    private uint         _editShapeId;
+
+    // ── Cell-highlight overlay ────────────────────────────────────────────────
+
+    private Rectangle? _cellHighlight;
+
+    public InCanvasTableCellEditor(SlideCanvas canvas, EditingSession editor, Canvas overlay)
+    {
+        _canvas  = canvas  ?? throw new ArgumentNullException(nameof(canvas));
+        _editor  = editor  ?? throw new ArgumentNullException(nameof(editor));
+        _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
+
+        _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
+        _canvas.MouseRightButtonDown += OnCanvasRightMouseDown;
+
+        _editor.SelectionChanged        += (_, _) => RefreshHighlight();
+        _editor.ActiveTableCellChanged  += (_, _) => RefreshHighlight();
+        _editor.Changed                 += RefreshHighlight;
+        _editor.CurrentSlideChanged     += (_, _) => { CommitCellEdit(); RefreshHighlight(); };
+    }
+
+    // ── Public surface ────────────────────────────────────────────────────────
+
+    public bool IsCellEditActive => _cellEditActive;
+
+    /// <summary>
+    /// Activates the cell text editor for the given table shape at (row, col).
+    /// Caller should ensure the shape is a table.
+    /// </summary>
+    public void ActivateCellEdit(uint shapeId, int row, int col)
+    {
+        if (_cellEditActive && _editShapeId == shapeId && _editRow == row && _editCol == col)
+            return;
+
+        CommitCellEdit(); // commit any pending edit first
+
+        var slide = _editor.CurrentSlide;
+        if (slide is null) return;
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+        if (shape?.Table is null) return;
+        var table = shape.Table;
+
+        if (row < 0 || row >= table.Rows.Count) return;
+        if (col < 0 || col >= table.ColumnWidthsEmu.Count) return;
+        var cell = table.Rows[row].Cells[col];
+        if (cell.HMerge || cell.VMerge) return; // can't edit a continuation cell directly
+
+        _editShapeId = shapeId;
+        _editRow     = row;
+        _editCol     = col;
+        _cellEditActive = true;
+
+        // Get cell rect in slide DIP → screen coords.
+        var cellRect = TableCellHitTester.GetCellRect(shape, row, col);
+        if (cellRect is null) { _cellEditActive = false; return; }
+
+        var xf = _canvas.CurrentTransform;
+        double x = cellRect.Value.X * xf.Scale + xf.OffsetX;
+        double y = cellRect.Value.Y * xf.Scale + xf.OffsetY;
+        double w = cellRect.Value.Width  * xf.Scale;
+        double h = cellRect.Value.Height * xf.Scale;
+
+        // Keep a snapshot for change detection.
+        _cellOriginalBody = SetShapeTextBodyCommand.CloneTextBody(cell.TextBody);
+
+        // Determine a fallback font size from the cell's first run.
+        double fallbackPt = cell.TextBody?.Paragraphs
+            .SelectMany(p => p.Runs)
+            .FirstOrDefault(r => r.FontSizePt.HasValue)?.FontSizePt ?? 13.0;
+
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(cell.TextBody, fallbackPt);
+
+        _cellTextBox = new RichTextBox(doc)
+        {
+            AcceptsReturn         = true,
+            Background            = new SolidColorBrush(Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF)),
+            BorderBrush           = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
+            BorderThickness       = new Thickness(1.5),
+            SpellCheck            = { IsEnabled = false },
+            IsUndoEnabled         = false,
+            MinWidth              = Math.Max(30, w),
+            MinHeight             = Math.Max(18, h),
+            Width                 = Math.Max(30, w),
+            Height                = Math.Max(18, h),
+            VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+        };
+
+        Canvas.SetLeft(_cellTextBox, x);
+        Canvas.SetTop (_cellTextBox, y);
+
+        _cellTextBox.LostFocus    += (_, _) => CommitCellEdit();
+        _cellTextBox.KeyDown      += OnCellTextBoxKeyDown;
+        _cellTextBox.PreviewKeyDown += OnCellTextBoxPreviewKeyDown;
+
+        _overlay.Children.Add(_cellTextBox);
+        _cellTextBox.Focus();
+        _cellTextBox.SelectAll();
+
+        // Keep active cell in sync.
+        _editor.SetActiveTableCell(row, col);
+    }
+
+    /// <summary>Commits the current cell edit (if active) and hides the text box.</summary>
+    public void CommitCellEdit()
+    {
+        if (!_cellEditActive || _cellTextBox is null) return;
+
+        var doc = _cellTextBox.Document;
+        _overlay.Children.Remove(_cellTextBox);
+        _cellTextBox    = null;
+        _cellEditActive = false;
+
+        var slide = _editor.CurrentSlide;
+        if (slide is null) return;
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == _editShapeId);
+        if (shape?.Table is null) return;
+
+        int row = _editRow;
+        int col = _editCol;
+        if (row >= shape.Table.Rows.Count) return;
+        var cell = shape.Table.Rows[row].Cells.ElementAtOrDefault(col);
+        if (cell is null) return;
+
+        // Rebuild the full rich TextBody from the FlowDocument.
+        var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, cell.TextBody);
+
+        // Only issue a command if content actually changed.
+        if (CellBodiesEqual(_cellOriginalBody, newBody)) return;
+
+        // Use the bus directly (the EditingSession API requires the shape to be selected).
+        _editor.Bus.Execute(new SetTableCellTextCommand(
+            _editor.CurrentSlideIndex, _editShapeId, row, col, newBody));
+    }
+
+    /// <summary>Cancels the current cell edit without writing back.</summary>
+    public void CancelCellEdit()
+    {
+        if (!_cellEditActive || _cellTextBox is null) return;
+        _overlay.Children.Remove(_cellTextBox);
+        _cellTextBox = null;
+        _cellEditActive = false;
+    }
+
+    // ── Mouse handling ────────────────────────────────────────────────────────
+
+    private void OnCanvasMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var slide = _editor.CurrentSlide;
+        if (slide is null || _editor.Presentation is null) return;
+
+        var xf      = _canvas.CurrentTransform;
+        var pt      = e.GetPosition(_canvas);
+        var slidePt = xf.ScreenToSlide(pt.X, pt.Y);
+
+        // Is the click on the currently selected table?
+        uint? hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
+        if (!hitId.HasValue) { CommitCellEdit(); return; }
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
+        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
+        {
+            // Clicked a non-table — commit any open cell edit.
+            CommitCellEdit();
+            return;
+        }
+
+        // Single click: set active cell.
+        var cellHit = TableCellHitTester.HitTest(shape, slidePt.X, slidePt.Y);
+        if (cellHit.HasValue)
+        {
+            // Only update the active cell if we own this shape (shape is being selected elsewhere
+            // by CanvasGestureHandler first, which fires before us because it registered first).
+            // We just set the active cell; the selection of the shape itself is handled by
+            // CanvasGestureHandler.
+            _editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
+
+            // Double-click → activate cell editor.
+            if (e.ClickCount >= 2)
+            {
+                ActivateCellEdit(shape.Id, cellHit.Value.Row, cellHit.Value.Col);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void OnCanvasRightMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var slide = _editor.CurrentSlide;
+        if (slide is null || _editor.Presentation is null) return;
+
+        var xf      = _canvas.CurrentTransform;
+        var pt      = e.GetPosition(_canvas);
+        var slidePt = xf.ScreenToSlide(pt.X, pt.Y);
+
+        uint? hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
+        if (!hitId.HasValue) return;
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == hitId.Value);
+        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null) return;
+
+        // Set active cell at right-click position.
+        var cellHit = TableCellHitTester.HitTest(shape, slidePt.X, slidePt.Y);
+        if (cellHit.HasValue)
+            _editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
+
+        // Build context menu.
+        var cm = BuildTableContextMenu(shape);
+        _canvas.ContextMenu = cm;
+        cm.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private ContextMenu BuildTableContextMenu(SlideShape shape)
+    {
+        var cm = new ContextMenu();
+
+        void Add(string header, Action action)
+        {
+            var mi = new MenuItem { Header = header };
+            mi.Click += (_, _) => action();
+            cm.Items.Add(mi);
+        }
+
+        Add("Insert Row Above",    () => { _editor.Select(shape.Id); _editor.InsertRowAbove(); });
+        Add("Insert Row Below",    () => { _editor.Select(shape.Id); _editor.InsertRowBelow(); });
+        cm.Items.Add(new Separator());
+        Add("Insert Column Left",  () => { _editor.Select(shape.Id); _editor.InsertColumnLeft(); });
+        Add("Insert Column Right", () => { _editor.Select(shape.Id); _editor.InsertColumnRight(); });
+        cm.Items.Add(new Separator());
+        Add("Delete Row",          () => { _editor.Select(shape.Id); _editor.DeleteRow(); });
+        Add("Delete Column",       () => { _editor.Select(shape.Id); _editor.DeleteColumn(); });
+        cm.Items.Add(new Separator());
+
+        // Merge Cells — needs at least a 2-cell region; we use active cell + neighbours as
+        // a simple default (merge active cell with the one to its right if available).
+        var table = shape.Table!;
+        var ac = _editor.ActiveTableCell;
+        bool canMerge = ac.HasValue &&
+            (ac.Value.Col + 1 < table.ColumnWidthsEmu.Count ||
+             ac.Value.Row + 1 < table.Rows.Count);
+        bool canSplit = ac.HasValue && table.Rows.Count > ac.Value.Row &&
+            table.Rows[ac.Value.Row].Cells.ElementAtOrDefault(ac.Value.Col) is { } cc &&
+            (cc.GridSpan > 1 || cc.RowSpan > 1);
+
+        var mergeMi = new MenuItem { Header = "Merge with Right Cell", IsEnabled = canMerge };
+        if (canMerge && ac.HasValue)
+        {
+            int r = ac.Value.Row, c = ac.Value.Col;
+            // Merge with cell to the right (or below if last column).
+            int r2 = r, c2 = c + 1 < table.ColumnWidthsEmu.Count ? c + 1 : c;
+            int r2b = r + 1 < table.Rows.Count && c2 == c ? r + 1 : r;
+            mergeMi.Click += (_, _) =>
+            {
+                _editor.Select(shape.Id);
+                _editor.MergeTableCells(r, c, r2b, c2);
+            };
+        }
+        cm.Items.Add(mergeMi);
+
+        var splitMi = new MenuItem { Header = "Split Cell", IsEnabled = canSplit };
+        if (canSplit && ac.HasValue)
+        {
+            int r = ac.Value.Row, c = ac.Value.Col;
+            splitMi.Click += (_, _) =>
+            {
+                _editor.Select(shape.Id);
+                _editor.SplitTableCell(r, c);
+            };
+        }
+        cm.Items.Add(splitMi);
+
+        return cm;
+    }
+
+    // ── Ribbon format application (10A SEAM) ──────────────────────────────────
+    // Called by the ribbon routing in FreePRibbonCommands when IsCellEditActive is true.
+
+    /// <summary>True when a cell's RichTextBox is open and focused.</summary>
+    public bool IsCellRichEditActive => _cellEditActive && _cellTextBox is not null;
+
+    /// <summary>Toggles bold on the current cell RichTextBox selection.</summary>
+    public void ApplyBold()    { if (_cellTextBox is not null) EditingCommands.ToggleBold.Execute(null, _cellTextBox); }
+    /// <summary>Toggles italic on the current cell RichTextBox selection.</summary>
+    public void ApplyItalic()  { if (_cellTextBox is not null) EditingCommands.ToggleItalic.Execute(null, _cellTextBox); }
+    /// <summary>Toggles underline on the current cell RichTextBox selection.</summary>
+    public void ApplyUnderline() { if (_cellTextBox is not null) EditingCommands.ToggleUnderline.Execute(null, _cellTextBox); }
+
+    /// <summary>Sets font family on the current cell RichTextBox selection.</summary>
+    public void ApplyFont(string? fontFamily)
+    {
+        if (_cellTextBox is null || string.IsNullOrEmpty(fontFamily)) return;
+        _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(fontFamily));
+    }
+
+    /// <summary>Sets font size (pt) on the current cell RichTextBox selection.</summary>
+    public void ApplyFontSize(double? sizePt)
+    {
+        if (_cellTextBox is null || sizePt is null) return;
+        _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, sizePt.Value * (96.0 / 72.0));
+    }
+
+    /// <summary>Sets text color on the current cell RichTextBox selection.</summary>
+    public void ApplyColor(ThemeAwareColor? color)
+    {
+        if (_cellTextBox is null || color is null) return;
+        var wpfColor = TextBodyFlowDocumentConverter.ResolveModelColor(color);
+        if (wpfColor is null) return;
+        _cellTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(wpfColor.Value));
+    }
+
+    // ── Keyboard ──────────────────────────────────────────────────────────────
+
+    private void OnCellTextBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            CancelCellEdit();
+            e.Handled = true;
+        }
+    }
+
+    private void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0) return;
+        if (e.Key == Key.B) { ApplyBold();      e.Handled = true; }
+        else if (e.Key == Key.I) { ApplyItalic();    e.Handled = true; }
+        else if (e.Key == Key.U) { ApplyUnderline(); e.Handled = true; }
+    }
+
+    // ── Cell highlight overlay ─────────────────────────────────────────────────
+
+    private void RefreshHighlight()
+    {
+        // Remove old highlight.
+        if (_cellHighlight is not null)
+        {
+            _overlay.Children.Remove(_cellHighlight);
+            _cellHighlight = null;
+        }
+
+        var slide = _editor.CurrentSlide;
+        if (slide is null || _editor.Presentation is null) return;
+        if (_editor.SelectedShapeIds.Count == 0) return;
+
+        var ac = _editor.ActiveTableCell;
+        if (ac is null) return;
+
+        var selId = _editor.SelectedShapeIds[0];
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selId);
+        if (shape?.Kind != SlideShapeKind.Table) return;
+
+        var cellRect = TableCellHitTester.GetCellRect(shape, ac.Value.Row, ac.Value.Col);
+        if (cellRect is null) return;
+
+        var xf = _canvas.CurrentTransform;
+        double x = cellRect.Value.X * xf.Scale + xf.OffsetX;
+        double y = cellRect.Value.Y * xf.Scale + xf.OffsetY;
+        double w = cellRect.Value.Width  * xf.Scale;
+        double h = cellRect.Value.Height * xf.Scale;
+
+        _cellHighlight = new Rectangle
+        {
+            Width           = Math.Max(1, w),
+            Height          = Math.Max(1, h),
+            Stroke          = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
+            StrokeThickness = 2.0,
+            Fill            = new SolidColorBrush(Color.FromArgb(0x18, 0x21, 0x96, 0xF3)),
+            IsHitTestVisible = false,
+        };
+
+        Canvas.SetLeft(_cellHighlight, x);
+        Canvas.SetTop (_cellHighlight, y);
+        _overlay.Children.Add(_cellHighlight);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static bool CellBodiesEqual(TextBody? a, TextBody? b)
+    {
+        if (a is null && b is null) return true;
+        if (a is null || b is null) return false;
+        if (a.Paragraphs.Count != b.Paragraphs.Count) return false;
+        for (int pi = 0; pi < a.Paragraphs.Count; pi++)
+        {
+            var pa = a.Paragraphs[pi];
+            var pb = b.Paragraphs[pi];
+            if (pa.Runs.Count != pb.Runs.Count) return false;
+            for (int ri = 0; ri < pa.Runs.Count; ri++)
+            {
+                var ra = pa.Runs[ri];
+                var rb = pb.Runs[ri];
+                if (ra.Text != rb.Text || ra.Bold != rb.Bold || ra.Italic != rb.Italic
+                    || ra.Underline != rb.Underline || ra.Strikethrough != rb.Strikethrough
+                    || ra.FontFamily != rb.FontFamily || ra.FontSizePt != rb.FontSizePt
+                    || !ColorsEqual(ra.Color, rb.Color))   // Y3: include Color in change detection
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Compares two <see cref="ThemeAwareColor"/> values, including resolved sRGB and SchemeColor ref.
+    /// </summary>
+    private static bool ColorsEqual(ThemeAwareColor? a, ThemeAwareColor? b)
+    {
+        if (a is null && b is null) return true;
+        if (a is null || b is null) return false;
+        if (a.Resolved != b.Resolved) return false;
+        if (a.SchemeColor is null && b.SchemeColor is null) return true;
+        if (a.SchemeColor is null || b.SchemeColor is null) return false;
+        return a.SchemeColor.Slot    == b.SchemeColor.Slot
+            && a.SchemeColor.LumMod  == b.SchemeColor.LumMod
+            && a.SchemeColor.LumOff  == b.SchemeColor.LumOff
+            && a.SchemeColor.Tint    == b.SchemeColor.Tint
+            && a.SchemeColor.Shade   == b.SchemeColor.Shade;
+    }
+}

@@ -42,3 +42,14 @@ public sealed record PdfText(
     PdfFontFace Face,
     PdfColor Color,
     string Text) : PdfDrawOp;
+
+/// <summary>
+/// Strokes a straight line between two points in PDF user space (origin bottom-left, y-up).
+/// </summary>
+public sealed record PdfLine(
+    double X1,
+    double Y1,
+    double X2,
+    double Y2,
+    PdfColor Color,
+    double LineWidth) : PdfDrawOp;

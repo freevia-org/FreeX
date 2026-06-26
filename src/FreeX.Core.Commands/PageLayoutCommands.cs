@@ -7,7 +7,7 @@ public sealed class SetPrintAreaCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _printArea;
-    private GridRange? _previousPrintArea;
+    private List<GridRange>? _previousPrintAreas;
 
     public string Label => "Set Print Area";
 
@@ -23,14 +23,14 @@ public sealed class SetPrintAreaCommand : IWorkbookCommand
             return new CommandOutcome(false, "Print area must be on the target sheet.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        _previousPrintArea = sheet.PrintArea;
+        _previousPrintAreas = sheet.PrintAreas.ToList();
         sheet.PrintArea = _printArea;
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
-        ctx.GetSheet(_sheetId).PrintArea = _previousPrintArea;
+        ctx.GetSheet(_sheetId).SetPrintAreas(_previousPrintAreas ?? []);
     }
 }
 
@@ -38,7 +38,7 @@ public sealed class SetPrintAreaCommand : IWorkbookCommand
 public sealed class ClearPrintAreaCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
-    private GridRange? _previousPrintArea;
+    private List<GridRange>? _previousPrintAreas;
 
     public string Label => "Clear Print Area";
 
@@ -50,14 +50,14 @@ public sealed class ClearPrintAreaCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        _previousPrintArea = sheet.PrintArea;
+        _previousPrintAreas = sheet.PrintAreas.ToList();
         sheet.PrintArea = null;
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
-        ctx.GetSheet(_sheetId).PrintArea = _previousPrintArea;
+        ctx.GetSheet(_sheetId).SetPrintAreas(_previousPrintAreas ?? []);
     }
 }
 

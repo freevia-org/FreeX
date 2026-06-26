@@ -7,25 +7,22 @@ internal static class XlsxWorksheetPageSetupMapper
 {
     public static void LoadPrintArea(IXLWorksheet xlSheet, Sheet sheet)
     {
-        IXLRange? xlRange = null;
-        foreach (var printArea in xlSheet.PageSetup.PrintAreas)
+        var areas = new List<GridRange>();
+        foreach (var xlRange in xlSheet.PageSetup.PrintAreas)
         {
-            xlRange = printArea;
-            break;
+            var start = new CellAddress(
+                sheet.Id,
+                (uint)xlRange.RangeAddress.FirstAddress.RowNumber,
+                (uint)xlRange.RangeAddress.FirstAddress.ColumnNumber);
+            var end = new CellAddress(
+                sheet.Id,
+                (uint)xlRange.RangeAddress.LastAddress.RowNumber,
+                (uint)xlRange.RangeAddress.LastAddress.ColumnNumber);
+            areas.Add(new GridRange(start, end));
         }
 
-        if (xlRange is null)
-            return;
-
-        var start = new CellAddress(
-            sheet.Id,
-            (uint)xlRange.RangeAddress.FirstAddress.RowNumber,
-            (uint)xlRange.RangeAddress.FirstAddress.ColumnNumber);
-        var end = new CellAddress(
-            sheet.Id,
-            (uint)xlRange.RangeAddress.LastAddress.RowNumber,
-            (uint)xlRange.RangeAddress.LastAddress.ColumnNumber);
-        sheet.PrintArea = new GridRange(start, end);
+        if (areas.Count > 0)
+            sheet.SetPrintAreas(areas);
     }
 
     public static void SetHeaderFooter(

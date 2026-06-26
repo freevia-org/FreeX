@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
@@ -112,6 +113,16 @@ public sealed partial class MainWindow
         foreach (var (surfaceId, opener) in dialogOpeners)
             results.Add(await CaptureModalSurfaceAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener));
 
+        // ── Multi-tab / multi-category dialogs: open once, render the default surface plus one
+        //    PNG per tab/category (`<surfaceId>.<TabName>`) so the comparison runner pairs each
+        //    tab against the matching WPF tab. ──
+        var tabDialogs = ParityTabDialogOpeners();
+        if (maxDialogSurfaces is not null)
+            tabDialogs = [];
+
+        foreach (var (surfaceId, opener, tabNames) in tabDialogs)
+            results.AddRange(await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames));
+
         foreach (var surfaceId in ParityBackstageSurfaces)
             results.Add(CaptureBackstageSurface(outputDirectory, surfaceId));
 
@@ -121,8 +132,6 @@ public sealed partial class MainWindow
     /// <summary>The canonical dialog surfaces and the shell method that opens each. Ordered for stable output.</summary>
     private IReadOnlyList<(string SurfaceId, Func<Task> Opener)> ParityDialogOpeners() =>
     [
-        ("dialog.FormatCells", () => ShowFormatCellsDialogAsync()),
-        ("dialog.FindReplace", () => ShowFindDialogAsync()),
         ("dialog.GoTo", () => ShowGoToDialogAsync()),
         ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.CreateTable", () => ShowCreateTableParityDialogAsync()),
@@ -163,20 +172,45 @@ public sealed partial class MainWindow
         ("dialog.SaveAsWorkbook", () => ShowWorkbookFileDialogParitySurfaceAsync(CreateSaveAsWorkbookDialogSurfacePlan())),
         ("dialog.ExportOptions", () => ShowExportOptionsParityDialogAsync()),
         ("dialog.SelectionPane", () => ShowSelectionPaneParityDialogAsync()),
-        ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync()),
-        ("dialog.PivotFieldFilter", () => ShowPivotFieldFilterParityDialogAsync()),
-        ("dialog.PivotValueFieldSettings", () => ShowPivotValueFieldSettingsParityDialogAsync()),
         ("dialog.InsertSlicer", () => ShowInsertSlicerParityDialogAsync()),
         ("dialog.InsertTimeline", () => ShowInsertTimelineParityDialogAsync()),
         ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
         ("dialog.ProtectSheet", () => ShowProtectSheetDialogAsync()),
-        ("dialog.ProtectWorkbook", () => ShowProtectWorkbookDialogAsync()),
+        ("dialog.ProtectWorkbook", () => ShowProtectWorkbookParityDialogAsync()),
         ("dialog.AccessibilityChecker", () => ShowAccessibilityCheckerDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
-        ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
+        ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsParityDialogAsync()),
+        // PageSetup is captured as a single default surface (not per-tab): the WPF dialog has 3 tabs
+        // (Page/Margins/Sheet) while the Avalonia dialog has 4 (adds Header/Footer), so an index-based
+        // per-tab pairing would mismatch. See ParityTabDialogOpeners for the per-tab dialogs.
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
-        ("dialog.Options", () => ShowOptionsDialogAsync()),
+    ];
+
+    /// <summary>
+    /// The multi-tab / multi-category dialog surfaces: each opens once and is rendered per tab
+    /// (<c>dialog.&lt;Name&gt;.&lt;TabName&gt;</c>) plus its default <c>dialog.&lt;Name&gt;</c> surface.
+    /// The tab-name lists are stable, English, position-ordered identifiers that match the WPF
+    /// capture's per-tab surface ids one-for-one (the renderer drives <c>SelectedIndex = i</c>, not
+    /// the localized header text, so the names here only need to agree across the two shells).
+    /// </summary>
+    private IReadOnlyList<(string SurfaceId, Func<Task> Opener, string[] TabNames)> ParityTabDialogOpeners() =>
+    [
+        ("dialog.FormatCells", () => ShowFormatCellsDialogAsync(),
+            ["Number", "Alignment", "Font", "Fill", "Border", "Protection"]),
+        ("dialog.FindReplace", () => ShowFindDialogAsync(),
+            ["Find", "Replace"]),
+        ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync(),
+            ["LayoutAndFormat", "TotalsAndFilters", "Display", "Printing", "Data", "AltText"]),
+        ("dialog.PivotFieldFilter", () => ShowPivotFieldFilterParityDialogAsync(),
+            ["SelectItems", "LabelFilters", "ValueFilters"]),
+        ("dialog.PivotValueFieldSettings", () => ShowPivotValueFieldSettingsParityDialogAsync(),
+            ["SummarizeValuesBy", "ShowValuesAs", "NumberFormat"]),
+        ("dialog.Options", () => ShowOptionsDialogAsync(),
+            [
+                "General", "Formulas", "Proofing", "Save", "Language", "EaseOfAccess",
+                "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View",
+            ]),
     ];
 
     private Task ShowPrintPreviewParityDialogAsync()
@@ -321,16 +355,16 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, ExportOptionsDialogSurfacePlanner.DialogAutomationId);
 
-        var activeSheetButton = new RadioButton { Content = UiText.Get("ExportOptions_ActiveSheetS"), IsChecked = true };
-        var selectionButton = new RadioButton { Content = UiText.Get("ExportOptions_SelectedRange") };
-        var workbookButton = new RadioButton { Content = UiText.Get("ExportOptions_Workbook") };
-        var allPagesButton = new RadioButton { Content = UiText.Get("ExportOptions_All"), GroupName = "PageRange", IsChecked = true };
-        var pagesButton = new RadioButton { Content = UiText.Get("ExportOptions_Pages"), GroupName = "PageRange" };
+        var activeSheetButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_ActiveSheetS")), IsChecked = true };
+        var selectionButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_SelectedRange")) };
+        var workbookButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Workbook")) };
+        var allPagesButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_All")), GroupName = "PageRange", IsChecked = true };
+        var pagesButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Pages")), GroupName = "PageRange" };
         var fromPageBox = new TextBox { Width = 56, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), IsEnabled = false };
         var toPageBox = new TextBox { Width = 56, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), IsEnabled = false };
-        var documentPropertiesBox = new CheckBox { Content = UiText.Get("ExportOptions_IncludeDocumentProperties") };
-        var ignorePrintAreasBox = new CheckBox { Content = UiText.Get("ExportOptions_IgnorePrintAreas") };
-        var bookmarksBox = new CheckBox { Content = UiText.Get("ExportOptions_CreatePdfBookmarks") };
+        var documentPropertiesBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_IncludeDocumentProperties")) };
+        var ignorePrintAreasBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_IgnorePrintAreas")) };
+        var bookmarksBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_CreatePdfBookmarks")) };
         var bookmarkModeBox = new ComboBox { Width = 180, Height = 24, MinHeight = 24, IsEnabled = false };
         bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_SheetNames"));
         bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PrintTitles"));
@@ -350,14 +384,14 @@ public sealed partial class MainWindow
         var pdfLanguageBox = new TextBox { Width = 88, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), Text = "en-US", IsEnabled = availability.PdfLanguageEnabled };
         var bitmapTextBox = new CheckBox
         {
-            Content = UiText.Get("ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded"),
+            Content = StripDisplayMnemonic(UiText.Get("ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded")),
             IsEnabled = availability.PdfBitmapTextEnabled,
         };
-        var pdfABox = new CheckBox { Content = UiText.Get("ExportOptions_PdfACompliantNotSupported"), IsEnabled = false };
-        var structureTagsBox = new CheckBox { Content = UiText.Get("ExportOptions_DocumentStructureTagsNotSupported"), IsEnabled = false };
-        var standardQualityButton = new RadioButton { Content = UiText.Get("ExportOptions_Standard"), IsChecked = true };
-        var minimumSizeButton = new RadioButton { Content = UiText.Get("ExportOptions_MinimumSize"), IsEnabled = availability.MinimumSizeEnabled };
-        var openAfterPublishBox = new CheckBox { Content = UiText.Get("ExportOptions_OpenAfterPublishing"), Margin = new Thickness(0, 8, 0, 0) };
+        var pdfABox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_PdfACompliantNotSupported")), IsEnabled = false };
+        var structureTagsBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_DocumentStructureTagsNotSupported")), IsEnabled = false };
+        var standardQualityButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Standard")), IsChecked = true };
+        var minimumSizeButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_MinimumSize")), IsEnabled = availability.MinimumSizeEnabled };
+        var openAfterPublishBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_OpenAfterPublishing")), Margin = new Thickness(0, 8, 0, 0) };
 
         bookmarksBox.IsEnabled = availability.PdfBookmarksEnabled;
         bookmarksBox.IsCheckedChanged += (_, _) => bookmarkModeBox.IsEnabled = bookmarksBox.IsChecked == true && availability.PdfBookmarksEnabled;
@@ -378,9 +412,9 @@ public sealed partial class MainWindow
 
         var pageRangePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0), Spacing = 6 };
         pageRangePanel.Children.Add(pagesButton);
-        pageRangePanel.Children.Add(new Label { Content = UiText.Get("ExportOptions_From"), Target = fromPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
+        pageRangePanel.Children.Add(new Label { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_From")), Target = fromPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
         pageRangePanel.Children.Add(fromPageBox);
-        pageRangePanel.Children.Add(new Label { Content = UiText.Get("ExportOptions_To"), Target = toPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
+        pageRangePanel.Children.Add(new Label { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_To")), Target = toPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
         pageRangePanel.Children.Add(toPageBox);
         stack.Children.Add(pageRangePanel);
 
@@ -433,7 +467,7 @@ public sealed partial class MainWindow
     private static TextBlock CreateExportOptionsSectionLabel(string resourceKey, double topMargin = 0) =>
         new()
         {
-            Text = UiText.Get(resourceKey),
+            Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, topMargin, 0, 4),
         };
@@ -446,7 +480,7 @@ public sealed partial class MainWindow
             Spacing = 6,
             Children =
             {
-                new Label { Content = UiText.Get(resourceKey), Target = control, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new Label { Content = StripDisplayMnemonic(UiText.Get(resourceKey)), Target = control, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 control,
             },
         };
@@ -948,6 +982,52 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
+    /// <summary>
+    /// Seeds a few conditional-format rules onto the demo sheet (over a range that overlaps the capture
+    /// selection, so the manager's default "current selection" scope lists them) before opening the Manage
+    /// Conditional Formats dialog — otherwise its rules list renders empty and there is nothing to compare.
+    /// </summary>
+    private async Task ShowManageConditionalFormatsParityDialogAsync()
+    {
+        var sheet = _session.Workbook.Sheets.Count > 0 ? _session.Workbook.Sheets[0] : _session.ActiveSheet;
+        var ruleRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 4),
+            new CellAddress(sheet.Id, 5, 4));
+
+        // Apply 3 example rules so the manager has rows. Each commits through the same apply-command path the
+        // ribbon uses; the demo workbook starts with no rules, so this is idempotent enough for a single run.
+        foreach (var preset in new[]
+                 {
+                     ConditionalFormatPreset.DataBar,
+                     ConditionalFormatPreset.ColorScale,
+                     ConditionalFormatPreset.HighlightGreaterThan,
+                 })
+        {
+            _session.ExecuteReviewCommand(
+                ConditionalFormatPresetFactory.BuildApplyCommand(preset, sheet.Id, ruleRange, value: "100"));
+        }
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        var previousSheetId = _session.ActiveSheet.Id;
+        if (!previousSheetId.Equals(sheet.Id))
+            _session.SelectSheet(sheet.Id);
+        var previousSelection = _session.SelectedRange;
+        _session.SelectRange(ruleRange);
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowManageConditionalFormatsDialogAsync();
+        }
+        finally
+        {
+            if (!previousSheetId.Equals(_session.ActiveSheet.Id))
+                _session.SelectSheet(previousSheetId);
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
     private async Task ShowCustomViewsParityDialogAsync()
     {
         _session.Workbook.CustomViews.Clear();
@@ -956,6 +1036,20 @@ public sealed partial class MainWindow
         _session.Workbook.CustomViews.Add(new WorkbookCustomView("Summary View", []));
         _session.Workbook.CustomViews.Add(new WorkbookCustomView("Detailed View", []));
         await ShowCustomViewsManagerDialogAsync();
+    }
+
+    private async Task ShowProtectWorkbookParityDialogAsync()
+    {
+        // Protect the workbook (with a password) first so the dialog renders the SAME "Unprotect
+        // Workbook" variant the WPF host capture hard-codes — otherwise Linux shows the Protect
+        // variant and the two captures can't be compared.
+        if (!_session.Workbook.IsStructureProtected)
+        {
+            _session.ExecuteReviewCommand(new ProtectWorkbookCommand("pw"));
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+
+        await ShowProtectWorkbookDialogAsync();
     }
 
     private async Task ShowAllowEditRangesParityDialogAsync()
@@ -1204,6 +1298,20 @@ public sealed partial class MainWindow
         _sheetTabsHost.Content = BuildSheetTabs();
         UpdateSheetTabNavigationVisibility();
         RefreshShell("Ready");
+
+        // The WPF capture activates the last inserted sheet and brings it into view, so its overflow
+        // surface shows the TAIL of the strip (Sheet12–Sheet20). Avalonia's scroller does not auto-scroll
+        // to the active tab on rebuild, so without this it would show the HEAD (Demo–Sheet10). Force the
+        // scroller to its end after a layout pass so both shells frame the same overflowed sheet range.
+        LayoutWindow();
+        ScrollSheetTabsToEndForParityCapture();
+        LayoutWindow();
+    }
+
+    private void ScrollSheetTabsToEndForParityCapture()
+    {
+        var maxOffsetX = Math.Max(0, _sheetTabsScroller.Extent.Width - _sheetTabsScroller.Viewport.Width);
+        _sheetTabsScroller.Offset = new Vector(maxOffsetX, _sheetTabsScroller.Offset.Y);
     }
 
     private static (string SurfaceId, string TabId)[] BuildStaticRibbonTabSurfaces()
@@ -1331,6 +1439,122 @@ public sealed partial class MainWindow
 
         return result;
     }
+
+    /// <summary>
+    /// Like <see cref="CaptureModalSurfaceAsync"/>, but for a multi-tab / multi-category dialog: opens the
+    /// dialog once, renders the default surface as <c>&lt;surfaceId&gt;.png</c>, then for each tab index sets
+    /// the relevant <see cref="TabControl"/>'s <c>SelectedIndex</c> (or invokes the category-list selector
+    /// for dialogs whose categories are not a <see cref="TabControl"/>, e.g. Options), pumps a layout pass so
+    /// the swapped pane re-renders, and writes <c>&lt;surfaceId&gt;.&lt;tabName&gt;.png</c>. The dialog is
+    /// closed once at the end. Returns one <see cref="ParitySurfaceResult"/> per emitted PNG.
+    /// </summary>
+    private async Task<IReadOnlyList<ParitySurfaceResult>> CaptureModalTabsAsync(
+        string outputDirectory,
+        string surfaceId,
+        ParitySurfaceKind kind,
+        Func<Task> opener,
+        string[] tabNames)
+    {
+        var results = new List<ParitySurfaceResult>();
+        var defaultPng = surfaceId + ".png";
+        var preexisting = OwnedWindows.ToHashSet();
+
+        Task openerTask;
+        try
+        {
+            openerTask = RunParityModalOpenerAsync(opener);
+        }
+        catch (Exception ex)
+        {
+            results.Add(new ParitySurfaceResult(surfaceId, kind, defaultPng, Captured: false, $"Opener threw: {ex.GetType().Name}: {ex.Message}"));
+            return results;
+        }
+
+        var dialog = await WaitForOwnedDialogAsync(preexisting);
+        if (dialog is null)
+        {
+            await AwaitOpenerQuietlyAsync(openerTask);
+            results.Add(new ParitySurfaceResult(surfaceId, kind, defaultPng, Captured: false, "Dialog window did not open within the wait window (guard or unavailable surface)."));
+            return results;
+        }
+
+        try
+        {
+            // Default surface first (whatever tab the dialog opens on).
+            results.Add(RenderParityDialogTab(outputDirectory, dialog, surfaceId, defaultPng, kind));
+
+            // A real TabControl drives selection via SelectedIndex; the Options dialog instead carries an
+            // Action<int> category selector on the category list's Tag (its categories are Border rows in a
+            // StackPanel, not a TabControl). Prefer the TabControl when present.
+            var tabControl = dialog.GetVisualDescendants().OfType<TabControl>().FirstOrDefault();
+            var categorySelector = tabControl is null ? FindParityCategorySelector(dialog) : null;
+
+            for (var i = 0; i < tabNames.Length; i++)
+            {
+                var pngName = $"{surfaceId}.{tabNames[i]}.png";
+                if (tabControl is not null)
+                {
+                    if (i >= tabControl.ItemCount)
+                    {
+                        results.Add(new ParitySurfaceResult($"{surfaceId}.{tabNames[i]}", kind, pngName, Captured: false, $"Tab index {i} is out of range (dialog has {tabControl.ItemCount} tabs)."));
+                        continue;
+                    }
+                    tabControl.SelectedIndex = i;
+                }
+                else if (categorySelector is not null)
+                {
+                    categorySelector(i);
+                }
+                else
+                {
+                    results.Add(new ParitySurfaceResult($"{surfaceId}.{tabNames[i]}", kind, pngName, Captured: false, "No TabControl or category selector found in the dialog visual tree."));
+                    continue;
+                }
+
+                // Pump a layout pass so the newly-selected tab's pane is measured/arranged before render.
+                await Task.Delay(ParityCaptureDialogPollMilliseconds);
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+                try { dialog.UpdateLayout(); } catch { /* best-effort */ }
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                results.Add(RenderParityDialogTab(outputDirectory, dialog, $"{surfaceId}.{tabNames[i]}", pngName, kind));
+            }
+        }
+        finally
+        {
+            try { dialog.Close(); } catch { /* closing best-effort */ }
+            await AwaitOpenerQuietlyAsync(openerTask);
+        }
+
+        return results;
+    }
+
+    private static ParitySurfaceResult RenderParityDialogTab(
+        string outputDirectory, Window dialog, string surfaceId, string pngName, ParitySurfaceKind kind)
+    {
+        try
+        {
+            var width = (int)Math.Ceiling(dialog.Bounds.Width > 0 ? dialog.Bounds.Width : dialog.Width);
+            var height = (int)Math.Ceiling(dialog.Bounds.Height > 0 ? dialog.Bounds.Height : dialog.Height);
+            RenderVisualToPng(dialog, width, height, Path.Combine(outputDirectory, pngName));
+            return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: true, "");
+        }
+        catch (Exception ex)
+        {
+            return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Returns the Options-style category selector — an <c>Action&lt;int&gt;</c> stashed on the category list's
+    /// <c>Tag</c> by the Options dialog — so the capture can switch left-list categories that are not backed by
+    /// a <see cref="TabControl"/>. Returns <c>null</c> when no such selector is present.
+    /// </summary>
+    private static Action<int>? FindParityCategorySelector(Window dialog) =>
+        dialog.GetVisualDescendants()
+            .OfType<Control>()
+            .Select(control => control.Tag as Action<int>)
+            .FirstOrDefault(selector => selector is not null);
 
     private static Task RunParityModalOpenerAsync(Func<Task> opener)
     {
@@ -2074,16 +2298,22 @@ public sealed partial class MainWindow
     }
 
     private static Control CreateParityCapturedBackstageBackArrowGlyph() =>
+        // Render the arrow at the geometry's natural ~14px size (Stretch.None) instead of stretching it
+        // to fill an 18px box — the uniform stretch also scaled the 1.25 stroke up, making the Linux
+        // arrow read much larger/heavier than the thin ~16px back arrow on the Windows backstage rail
+        // (backstage.Account.win.png / backstage.Info.win.png). No stretch keeps the stroke crisp + thin.
         new global::Avalonia.Controls.Shapes.Path
         {
             Data = Geometry.Parse("M12,4 L5,11 L12,18 M6,11 L19,11"),
-            Width = 18,
-            Height = 18,
+            Width = 16,
+            Height = 16,
             Stroke = Brushes.White,
-            StrokeThickness = 1.25,
+            StrokeThickness = 1.1,
             StrokeLineCap = PenLineCap.Round,
             StrokeJoin = PenLineJoin.Round,
-            Stretch = Stretch.Uniform,
+            Stretch = Stretch.None,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
 
     private static Control CreateParityCapturedBackstageRailButton(RibbonCommandIconKind iconKind, string text, string commandName, bool isSelected)
@@ -2177,12 +2407,6 @@ public sealed partial class MainWindow
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         }, 40, 98);
         PlaceBackstage(canvas, CreateParityCapturedBlankWorkbookTile(), 44, 126);
-        PlaceBackstage(canvas, new TextBlock
-        {
-            Text = "More templates (Excluded) ->",
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(0, 96, 128)),
-        }, 692, 100);
 
         var recentHeader = new AvaloniaGrid
         {

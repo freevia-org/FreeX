@@ -178,7 +178,7 @@ public sealed partial class MainWindow
 
         var viewsGroup = new GroupBox
         {
-            Header = UiText.Get("CustomViews_ListLabel"),
+            Header = StripDisplayMnemonic(UiText.Get("CustomViews_ListLabel")),
             Content = listFrame,
         };
 

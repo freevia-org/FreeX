@@ -37,6 +37,7 @@ public sealed partial class MainWindow
 
     private static void ApplyOutlineCheckBoxChrome(CheckBox cb)
     {
+        StripContentMnemonic(cb);
         cb.MinHeight = 20;
         cb.MaxHeight = 20;
         cb.FontSize = 12;

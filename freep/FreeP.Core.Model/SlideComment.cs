@@ -1,0 +1,52 @@
+namespace FreeP.Core.Model;
+
+/// <summary>
+/// A single comment on a slide (legacy p:cm schema — ppt/comments/commentN.xml).
+///
+/// Comments are positioned in EMU from the slide's top-left corner (<see cref="Xemu"/>,
+/// <see cref="Yemu"/>), hold an <see cref="Author"/> display name and short
+/// <see cref="Initials"/>, and a plain-text <see cref="Text"/> body.
+///
+/// The <see cref="Idx"/> field is the comment index within a slide (1-based; used by
+/// the IO layer for round-trip identity — two comments on the same slide have different
+/// indices).  <see cref="AuthorId"/> is the numeric author id from commentAuthors.xml
+/// (automatically managed by the writer).
+/// </summary>
+public sealed class SlideComment
+{
+    // ── Author ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Numeric author id matching a cmAuthor entry. Assigned by the IO layer on write.</summary>
+    public int AuthorId { get; set; }
+
+    /// <summary>Author display name (p:cmAuthor name=).</summary>
+    public string Author { get; set; } = string.Empty;
+
+    /// <summary>Author initials (p:cmAuthor initials=). Usually 1-3 characters.</summary>
+    public string Initials { get; set; } = string.Empty;
+
+    // ── Content ───────────────────────────────────────────────────────────────────
+
+    /// <summary>Plain-text comment body (p:text inside p:cm).</summary>
+    public string Text { get; set; } = string.Empty;
+
+    /// <summary>Creation or modification timestamp. Null if not specified in the source.</summary>
+    public DateTime? DateTime { get; set; }
+
+    // ── Position ──────────────────────────────────────────────────────────────────
+
+    /// <summary>Horizontal position from the slide left edge, in EMU (p:pos x=).</summary>
+    public long Xemu { get; set; }
+
+    /// <summary>Vertical position from the slide top edge, in EMU (p:pos y=).</summary>
+    public long Yemu { get; set; }
+
+    // ── IO round-trip identity ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 1-based comment index within the slide (p:cm idx=).
+    /// Multiple comments on one slide have distinct indices.
+    /// Set by the reader; recalculated from list position on write.
+    /// </summary>
+    public int Idx { get; set; }
+}

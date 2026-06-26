@@ -1,6 +1,7 @@
 using System.Windows;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
+using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
@@ -29,11 +30,42 @@ internal static class FreePRibbonCommands
     /// <param name="onStartFromCurrent">
     ///   Callback that starts the slideshow from the current slide (wired to MainWindow.StartSlideShow(false)).
     /// </param>
+    /// <param name="onEditChartData">
+    ///   Callback that opens the chart data editing dialog for the currently selected chart.
+    ///   Provided by Wave 9B / MainWindow.  When null the button is a no-op.
+    /// </param>
+    /// <param name="getSlideCanvas">
+    ///   Wave 10A: a late-binding getter for the live SlideCanvas. Used to route
+    ///   Bold/Italic/Underline/Font to the active RichTextBox editor when it is open, instead
+    ///   of applying the command to the whole-shape TextBody. May be null (e.g. in tests);
+    ///   routing is silently skipped when the getter returns null or no editor is active.
+    /// </param>
+    /// <param name="onCustomSlideSize">
+    ///   Callback that opens the custom slide-size dialog (Wave 10B).
+    ///   Wired to <c>MainWindow.OpenSlideSizeDialog()</c>.  When null the button is a no-op.
+    /// </param>
+    /// <param name="osClipboard">
+    ///   Optional OS-clipboard service (Wave 10B). When provided, ribbon Copy/Cut also
+    ///   place content on the OS clipboard; ribbon Paste checks the OS clipboard first.
+    ///   When null the ribbon uses the internal clipboard only (original Wave 5B behaviour).
+    /// </param>
+    /// <param name="onInsertLink">
+    ///   Wave 11A: callback that opens the Insert Hyperlink dialog.
+    ///   Provided by MainWindow which builds and owns the dialog.
+    /// </param>
     public static RibbonCommandRegistry Build(
-        RibbonStateStore stateStore,
-        EditingSession   editor,
-        Action?          onStartFromStart   = null,
-        Action?          onStartFromCurrent = null)
+        RibbonStateStore    stateStore,
+        EditingSession      editor,
+        Action?             onStartFromStart   = null,
+        Action?             onStartFromCurrent = null,
+        Action?             onEditChartData    = null,
+        Func<SlideCanvas?>? getSlideCanvas     = null,
+        Action?             onCustomSlideSize  = null,
+        OsClipboardService? osClipboard        = null,
+        Action?             onInsertLink       = null,
+        // Wave 12B: Find & Replace dialog launchers.
+        Action?             onFind             = null,
+        Action?             onFindReplace      = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -92,24 +124,56 @@ internal static class FreePRibbonCommands
         }));
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
+        //
+        // Wave 10A routing: when the in-canvas RichTextBox editor is active, format commands
+        // apply to the RichTextBox selection; otherwise they fall through to the whole-shape
+        // EditingSession toggles.  The routing helper is defined at the bottom of this class.
+        //
+        // 10B NOTE: this block is the only region that references slideCanvas in this file.
+        // Keep it isolated here to minimise merge churn with 10B.
 
-        registry.Register("freep.bold",      new EditorToggleCommand(stateStore, "freep.bold",
-            () => editor.ToggleBoldOnSelection()));
-        registry.Register("freep.italic",    new EditorToggleCommand(stateStore, "freep.italic",
-            () => editor.ToggleItalicOnSelection()));
-        registry.Register("freep.underline", new EditorToggleCommand(stateStore, "freep.underline",
-            () => editor.ToggleUnderlineOnSelection()));
+        registry.Register("freep.bold", new EditorToggleCommand(stateStore, "freep.bold", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyBold(), e => e.ApplyBold())) return;
+            editor.ToggleBoldOnSelection();
+        }));
+        registry.Register("freep.italic", new EditorToggleCommand(stateStore, "freep.italic", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyItalic(), e => e.ApplyItalic())) return;
+            editor.ToggleItalicOnSelection();
+        }));
+        registry.Register("freep.underline", new EditorToggleCommand(stateStore, "freep.underline", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyUnderline(), e => e.ApplyUnderline())) return;
+            editor.ToggleUnderlineOnSelection();
+        }));
 
-        // ── Clipboard — Wave 5B ───────────────────────────────────────────────────
+        // ── Clipboard — Wave 5B / 10B ─────────────────────────────────────────────
+        // When osClipboard is provided (MainWindow injects it), Copy and Cut also push
+        // content to the OS clipboard (PNG image + plain text); Paste checks OS first.
 
         registry.Register("freep.copy",
-            new ActionCommand(() => editor.CopySelectedShapes()));
+            new ActionCommand(() =>
+            {
+                editor.CopySelectedShapes();
+                osClipboard?.PlaceSelectionOnOsClipboard(editor);
+            }));
 
         registry.Register("freep.cut",
-            new ActionCommand(() => editor.CutSelectedShapes()));
+            new ActionCommand(() =>
+            {
+                editor.CutSelectedShapes();
+                osClipboard?.PlaceSelectionOnOsClipboard(editor);
+            }));
 
         registry.Register("freep.paste",
-            new ActionCommand(() => editor.Paste()));
+            new ActionCommand(() =>
+            {
+                if (osClipboard is not null)
+                    osClipboard.Paste(editor, preferOsClipboard: true);
+                else
+                    editor.Paste();
+            }));
 
         // ── Format Painter — Wave 5B ─────────────────────────────────────────────
         // Single-click mode: copies formatting from the first selected shape, then immediately
@@ -126,16 +190,20 @@ internal static class FreePRibbonCommands
         // ── Layout — STUBBED (no layout model yet) ────────────────────────────────
         registry.Register("freep.layout", new ActionCommand(() => { /* STUB: layout picker deferred */ }));
 
-        // ── Font family — Wave 5B ─────────────────────────────────────────────────
-        // The shared ComboBox fires Execute on every selection change; the chosen item is
-        // provided via RibbonCommandContext.SelectedValue (a string). When the context value
-        // is absent (e.g. tests that call Execute(Empty)), the command is a no-op.
+        // ── Font family — Wave 5B / 10A ───────────────────────────────────────────
+        // When the in-canvas editor is active, apply to the RichTextBox selection;
+        // otherwise apply to the whole-shape selection.
         registry.Register("freep.font-family",
             new ContextAwareCommand(ctx =>
             {
                 var family = ctx.SelectedValue;
-                if (!string.IsNullOrEmpty(family))
-                    editor.SetFontFamilyOnSelection(family);
+                if (string.IsNullOrEmpty(family)) return;
+                if (RouteToActiveRichEditor(
+                        getSlideCanvas?.Invoke(),
+                        e => e.ApplyFont(family),
+                        e => e.ApplyFont(family)))
+                    return;
+                editor.SetFontFamilyOnSelection(family);
             }));
 
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
@@ -331,6 +399,83 @@ internal static class FreePRibbonCommands
         registry.Register("freep.slide-size-4x3",
             new ActionCommand(() => editor.SetSlideSize4x3()));
 
+        // ── Wave 10B: Design tab — Custom Slide Size dialog ───────────────────────
+        registry.Register("freep.slide-size-custom",
+            new ActionCommand(() => onCustomSlideSize?.Invoke()));
+
+        // ── Wave 9B: Chart data editing ───────────────────────────────────────────
+        // Enabled only when a chart shape is selected; otherwise silently a no-op.
+        registry.Register("freep.chart.edit-data",
+            new ActionCommand(() =>
+            {
+                // If caller supplied a dedicated open-dialog callback (e.g. MainWindow),
+                // use it; otherwise fall back to the no-op.
+                if (onEditChartData is not null)
+                    onEditChartData();
+            }));
+
+        // ── Wave 11A: Hyperlinks ──────────────────────────────────────────────────
+
+        // Insert/edit hyperlink — opens HyperlinkDialog (supplied by MainWindow).
+        registry.Register("freep.insert-link",
+            new ActionCommand(() => onInsertLink?.Invoke()));
+
+        // Remove hyperlink — clears the shape-level hyperlink on all selected shapes.
+        registry.Register("freep.remove-link",
+            new ActionCommand(() => editor.RemoveShapeHyperlink()));
+
+        // ── Wave 12A: Arrange — Group / Ungroup / Z-order / Align / Distribute ────
+
+        registry.Register("freep.arrange.group",
+            new ActionCommand(() => editor.GroupSelectedShapes()));
+
+        registry.Register("freep.arrange.ungroup",
+            new ActionCommand(() => editor.UngroupSelected()));
+
+        registry.Register("freep.arrange.bring-to-front",
+            new ActionCommand(() => editor.BringToFront()));
+
+        registry.Register("freep.arrange.bring-forward",
+            new ActionCommand(() => editor.BringForward()));
+
+        registry.Register("freep.arrange.send-backward",
+            new ActionCommand(() => editor.SendBackward()));
+
+        registry.Register("freep.arrange.send-to-back",
+            new ActionCommand(() => editor.SendToBack()));
+
+        registry.Register("freep.arrange.align-left",
+            new ActionCommand(() => editor.AlignLeft()));
+
+        registry.Register("freep.arrange.align-center-h",
+            new ActionCommand(() => editor.AlignCenterH()));
+
+        registry.Register("freep.arrange.align-right",
+            new ActionCommand(() => editor.AlignRight()));
+
+        registry.Register("freep.arrange.align-top",
+            new ActionCommand(() => editor.AlignTop()));
+
+        registry.Register("freep.arrange.align-middle",
+            new ActionCommand(() => editor.AlignMiddle()));
+
+        registry.Register("freep.arrange.align-bottom",
+            new ActionCommand(() => editor.AlignBottom()));
+
+        registry.Register("freep.arrange.distribute-h",
+            new ActionCommand(() => editor.DistributeHorizontally()));
+
+        registry.Register("freep.arrange.distribute-v",
+            new ActionCommand(() => editor.DistributeVertically()));
+
+        // ── Wave 12B: Find & Replace ──────────────────────────────────────────────
+
+        registry.Register("freep.find",
+            new ActionCommand(() => onFind?.Invoke()));
+
+        registry.Register("freep.replace",
+            new ActionCommand(() => onFindReplace?.Invoke()));
+
         return registry;
     }
 
@@ -416,6 +561,40 @@ internal static class FreePRibbonCommands
                 Trigger    = AnimationTrigger.OnClick,
                 DurationMs = 500,
             })));
+
+    // ── Wave 10A: active-editor routing ──────────────────────────────────────────
+    //
+    // This region is the ONLY place in this file that references SlideCanvas for 10A.
+    // 10B must not add slideCanvas references outside this region.
+
+    /// <summary>
+    /// Routes a format action to the active in-canvas RichTextBox editor (shape or table-cell),
+    /// if one is currently open.  Returns true if the action was routed (caller should skip the
+    /// whole-shape fallback); false if no editor is active.
+    /// </summary>
+    private static bool RouteToActiveRichEditor(
+        SlideCanvas?                     canvas,
+        Action<InCanvasTextEditor>       shapeAction,
+        Action<InCanvasTableCellEditor>  tableAction)
+    {
+        if (canvas is null) return false;
+
+        // Shape editor takes priority.
+        if (canvas.TextEditor?.IsActive == true)
+        {
+            shapeAction(canvas.TextEditor);
+            return true;
+        }
+
+        // Table cell editor.
+        if (canvas.TableCellEditor?.IsCellRichEditActive == true)
+        {
+            tableAction(canvas.TableCellEditor);
+            return true;
+        }
+
+        return false;
+    }
 
     /// <summary>Finds the last animation index targeting <paramref name="shapeId"/>; -1 if not found.</summary>
     private static int FindLastAnimationIndex(

@@ -43,6 +43,14 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     private string? _oldName;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private Dictionary<string, string>? _namedFormulaSnapshot;
+    // T6: string sheet-name refs on model objects
+    private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameSnapshot;
+    private List<(ChartModel Chart, string OldValue)>? _chartPivotSourceNameSnapshot;
+    private List<(SlicerModel Slicer, string OldValue)>? _slicerNameSnapshot;
+    private List<(PictureModel Picture, string OldValue)>? _pictureNameSnapshot;
+    // T7: CF/DV formula rewrites across ALL sheets for the rename
+    private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaRenameSnapshot;
+    private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaRenameSnapshot;
 
     public string Label => $"Rename Sheet to '{_newName}'";
 
@@ -70,6 +78,99 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         _namedFormulaSnapshot = [];
         RowColumnShiftHelpers.RewriteNamedFormulas(
             ctx.Workbook, new RenameSheetOp(_oldName, _newName), _namedFormulaSnapshot);
+
+        // T6: update string sheet-name refs on model objects
+        _pivotCacheNameSnapshot = [];
+        foreach (var cache in ctx.Workbook.PivotCaches)
+        {
+            if (cache.SourceSheetName is not null &&
+                string.Equals(cache.SourceSheetName, _oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                _pivotCacheNameSnapshot.Add((cache, cache.SourceSheetName));
+                cache.SourceSheetName = _newName;
+            }
+        }
+
+        _chartPivotSourceNameSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var chart in s.Charts)
+            {
+                if (chart.PivotSourceSheetName is not null &&
+                    string.Equals(chart.PivotSourceSheetName, _oldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _chartPivotSourceNameSnapshot.Add((chart, chart.PivotSourceSheetName));
+                    chart.PivotSourceSheetName = _newName;
+                }
+            }
+        }
+
+        _slicerNameSnapshot = [];
+        foreach (var slicer in ctx.Workbook.Slicers)
+        {
+            if (slicer.SourceSheetName is not null &&
+                string.Equals(slicer.SourceSheetName, _oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                _slicerNameSnapshot.Add((slicer, slicer.SourceSheetName));
+                slicer.SourceSheetName = _newName;
+            }
+        }
+
+        _pictureNameSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var pic in s.Pictures)
+            {
+                if (pic.LinkedSourceSheetName is not null &&
+                    string.Equals(pic.LinkedSourceSheetName, _oldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _pictureNameSnapshot.Add((pic, pic.LinkedSourceSheetName));
+                    pic.LinkedSourceSheetName = _newName;
+                }
+            }
+        }
+
+        // T7: rewrite CF FormulaText and DV Formula1/Formula2 across all sheets with RenameSheetOp
+        var renameOp = new RenameSheetOp(_oldName, _newName);
+        _cfFormulaRenameSnapshot = [];
+        _dvFormulaRenameSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var cf in s.ConditionalFormats)
+            {
+                if (cf.FormulaText is { } ft)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(ft, renameOp, s.Name);
+                    if (rewritten is not null && rewritten != ft)
+                    {
+                        _cfFormulaRenameSnapshot.Add((cf.Id, ft, s.Id));
+                        cf.FormulaText = rewritten;
+                    }
+                }
+            }
+            foreach (var dv in s.DataValidations)
+            {
+                if (dv.Formula1 is { } f1)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(f1, renameOp, s.Name);
+                    if (rewritten is not null && rewritten != f1)
+                    {
+                        _dvFormulaRenameSnapshot.Add((dv.Id, 1, f1, s.Id));
+                        dv.Formula1 = rewritten;
+                    }
+                }
+                if (dv.Formula2 is { } f2)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(f2, renameOp, s.Name);
+                    if (rewritten is not null && rewritten != f2)
+                    {
+                        _dvFormulaRenameSnapshot.Add((dv.Id, 2, f2, s.Id));
+                        dv.Formula2 = rewritten;
+                    }
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -77,10 +178,55 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     {
         if (_oldName is not null)
         {
-            var sheet = ctx.GetSheet(_sheetId);
-            sheet.Name = _oldName;
+            var s = ctx.GetSheet(_sheetId);
+            s.Name = _oldName;
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
             RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+
+            // T6 restore: string sheet-name refs
+            if (_pivotCacheNameSnapshot is not null)
+                foreach (var (cache, oldValue) in _pivotCacheNameSnapshot)
+                    cache.SourceSheetName = oldValue;
+
+            if (_chartPivotSourceNameSnapshot is not null)
+                foreach (var (chart, oldValue) in _chartPivotSourceNameSnapshot)
+                    chart.PivotSourceSheetName = oldValue;
+
+            if (_slicerNameSnapshot is not null)
+                foreach (var (slicer, oldValue) in _slicerNameSnapshot)
+                    slicer.SourceSheetName = oldValue;
+
+            if (_pictureNameSnapshot is not null)
+                foreach (var (pic, oldValue) in _pictureNameSnapshot)
+                    pic.LinkedSourceSheetName = oldValue;
+
+            // T7 restore: CF/DV formula text
+            if (_cfFormulaRenameSnapshot is not null)
+            {
+                foreach (var (ruleId, oldValue, sheetId) in _cfFormulaRenameSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    foreach (var cf in sh.ConditionalFormats)
+                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; break; }
+                }
+            }
+
+            if (_dvFormulaRenameSnapshot is not null)
+            {
+                foreach (var (ruleId, slot, oldValue, sheetId) in _dvFormulaRenameSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    foreach (var dv in sh.DataValidations)
+                    {
+                        if (dv.Id != ruleId) continue;
+                        if (slot == 1) dv.Formula1 = oldValue;
+                        else           dv.Formula2 = oldValue;
+                        break;
+                    }
+                }
+            }
         }
     }
 }
@@ -92,8 +238,13 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private Sheet? _removedSheet;
     private int _removedIndex;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private Dictionary<string, string>? _namedFormulaSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulaSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    // X3: CF/DV formula rewrites across surviving sheets for the deleted-sheet #REF! pass
+    private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaDeleteSnapshot;
+    private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -113,11 +264,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         for (int i = 0; i < sheets.Count; i++)
             if (sheets[i].Id == _sheetId) { _removedIndex = i; break; }
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         foreach (var (name, range) in ctx.Workbook.NamedRanges.ToList())
         {
             if (range.Start.Sheet == _sheetId)
                 ctx.Workbook.RemoveNamedRange(name);
         }
+        // Capture scoped named formulas BEFORE RemoveSheet purges them.
+        _scopedNamedFormulaSnapshot = ctx.Workbook.ScopedNamedFormulas
+            .ToDictionary(p => p.Key, p => p.Value);
         var deletedSheetName = sheet.Name;
         ctx.Workbook.RemoveSheet(_sheetId);
         _formulaSnapshot.Clear();
@@ -126,6 +281,49 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         // Defined names whose refers-to is a formula expression are not covered by the named-range
         // pass above; rewrite their sheet-qualified references to the deleted sheet to #REF! too.
         _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
+
+        // X3: rewrite CF FormulaText and DV Formula1/Formula2 on all surviving sheets
+        // that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand T7.
+        var deleteOp = new DeleteSheetOp(deletedSheetName);
+        _cfFormulaDeleteSnapshot = [];
+        _dvFormulaDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var cf in s.ConditionalFormats)
+            {
+                if (cf.FormulaText is { } ft)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(ft, deleteOp, s.Name);
+                    if (rewritten is not null && rewritten != ft)
+                    {
+                        _cfFormulaDeleteSnapshot.Add((cf.Id, ft, s.Id));
+                        cf.FormulaText = rewritten;
+                    }
+                }
+            }
+            foreach (var dv in s.DataValidations)
+            {
+                if (dv.Formula1 is { } f1)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(f1, deleteOp, s.Name);
+                    if (rewritten is not null && rewritten != f1)
+                    {
+                        _dvFormulaDeleteSnapshot.Add((dv.Id, 1, f1, s.Id));
+                        dv.Formula1 = rewritten;
+                    }
+                }
+                if (dv.Formula2 is { } f2)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(f2, deleteOp, s.Name);
+                    if (rewritten is not null && rewritten != f2)
+                    {
+                        _dvFormulaDeleteSnapshot.Add((dv.Id, 2, f2, s.Id));
+                        dv.Formula2 = rewritten;
+                    }
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -136,7 +334,36 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
             ctx.Workbook.InsertSheet(_removedIndex, _removedSheet);
             RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+            RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
             RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+            RestoreScopedNamedFormulas(ctx.Workbook, _scopedNamedFormulaSnapshot);
+
+            // X3 restore: CF/DV formula text rewritten to #REF! must be restored
+            if (_cfFormulaDeleteSnapshot is not null)
+            {
+                foreach (var (ruleId, oldValue, sheetId) in _cfFormulaDeleteSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    foreach (var cf in sh.ConditionalFormats)
+                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; break; }
+                }
+            }
+            if (_dvFormulaDeleteSnapshot is not null)
+            {
+                foreach (var (ruleId, slot, oldValue, sheetId) in _dvFormulaDeleteSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    foreach (var dv in sh.DataValidations)
+                    {
+                        if (dv.Id != ruleId) continue;
+                        if (slot == 1) dv.Formula1 = oldValue;
+                        else           dv.Formula2 = oldValue;
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -169,6 +396,17 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
 
         foreach (var (name, original) in snapshot)
             workbook.NamedFormulas[name] = original;
+    }
+
+    private static void RestoreScopedNamedFormulas(
+        Workbook workbook,
+        Dictionary<(string Name, SheetId Sheet), string>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        foreach (var ((name, sheetId), formulaText) in snapshot)
+            workbook.DefineNamedFormula(name, formulaText, sheetId);
     }
 }
 

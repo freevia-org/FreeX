@@ -82,6 +82,11 @@ public sealed class SlideShowWindow : Window
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _controller   = new SlideShowController(presentation.Slides, startIndex);
 
+        // Pre-compute slide DIP dimensions so HitTestHyperlink works even before the first
+        // DisplayCurrentSlide call (e.g. in unit tests that construct but don't show the window).
+        _slideDipW = presentation.SlideSizeCxEmu / 9525.0;
+        _slideDipH = presentation.SlideSizeCyEmu / 9525.0;
+
         // Window chrome
         WindowStyle  = WindowStyle.None;
         WindowState  = WindowState.Maximized;
@@ -136,10 +141,11 @@ public sealed class SlideShowWindow : Window
         _autoAdvanceTimer.Tick += (_, _) => DoAdvance();
 
         // ── Event wiring ───────────────────────────────────────────────────────
-        KeyDown     += OnKeyDown;
-        MouseLeftButtonDown += (_, _) => DoAdvance();
-        Loaded      += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
-        Closed      += (_, _) => Teardown();
+        KeyDown              += OnKeyDown;
+        MouseLeftButtonDown  += OnMouseLeftButtonDown;
+        MouseMove            += OnMouseMove;
+        Loaded               += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
+        Closed               += (_, _) => Teardown();
     }
 
     // ── Public API (callable by test code without showing the window) ─────────────
@@ -223,6 +229,217 @@ public sealed class SlideShowWindow : Window
     }
 
     // ── Navigation helpers ────────────────────────────────────────────────────────
+
+    private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var slide = _controller.CurrentSlide;
+
+        // Check if the click lands on a trigger shape first.
+        if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
+        {
+            var clickPt = e.GetPosition(_slideCanvas);
+            var triggerShapeId = HitTestTriggerShape(slide, clickPt.X, clickPt.Y);
+            if (triggerShapeId is not null)
+            {
+                PlayTriggerGroup(triggerShapeId.Value);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Check if the click lands on a hyperlinked shape.
+        if (slide is not null)
+        {
+            var clickPt = e.GetPosition(_slideCanvas);
+            var hlink = HitTestHyperlink(slide, clickPt.X, clickPt.Y);
+            if (hlink is not null)
+            {
+                ActivateHyperlink(hlink);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Not a trigger or hyperlink — regular advance.
+        DoAdvance();
+    }
+
+    private void OnMouseMove(object sender, MouseEventArgs e)
+    {
+        var slide = _controller.CurrentSlide;
+        if (slide is null) { Cursor = Cursors.Arrow; return; }
+        var pt = e.GetPosition(_slideCanvas);
+        var hlink = HitTestHyperlink(slide, pt.X, pt.Y);
+        Cursor = hlink is not null ? Cursors.Hand : Cursors.Arrow;
+    }
+
+    // ── Hyperlink hit-testing & activation ─────────────────────────────────────────
+
+    /// <summary>
+    /// Hit-tests the click point against shapes that carry a hyperlink.
+    /// Returns the first matching hyperlink, or null.
+    /// Run-precise hit-testing for run-level links is approximated to the containing shape (v1).
+    /// Recurses into group children (BB2 fix) so hyperlinks on grouped shapes are reachable.
+    /// </summary>
+    internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
+    {
+        double slideX = CanvasToSlideX(canvasX);
+        double slideY = CanvasToSlideY(canvasY);
+
+        return HitTestHyperlinkInShapes(slide.Shapes, slideX, slideY);
+    }
+
+    /// <summary>
+    /// Recursively searches <paramref name="shapes"/> (and their group children) for a shape
+    /// that contains (<paramref name="slideX"/>, <paramref name="slideY"/>) and carries a
+    /// hyperlink.  Group bounds are checked first so we only recurse when inside the group.
+    /// </summary>
+    private static Hyperlink? HitTestHyperlinkInShapes(
+        IReadOnlyList<SlideShape> shapes, double slideX, double slideY)
+    {
+        foreach (var shape in shapes)
+        {
+            if (!HitTestShape(shape, slideX, slideY)) continue;
+
+            // Shape-level hyperlink takes priority.
+            if (shape.Hyperlink is not null) return shape.Hyperlink;
+
+            // Recurse into group children — they share the same coordinate space as the
+            // parent slide (group children use absolute EMU offsets, not relative to the group),
+            // so no coordinate transform is needed; the same slideX/slideY is correct.
+            if (shape.Children.Count > 0)
+            {
+                var groupResult = HitTestHyperlinkInShapes(shape.Children, slideX, slideY);
+                if (groupResult is not null) return groupResult;
+            }
+
+            // Run-level: return the first hyperlink found in any run (shape-level approximation).
+            if (shape.TextBody is not null)
+            {
+                foreach (var para in shape.TextBody.Paragraphs)
+                    foreach (var run in para.Runs)
+                        if (run.Hyperlink is not null) return run.Hyperlink;
+            }
+        }
+        return null;
+    }
+
+    private static bool HitTestShape(SlideShape shape, double slideX, double slideY)
+    {
+        double sx  = shape.OffsetXEmu / 9525.0;
+        double sy  = shape.OffsetYEmu / 9525.0;
+        double scx = shape.ExtentCxEmu / 9525.0;
+        double scy = shape.ExtentCyEmu / 9525.0;
+        return slideX >= sx && slideX <= sx + scx && slideY >= sy && slideY <= sy + scy;
+    }
+
+    private double CanvasToSlideX(double canvasX)
+    {
+        double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
+        return canvasX * (_slideDipW / cw);
+    }
+
+    private double CanvasToSlideY(double canvasY)
+    {
+        double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
+        return canvasY * (_slideDipH / ch);
+    }
+
+    /// <summary>
+    /// Activates a hyperlink: external → open URL in browser (http/https/mailto only);
+    /// internal → navigate the controller to the target slide.
+    /// </summary>
+    internal void ActivateHyperlink(Hyperlink hlink)
+    {
+        if (hlink.IsExternal)
+        {
+            OpenExternalUrl(hlink.Url!);
+        }
+        else if (hlink.TargetSlideId is not null)
+        {
+            var targetIdx = _presentation.Slides
+                .FindIndex(s => s.Id == hlink.TargetSlideId);
+            if (targetIdx >= 0)
+            {
+                _autoAdvanceTimer.Stop();
+                _controller.GoToSlide(targetIdx);
+                DisplayCurrentSlide(animated: false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens an external URL in the default browser.
+    /// Only http, https, and mailto schemes are allowed; all others are silently ignored.
+    /// </summary>
+    internal static void OpenExternalUrl(string url)
+    {
+        try
+        {
+            var uri = new Uri(url, UriKind.Absolute);
+            if (uri.Scheme is not ("http" or "https" or "mailto"))
+                return; // security guard: reject file:// and other schemes
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            // Swallow — never crash the slideshow over a bad URL.
+        }
+    }
+
+    /// <summary>
+    /// Hit-tests the click point (in slide-canvas DIP coords) against trigger shapes on the slide.
+    /// Returns the TriggerShapeId if a trigger shape was hit, null otherwise.
+    /// </summary>
+    private uint? HitTestTriggerShape(Slide slide, double canvasX, double canvasY)
+    {
+        // Convert canvas DIP coords to slide DIP coords.
+        // The canvas renders the slide at the canonical slide size (_slideDipW x _slideDipH)
+        // scaled to fit _slideCanvas.ActualWidth x _slideCanvas.ActualHeight.
+        double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
+        double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
+        double scaleX = _slideDipW / cw;
+        double scaleY = _slideDipH / ch;
+        double slideX = canvasX * scaleX;
+        double slideY = canvasY * scaleY;
+
+        // Get all unique trigger shape ids.
+        var triggerShapeIds = slide.Animations
+            .Where(a => a.TriggerShapeId is not null)
+            .Select(a => a.TriggerShapeId!.Value)
+            .Distinct();
+
+        foreach (var spid in triggerShapeIds)
+        {
+            var shape = slide.Shapes.FirstOrDefault(s => s.Id == spid);
+            if (shape is null) continue;
+
+            double shapeX  = shape.OffsetXEmu / 9525.0;
+            double shapeY  = shape.OffsetYEmu / 9525.0;
+            double shapeCx = shape.ExtentCxEmu / 9525.0;
+            double shapeCy = shape.ExtentCyEmu / 9525.0;
+
+            if (slideX >= shapeX && slideX <= shapeX + shapeCx &&
+                slideY >= shapeY && slideY <= shapeY + shapeCy)
+                return spid;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Advances the interactive sequence for <paramref name="triggerShapeId"/> by ONE step,
+    /// mirroring how the main sequence advances one click-step at a time.
+    /// Subsequent clicks on the same trigger shape advance further through its step list.
+    /// </summary>
+    private void PlayTriggerGroup(uint triggerShapeId)
+    {
+        var step = _controller.AdvanceTrigger(triggerShapeId);
+        if (step is not null)
+            PlayAnimationStep(step);
+    }
 
     private void DoAdvance()
     {
@@ -453,8 +670,12 @@ public sealed class SlideShowWindow : Window
         _animElements.Clear();
         _revealedShapes.Clear();
 
+        // Only hide shapes whose ONLY animations are non-trigger (main-sequence) entrances/motions.
+        // A shape whose sole animation is an interactive trigger should be visible at slide entry;
+        // the trigger animation plays on the already-visible shape when the user clicks the trigger.
         _entranceShapeIds = slide.Animations
-            .Where(a => a.Kind == AnimationKind.Entrance)
+            .Where(a => (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
+                        && a.TriggerShapeId == null)
             .Select(a => a.ShapeId)
             .Distinct()
             .ToList();
@@ -560,6 +781,15 @@ public sealed class SlideShowWindow : Window
         int delayMs    = Math.Max(0,  anim.DelayMs);
 
         var sb = new Storyboard();
+
+        // Motion-path animation takes priority over preset.
+        if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
+        {
+            MotionPathEffect(sb, element, anim.Motion, durationMs, delayMs);
+            _pendingStoryboards.Add(sb);
+            sb.Begin(element, isControllable: true);
+            return;
+        }
 
         switch (anim.Preset)
         {
@@ -816,6 +1046,55 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTargetProperty(anim,
             new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
         sb.Children.Add(anim);
+    }
+
+    /// <summary>
+    /// Motion-path animation: translates the shape along the normalized path in DIP space.
+    /// The path coords (0..1 relative to shape center) are scaled to actual slide DIP dimensions.
+    /// We sample the path using DoubleAnimationUsingKeyFrames at 20 discrete frames.
+    /// The element must be visible (Opacity=1) from the start.
+    /// </summary>
+    private void MotionPathEffect(Storyboard sb, FrameworkElement element,
+        MotionPath path, int durationMs, int delayMs)
+    {
+        double slideW = _slideDipW > 0 ? _slideDipW : 960;
+        double slideH = _slideDipH > 0 ? _slideDipH : 540;
+
+        // Ensure visible
+        element.Opacity = 1;
+
+        var translate = new TranslateTransform(0, 0);
+        element.RenderTransform = translate;
+
+        var dur      = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var delay    = TimeSpan.FromMilliseconds(delayMs);
+        const int frames = 30;
+
+        var animX = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
+        var animY = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
+
+        for (int f = 0; f <= frames; f++)
+        {
+            double t = f / (double)frames;
+            var (dx, dy) = MotionPathEvaluator.Sample(path, t);
+
+            double dxDip = dx * slideW;
+            double dyDip = dy * slideH;
+
+            var keyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(durationMs * t));
+            animX.KeyFrames.Add(new LinearDoubleKeyFrame(dxDip, keyTime));
+            animY.KeyFrames.Add(new LinearDoubleKeyFrame(dyDip, keyTime));
+        }
+
+        Storyboard.SetTarget(animX, element);
+        Storyboard.SetTarget(animY, element);
+        Storyboard.SetTargetProperty(animX,
+            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
+        Storyboard.SetTargetProperty(animY,
+            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
+
+        sb.Children.Add(animX);
+        sb.Children.Add(animY);
     }
 
     /// <summary>

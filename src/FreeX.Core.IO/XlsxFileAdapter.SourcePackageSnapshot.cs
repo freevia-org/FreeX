@@ -5628,7 +5628,10 @@ public sealed partial class XlsxFileAdapter
                             OriginalSourceStyleIndex: originalSourceStyleIndex,
                             NewSourceStyleIndex: insertedSourceStyleIndex,
                             OriginalIgnoreFormulaError: false,
-                            ConsumesSourceStyleOnlyCell: consumesSourceStyleOnlyCell));
+                            ConsumesSourceStyleOnlyCell: consumesSourceStyleOnlyCell,
+                            RichRuns: cell.Value is TextValue
+                                ? sheet.RichTextRuns.GetValueOrDefault(new CellAddress(baseline.SheetId, row, col))
+                                : null));
                         if (changes.Count > changeLimit)
                             return Fail("change_limit_cells", out blockReason);
 
@@ -5719,7 +5722,10 @@ public sealed partial class XlsxFileAdapter
                         cell.StyleId,
                         original.SourceStyleIndex,
                         newSourceStyleIndex,
-                        original.IgnoreFormulaError));
+                        original.IgnoreFormulaError,
+                        RichRuns: patchKind == XlsxCellValuePatchKind.LiteralValue && cell.Value is TextValue
+                            ? sheet.RichTextRuns.GetValueOrDefault(new CellAddress(baseline.SheetId, row, col))
+                            : null));
                     if (changes.Count > changeLimit)
                         return Fail("change_limit_cells", out blockReason);
                 }
@@ -5933,7 +5939,7 @@ public sealed partial class XlsxFileAdapter
         {
             if (change.Kind == XlsxCellValuePatchKind.LiteralValue)
             {
-                RewriteLiteralCellValue(cell, worksheetNs, change.NewValue);
+                RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns);
             }
             else if (change.Kind == XlsxCellValuePatchKind.FormulaCachedValue)
             {
@@ -6039,7 +6045,8 @@ public sealed partial class XlsxFileAdapter
                             change.Row,
                             change.Col,
                             change.NewValue,
-                            change.NewSourceStyleIndex))
+                            change.NewSourceStyleIndex,
+                            change.RichRuns))
                         {
                             return false;
                         }
@@ -6048,7 +6055,7 @@ public sealed partial class XlsxFileAdapter
                     }
 
                     if (!change.ConsumesSourceStyleOnlyCell ||
-                        !RewriteStyleOnlyCellAsLiteral(cell, worksheetNs, change.NewValue, change.NewSourceStyleIndex))
+                        !RewriteStyleOnlyCellAsLiteral(cell, worksheetNs, change.NewValue, change.NewSourceStyleIndex, change.RichRuns))
                     {
                         return false;
                     }
@@ -6085,7 +6092,7 @@ public sealed partial class XlsxFileAdapter
                 }
                 else
                 {
-                    RewriteLiteralCellValue(cell, worksheetNs, change.NewValue);
+                    RewriteLiteralCellValue(cell, worksheetNs, change.NewValue, change.RichRuns);
                 }
 
                 if (change.HasStyleChange)
@@ -7563,7 +7570,11 @@ public sealed partial class XlsxFileAdapter
         private static bool CellReferenceMatches(XElement cell, string reference) =>
             string.Equals(cell.Attribute("r")?.Value, reference, StringComparison.OrdinalIgnoreCase);
 
-        private static void RewriteLiteralCellValue(XElement cell, XNamespace worksheetNs, ScalarValue value)
+        private static void RewriteLiteralCellValue(
+            XElement cell,
+            XNamespace worksheetNs,
+            ScalarValue value,
+            IReadOnlyList<CellTextRun>? richRuns = null)
         {
             cell.Element(worksheetNs + "f")?.Remove();
             cell.Element(worksheetNs + "v")?.Remove();
@@ -7576,9 +7587,11 @@ public sealed partial class XlsxFileAdapter
                     break;
                 case TextValue text:
                     cell.SetAttributeValue("t", "inlineStr");
-                    AddCellValueElement(cell, worksheetNs, new XElement(
-                        worksheetNs + "is",
-                        CreateInlineTextElement(worksheetNs, text.Value)));
+                    AddCellValueElement(cell, worksheetNs, richRuns is { Count: > 0 }
+                        ? CreateRichInlineStringElement(worksheetNs, richRuns)
+                        : new XElement(
+                            worksheetNs + "is",
+                            CreateInlineTextElement(worksheetNs, text.Value)));
                     break;
                 case BoolValue boolean:
                     cell.SetAttributeValue("t", "b");
@@ -7675,7 +7688,8 @@ public sealed partial class XlsxFileAdapter
             uint row,
             uint col,
             ScalarValue value,
-            string? sourceStyleIndex)
+            string? sourceStyleIndex,
+            IReadOnlyList<CellTextRun>? richRuns = null)
         {
             var rowElement = FindOrCreateRow(sheetData, worksheetNs, row);
             if (rowElement is null)
@@ -7683,7 +7697,7 @@ public sealed partial class XlsxFileAdapter
 
             var cellElement = new XElement(worksheetNs + "c", new XAttribute("r", ToReference(row, col)));
             ApplyCellStyle(cellElement, sourceStyleIndex);
-            RewriteLiteralCellValue(cellElement, worksheetNs, value);
+            RewriteLiteralCellValue(cellElement, worksheetNs, value, richRuns);
             InsertCellInColumnOrder(rowElement, worksheetNs, cellElement, col);
             return true;
         }
@@ -7692,13 +7706,14 @@ public sealed partial class XlsxFileAdapter
             XElement cell,
             XNamespace worksheetNs,
             ScalarValue value,
-            string? sourceStyleIndex)
+            string? sourceStyleIndex,
+            IReadOnlyList<CellTextRun>? richRuns = null)
         {
             if (cell.Elements().Any(child => child.Name != worksheetNs + "extLst"))
                 return false;
 
             ApplyCellStyle(cell, sourceStyleIndex);
-            RewriteLiteralCellValue(cell, worksheetNs, value);
+            RewriteLiteralCellValue(cell, worksheetNs, value, richRuns);
             return true;
         }
 
@@ -7852,6 +7867,15 @@ public sealed partial class XlsxFileAdapter
 
             return text;
         }
+
+        /// <summary>
+        /// Builds an OOXML <c>&lt;is&gt;</c> element with one <c>&lt;r&gt;</c> child per rich-text run.
+        /// Null properties on a run mean "inherit from cell style"; they are omitted from <c>&lt;rPr&gt;</c>.
+        /// </summary>
+        private static XElement CreateRichInlineStringElement(
+            XNamespace worksheetNs,
+            IReadOnlyList<CellTextRun> runs)
+            => XlsxRichRunWriter.CreateRichInlineStringElement(worksheetNs, runs);
 
         private static string ToReference(uint row, uint col)
         {
@@ -9709,7 +9733,8 @@ public sealed partial class XlsxFileAdapter
         string? OriginalSourceStyleIndex,
         string? NewSourceStyleIndex,
         bool OriginalIgnoreFormulaError,
-        bool ConsumesSourceStyleOnlyCell = false)
+        bool ConsumesSourceStyleOnlyCell = false,
+        IReadOnlyList<CellTextRun>? RichRuns = null)
     {
         public bool HasStyleChange => OriginalStyleId != NewStyleId;
     }

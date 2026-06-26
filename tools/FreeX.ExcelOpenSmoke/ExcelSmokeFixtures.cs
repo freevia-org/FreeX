@@ -166,6 +166,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_richtext_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeRichTextCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -4799,6 +4805,7 @@ internal static class ExcelSmokeFixtures
     private const int MsoShapeExplosion1             = 89;
     private const int MsoShapeRectangularCallout     = 61;
     private const int MsoShapeOvalCallout            = 107;
+    private const int MsoShapeCan                    = 46;    // msoShapeCan (Office MsoAutoShapeType) — database/storage cylinder
 
     // MsoLineDashStyle
     private const int MsoLineSolid               = 1;
@@ -4823,6 +4830,7 @@ internal static class ExcelSmokeFixtures
             Path.Combine(outputDirectory, "Excel_native_shapes_line_conn_007.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_shapes_picture_008.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_shapes_wordart_009.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_cylinder_conn_010.xlsx"),
         ];
     }
 
@@ -4847,6 +4855,8 @@ internal static class ExcelSmokeFixtures
             GenerateShapesFixture_Picture(workbooks, outputPath);
         else if (fileName.Contains("wordart_009", StringComparison.OrdinalIgnoreCase))
             GenerateShapesFixture_WordArt(workbooks, outputPath);
+        else if (fileName.Contains("cylinder_conn_010", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_CylinderConn(workbooks, outputPath);
         else
             throw new ArgumentException($"Unknown shapes corpus fixture: {fileName}");
     }
@@ -5914,6 +5924,94 @@ internal static class ExcelSmokeFixtures
     }
 
     // =========================================================================
+    // case 010 — Cylinder ("can") + curved connector
+    // =========================================================================
+    private static void GenerateShapesFixture_CylinderConn(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? shape     = null;
+        object? conn      = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "CylinderConn", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Cylinder + Curved Connector");
+
+            object? shapes = null;
+            try
+            {
+                shapes = ((dynamic)worksheet).Shapes;
+
+                // Cylinder (orange) — msoShapeCan = 46
+                try
+                {
+                    shape = ((dynamic)shapes).AddShape(MsoShapeCan, 10f, 36f, 100f, 120f);
+                    ((dynamic)shape).Name = "Cylinder";
+                    SetShapeSolidFill(shape, 0xED, 0x7D, 0x31);   // orange fill
+                    SetShapeOutline(shape, 0xC5, 0x5A, 0x11);      // dark orange outline
+                    ReleaseComObject(shape); shape = null;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: AddShape(msoShapeCan) failed: {ex.Message}. Generating placeholder.");
+                    try
+                    {
+                        shape = ((dynamic)shapes).AddShape(MsoShapeOval, 10f, 36f, 100f, 120f);
+                        ((dynamic)shape).Name = "CylinderPlaceholder";
+                        SetShapeSolidFill(shape, 0xED, 0x7D, 0x31);
+                        ReleaseComObject(shape); shape = null;
+                    }
+                    catch (Exception ex2)
+                    {
+                        Console.Error.WriteLine($"  COM note: placeholder also failed: {ex2.Message}");
+                    }
+                }
+
+                // Curved connector — msoConnectorCurve = 3
+                try
+                {
+                    conn = ((dynamic)shapes).AddConnector(3 /*msoConnectorCurve*/, 150f, 36f, 350f, 160f);
+                    ((dynamic)conn).Name = "CurvedConnector";
+                    {
+                        object? ln = null;
+                        try
+                        {
+                            ln = ((dynamic)conn).Line;
+                            ((dynamic)ln).ForeColor.RGB = ToOleColor(0x70, 0xAD, 0x47);  // green
+                            ((dynamic)ln).Weight = 2.5f;
+                            try { ((dynamic)ln).EndArrowheadStyle = 2; /* msoArrowheadOpen */ } catch { }
+                        }
+                        finally { ReleaseComObject(ln); }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: AddConnector(msoConnectorCurve) failed: {ex.Message}");
+                }
+            }
+            finally
+            {
+                ReleaseComObject(conn);
+                ReleaseComObject(shape);
+                ReleaseComObject(shapes);
+            }
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
     // View-feature baseline corpus fixtures
     // (hyperlinks_001, formcontrols_002, grouping_003)
     // =========================================================================
@@ -6229,6 +6327,116 @@ internal static class ExcelSmokeFixtures
         {
             ReleaseComObject(rowRange);
             ReleaseComObject(colRange);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // Rich-text cell corpus fixtures
+    // =========================================================================
+
+    /// <summary>Returns output paths for all rich-text cell corpus fixtures.</summary>
+    public static IReadOnlyList<string> GetExcelRichTextCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_richtext_mixed_001.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for rich-text cell corpus fixtures.</summary>
+    private static void GenerateExcelNativeRichTextCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("richtext_mixed_001", StringComparison.OrdinalIgnoreCase))
+            GenerateRichTextFixture_Mixed(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown rich-text corpus fixture: {fileName}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 001 — one workbook, four cells covering subscript, superscript,
+    //            bold+color, and mixed font sizes
+    // -------------------------------------------------------------------------
+    private static void GenerateRichTextFixture_Mixed(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? cell      = null;
+        object? chars     = null;
+        object? font      = null;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+
+            workbook  = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            ((dynamic)worksheet).Name = "RichText";
+
+            // --- A1: H₂O  (subscript "2") ---
+            cell = ((dynamic)worksheet).Cells[1, 1];
+            ((dynamic)cell).Value2 = "H2O";
+            chars = ((dynamic)cell).Characters(2, 1);   // "2" (1-based, length 1)
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Subscript = true;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+            ReleaseComObject(cell);  cell  = null;
+
+            // --- A2: X² (superscript "2") ---
+            cell  = ((dynamic)worksheet).Cells[2, 1];
+            ((dynamic)cell).Value2 = "X2";
+            chars = ((dynamic)cell).Characters(2, 1);   // "2"
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Superscript = true;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+            ReleaseComObject(cell);  cell  = null;
+
+            // --- A3: "Hello" bold  +  " World" red ---
+            cell  = ((dynamic)worksheet).Cells[3, 1];
+            ((dynamic)cell).Value2 = "Hello World";
+            chars = ((dynamic)cell).Characters(1, 5);   // "Hello"
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Bold = true;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+
+            chars = ((dynamic)cell).Characters(7, 5);   // "World" (offset 7 = space + "World"[0])
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Color = ToOleColor(255, 0, 0);  // red
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+            ReleaseComObject(cell);  cell  = null;
+
+            // --- A4: "Big" size 18  +  "Small" size 8 ---
+            cell  = ((dynamic)worksheet).Cells[4, 1];
+            ((dynamic)cell).Value2 = "BigSmall";
+            chars = ((dynamic)cell).Characters(1, 3);   // "Big"
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Size = 18;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+
+            chars = ((dynamic)cell).Characters(4, 5);   // "Small"
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Size = 8;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+            ReleaseComObject(cell);  cell  = null;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(font);
+            ReleaseComObject(chars);
+            ReleaseComObject(cell);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);

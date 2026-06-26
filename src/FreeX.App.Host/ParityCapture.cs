@@ -246,6 +246,11 @@ internal static class ParityCapture
             SetBackstageContent(window, replacementContent);
         if (!string.IsNullOrWhiteSpace(focusEntryId))
             FocusBackstageEntry(window, focusEntryId);
+        // The start-screen Home view carries a "More templates (Excluded)" rail link that points at an
+        // unavailable online-template service; it is excluded from the product, so collapse it for the
+        // parity capture so the Home/Export surface matches the Linux backstage (which omits it). The
+        // live control stays in the XAML — this only affects the offscreen capture pass.
+        HideBackstageMoreTemplatesLink(window);
         window.UpdateLayout();
         PumpDispatcher();
 
@@ -257,6 +262,37 @@ internal static class ParityCapture
         }
 
         return RenderElement(window, SurfaceWidth, SurfaceHeight);
+    }
+
+    private static void HideBackstageMoreTemplatesLink(MainWindow window)
+    {
+        if (window.FindName("StartScreenOverlay") is not DependencyObject overlay)
+            return;
+
+        foreach (var button in FindVisualChildren<Button>(overlay))
+        {
+            if (string.Equals(
+                    AutomationProperties.GetAutomationId(button),
+                    "MoreTemplatesExcludedButton",
+                    StringComparison.Ordinal))
+            {
+                button.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
     }
 
     private static void SetBackstageContent(MainWindow window, UIElement content)
@@ -399,15 +435,17 @@ internal static class ParityCapture
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 5, 5));
 
-        CaptureDialog(results, "dialog.FormatCells", outDir, () =>
-            new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Number));
+        CaptureDialogTabs(results, "dialog.FormatCells", outDir,
+            () => new FormatCellsDialog(CellStyle.Default, FormatCellsDialogTab.Number),
+            ["Number", "Alignment", "Font", "Fill", "Border", "Protection"]);
 
-        CaptureDialog(results, "dialog.FindReplace", outDir, () =>
-            new FindReplaceDialog(
+        CaptureDialogTabs(results, "dialog.FindReplace", outDir,
+            () => new FindReplaceDialog(
                 getWorkbook: () => workbook,
                 commandBus: new CommandBus(_ => new WorkbookCommandContext(workbook)),
                 navigateTo: _ => { },
-                replaceMode: false));
+                replaceMode: false),
+            ["Find", "Replace"]);
 
         CaptureDialog(results, "dialog.GoTo", outDir, () =>
             new GoToDialog(sheet.Id));
@@ -546,17 +584,20 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.SelectionPane", outDir, () =>
             new SelectionPaneDialog(CreateSelectionPaneItems()));
 
-        CaptureDialog(results, "dialog.PivotTableOptions", outDir, () =>
+        CaptureDialogTabs(results, "dialog.PivotTableOptions", outDir, () =>
         {
             var (pivot, cache, _) = CreatePivotModels(sheet.Id);
             return new PivotTableOptionsDialog(pivot, cache);
-        });
+        },
+            ["LayoutAndFormat", "TotalsAndFilters", "Display", "Printing", "Data", "AltText"]);
 
-        CaptureDialog(results, "dialog.PivotFieldFilter", outDir, () =>
-            new PivotFieldFilterDialog(["North", "South", "East", "West"], selectedItems: ["North", "South"]));
+        CaptureDialogTabs(results, "dialog.PivotFieldFilter", outDir,
+            () => new PivotFieldFilterDialog(["North", "South", "East", "West"], selectedItems: ["North", "South"]),
+            ["SelectItems", "LabelFilters", "ValueFilters"]);
 
-        CaptureDialog(results, "dialog.PivotValueFieldSettings", outDir, () =>
-            new PivotValueFieldSettingsDialog(new PivotDataFieldModel(4, "Sum of Revenue", "sum"), CreatePivotHeaders()));
+        CaptureDialogTabs(results, "dialog.PivotValueFieldSettings", outDir,
+            () => new PivotValueFieldSettingsDialog(new PivotDataFieldModel(4, "Sum of Revenue", "sum"), CreatePivotHeaders()),
+            ["SummarizeValuesBy", "ShowValuesAs", "NumberFormat"]);
 
         CaptureDialog(results, "dialog.InsertSlicer", outDir, () =>
             new InsertSlicerDialog(CreatePivotHeaders(), selectedField: "Region"));
@@ -583,13 +624,25 @@ internal static class ParityCapture
             new NewConditionalFormatRuleDialog("Greater Than", range));
 
         CaptureDialog(results, "dialog.ConditionalFormatManage", outDir, () =>
-            new ManageConditionalFormatsDialog(sheet, range));
+        {
+            // Seed a few example rules over the dialog's range so its rules list shows rows (mirrors the
+            // Avalonia parity wrapper, which seeds DataBar / ColorScale / Greater-Than rules).
+            SeedConditionalFormatRules(sheet, range);
+            return new ManageConditionalFormatsDialog(sheet, range);
+        });
 
+        // PageSetup is a single default surface (not per-tab): the WPF dialog has 3 tabs
+        // (Page/Margins/Sheet) while Avalonia has 4 (adds Header/Footer), so per-tab index pairing
+        // would mismatch. Captured whole instead.
         CaptureDialog(results, "dialog.PageSetup", outDir, () =>
             new PageSetupDialog(sheet));
 
-        CaptureDialog(results, "dialog.Options", outDir, () =>
-            new OptionsDialog(FreeXOptions.Load()));
+        CaptureDialogTabs(results, "dialog.Options", outDir,
+            () => new OptionsDialog(FreeXOptions.Load()),
+            [
+                "General", "Formulas", "Proofing", "Save", "Language", "EaseOfAccess",
+                "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View",
+            ]);
     }
 
     private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
@@ -906,6 +959,37 @@ internal static class ParityCapture
             "Charts should include descriptive alternative text."),
     ];
 
+    /// <summary>
+    /// Seeds three example conditional-format rules (DataBar, three-color ColorScale, Greater-Than) over
+    /// <paramref name="range"/> so the Manage Conditional Formats dialog lists rows. Idempotent: clears any
+    /// existing rules first so a re-run keeps the same three.
+    /// </summary>
+    private static void SeedConditionalFormatRules(Sheet sheet, GridRange range)
+    {
+        sheet.ConditionalFormats.Clear();
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 1,
+            RuleType = CfRuleType.DataBar,
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 2,
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 3,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "100",
+        });
+    }
+
     private static void CaptureDialog(
         List<SurfaceResult> results, string surfaceId, string outDir, Func<Window> factory)
     {
@@ -937,6 +1021,91 @@ internal static class ParityCapture
                 PumpDispatcher();
             }
         });
+    }
+
+    /// <summary>
+    /// Multi-tab variant of <see cref="CaptureDialog"/>: opens the dialog once, renders its default surface
+    /// (<c>&lt;surfaceId&gt;.png</c>), then for each tab index drives the dialog's tab/category selector
+    /// (the first <see cref="TabControl"/>, else the first category <see cref="ListBox"/> — Options uses a
+    /// left-rail ListBox rather than a TabControl) to that index and renders <c>&lt;surfaceId&gt;.&lt;tabName&gt;.png</c>.
+    /// Mirrors the Avalonia <c>CaptureModalTabsAsync</c> so the comparison runner pairs the per-tab surfaces.
+    /// </summary>
+    private static void CaptureDialogTabs(
+        List<SurfaceResult> results, string surfaceId, string outDir, Func<Window> factory, string[] tabNames)
+    {
+        Window? dialog = null;
+        try
+        {
+            dialog = factory();
+            dialog.WindowStartupLocation = WindowStartupLocation.Manual;
+            dialog.ShowInTaskbar = false;
+            dialog.ShowActivated = false;
+            dialog.Left = -10000;
+            dialog.Top = -10000;
+            dialog.Show();
+            PumpDispatcher();
+            dialog.UpdateLayout();
+            PumpDispatcher();
+
+            var liveDialog = dialog;
+
+            // Default surface (whatever tab the dialog opened on).
+            CaptureSurface(results, surfaceId, "dialog", outDir, () => RenderDialog(liveDialog));
+
+            // The first TabControl drives most dialogs; the Options dialog instead switches its content via a
+            // left-rail ListBox (TabList), so fall back to the first ListBox when no TabControl is present.
+            var tabControl = FindVisualChildren<TabControl>(liveDialog).FirstOrDefault();
+            var categoryList = tabControl is null ? FindVisualChildren<ListBox>(liveDialog).FirstOrDefault() : null;
+
+            for (var i = 0; i < tabNames.Length; i++)
+            {
+                var tabSurfaceId = $"{surfaceId}.{tabNames[i]}";
+                var index = i;
+                CaptureSurface(results, tabSurfaceId, "dialog", outDir, () =>
+                {
+                    if (tabControl is not null)
+                    {
+                        if (index >= tabControl.Items.Count)
+                            throw new InvalidOperationException($"Tab index {index} is out of range (dialog has {tabControl.Items.Count} tabs).");
+                        tabControl.SelectedIndex = index;
+                    }
+                    else if (categoryList is not null)
+                    {
+                        if (index >= categoryList.Items.Count)
+                            throw new InvalidOperationException($"Category index {index} is out of range (dialog has {categoryList.Items.Count} categories).");
+                        categoryList.SelectedIndex = index;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("No TabControl or category ListBox found in the dialog visual tree.");
+                    }
+
+                    liveDialog.UpdateLayout();
+                    PumpDispatcher();
+                    return RenderDialog(liveDialog);
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            AddMissing(results, surfaceId, "dialog", Flatten(ex));
+            foreach (var tabName in tabNames)
+                AddMissing(results, $"{surfaceId}.{tabName}", "dialog", Flatten(ex));
+        }
+        finally
+        {
+            try { dialog?.Close(); } catch { /* best-effort teardown */ }
+            PumpDispatcher();
+        }
+    }
+
+    private static BitmapSource RenderDialog(Window dialog)
+    {
+        var width = dialog.ActualWidth > 0 ? dialog.ActualWidth : dialog.Width;
+        var height = dialog.ActualHeight > 0 ? dialog.ActualHeight : dialog.Height;
+        if (double.IsNaN(width) || width <= 0) width = 480;
+        if (double.IsNaN(height) || height <= 0) height = 360;
+        return RenderElement(dialog, width, height);
     }
 
     // ----- Rendering primitives -----

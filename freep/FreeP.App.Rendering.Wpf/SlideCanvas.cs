@@ -9,6 +9,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Rendering.Wpf;
 
+
 /// <summary>
 /// A WPF panel that renders a single <see cref="Slide"/> using the framework-free
 /// <see cref="SlideCompositor"/> to produce draw operations and converts them to WPF primitives.
@@ -57,11 +58,12 @@ public sealed class SlideCanvas : FrameworkElement
     private static void OnModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((SlideCanvas)d).Refresh();
 
-    // ── Editing (Wave 3C) ─────────────────────────────────────────────────────
+    // ── Editing (Wave 3C / 9A) ────────────────────────────────────────────────
 
-    private CanvasGestureHandler?  _gestureHandler;
-    private InCanvasTextEditor?    _textEditor;
-    private Canvas?                _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
+    private CanvasGestureHandler?      _gestureHandler;
+    private InCanvasTextEditor?        _textEditor;
+    private InCanvasTableCellEditor?   _tableCellEditor;   // Wave 9A
+    private Canvas?                    _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
 
     /// <summary>
     /// The current slide→screen transform (updated on every render pass).
@@ -77,11 +79,27 @@ public sealed class SlideCanvas : FrameworkElement
     public void AttachEditing(EditingSession editor, Canvas textOverlay)
     {
         // Detach previous handler if any (don't re-add adorner on every call)
-        _textEditor    = null;
-        _gestureHandler = new CanvasGestureHandler(this, editor);
-        _textOverlay   = textOverlay;
-        _textEditor    = new InCanvasTextEditor(this, editor, textOverlay);
+        _textEditor      = null;
+        _tableCellEditor = null;
+        _gestureHandler  = new CanvasGestureHandler(this, editor);
+        _textOverlay     = textOverlay;
+        _textEditor      = new InCanvasTextEditor(this, editor, textOverlay);
+        _tableCellEditor = new InCanvasTableCellEditor(this, editor, textOverlay); // Wave 9A
     }
+
+    // ── Wave 10A: active editor access for ribbon routing ──────────────────────
+
+    /// <summary>
+    /// The in-canvas shape text editor.  Null until <see cref="AttachEditing"/> is called.
+    /// The ribbon routing in MainWindow uses this to forward Bold/Italic/Underline/Font/Size/Color
+    /// to the active selection inside the RichTextBox while the editor is open.
+    /// </summary>
+    public InCanvasTextEditor? TextEditor => _textEditor;
+
+    /// <summary>
+    /// The in-canvas table cell editor.  Null until <see cref="AttachEditing"/> is called.
+    /// </summary>
+    public InCanvasTableCellEditor? TableCellEditor => _tableCellEditor;
 
     // ── Cached draw ops (invalidated on model change) ─────────────────────────
 
@@ -213,6 +231,10 @@ public sealed class SlideCanvas : FrameworkElement
             dc.DrawGeometry(fillBrush, pen, geometry);
         }
 
+        // Bevel overlay: painted ON TOP of the fill (but before text)
+        if (shape.Effects is not null)
+            RenderShapeBevel(dc, shape);
+
         // Draw text overlay
         if (shape.Text is not null)
             RenderText(dc, shape.Text, bounds);
@@ -291,6 +313,123 @@ public sealed class SlideCanvas : FrameworkElement
                 dc.DrawGeometry(null, glowPen, glowGeo);
             }
         }
+
+        // Bevel: overlay highlight + shade stripes on the inner edge of the shape bounds.
+        // This runs AFTER the shape fill/outline are drawn (the caller RenderShape draws
+        // geometry after calling this method for shadows — but bevel must paint ON TOP of
+        // the fill).  We therefore invoke this portion from a second call site in RenderShape
+        // (RenderShapeBevel) so it can be layered correctly.
+    }
+
+    /// <summary>
+    /// Renders the bevel highlight/shade overlay for a shape.
+    /// Called AFTER the shape geometry has been painted so the overlay sits on top.
+    /// Also draws the contour outline if one is requested.
+    /// </summary>
+    private static void RenderShapeBevel(DrawingContext dc, DrawOp.Shape shape)
+    {
+        var fx = shape.Effects;
+        if (fx is null) return;
+
+        bool hasBevel   = fx.BevelTop is not null || fx.BevelBottom is not null;
+        bool hasContour = fx.ContourWidthDip > 0;
+        if (!hasBevel && !hasContour) return;
+
+        if (shape.Geometry.Contours.Count == 0) return;
+
+        var geo    = ContourListToGeometry(shape.Geometry);
+        var bounds = shape.BoundsDip;
+
+        if (hasBevel && fx.BevelTop is not null)
+        {
+            var (highlight, shade) = BevelGeometryHelper.ComputeBevelRegions(bounds, fx.BevelTop, fx.LightDirDeg);
+            DrawBevelOverlay(dc, geo, bounds, highlight, shade, fx.BevelTop.WidthDip, fx.BevelTop.HeightDip);
+        }
+
+        // Contour outline (thin ring in contourColor)
+        if (hasContour)
+        {
+            var cColor  = fx.ContourColor ?? new SrgbColor(0x60, 0x60, 0x60);
+            var contourBrush = new SolidColorBrush(Color.FromArgb(200, cColor.R, cColor.G, cColor.B));
+            if (contourBrush.CanFreeze) contourBrush.Freeze();
+            var contourPen = new Pen(contourBrush, Math.Max(0.5, fx.ContourWidthDip));
+            if (contourPen.CanFreeze) contourPen.Freeze();
+            dc.DrawGeometry(null, contourPen, geo);
+        }
+    }
+
+    private static void DrawBevelOverlay(
+        DrawingContext dc,
+        Geometry shapeGeo,
+        LayoutRect bounds,
+        BevelEdgeSet highlight,
+        BevelEdgeSet shade,
+        double bevelW,
+        double bevelH)
+    {
+        // We draw simple trapezoidal / rectangular strips clipped to the shape geometry.
+        // Highlight = near-white semi-transparent; Shade = near-black semi-transparent.
+        var highlightBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255));
+        var shadeBrush     = new SolidColorBrush(Color.FromArgb(110, 0,   0,   0  ));
+        if (highlightBrush.CanFreeze) highlightBrush.Freeze();
+        if (shadeBrush.CanFreeze)     shadeBrush.Freeze();
+
+        // Push clip to the shape boundary so bevel strips are contained within it
+        dc.PushClip(shapeGeo);
+
+        double x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height;
+        double bw = Math.Min(bevelW, w / 3);
+        double bh = Math.Min(bevelH, h / 3);
+
+        // Draw trapezoidal wedge for each active edge
+        void DrawWedge(bool active, Brush brush, Point tl, Point tr, Point bl, Point br)
+        {
+            if (!active) return;
+            var pg = new StreamGeometry();
+            using (var sgc = pg.Open())
+            {
+                sgc.BeginFigure(tl, isFilled: true, isClosed: true);
+                sgc.LineTo(tr, isStroked: false, isSmoothJoin: true);
+                sgc.LineTo(br, isStroked: false, isSmoothJoin: true);
+                sgc.LineTo(bl, isStroked: false, isSmoothJoin: true);
+            }
+            pg.Freeze();
+            dc.DrawGeometry(brush, null, pg);
+        }
+
+        // Top edge wedge (trapezoid: outer rect top edge, inner inset)
+        DrawWedge(highlight.Top || shade.Top,
+            highlight.Top ? highlightBrush : shadeBrush,
+            new Point(x,      y),
+            new Point(x + w,  y),
+            new Point(x + w - bw, y + bh),
+            new Point(x + bw, y + bh));
+
+        // Bottom edge wedge
+        DrawWedge(highlight.Bottom || shade.Bottom,
+            highlight.Bottom ? highlightBrush : shadeBrush,
+            new Point(x + bw, y + h - bh),
+            new Point(x + w - bw, y + h - bh),
+            new Point(x + w,  y + h),
+            new Point(x,      y + h));
+
+        // Left edge wedge
+        DrawWedge(highlight.Left || shade.Left,
+            highlight.Left ? highlightBrush : shadeBrush,
+            new Point(x,      y),
+            new Point(x + bw, y + bh),
+            new Point(x + bw, y + h - bh),
+            new Point(x,      y + h));
+
+        // Right edge wedge
+        DrawWedge(highlight.Right || shade.Right,
+            highlight.Right ? highlightBrush : shadeBrush,
+            new Point(x + w - bw, y + bh),
+            new Point(x + w,      y),
+            new Point(x + w,      y + h),
+            new Point(x + w - bw, y + h - bh));
+
+        dc.Pop(); // pop clip
     }
 
     private static Transform BuildShapeTransform(DrawOp.Shape shape)
@@ -357,7 +496,36 @@ public sealed class SlideCanvas : FrameworkElement
                 dc.DrawRectangle(null, pen, dest);
         }
 
+        // Draw play button overlay for media shapes (already in scaled coords since a transform is pushed).
+        if (pic.IsMedia)
+            DrawPlayButtonOverlay(dc, dest);
+
         if (hasRotation) dc.Pop();
+    }
+
+    private static void DrawPlayButtonOverlay(DrawingContext dc, Rect dest)
+    {
+        double cx = dest.Left + dest.Width  / 2;
+        double cy = dest.Top  + dest.Height / 2;
+        double r  = Math.Min(dest.Width, dest.Height) / 6;
+        if (r < 4) r = 4;
+
+        var circleBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0x00, 0x00, 0x00));
+        circleBrush.Freeze();
+        dc.DrawEllipse(circleBrush, null, new Point(cx, cy), r, r);
+
+        // Triangle pointing right
+        double tx = cx - r * 0.3;
+        double ty = cy - r * 0.45;
+        var triGeo = new StreamGeometry();
+        using (var ctx = triGeo.Open())
+        {
+            ctx.BeginFigure(new Point(tx,              ty),              isFilled: true, isClosed: true);
+            ctx.LineTo(     new Point(tx + r * 0.8,    cy),              true, false);
+            ctx.LineTo(     new Point(tx,               cy + r * 0.45),  true, false);
+        }
+        triGeo.Freeze();
+        dc.DrawGeometry(Brushes.White, null, triGeo);
     }
 
     // ── Table ──────────────────────────────────────────────────────────────────
@@ -1304,11 +1472,22 @@ public sealed class SlideCanvas : FrameworkElement
         ResolvedFill.None => null,
         ResolvedFill.Solid s => FreezeBrush(
             new SolidColorBrush(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B))),
-        ResolvedFill.Gradient g => MakeGradientBrush(g, bounds),
+        ResolvedFill.Gradient g when g.Kind == GradientKind.Radial => MakeRadialGradientBrush(g),
+        ResolvedFill.Gradient g => MakeLinearGradientBrush(g),
+        ResolvedFill.Picture p => MakePictureBrush(p),
+        ResolvedFill.PatternFill pat => MakePatternBrush(pat),
         _ => null
     };
 
-    private static Brush MakeGradientBrush(ResolvedFill.Gradient g, LayoutRect bounds)
+    private static GradientStopCollection BuildGradientStops(ResolvedFill.Gradient g)
+    {
+        var stops = new GradientStopCollection();
+        foreach (var s in g.Stops)
+            stops.Add(new System.Windows.Media.GradientStop(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B), s.Position));
+        return stops;
+    }
+
+    private static Brush MakeLinearGradientBrush(ResolvedFill.Gradient g)
     {
         // Angle: 0 = left→right, 90 = top→bottom.
         double angleRad = g.AngleDegrees * Math.PI / 180.0;
@@ -1316,7 +1495,6 @@ public sealed class SlideCanvas : FrameworkElement
         double sin = Math.Sin(angleRad);
 
         // Map angle to WPF start/end points (GradientBrush uses 0,0..1,1 relative space).
-        // 0° → left to right; 90° → top to bottom
         var startPoint = new Point(
             cos >= 0 ? 0 : 1,
             sin >= 0 ? 0 : 1);
@@ -1324,14 +1502,218 @@ public sealed class SlideCanvas : FrameworkElement
             cos >= 0 ? 1 : 0,
             sin >= 0 ? 1 : 0);
 
-        var brush = new LinearGradientBrush(
-            Color.FromRgb(g.StartColor.R, g.StartColor.G, g.StartColor.B),
-            Color.FromRgb(g.EndColor.R, g.EndColor.G, g.EndColor.B),
-            startPoint,
-            endPoint);
-
+        var brush = new LinearGradientBrush(BuildGradientStops(g), startPoint, endPoint);
         if (brush.CanFreeze) brush.Freeze();
         return brush;
+    }
+
+    private static Brush MakeRadialGradientBrush(ResolvedFill.Gradient g)
+    {
+        // PowerPoint radial gradients are center-out.
+        var brush = new RadialGradientBrush(BuildGradientStops(g))
+        {
+            Center = new Point(0.5, 0.5),
+            GradientOrigin = new Point(0.5, 0.5),
+            RadiusX = 0.5,
+            RadiusY = 0.5
+        };
+        if (brush.CanFreeze) brush.Freeze();
+        return brush;
+    }
+
+    private static Brush MakePictureBrush(ResolvedFill.Picture p)
+    {
+        try
+        {
+            using var ms = new System.IO.MemoryStream(p.ImageBytes);
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            if (bmp.CanFreeze) bmp.Freeze();
+
+            var brush = new ImageBrush(bmp)
+            {
+                Stretch = p.Tile ? Stretch.None : Stretch.Fill,
+                TileMode = p.Tile ? TileMode.Tile : TileMode.None
+            };
+            if (brush.CanFreeze) brush.Freeze();
+            return brush;
+        }
+        catch
+        {
+            // If image decode fails, fall back to transparent
+            return Brushes.Transparent;
+        }
+    }
+
+    private static Brush MakePatternBrush(ResolvedFill.PatternFill pat)
+    {
+        // Render common patterns as a small DrawingBrush tile.
+        var fg = Color.FromRgb(pat.ForegroundColor.R, pat.ForegroundColor.G, pat.ForegroundColor.B);
+        var bg = Color.FromRgb(pat.BackgroundColor.R, pat.BackgroundColor.G, pat.BackgroundColor.B);
+
+        // Select pattern geometry based on preset
+        return pat.Preset switch
+        {
+            "pct5" => BuildDotPatternBrush(bg, fg, 4, 4, 1, 0.25),
+            "pct10" => BuildDotPatternBrush(bg, fg, 4, 4, 1, 0.5),
+            "pct20" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 0.75),
+            "pct25" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 1.0),
+            "pct30" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 1.25),
+            "pct40" => BuildDotPatternBrush(bg, fg, 4, 4, 3, 1.5),
+            "pct50" => BuildHalfHalfBrush(bg, fg, horizontal: false),
+            "pct60" => BuildDotPatternBrush(fg, bg, 4, 4, 3, 1.5),
+            "pct75" => BuildDotPatternBrush(fg, bg, 4, 4, 2, 1.0),
+            "pct90" => BuildDotPatternBrush(fg, bg, 4, 4, 1, 0.25),
+            "horzStripe" => BuildStripePatternBrush(bg, fg, horizontal: true),
+            "vertStripe" => BuildStripePatternBrush(bg, fg, horizontal: false),
+            "ltHorz" => BuildStripePatternBrush(bg, fg, horizontal: true),
+            "ltVert" => BuildStripePatternBrush(bg, fg, horizontal: false),
+            "dashHorz" => BuildStripePatternBrush(bg, fg, horizontal: true),
+            "dashVert" => BuildStripePatternBrush(bg, fg, horizontal: false),
+            "diagStripe" or "ltDnDiag" or "dnDiag" => BuildDiagPatternBrush(bg, fg, down: true),
+            "upDiag" or "ltUpDiag" => BuildDiagPatternBrush(bg, fg, down: false),
+            "cross" => BuildCrossPatternBrush(bg, fg),
+            "diagCross" or "smConfetti" => BuildDiagCrossPatternBrush(bg, fg),
+            "smGrid" => BuildCrossPatternBrush(bg, fg),
+            "wave" or "trellis" => BuildDiagCrossPatternBrush(bg, fg),
+            _ => new SolidColorBrush(fg) // unrecognized: solid foreground color
+        };
+    }
+
+    private static DrawingBrush BuildDotPatternBrush(
+        Color bg, Color fgColor, double tileW, double tileH, int dotCount, double dotSize)
+    {
+        var dg = new DrawingGroup();
+        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
+            new RectangleGeometry(new Rect(0, 0, tileW, tileH))));
+        double spacing = tileW / dotCount;
+        for (int i = 0; i < dotCount; i++)
+        {
+            double cx = spacing * i + spacing / 2;
+            double cy = tileH / 2;
+            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fgColor), null,
+                new EllipseGeometry(new Point(cx, cy), dotSize / 2, dotSize / 2)));
+        }
+        return new DrawingBrush(dg)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, tileW, tileH),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.None
+        };
+    }
+
+    private static DrawingBrush BuildHalfHalfBrush(Color bg, Color fg, bool horizontal)
+    {
+        var dg = new DrawingGroup();
+        if (horizontal)
+        {
+            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
+                new RectangleGeometry(new Rect(0, 0, 4, 2))));
+            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
+                new RectangleGeometry(new Rect(0, 2, 4, 2))));
+        }
+        else
+        {
+            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
+                new RectangleGeometry(new Rect(0, 0, 2, 4))));
+            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
+                new RectangleGeometry(new Rect(2, 0, 2, 4))));
+        }
+        return new DrawingBrush(dg)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, 4, 4),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.None
+        };
+    }
+
+    private static DrawingBrush BuildStripePatternBrush(Color bg, Color fg, bool horizontal)
+    {
+        var dg = new DrawingGroup();
+        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
+            new RectangleGeometry(new Rect(0, 0, 6, 6))));
+        if (horizontal)
+            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
+                new RectangleGeometry(new Rect(0, 2, 6, 2))));
+        else
+            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
+                new RectangleGeometry(new Rect(2, 0, 2, 6))));
+        return new DrawingBrush(dg)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, 6, 6),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.None
+        };
+    }
+
+    private static DrawingBrush BuildDiagPatternBrush(Color bg, Color fg, bool down)
+    {
+        var dg = new DrawingGroup();
+        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
+            new RectangleGeometry(new Rect(0, 0, 6, 6))));
+        var pen = new Pen(new SolidColorBrush(fg), 1.5);
+        var geo = new StreamGeometry();
+        using (var ctx = geo.Open())
+        {
+            if (down) { ctx.BeginFigure(new Point(0, 0), false, false); ctx.LineTo(new Point(6, 6), true, false); }
+            else       { ctx.BeginFigure(new Point(0, 6), false, false); ctx.LineTo(new Point(6, 0), true, false); }
+        }
+        dg.Children.Add(new GeometryDrawing(null, pen, geo));
+        return new DrawingBrush(dg)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, 6, 6),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.None
+        };
+    }
+
+    private static DrawingBrush BuildCrossPatternBrush(Color bg, Color fg)
+    {
+        var dg = new DrawingGroup();
+        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
+            new RectangleGeometry(new Rect(0, 0, 6, 6))));
+        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
+            new RectangleGeometry(new Rect(2, 0, 2, 6))));
+        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
+            new RectangleGeometry(new Rect(0, 2, 6, 2))));
+        return new DrawingBrush(dg)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, 6, 6),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.None
+        };
+    }
+
+    private static DrawingBrush BuildDiagCrossPatternBrush(Color bg, Color fg)
+    {
+        var dg = new DrawingGroup();
+        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
+            new RectangleGeometry(new Rect(0, 0, 6, 6))));
+        var pen = new Pen(new SolidColorBrush(fg), 1.5);
+        var geo = new StreamGeometry();
+        using (var ctx = geo.Open())
+        {
+            ctx.BeginFigure(new Point(0, 0), false, false);
+            ctx.LineTo(new Point(6, 6), true, false);
+            ctx.BeginFigure(new Point(6, 0), false, false);
+            ctx.LineTo(new Point(0, 6), true, false);
+        }
+        dg.Children.Add(new GeometryDrawing(null, pen, geo));
+        return new DrawingBrush(dg)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, 6, 6),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.None
+        };
     }
 
     private static Pen? MakePen(ResolvedOutline outline)
@@ -1432,6 +1814,7 @@ public sealed class SlideCanvas : FrameworkElement
 
         _slideWidthDip = presentation.SlideSizeCxEmu / 9525.0;
         _slideHeightDip = presentation.SlideSizeCyEmu / 9525.0;
-        _cachedOps = SlideCompositor.Compose(presentation, slide);
+        int slideIndex = presentation.Slides.IndexOf(slide);
+        _cachedOps = SlideCompositor.Compose(presentation, slide, slideIndex < 0 ? 0 : slideIndex);
     }
 }

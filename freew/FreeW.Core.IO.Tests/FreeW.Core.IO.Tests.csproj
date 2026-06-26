@@ -16,6 +16,8 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <!-- The PDF adapter test synthesizes a PDF in-test with PdfPig's writer. -->
     <PackageReference Include="UglyToad.PdfPig" />
+    <!-- OpenXmlValidator used to assert schema-order correctness in schema-order tests. -->
+    <PackageReference Include="DocumentFormat.OpenXml" />
   </ItemGroup>
 
   <ItemGroup>

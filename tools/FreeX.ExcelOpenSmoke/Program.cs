@@ -424,6 +424,18 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateExcelRichTextCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelRichTextCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-richtext")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "Excel-authored rich-text cell corpus fixture",
+                        GenerateWithExcel: true));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))

@@ -325,6 +325,9 @@ public sealed partial class MainWindow
             categoryList.Children.Add(row);
         }
         SelectCategory(0);
+        // Expose the category selector so the parity capture can switch left-list categories (which are
+        // Border rows in this StackPanel, not a TabControl) to render one PNG per category.
+        categoryList.Tag = (Action<int>)SelectCategory;
 
         void SelectCategory(int index)
         {
@@ -524,6 +527,7 @@ public sealed partial class MainWindow
 
     private static void ApplyOptionsCheckBoxChrome(CheckBox checkBox)
     {
+        StripContentMnemonic(checkBox);
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
         checkBox.FontSize = 12;
@@ -532,6 +536,7 @@ public sealed partial class MainWindow
 
     private static void ApplyOptionsRadioButtonChrome(RadioButton radioButton)
     {
+        StripContentMnemonic(radioButton);
         radioButton.MinHeight = 20;
         radioButton.FontSize = 12;
         radioButton.FontFamily = FormulaBarFontFamily;

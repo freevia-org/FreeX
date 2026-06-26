@@ -15,6 +15,9 @@ namespace FreeP.App.Host;
 /// label and a small <see cref="SlideCanvas"/> (150 px wide, 16:9 height, display-only).
 /// Clicking an item calls <see cref="EditingSession.SelectSlide"/>.
 ///
+/// Wave 11B: when the presentation has sections a section-header row (section name + slide
+/// count) is injected above the first thumbnail belonging to each section.
+///
 /// The pane rebuilds / refreshes when:
 ///   - <see cref="EditingSession.Changed"/> fires (slide added/removed/edited/reordered)
 ///   - <see cref="EditingSession.CurrentSlideChanged"/> fires (highlight update only)
@@ -38,6 +41,10 @@ public sealed class SlidePane : Border
     private static readonly Brush ItemNormalBorder   = Freeze(new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)));
     private static readonly Brush LabelBrush         = Freeze(new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)));
     private static readonly Brush InsertLineBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)));
+
+    // Section header row colors (Wave 11B)
+    private static readonly Brush SectionHeaderBg   = Freeze(new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)));
+    private static readonly Brush SectionHeaderFg   = Freeze(new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
 
     // Thumbnail dimensions
     private const double ThumbWidth  = 150.0;
@@ -119,15 +126,94 @@ public sealed class SlidePane : Border
     {
         _stack.Children.Clear();
 
-        var slides = _editor.Presentation.Slides;
+        var slides   = _editor.Presentation.Slides;
+        var sections = _editor.Presentation.Sections;
+
+        // Build a mapping: slide index → section name to inject before it.
+        // A section header is shown above the first slide whose sldId numeric string is in
+        // that section's SlideIds list.  We walk sections in order and cross-reference the
+        // presentation sldIdLst order which is captured as the Slide.Id on read.
+        //
+        // Slide.Id is either the numeric sldId string (set by the reader) or a GUID for
+        // new slides.  We match by index as a fallback when section membership isn't found.
+        var sectionHeaderBefore = new Dictionary<int, PresentationSection>();
+        if (sections.Count > 0)
+        {
+            // Build a map from Slide.Id → slide list index for fast lookup.
+            var slideIndexById = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < slides.Count; i++)
+                slideIndexById[slides[i].Id] = i;
+
+            // For each section, find the first slide index mentioned in its SlideIds list.
+            foreach (var section in sections)
+            {
+                int firstIdx = -1;
+                foreach (var sldId in section.SlideIds)
+                {
+                    if (slideIndexById.TryGetValue(sldId, out var idx))
+                    {
+                        if (firstIdx < 0 || idx < firstIdx)
+                            firstIdx = idx;
+                    }
+                }
+                if (firstIdx >= 0 && !sectionHeaderBefore.ContainsKey(firstIdx))
+                    sectionHeaderBefore[firstIdx] = section;
+            }
+        }
+
         for (int i = 0; i < slides.Count; i++)
         {
+            // Inject section header if this slide begins a section.
+            if (sectionHeaderBefore.TryGetValue(i, out var sec))
+            {
+                // Count slides that belong to this section (for the badge).
+                int sectionSlideCount = 0;
+                if (sections.Count > 0)
+                {
+                    var secIdx = sections.IndexOf(sec);
+                    var nextSec = secIdx + 1 < sections.Count ? sections[secIdx + 1] : null;
+                    var slideIndexById2 = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    for (int k = 0; k < slides.Count; k++) slideIndexById2[slides[k].Id] = k;
+                    foreach (var sldId in sec.SlideIds)
+                        if (slideIndexById2.ContainsKey(sldId)) sectionSlideCount++;
+                }
+                _stack.Children.Add(BuildSectionHeader(sec.Name, sectionSlideCount));
+            }
+
             var item = BuildSlideItem(i, slides[i]);
             _stack.Children.Add(item);
         }
 
         // "New Slide" affordance at the bottom.
         _stack.Children.Add(BuildNewSlideButton());
+    }
+
+    /// <summary>
+    /// Builds a non-interactive section-header row showing the section name and slide count.
+    /// Wave 11B.
+    /// </summary>
+    private static Border BuildSectionHeader(string name, int slideCount)
+    {
+        var label = new TextBlock
+        {
+            Text                = slideCount > 0
+                                    ? $"{name}  ({slideCount})"
+                                    : name,
+            FontSize            = 11,
+            FontWeight          = FontWeights.SemiBold,
+            Foreground          = SectionHeaderFg,
+            VerticalAlignment   = VerticalAlignment.Center,
+            TextTrimming        = TextTrimming.CharacterEllipsis,
+        };
+
+        return new Border
+        {
+            Background      = SectionHeaderBg,
+            Padding         = new Thickness(10, 4, 10, 4),
+            Margin          = new Thickness(0, 6, 0, 2),
+            IsHitTestVisible = false,
+            Child           = label,
+        };
     }
 
     /// <summary>Updates only the highlight (selected border/background) on existing items.
@@ -336,28 +422,57 @@ public sealed class SlidePane : Border
     /// <summary>
     /// Returns insertion index (0 = before slide 0, N = after last slide)
     /// based on Y coordinate relative to the StackPanel.
+    /// Iterates over _stack children skipping section-header borders.
     /// </summary>
     private int HitTestInsertionPoint(double y)
     {
-        int count = SlideItemCount();
-        for (int i = 0; i < count; i++)
+        int slideIdx = 0;
+        double runningY = 0.0;
+        const double SectionHeaderHeight = 30.0; // approximate; avoids layout query
+
+        foreach (UIElement child in _stack.Children)
         {
-            double midY = (i + 0.5) * ItemHeight;
-            if (y < midY) return i;
+            if (child is Border b && b.Tag is int)
+            {
+                double midY = runningY + ItemHeight * 0.5;
+                if (y < midY) return slideIdx;
+                runningY += ItemHeight;
+                slideIdx++;
+            }
+            else if (child is Border sectionHeader && !(sectionHeader.Tag is int))
+            {
+                // section header or new-slide button
+                runningY += SectionHeaderHeight;
+            }
         }
-        return count;
+        return slideIdx;
     }
 
     private int SlideItemCount() =>
-        // Last child of _stack is the "New Slide" button — exclude it.
-        Math.Max(0, _stack.Children.Count - 1);
+        // Count only items whose Tag is an int (slide items); exclude section headers and the "New Slide" button.
+        _stack.Children.OfType<Border>().Count(b => b.Tag is int);
 
     private void ShowInsertIndicator()
     {
+        // Walk children to find the Y offset of the insertion point.
         int count = SlideItemCount();
-        double indicatorY = _dragTargetIndex >= count
-            ? count * ItemHeight
-            : _dragTargetIndex * ItemHeight;
+        double indicatorY = 0.0;
+        int slideIdx = 0;
+        const double SectionHeaderHeight = 30.0;
+
+        foreach (UIElement child in _stack.Children)
+        {
+            if (slideIdx >= _dragTargetIndex) break;
+            if (child is Border b && b.Tag is int)
+            {
+                indicatorY += ItemHeight;
+                slideIdx++;
+            }
+            else
+            {
+                indicatorY += SectionHeaderHeight;
+            }
+        }
 
         _insertIndicator.Margin     = new Thickness(0, indicatorY - 1, 0, 0);
         _insertIndicator.Visibility = Visibility.Visible;

@@ -182,8 +182,7 @@ public static class PivotGridAdornmentPlanner
     private static bool IsFieldActive(PivotTableModel pivotTable, PivotFieldModel field) =>
         HasExplicitSelection(field) ||
         pivotTable.LabelFilters.Any(f => f.SourceFieldIndex == field.SourceFieldIndex) ||
-        pivotTable.ValueFilters.Any(f =>
-            f.SourceFieldIndex is null || f.SourceFieldIndex == field.SourceFieldIndex) ||
+        pivotTable.ValueFilters.Any(f => f.SourceFieldIndex == field.SourceFieldIndex) ||
         pivotTable.Sorts.Any(s => s.FieldIndex == field.SourceFieldIndex);
 
     private static bool HasExplicitSelection(PivotFieldModel field)

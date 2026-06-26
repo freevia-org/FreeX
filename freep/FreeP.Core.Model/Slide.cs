@@ -37,6 +37,36 @@ public sealed class CustomGeometryPath
 }
 
 /// <summary>
+/// Bevel descriptor (a:bevelT / a:bevelB inside a:sp3d). All sizes in EMU.
+/// </summary>
+public sealed class BevelInfo
+{
+    /// <summary>Bevel width in EMU (w= attribute). Default 76200 = 0.6 pt.</summary>
+    public long WidthEmu { get; set; } = 76200;
+
+    /// <summary>Bevel height in EMU (h= attribute). Default 76200.</summary>
+    public long HeightEmu { get; set; } = 76200;
+
+    /// <summary>Preset name (prst= attribute), e.g. "circle", "relaxedInset", "cross", "angle", etc. Empty = circle.</summary>
+    public string PresetName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// 3-D scene data from a:scene3d. Stored for round-trip; rendering is approximated.
+/// </summary>
+public sealed class Scene3dInfo
+{
+    /// <summary>Camera preset name (a:camera prst=), e.g. "orthographicFront", "perspectiveRelaxed".</summary>
+    public string CameraPreset { get; set; } = string.Empty;
+
+    /// <summary>Light rig preset name (a:lightRig rig=), e.g. "threePt", "flat", "balanced".</summary>
+    public string LightRig { get; set; } = string.Empty;
+
+    /// <summary>Light rig direction (a:lightRig dir=), e.g. "t", "tl", "r".</summary>
+    public string LightRigDir { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Shape effects carried on a SlideShape. All distances/radii are in EMU.
 /// </summary>
 public sealed class ShapeEffects
@@ -67,8 +97,80 @@ public sealed class ShapeEffects
     public bool HasSoftEdge { get; set; }
     public long SoftEdgeRadEmu { get; set; }
 
-    // ── Bevel (best-effort flag only) ─────────────────────────────────────────
-    public bool HasBevel { get; set; }
+    // ── Bevel / 3-D (a:sp3d) ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// True when any sp3d data is present. Back-compat alias; callers should prefer
+    /// checking BevelTop/BevelBottom/ExtrusionHeightEmu directly.
+    /// </summary>
+    public bool HasBevel => BevelTop is not null || BevelBottom is not null;
+
+    /// <summary>Top-face bevel (a:bevelT). Null = none.</summary>
+    public BevelInfo? BevelTop { get; set; }
+
+    /// <summary>Bottom-face bevel (a:bevelB). Null = none.</summary>
+    public BevelInfo? BevelBottom { get; set; }
+
+    /// <summary>3-D extrusion depth in EMU (a:sp3d extrusionH= attribute). 0 = none.</summary>
+    public long ExtrusionHeightEmu { get; set; }
+
+    /// <summary>Contour width in EMU (a:sp3d contourW= attribute). 0 = none.</summary>
+    public long ContourWidthEmu { get; set; }
+
+    /// <summary>Preset material name (a:sp3d prstMaterial= attribute).</summary>
+    public string PrstMaterial { get; set; } = string.Empty;
+
+    /// <summary>Extrusion colour (a:extrusionClr). Null = no override.</summary>
+    public SrgbColor? ExtrusionColor { get; set; }
+
+    /// <summary>Contour colour (a:contourClr). Null = no override.</summary>
+    public SrgbColor? ContourColor { get; set; }
+
+    // ── Scene 3-D (a:scene3d) ─────────────────────────────────────────────────
+
+    /// <summary>Scene 3-D camera/light data. Null = not present.</summary>
+    public Scene3dInfo? Scene3d { get; set; }
+}
+
+/// <summary>
+/// Payload for an audio or video media object embedded in a slide.
+/// The poster image bytes (shown while not playing) are stored in the parent
+/// shape's <see cref="SlideShape.Picture"/> field. The media asset itself
+/// (audio/video bytes) is stored here together with its content-type for
+/// round-trip preservation.
+/// </summary>
+public sealed class MediaInfo
+{
+    /// <summary>True = video, false = audio.</summary>
+    public bool IsVideo { get; set; }
+
+    /// <summary>Raw media bytes. Empty when the media is link-only (no embed).</summary>
+    public byte[] Bytes { get; set; } = Array.Empty<byte>();
+
+    /// <summary>MIME content type, e.g. "video/mp4", "audio/mpeg".</summary>
+    public string ContentType { get; set; } = "video/mp4";
+
+    /// <summary>
+    /// For link-only media: the external URI from r:link on the videoFile/audioFile element.
+    /// Empty when the media is embedded.
+    /// </summary>
+    public string LinkUrl { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Visibility flags for footer/date/slide-number placeholders.
+/// Corresponds to <c>p:hf</c> in slide/layout/master XML.
+/// </summary>
+public sealed class HfFlags
+{
+    /// <summary>Show footer placeholder.</summary>
+    public bool ShowFooter { get; set; } = true;
+    /// <summary>Show date/time placeholder.</summary>
+    public bool ShowDate { get; set; } = true;
+    /// <summary>Show slide number placeholder.</summary>
+    public bool ShowSlideNum { get; set; } = true;
+    /// <summary>Show header placeholder.</summary>
+    public bool ShowHeader { get; set; } = false;
 }
 
 /// <summary>
@@ -170,6 +272,14 @@ public sealed class SlideShape
     /// <summary>Image data when Kind == Picture.</summary>
     public ImagePart? Picture { get; set; }
 
+    // ── Media (audio/video) ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Media payload when Kind == Media. The poster image (shown when not playing)
+    /// is stored in <see cref="Picture"/>. Audio/video bytes live here.
+    /// </summary>
+    public MediaInfo? Media { get; set; }
+
     // ── Table ─────────────────────────────────────────────────────────────────────
 
     /// <summary>Table data when Kind == Table.</summary>
@@ -198,6 +308,14 @@ public sealed class SlideShape
     /// Not serialized by the model layer — FxpFormat uses it directly.
     /// </summary>
     public string? LegacyFxpKind { get; set; }
+
+    // ── Hyperlink ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Shape-level hyperlink.  Corresponds to <c>a:hlinkClick</c> inside <c>p:cNvPr</c>.
+    /// When set, a click anywhere on the shape navigates to the hyperlink target.
+    /// </summary>
+    public Hyperlink? Hyperlink { get; set; }
 
     // ── Convenience helpers ───────────────────────────────────────────────────────
 
@@ -278,6 +396,23 @@ public sealed class Slide
     /// Corresponds to the body placeholder (p:ph type="body") in the ppt/notesSlides/notesSlideN.xml part.
     /// </summary>
     public TextBody? Notes { get; set; }
+
+    // ── Header/footer visibility ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Slide-level header/footer visibility flags (from <c>p:hf</c>).
+    /// Null = not present on this slide (inherit from layout/master).
+    /// </summary>
+    public HfFlags? HfVisibility { get; set; }
+
+    // ── Comments ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Comments attached to this slide (legacy p:cm schema, ppt/comments/commentN.xml).
+    /// Empty when the slide has no comments. Author identity is de-duplicated on write
+    /// into a shared commentAuthors.xml part.
+    /// </summary>
+    public List<SlideComment> Comments { get; } = new();
 
     // ── Legacy title accessor ─────────────────────────────────────────────────────
 

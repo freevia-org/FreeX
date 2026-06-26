@@ -35,6 +35,13 @@ public sealed class SlideShowController
     /// <summary>Precomputed click-steps for the current slide.</summary>
     private IReadOnlyList<AnimationStep> _currentSteps = Array.Empty<AnimationStep>();
 
+    /// <summary>
+    /// Per-trigger step cursors for interactive sequences on the current slide.
+    /// Key = TriggerShapeId; value = index of the next step to play for that trigger.
+    /// Reset whenever the slide changes (same as PendingStepIndex).
+    /// </summary>
+    private readonly Dictionary<uint, int> _triggerStepCursors = new();
+
     // ── Construction ─────────────────────────────────────────────────────────────
 
     /// <param name="slides">The ordered slide list from Presentation.Slides.</param>
@@ -124,6 +131,9 @@ public sealed class SlideShowController
 
     /// <summary>
     /// Groups a slide's flat animation list into click-steps.
+    /// ONLY includes animations that are in the main sequence (TriggerShapeId == null).
+    /// Trigger animations are excluded from the advance chain — they are fired by
+    /// <see cref="FireTrigger"/> when the user clicks the trigger shape.
     /// Rule: an OnClick animation begins a new step; WithPrevious and AfterPrevious
     /// animations join the current step and will play together with it.
     /// </summary>
@@ -135,6 +145,9 @@ public sealed class SlideShowController
         List<ShapeAnimation>? current = null;
         foreach (var anim in slide.Animations)
         {
+            // Skip trigger animations — they are not part of the main advance chain.
+            if (anim.TriggerShapeId is not null) continue;
+
             if (anim.Trigger == AnimationTrigger.OnClick || current is null)
             {
                 current = new List<ShapeAnimation> { anim };
@@ -149,11 +162,72 @@ public sealed class SlideShowController
         return steps;
     }
 
+    /// <summary>
+    /// Returns ALL animation steps registered for the given trigger shape (query only,
+    /// does not advance the per-trigger cursor). Used for testing and initial inspection.
+    /// Returns empty when no trigger group is registered for that shape.
+    /// </summary>
+    public IReadOnlyList<AnimationStep> FireTrigger(uint triggerShapeId)
+    {
+        var slide = CurrentSlide;
+        if (slide is null) return Array.Empty<AnimationStep>();
+
+        var triggerAnims = slide.Animations
+            .Where(a => a.TriggerShapeId == triggerShapeId)
+            .ToList();
+
+        return BuildTriggerSteps(triggerAnims);
+    }
+
+    /// <summary>
+    /// Advances the per-trigger click cursor for <paramref name="triggerShapeId"/> by one step
+    /// and returns that step, mirroring how <see cref="Advance"/> works for the main sequence.
+    /// Returns <see langword="null"/> when all steps for this trigger have already been played
+    /// (subsequent clicks on an exhausted trigger are silently ignored, matching PowerPoint behaviour).
+    /// </summary>
+    public AnimationStep? AdvanceTrigger(uint triggerShapeId)
+    {
+        var allSteps = FireTrigger(triggerShapeId);
+        if (allSteps.Count == 0) return null;
+
+        _triggerStepCursors.TryGetValue(triggerShapeId, out int cursor);
+        if (cursor >= allSteps.Count) return null;  // already exhausted
+
+        var step = allSteps[cursor];
+        _triggerStepCursors[triggerShapeId] = cursor + 1;
+        return step;
+    }
+
+    /// <summary>
+    /// Groups a flat list of trigger animations into click-steps (same rules as BuildSteps).
+    /// </summary>
+    public static IReadOnlyList<AnimationStep> BuildTriggerSteps(IReadOnlyList<ShapeAnimation> anims)
+    {
+        var steps = new List<AnimationStep>();
+        if (anims.Count == 0) return steps;
+
+        List<ShapeAnimation>? current = null;
+        foreach (var anim in anims)
+        {
+            if (anim.Trigger == AnimationTrigger.OnClick || current is null)
+            {
+                current = new List<ShapeAnimation> { anim };
+                steps.Add(new AnimationStep(current));
+            }
+            else
+            {
+                current.Add(anim);
+            }
+        }
+        return steps;
+    }
+
     // ── Private ───────────────────────────────────────────────────────────────────
 
     private void RebuildSteps()
     {
         PendingStepIndex = 0;
+        _triggerStepCursors.Clear();
         _currentSteps = CurrentSlide is null
             ? Array.Empty<AnimationStep>()
             : BuildSteps(CurrentSlide);

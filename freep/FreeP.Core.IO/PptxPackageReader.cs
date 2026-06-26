@@ -33,6 +33,18 @@ public static class PptxPackageReader
     private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
+    private const string HyperlinkRelType     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string SlideHlinkRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+    private const string CommentsRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
+    private const string VideoRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
+    private const string AudioRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
+    // Microsoft proprietary media rel type used by newer PowerPoint
+    private const string MediaRelType         = "http://schemas.microsoft.com/office/2007/relationships/media";
+
+    // p14 section extension namespace
+    private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 
     // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -124,20 +136,82 @@ public static class PptxPackageReader
             }
         }
 
-        // Slides in order from sldIdLst
+        // Slides in order from sldIdLst — two-phase so internal hyperlinks can resolve to Slide.Id.
+        // Phase 1: collect ordered (rId, slidePath) pairs and create placeholder Slide objects so we
+        //           have a complete allSlides list before parsing shapes.
         var slideRelEntries = presRels.ToDictionary(r => r.id, StringComparer.OrdinalIgnoreCase);
         var sldIdList = presRoot.Element(P + "sldIdLst")?.Elements(P + "sldId").ToList() ?? new();
 
+        // Build ordered list of (rId, slidePath) for all valid slide entries.
+        var slideInfos = new List<(string rId, string slidePath)>();
         foreach (var sldIdEl in sldIdList)
         {
             var rId = sldIdEl.Attribute(R + "id")?.Value;
             if (string.IsNullOrWhiteSpace(rId) || !slideRelEntries.TryGetValue(rId, out var slideRel))
                 continue;
             if (slideRel.type != SlideRelType) continue;
+            slideInfos.Add((rId, ResolvePath(presDir, slideRel.target)));
+        }
 
-            var slidePath = ResolvePath(presDir, slideRel.target);
-            var slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles);
+        // Create placeholder slides (with Id set) for the allSlides reference list.
+        var allSlides = new List<Slide>(slideInfos.Count);
+        foreach (var (rId, _) in slideInfos)
+            allSlides.Add(new Slide { Id = rId });
+
+        // Build a map from normalized slide part path → Slide.Id (= presentation-level rId).
+        // This is used by ResolveHlinkClick to resolve internal slide-jump hyperlinks by part
+        // path rather than by filename digit, so reordered decks resolve to the correct slide.
+        var slidePartPathToId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (rId, slidePath) in slideInfos)
+            slidePartPathToId[slidePath] = rId;
+
+        // Phase 2: read each slide, replacing the placeholder with the fully parsed slide.
+        for (int si = 0; si < slideInfos.Count; si++)
+        {
+            var (rId, slidePath) = slideInfos[si];
+            var slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId);
+            // Replace the placeholder so hyperlinks referencing this slide still get the same object.
+            allSlides[si] = slide;
             presentation.Slides.Add(slide);
+        }
+
+        // Build a mapping from sldId integer → rId so we can resolve section membership.
+        // sldIdList was built above from p:sldIdLst elements.
+        var sldIdToRId = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var sldIdEl in sldIdList)
+        {
+            var numId = sldIdEl.Attribute("id")?.Value;
+            var rId2  = sldIdEl.Attribute(R + "id")?.Value;
+            if (!string.IsNullOrWhiteSpace(numId) && !string.IsNullOrWhiteSpace(rId2))
+                sldIdToRId[numId] = rId2;
+        }
+
+        // Sections from p:extLst / p:ext[@uri="{521415D9-…}"] / p14:sectionLst
+        ReadSections(presRoot, sldIdToRId, presentation);
+
+        // Comment authors live in a single ppt/commentAuthors.xml part referenced from presRels.
+        var cmAuthorsTarget = GetRelTarget(presRels, CommentAuthorsRelType);
+        var authorMap = new Dictionary<int, (string name, string initials)>();
+        if (cmAuthorsTarget is not null)
+        {
+            var cmAuthorsPath = ResolvePath(presDir, cmAuthorsTarget);
+            authorMap = ReadCommentAuthors(archive, cmAuthorsPath);
+        }
+
+        // Re-process each slide's comments now that we have the author map.
+        // (Comments were NOT parsed in ReadSlide yet — we do it here so authorMap is available.)
+        for (int si = 0; si < presentation.Slides.Count; si++)
+        {
+            var slide = presentation.Slides[si];
+            var rId = sldIdList.Count > si ? sldIdList[si].Attribute(R + "id")?.Value : null;
+            if (rId is null) continue;
+            if (!slideRelEntries.TryGetValue(rId, out var sr)) continue;
+            var slidePath2 = ResolvePath(presDir, sr.target);
+            var slideRels2 = LoadRels(archive, GetRelsPath(slidePath2));
+            var cmTarget = GetRelTarget(slideRels2, CommentsRelType);
+            if (cmTarget is null) continue;
+            var cmPath = ResolvePath(GetDirectory(slidePath2), cmTarget);
+            ReadSlideComments(archive, cmPath, authorMap, slide.Comments);
         }
 
         return presentation;
@@ -155,6 +229,134 @@ public static class PptxPackageReader
         props.Subject = xml.Root.Element(Dc + "subject")?.Value;
         props.Keywords = xml.Root.Element(Cp + "keywords")?.Value;
         props.Comments = xml.Root.Element(Dc + "description")?.Value;
+    }
+
+    // ── Sections ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses p14:sectionLst from the presentation.xml extLst and populates
+    /// <see cref="Presentation.Sections"/>.  <paramref name="sldIdToRId"/> maps the numeric
+    /// sldId integer (as string) to the relationship id so sections can reference Slide.Id.
+    /// </summary>
+    private static void ReadSections(
+        XElement presRoot,
+        Dictionary<string, string> sldIdToRId,
+        Presentation presentation)
+    {
+        var extLst = presRoot.Element(P + "extLst");
+        if (extLst is null) return;
+
+        foreach (var ext in extLst.Elements(P + "ext"))
+        {
+            if (ext.Attribute("uri")?.Value != SectionExtUri) continue;
+
+            var sectionLst = ext.Element(P14 + "sectionLst");
+            if (sectionLst is null) continue;
+
+            foreach (var sectionEl in sectionLst.Elements(P14 + "section"))
+            {
+                var section = new PresentationSection
+                {
+                    Name = sectionEl.Attribute("name")?.Value ?? string.Empty,
+                    Id   = sectionEl.Attribute("id")?.Value   ?? Guid.NewGuid().ToString("B").ToUpperInvariant(),
+                };
+
+                // p14:sldIdLst holds the slide ids belonging to this section.
+                var sldIdLstEl = sectionEl.Element(P14 + "sldIdLst");
+                if (sldIdLstEl is not null)
+                {
+                    foreach (var sldIdEl in sldIdLstEl.Elements(P14 + "sldId"))
+                    {
+                        // The id= attribute is the numeric sldId integer (same as p:sldId id=).
+                        // Translate it to the rId (Slide.Id key space) via the map built from
+                        // p:sldIdLst so that section.SlideIds values match Slide.Id exactly.
+                        // Dangling references (numeric id not in any p:sldId) are dropped.
+                        var numId = sldIdEl.Attribute("id")?.Value;
+                        if (!string.IsNullOrWhiteSpace(numId) &&
+                            sldIdToRId.TryGetValue(numId, out var rId))
+                            section.SlideIds.Add(rId);
+                    }
+                }
+
+                presentation.Sections.Add(section);
+            }
+            break; // only one sectionLst ext expected
+        }
+    }
+
+    // ── Comment authors ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads ppt/commentAuthors.xml and returns a map of authorId → (name, initials).
+    /// </summary>
+    private static Dictionary<int, (string name, string initials)> ReadCommentAuthors(
+        ZipArchive archive, string path)
+    {
+        var result = new Dictionary<int, (string name, string initials)>();
+        var xml = LoadXml(archive, path);
+        if (xml?.Root is null) return result;
+
+        foreach (var cmAuthorEl in xml.Root.Elements(P + "cmAuthor"))
+        {
+            if (!int.TryParse(cmAuthorEl.Attribute("id")?.Value, out var id)) continue;
+            var name     = cmAuthorEl.Attribute("name")?.Value     ?? string.Empty;
+            var initials = cmAuthorEl.Attribute("initials")?.Value ?? string.Empty;
+            result[id] = (name, initials);
+        }
+
+        return result;
+    }
+
+    // ── Slide comments ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads a ppt/comments/commentN.xml part and appends parsed comments to
+    /// <paramref name="comments"/>.  Author names/initials are resolved from
+    /// <paramref name="authorMap"/>.
+    /// </summary>
+    private static void ReadSlideComments(
+        ZipArchive archive,
+        string path,
+        Dictionary<int, (string name, string initials)> authorMap,
+        List<SlideComment> comments)
+    {
+        var xml = LoadXml(archive, path);
+        if (xml?.Root is null) return;
+
+        foreach (var cmEl in xml.Root.Elements(P + "cm"))
+        {
+            if (!int.TryParse(cmEl.Attribute("authorId")?.Value, out var authorId)) authorId = 0;
+            if (!int.TryParse(cmEl.Attribute("idx")?.Value, out var idx)) idx = 0;
+
+            // BB6: don't silently fabricate an empty author when authorId is not in the map.
+            // Preserve the numeric id as a placeholder so identity is not destroyed on round-trip.
+            if (!authorMap.TryGetValue(authorId, out var author))
+                author = ($"Author {authorId}", $"A{authorId}");
+
+            DateTime? dt = null;
+            var dtStr = cmEl.Attribute("dt")?.Value;
+            if (!string.IsNullOrWhiteSpace(dtStr) &&
+                System.DateTime.TryParse(dtStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
+                dt = parsed;
+
+            var posEl = cmEl.Element(P + "pos");
+            long x = ParseLong(posEl?.Attribute("x")?.Value);
+            long y = ParseLong(posEl?.Attribute("y")?.Value);
+
+            var text = cmEl.Element(P + "text")?.Value ?? string.Empty;
+
+            comments.Add(new SlideComment
+            {
+                AuthorId = authorId,
+                Author   = author.name,
+                Initials = author.initials,
+                Text     = text,
+                DateTime = dt,
+                Xemu     = x,
+                Yemu     = y,
+                Idx      = idx,
+            });
+        }
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────────
@@ -373,7 +575,9 @@ public static class PptxPackageReader
     private static Slide ReadSlide(
         ZipArchive archive, string slidePath, string slideId,
         PresentationColorScheme scheme, List<SlideLayout> layouts,
-        Dictionary<string, TableStyleData>? tableStyles = null)
+        Dictionary<string, TableStyleData>? tableStyles = null,
+        List<Slide>? allSlides = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var slide = new Slide { Id = slideId };
 
@@ -393,10 +597,11 @@ public static class PptxPackageReader
         var bg = xml.Root.Element(P + "bg");
         if (bg is not null) slide.Background = ReadBackground(bg, scheme);
 
+        var slideDir = GetDirectory(slidePath);
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
         {
-            foreach (var shape in ReadShapesFromTree(spTree, archive, slidePath, scheme, tableStyles))
+            foreach (var shape in ReadShapesFromTree(spTree, archive, slidePath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId))
                 slide.Shapes.Add(shape);
         }
 
@@ -416,6 +621,19 @@ public static class PptxPackageReader
         {
             var notesPath = ResolvePath(GetDirectory(slidePath), notesTarget);
             slide.Notes = ReadNotesSlide(archive, notesPath, scheme);
+        }
+
+        // p:hf — header/footer visibility flags
+        var hfEl = xml.Root.Element(P + "hf");
+        if (hfEl is not null)
+        {
+            slide.HfVisibility = new HfFlags
+            {
+                ShowFooter   = hfEl.Attribute("ftr")?.Value    is not "0",
+                ShowDate     = hfEl.Attribute("dt")?.Value     is not "0",
+                ShowSlideNum = hfEl.Attribute("sldNum")?.Value is not "0",
+                ShowHeader   = hfEl.Attribute("hdr")?.Value    is "1" or "true",
+            };
         }
 
         return slide;
@@ -489,16 +707,20 @@ public static class PptxPackageReader
 
     private static IEnumerable<SlideShape> ReadShapesFromTree(
         XElement spTree, ZipArchive archive, string partPath, PresentationColorScheme scheme,
-        Dictionary<string, TableStyleData>? tableStyles = null)
+        Dictionary<string, TableStyleData>? tableStyles = null,
+        List<(string id, string type, string target)>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         foreach (var child in spTree.Elements())
         {
             SlideShape? shape = child.Name.LocalName switch
             {
-                "sp" => ReadSp(child, scheme),
-                "pic" => ReadPic(child, archive, partPath, scheme),
-                "cxnSp" => ReadCxnSp(child, scheme),
-                "grpSp" => ReadGrpSp(child, archive, partPath, scheme, tableStyles),
+                "sp"           => ReadSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
+                "pic"          => ReadPic(child, archive, partPath, scheme),
+                "cxnSp"        => ReadCxnSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
+                "grpSp"        => ReadGrpSp(child, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
                 "graphicFrame" => ReadGraphicFrame(child, archive, partPath, scheme, tableStyles),
                 _ => null
             };
@@ -506,6 +728,96 @@ public static class PptxPackageReader
             if (shape is not null)
                 yield return shape;
         }
+    }
+
+    // ── Hyperlink resolution from slide rels ─────────────────────────────────────
+
+    /// <summary>
+    /// Resolves an <c>a:hlinkClick</c> element from a slide's relationship list into a
+    /// <see cref="Hyperlink"/> model object.
+    /// External hyperlinks use TargetMode="External" and rel type .../hyperlink.
+    /// Internal slide jumps use rel type .../slide (with an optional action attribute).
+    /// Returns null when the rId is missing or the rels list is null.
+    /// </summary>
+    /// <param name="slideDir">
+    /// Directory of the slide part (e.g. "ppt/slides") used to resolve relative rel targets
+    /// to absolute OPC part paths when <paramref name="slidePartPathToId"/> is provided.
+    /// </param>
+    /// <param name="slidePartPathToId">
+    /// Maps absolute normalized OPC part paths (e.g. "ppt/slides/slide3.xml") to their
+    /// Slide.Id (= presentation-level rId). When supplied, internal slide-jump targets are
+    /// resolved by part path rather than by filename digit, which is order-independent and
+    /// correct for reordered decks (where slideN.xml filename ≠ presentation order).
+    /// </param>
+    private static Hyperlink? ResolveHlinkClick(
+        XElement hlinkEl,
+        List<(string id, string type, string target)>? slideRels,
+        List<Slide>? allSlides,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
+    {
+        if (slideRels is null) return null;
+
+        var rId     = hlinkEl.Attribute(R + "id")?.Value;
+        var action  = hlinkEl.Attribute("action")?.Value;
+        var tooltip = hlinkEl.Attribute("tooltip")?.Value;
+
+        // action="ppaction://hlinksldjump" with empty rId is a slide-jump with a rels entry.
+        // Also handle action-only with no rId.
+        bool isSlideJumpAction = action?.Contains("hlinksldjump", StringComparison.OrdinalIgnoreCase) == true;
+
+        if (!string.IsNullOrEmpty(rId))
+        {
+            var rel = slideRels.FirstOrDefault(r => r.id == rId);
+            if (rel == default) return null;
+
+            if (rel.type == HyperlinkRelType)
+            {
+                // External hyperlink
+                return new Hyperlink { Url = rel.target, Tooltip = tooltip };
+            }
+
+            if (rel.type == SlideRelType || rel.type == SlideHlinkRelType || isSlideJumpAction)
+            {
+                // Internal slide jump: target is a relative path like "../slides/slide3.xml".
+                // Resolve by part path → Slide.Id rather than filename digit, so decks where the
+                // presentation order does not match slideN.xml filenames navigate correctly.
+                if (slidePartPathToId is not null && slideDir is not null)
+                {
+                    // Resolve the relative target against the slide's directory to get an absolute
+                    // OPC part path, then look it up in the part-path→rId map.
+                    var absTarget = ResolvePath(slideDir, rel.target);
+                    if (slidePartPathToId.TryGetValue(absTarget, out var slideId))
+                        return new Hyperlink { TargetSlideId = slideId, Tooltip = tooltip };
+                    // absTarget didn't match — fall through to filename-digit fallback below.
+                }
+
+                if (allSlides is not null)
+                {
+                    // Fallback (no map available or path not found): derive slide index from the
+                    // numeric suffix of the filename. This is order-sensitive and wrong for reordered
+                    // decks, but preserves the pre-fix behaviour when the map is absent.
+                    var targetSeg = rel.target.Split('/').Last(); // e.g. "slide2.xml"
+                    var numStr = System.Text.RegularExpressions.Regex
+                        .Match(targetSeg, @"\d+").Value;
+                    if (int.TryParse(numStr, out var num) && num >= 1 && num <= allSlides.Count)
+                    {
+                        var targetSlide = allSlides[num - 1];
+                        return new Hyperlink { TargetSlideId = targetSlide.Id, Tooltip = tooltip };
+                    }
+                }
+                // Last resort: store the target path as the id (round-trip acceptable).
+                return new Hyperlink { TargetSlideId = rel.target, Tooltip = tooltip };
+            }
+        }
+        else if (isSlideJumpAction)
+        {
+            // action with no rId — some tools write slide jumps this way; can't resolve without rId.
+            // Return null; the hyperlink will be dropped rather than producing garbage.
+            return null;
+        }
+
+        return null;
     }
 
     // ── p:graphicFrame (table, chart, etc.) ───────────────────────────────────────
@@ -977,7 +1289,13 @@ public static class PptxPackageReader
 
     // ── p:sp ─────────────────────────────────────────────────────────────────────
 
-    private static SlideShape ReadSp(XElement sp, PresentationColorScheme scheme)
+    private static SlideShape ReadSp(XElement sp, PresentationColorScheme scheme,
+        List<(string id, string type, string target)>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        ZipArchive? archive = null,
+        string? partPath = null)
     {
         var cNvPr = sp.Element(P + "nvSpPr")?.Element(P + "cNvPr");
         var nvPr = sp.Element(P + "nvSpPr")?.Element(P + "nvPr");
@@ -989,17 +1307,25 @@ public static class PptxPackageReader
             Kind = SlideShapeKind.AutoShape
         };
 
+        // Shape-level hyperlink: a:hlinkClick inside cNvPr.
+        var shapeHlink = cNvPr?.Element(A + "hlinkClick");
+        if (shapeHlink is not null)
+            shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides, slideDir, slidePartPathToId);
+
         var ph = nvPr?.Element(P + "ph");
         if (ph is not null) shape.Placeholder = ReadPlaceholder(ph);
 
         var spPr = sp.Element(P + "spPr");
-        ReadSpPr(spPr, shape, scheme);
+        var blipResolver = (archive is not null && slideRels is not null && partPath is not null)
+            ? BuildBlipResolver(archive, slideRels, partPath)
+            : null;
+        ReadSpPr(spPr, shape, scheme, blipResolver);
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
         shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
 
         var txBody = sp.Element(P + "txBody");
-        if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme);
+        if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme, slideRels, allSlides, slideDir, slidePartPathToId);
 
         return shape;
     }
@@ -1009,6 +1335,7 @@ public static class PptxPackageReader
     private static SlideShape ReadPic(XElement pic, ZipArchive archive, string partPath, PresentationColorScheme scheme)
     {
         var cNvPr = pic.Element(P + "nvPicPr")?.Element(P + "cNvPr");
+        var nvPr  = pic.Element(P + "nvPicPr")?.Element(P + "nvPr");
 
         var shape = new SlideShape
         {
@@ -1021,7 +1348,7 @@ public static class PptxPackageReader
         ReadSpPr(spPr, shape, scheme);
         // P3: also carry the picture's outline (a:ln inside p:spPr) — already handled by ReadSpPr.
 
-        // blipFill → image
+        // blipFill → poster / image
         var blip = pic.Element(P + "blipFill")?.Element(A + "blip");
         var embedId = blip?.Attribute(R + "embed")?.Value;
         if (!string.IsNullOrWhiteSpace(embedId))
@@ -1046,12 +1373,111 @@ public static class PptxPackageReader
             }
         }
 
+        // Detect media (audio/video) — a:videoFile or a:audioFile inside p:nvPr
+        if (nvPr is not null)
+        {
+            var videoFileEl = nvPr.Element(A + "videoFile");
+            var audioFileEl = nvPr.Element(A + "audioFile");
+            var mediaEl     = videoFileEl ?? audioFileEl;
+            if (mediaEl is not null)
+            {
+                bool isVideo  = videoFileEl is not null;
+                var  mediaRelId = mediaEl.Attribute(R + "link")?.Value
+                               ?? mediaEl.Attribute(R + "embed")?.Value;
+
+                var mediaInfo = new MediaInfo { IsVideo = isVideo };
+
+                if (!string.IsNullOrWhiteSpace(mediaRelId))
+                {
+                    var partRels = LoadRels(archive, GetRelsPath(partPath));
+                    var mediaRel = partRels.FirstOrDefault(r => r.id == mediaRelId);
+                    if (!string.IsNullOrEmpty(mediaRel.target))
+                    {
+                        if (mediaRel.type == HyperlinkRelType ||
+                            mediaRel.target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // External / link-only
+                            mediaInfo.LinkUrl = mediaRel.target;
+                        }
+                        else
+                        {
+                            // Embedded
+                            var mediaPath  = ResolvePath(GetDirectory(partPath), mediaRel.target);
+                            var mediaBytes = ReadEntryBytes(archive, mediaPath);
+                            if (mediaBytes is not null)
+                            {
+                                mediaInfo.Bytes       = mediaBytes;
+                                mediaInfo.ContentType = GuessMediaContentType(mediaPath);
+                            }
+                        }
+                    }
+                }
+
+                // Also try p:extLst media references (newer PowerPoint embeds via p:media)
+                if (mediaInfo.Bytes.Length == 0 && string.IsNullOrEmpty(mediaInfo.LinkUrl))
+                {
+                    var extLst = nvPr.Element(P + "extLst");
+                    if (extLst is not null)
+                    {
+                        var partRels = LoadRels(archive, GetRelsPath(partPath));
+                        foreach (var ext in extLst.Elements(P + "ext"))
+                        {
+                            var mediaRef = ext.Descendants()
+                                .FirstOrDefault(e => e.Attribute(R + "embed") is not null
+                                                 || e.Attribute(R + "link") is not null);
+                            if (mediaRef is null) continue;
+                            var mRelId = mediaRef.Attribute(R + "embed")?.Value
+                                      ?? mediaRef.Attribute(R + "link")?.Value;
+                            if (string.IsNullOrEmpty(mRelId)) continue;
+                            var mRel = partRels.FirstOrDefault(r => r.id == mRelId);
+                            if (string.IsNullOrEmpty(mRel.target)) continue;
+                            var mPath  = ResolvePath(GetDirectory(partPath), mRel.target);
+                            var mBytes = ReadEntryBytes(archive, mPath);
+                            if (mBytes is not null)
+                            {
+                                mediaInfo.Bytes       = mBytes;
+                                mediaInfo.ContentType = GuessMediaContentType(mPath);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                shape.Media = mediaInfo;
+                shape.Kind  = SlideShapeKind.Media;
+            }
+        }
+
         return shape;
+    }
+
+    private static string GuessMediaContentType(string path)
+    {
+        var ext = path.Split('.').Last().ToLowerInvariant();
+        return ext switch
+        {
+            "mp4"  => "video/mp4",
+            "m4v"  => "video/mp4",
+            "mov"  => "video/quicktime",
+            "avi"  => "video/x-msvideo",
+            "wmv"  => "video/x-ms-wmv",
+            "mp3"  => "audio/mpeg",
+            "m4a"  => "audio/mp4",
+            "wav"  => "audio/wav",
+            "wma"  => "audio/x-ms-wma",
+            _      => "video/mp4"
+        };
     }
 
     // ── p:cxnSp ──────────────────────────────────────────────────────────────────
 
-    private static SlideShape ReadCxnSp(XElement cxnSp, PresentationColorScheme scheme)
+    private static SlideShape ReadCxnSp(XElement cxnSp, PresentationColorScheme scheme,
+        List<(string id, string type, string target)>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        ZipArchive? archive = null,
+        string? partPath = null)
     {
         var cNvPr = cxnSp.Element(P + "nvCxnSpPr")?.Element(P + "cNvPr");
 
@@ -1062,8 +1488,16 @@ public static class PptxPackageReader
             Kind = SlideShapeKind.Connector
         };
 
+        // Shape-level hyperlink on connector.
+        var shapeHlink = cNvPr?.Element(A + "hlinkClick");
+        if (shapeHlink is not null)
+            shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides, slideDir, slidePartPathToId);
+
         var spPr = cxnSp.Element(P + "spPr");
-        ReadSpPr(spPr, shape, scheme);
+        var blipResolver = (archive is not null && slideRels is not null && partPath is not null)
+            ? BuildBlipResolver(archive, slideRels, partPath)
+            : null;
+        ReadSpPr(spPr, shape, scheme, blipResolver);
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
         shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
@@ -1074,7 +1508,11 @@ public static class PptxPackageReader
     // ── p:grpSp ──────────────────────────────────────────────────────────────────
 
     private static SlideShape ReadGrpSp(XElement grpSp, ZipArchive archive, string partPath,
-        PresentationColorScheme scheme, Dictionary<string, TableStyleData>? tableStyles = null)
+        PresentationColorScheme scheme, Dictionary<string, TableStyleData>? tableStyles = null,
+        List<(string id, string type, string target)>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var cNvPr = grpSp.Element(P + "nvGrpSpPr")?.Element(P + "cNvPr");
 
@@ -1087,7 +1525,7 @@ public static class PptxPackageReader
 
         ReadSpPr(grpSp.Element(P + "grpSpPr"), shape, scheme);
 
-        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles))
+        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId))
             shape.Children.Add(child);
 
         return shape;
@@ -1095,7 +1533,11 @@ public static class PptxPackageReader
 
     // ── spPr ─────────────────────────────────────────────────────────────────────
 
-    private static void ReadSpPr(XElement? spPr, SlideShape shape, PresentationColorScheme scheme)
+    private static void ReadSpPr(
+        XElement? spPr,
+        SlideShape shape,
+        PresentationColorScheme scheme,
+        Func<string, (byte[] bytes, string contentType)?>? resolveBlip = null)
     {
         if (spPr is null) return;
 
@@ -1114,7 +1556,7 @@ public static class PptxPackageReader
             shape.FlipV = xfrm.Attribute("flipV")?.Value is "1" or "true";
         }
 
-        shape.Fill = PptxColorReader.TryReadFill(spPr, scheme);
+        shape.Fill = PptxColorReader.TryReadFill(spPr, scheme, resolveBlip);
         shape.Outline = PptxColorReader.TryReadOutline(spPr.Element(A + "ln"), scheme);
 
         // Custom geometry
@@ -1122,10 +1564,132 @@ public static class PptxPackageReader
         if (custGeom is not null)
             ReadCustGeom(custGeom, shape);
 
-        // Shape effects
+        // Shape effects (effectLst, sp3d, scene3d all go into ShapeEffects)
         var effectLst = spPr.Element(A + "effectLst");
-        if (effectLst is not null)
-            shape.Effects = ReadEffectLst(effectLst, scheme);
+        var sp3d      = spPr.Element(A + "sp3d");
+        var scene3d   = spPr.Element(A + "scene3d");
+
+        if (effectLst is not null || sp3d is not null || scene3d is not null)
+        {
+            var fx = effectLst is not null
+                ? (ReadEffectLst(effectLst, scheme) ?? new ShapeEffects())
+                : new ShapeEffects();
+
+            if (sp3d is not null)
+                ReadSp3d(sp3d, fx, scheme);
+
+            if (scene3d is not null)
+                ReadScene3d(scene3d, fx);
+
+            // Only store if there's actually something
+            bool hasSomething = fx.HasOuterShadow || fx.HasInnerShadow || fx.HasGlow
+                || fx.HasSoftEdge || fx.BevelTop is not null || fx.BevelBottom is not null
+                || fx.ExtrusionHeightEmu != 0 || fx.ContourWidthEmu != 0
+                || fx.Scene3d is not null;
+            if (hasSomething)
+                shape.Effects = fx;
+        }
+    }
+
+    // ── Blip resolver ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a delegate that resolves a blip embed rId to (bytes, contentType) using
+    /// the slide's image rels and the archive. Used for a:blipFill shape fills.
+    /// </summary>
+    private static Func<string, (byte[] bytes, string contentType)?> BuildBlipResolver(
+        ZipArchive archive,
+        List<(string id, string type, string target)> slideRels,
+        string partPath)
+    {
+        return (embedId) =>
+        {
+            var imageTarget = slideRels
+                .FirstOrDefault(r => r.id == embedId && r.type == ImageRelType).target;
+            if (string.IsNullOrWhiteSpace(imageTarget)) return null;
+
+            var imagePath = ResolvePath(GetDirectory(partPath), imageTarget);
+            var entry = archive.GetEntry(imagePath);
+            if (entry is null) return null;
+
+            using var imgStream = entry.Open();
+            using var ms = new MemoryStream();
+            imgStream.CopyTo(ms);
+            return (ms.ToArray(), GuessContentType(imagePath));
+        };
+    }
+
+    // ── a:sp3d ───────────────────────────────────────────────────────────────
+
+    private static void ReadSp3d(XElement sp3d, ShapeEffects fx, PresentationColorScheme scheme)
+    {
+        fx.ExtrusionHeightEmu = ParseLong(sp3d.Attribute("extrusionH")?.Value);
+        fx.ContourWidthEmu    = ParseLong(sp3d.Attribute("contourW")?.Value);
+        fx.PrstMaterial       = sp3d.Attribute("prstMaterial")?.Value ?? string.Empty;
+
+        // a:bevelT
+        var bevelT = sp3d.Element(A + "bevelT");
+        if (bevelT is not null)
+        {
+            fx.BevelTop = new BevelInfo
+            {
+                WidthEmu   = ParseLongOrDefault(bevelT.Attribute("w")?.Value,  76200),
+                HeightEmu  = ParseLongOrDefault(bevelT.Attribute("h")?.Value,  76200),
+                PresetName = bevelT.Attribute("prst")?.Value ?? string.Empty
+            };
+        }
+
+        // a:bevelB
+        var bevelB = sp3d.Element(A + "bevelB");
+        if (bevelB is not null)
+        {
+            fx.BevelBottom = new BevelInfo
+            {
+                WidthEmu   = ParseLongOrDefault(bevelB.Attribute("w")?.Value,  76200),
+                HeightEmu  = ParseLongOrDefault(bevelB.Attribute("h")?.Value,  76200),
+                PresetName = bevelB.Attribute("prst")?.Value ?? string.Empty
+            };
+        }
+
+        // a:extrusionClr
+        var extClr = sp3d.Element(A + "extrusionClr");
+        if (extClr is not null)
+        {
+            var tac = PptxColorReader.TryReadColor(extClr, scheme);
+            if (tac is not null) fx.ExtrusionColor = tac.Resolved;
+        }
+
+        // a:contourClr
+        var ctrClr = sp3d.Element(A + "contourClr");
+        if (ctrClr is not null)
+        {
+            var tac = PptxColorReader.TryReadColor(ctrClr, scheme);
+            if (tac is not null) fx.ContourColor = tac.Resolved;
+        }
+    }
+
+    // ── a:scene3d ────────────────────────────────────────────────────────────
+
+    private static void ReadScene3d(XElement scene3d, ShapeEffects fx)
+    {
+        var camera   = scene3d.Element(A + "camera");
+        var lightRig = scene3d.Element(A + "lightRig");
+
+        if (camera is null && lightRig is null) return;
+
+        fx.Scene3d = new Scene3dInfo
+        {
+            CameraPreset = camera?.Attribute("prst")?.Value   ?? string.Empty,
+            LightRig     = lightRig?.Attribute("rig")?.Value  ?? string.Empty,
+            LightRigDir  = lightRig?.Attribute("dir")?.Value  ?? string.Empty
+        };
+    }
+
+    private static long ParseLongOrDefault(string? value, long defaultValue)
+    {
+        if (value is null) return defaultValue;
+        return long.TryParse(value, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : defaultValue;
     }
 
     private static void ReadCustGeom(XElement custGeom, SlideShape shape)
@@ -1279,10 +1843,6 @@ public static class PptxPackageReader
             fx.SoftEdgeRadEmu = ParseLong(softEdge.Attribute("rad")?.Value);
         }
 
-        // a:sp3d (bevel — best-effort flag)
-        var sp3d = effectLst.Element(A + "sp3d");
-        if (sp3d is not null) { fx.HasBevel = true; any = true; }
-
         return any ? fx : null;
     }
 
@@ -1304,7 +1864,11 @@ public static class PptxPackageReader
 
     // ── TextBody ─────────────────────────────────────────────────────────────────
 
-    private static TextBody ReadTxBody(XElement txBody, PresentationColorScheme scheme)
+    private static TextBody ReadTxBody(XElement txBody, PresentationColorScheme scheme,
+        List<(string id, string type, string target)>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var body = new TextBody();
 
@@ -1359,12 +1923,16 @@ public static class PptxPackageReader
         }
 
         foreach (var pEl in txBody.Elements(A + "p"))
-            body.Paragraphs.Add(ReadParagraph(pEl, scheme));
+            body.Paragraphs.Add(ReadParagraph(pEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
 
         return body;
     }
 
-    private static Paragraph ReadParagraph(XElement pEl, PresentationColorScheme scheme)
+    private static Paragraph ReadParagraph(XElement pEl, PresentationColorScheme scheme,
+        List<(string id, string type, string target)>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var para = new Paragraph();
         var pPr = pEl.Element(A + "pPr");
@@ -1403,14 +1971,56 @@ public static class PptxPackageReader
 
         foreach (var child in pEl.Elements())
         {
-            if (child.Name == A + "r") para.Runs.Add(ReadRun(child, scheme));
-            else if (child.Name == A + "br") para.Runs.Add(new Run { Text = "\n" });
+            if (child.Name == A + "r")
+                para.Runs.Add(ReadRun(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
+            else if (child.Name == A + "br")
+                para.Runs.Add(new Run { Text = "\n" });
+            else if (child.Name == A + "fld")
+                para.Runs.Add(ReadFieldRun(child, scheme));
         }
 
         return para;
     }
 
-    private static Run ReadRun(XElement rEl, PresentationColorScheme scheme)
+    private static Run ReadFieldRun(XElement fldEl, PresentationColorScheme scheme)
+    {
+        var fieldType  = fldEl.Attribute("type")?.Value ?? string.Empty;
+        var cachedText = fldEl.Element(A + "t")?.Value ?? string.Empty;
+
+        var fld = new FieldRun
+        {
+            FieldType  = fieldType,
+            CachedText = cachedText,
+        };
+
+        var rPr = fldEl.Element(A + "rPr");
+        if (rPr is not null)
+        {
+            if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
+                fld.FontSizePt = sz / 100.0;
+            fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+            fld.Bold   = rPr.Attribute("b")?.Value is "1" or "true";
+            fld.Italic = rPr.Attribute("i")?.Value is "1" or "true";
+            var solidFill = rPr.Element(A + "solidFill");
+            if (solidFill is not null)
+            {
+                var tac = PptxColorReader.TryReadColor(solidFill, scheme);
+                if (tac is not null) fld.Color = tac.Resolved;
+            }
+        }
+
+        return new Run
+        {
+            Text  = cachedText,
+            Field = fld,
+        };
+    }
+
+    private static Run ReadRun(XElement rEl, PresentationColorScheme scheme,
+        List<(string id, string type, string target)>? slideRels = null,
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var run = new Run { Text = rEl.Element(A + "t")?.Value ?? string.Empty };
         var rPr = rEl.Element(A + "rPr");
@@ -1426,6 +2036,11 @@ public static class PptxPackageReader
             var solidFill = rPr.Element(A + "solidFill");
             if (solidFill is not null)
                 run.Color = PptxColorReader.TryReadColor(solidFill, scheme);
+
+            // Run-level hyperlink: a:hlinkClick inside a:rPr.
+            var runHlink = rPr.Element(A + "hlinkClick");
+            if (runHlink is not null)
+                run.Hyperlink = ResolveHlinkClick(runHlink, slideRels, allSlides, slideDir, slidePartPathToId);
         }
         return run;
     }
@@ -1463,72 +2078,114 @@ public static class PptxPackageReader
         return t;
     }
 
-    // ── p:timing (main sequence animations) ──────────────────────────────────────
+    // ── p:timing (main sequence + trigger sequences) ─────────────────────────────
 
     private static void ReadAnimations(XElement timingEl, Slide slide)
     {
         // Walk: p:timing > p:tnLst > p:par (interactive) > p:cTn > p:childTnLst > p:seq (main seq)
         // > p:cTn > p:childTnLst > p:par (build step) > p:cTn > p:childTnLst > p:par > p:cTn
-        // > ... > p:set | p:animEffect (target shape).
+        // > ... > p:set | p:animEffect | p:animMotion (target shape).
         //
-        // Real-world structure (PowerPoint 2016+):
-        // p:timing/p:tnLst/p:par/p:cTn/p:childTnLst/p:seq/p:cTn/p:childTnLst/p:par*
-        // Each outer p:par in childTnLst of the seq = one "click group".
-        // Each click group's p:cTn/p:childTnLst/p:par* = individual build items.
-        //
-        // We flatten and collect every p:animEffect / p:set that targets a spTgt.
+        // Additionally: trigger sequences live as sibling p:seq elements whose p:cTn/p:stCondLst/p:cond
+        // has evt="onClick" and tgtEl/p:spTgt pointing to the trigger shape.
 
         try
         {
             var tnLst = timingEl.Element(P + "tnLst");
             if (tnLst is null) return;
 
-            // Find the main sequence: p:seq with the "mainSeq" presentation attribute or just the first p:seq
-            var seq = FindMainSequence(tnLst);
-            if (seq is null) return;
+            // Find the main sequence: p:seq with nodeType="mainSeq"
+            var mainSeq = FindSequence(tnLst, "mainSeq");
 
-            var seqChildTnLst = seq.Element(P + "cTn")?.Element(P + "childTnLst");
-            if (seqChildTnLst is null) return;
-
-            // Each p:par inside is one "click group"
-            foreach (var clickGroup in seqChildTnLst.Elements(P + "par"))
+            if (mainSeq is not null)
             {
-                ReadClickGroup(clickGroup, slide);
+                var seqChildTnLst = mainSeq.Element(P + "cTn")?.Element(P + "childTnLst");
+                if (seqChildTnLst is not null)
+                {
+                    foreach (var clickGroup in seqChildTnLst.Elements(P + "par"))
+                        ReadClickGroup(clickGroup, slide, triggerShapeId: null);
+                }
+            }
+
+            // Find all trigger (interactive) sequences: p:seq with stCondLst/cond evt="onClick" tgtEl/spTgt
+            foreach (var triggerSeq in FindTriggerSequences(tnLst))
+            {
+                var trigSpid = GetTriggerShapeId(triggerSeq);
+                if (trigSpid is null) continue;
+
+                var seqChild = triggerSeq.Element(P + "cTn")?.Element(P + "childTnLst");
+                if (seqChild is null) continue;
+
+                foreach (var clickGroup in seqChild.Elements(P + "par"))
+                    ReadClickGroup(clickGroup, slide, triggerShapeId: trigSpid);
             }
         }
         catch
         {
             // If we fail to parse the timing tree (complex/unknown structure), skip silently.
-            // Unmodeled timing is dropped per spec.
         }
     }
 
-    private static XElement? FindMainSequence(XElement tnLst)
+    private static XElement? FindSequence(XElement tnLst, string nodeType)
     {
-        // Typical: tnLst/par/cTn/childTnLst/seq
-        // But FreeP writes: tnLst/par/cTn/childTnLst/par/cTn(interactiveSeq)/childTnLst/seq
-        // So we search descendants broadly for the first p:seq with nodeType="mainSeq"
-        // or just the first p:seq anywhere.
-        var mainSeq = tnLst.Descendants(P + "seq")
-            .FirstOrDefault(s => s.Element(P + "cTn")?.Attribute("nodeType")?.Value == "mainSeq");
-        if (mainSeq is not null) return mainSeq;
-
-        // Fallback: any seq
-        return tnLst.Descendants(P + "seq").FirstOrDefault();
+        return tnLst.Descendants(P + "seq")
+            .FirstOrDefault(s => s.Element(P + "cTn")?.Attribute("nodeType")?.Value == nodeType);
     }
 
-    private static void ReadClickGroup(XElement clickGroup, Slide slide)
+    /// <summary>
+    /// Finds all p:seq elements whose stCondLst has a cond with evt="onClick" and a spTgt target.
+    /// These are the interactive-trigger sequences.
+    /// </summary>
+    private static IEnumerable<XElement> FindTriggerSequences(XElement tnLst)
+    {
+        foreach (var seq in tnLst.Descendants(P + "seq"))
+        {
+            var nodeType = seq.Element(P + "cTn")?.Attribute("nodeType")?.Value;
+            // Skip the main sequence itself.
+            if (nodeType == "mainSeq") continue;
+
+            var condLst = seq.Element(P + "cTn")?.Element(P + "stCondLst");
+            if (condLst is null) continue;
+
+            foreach (var cond in condLst.Elements(P + "cond"))
+            {
+                if (cond.Attribute("evt")?.Value == "onClick" &&
+                    cond.Descendants(P + "spTgt").Any())
+                {
+                    yield return seq;
+                    break;
+                }
+            }
+        }
+    }
+
+    private static uint? GetTriggerShapeId(XElement triggerSeq)
+    {
+        var condLst = triggerSeq.Element(P + "cTn")?.Element(P + "stCondLst");
+        if (condLst is null) return null;
+        foreach (var cond in condLst.Elements(P + "cond"))
+        {
+            if (cond.Attribute("evt")?.Value == "onClick")
+            {
+                var spTgt = cond.Descendants(P + "spTgt").FirstOrDefault();
+                if (spTgt is not null && uint.TryParse(spTgt.Attribute("spid")?.Value, out var spid))
+                    return spid;
+            }
+        }
+        return null;
+    }
+
+    private static void ReadClickGroup(XElement clickGroup, Slide slide, uint? triggerShapeId)
     {
         var innerTnLst = clickGroup.Element(P + "cTn")?.Element(P + "childTnLst");
         if (innerTnLst is null) return;
 
         // Determine trigger from the click group's stCondLst
-        // If it has a cond with delay="indefinite" -> OnClick; else WithPrevious or AfterPrevious
         var trigger = GetTrigger(clickGroup.Element(P + "cTn")?.Element(P + "stCondLst"));
 
         foreach (var buildItem in innerTnLst.Elements(P + "par"))
         {
-            var anim = ReadBuildItem(buildItem, trigger);
+            var anim = ReadBuildItem(buildItem, trigger, triggerShapeId);
             if (anim is not null)
                 slide.Animations.Add(anim);
         }
@@ -1544,34 +2201,17 @@ public static class PptxPackageReader
         return AnimationTrigger.AfterPrevious;
     }
 
-    private static ShapeAnimation? ReadBuildItem(XElement buildPar, AnimationTrigger outerTrigger)
+    private static ShapeAnimation? ReadBuildItem(XElement buildPar, AnimationTrigger outerTrigger, uint? triggerShapeId)
     {
-        // Navigate down to find a p:animEffect or p:set with a p:spTgt
         var cTn = buildPar.Element(P + "cTn");
         if (cTn is null) return null;
-
-        // presetClass and presetID are on the innermost cTn
-        var presetClass = cTn.Attribute("presetClass")?.Value;
-        var presetIdStr = cTn.Attribute("presetID")?.Value;
-        if (string.IsNullOrEmpty(presetClass)) return null;
-
-        if (!int.TryParse(presetIdStr, out var presetId)) return null;
-
-        // presetSubtype for direction
-        var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
-
-        // Find shape target (spTgt) anywhere in the descendants
-        var spTgt = FindSpTgt(buildPar);
-        if (spTgt is null) return null;
-
-        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
 
         // Duration from p:cTn dur attribute
         int durationMs = 500;
         if (int.TryParse(cTn.Attribute("dur")?.Value, out var d) && d > 0)
             durationMs = d;
 
-        // Delay from stCondLst/cond delay
+        // Delay and inner trigger
         int delayMs = 0;
         var stCondLst = cTn.Element(P + "stCondLst");
         var innerTrigger = outerTrigger;
@@ -1588,24 +2228,186 @@ public static class PptxPackageReader
             }
         }
 
+        // Check for motion path: look for p:animMotion anywhere in descendants.
+        var animMotion = buildPar.Descendants(P + "animMotion").FirstOrDefault();
+        if (animMotion is not null)
+            return ReadMotionBuildItem(animMotion, buildPar, durationMs, innerTrigger, triggerShapeId);
+
+        // Preset entrance/emphasis/exit animation.
+        var presetClass = cTn.Attribute("presetClass")?.Value;
+        var presetIdStr = cTn.Attribute("presetID")?.Value;
+        if (string.IsNullOrEmpty(presetClass)) return null;
+        if (!int.TryParse(presetIdStr, out var presetId)) return null;
+
+        var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
+
+        var spTgt = FindSpTgt(buildPar);
+        if (spTgt is null) return null;
+        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
+
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
         var direction = PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype);
 
         return new ShapeAnimation
         {
-            ShapeId    = shapeId,
-            Kind       = kind,
-            Preset     = preset,
-            Trigger    = innerTrigger,
-            DelayMs    = delayMs,
-            DurationMs = durationMs,
-            Direction  = direction,
+            ShapeId        = shapeId,
+            Kind           = kind,
+            Preset         = preset,
+            Trigger        = innerTrigger,
+            DelayMs        = delayMs,
+            DurationMs     = durationMs,
+            Direction      = direction,
+            TriggerShapeId = triggerShapeId,
         };
+    }
+
+    private static ShapeAnimation? ReadMotionBuildItem(
+        XElement animMotion, XElement buildPar,
+        int durationMs, AnimationTrigger trigger, uint? triggerShapeId)
+    {
+        // p:animMotion has: path attr (mini-language), origin attr, cBhvr child with spTgt.
+        var pathStr = animMotion.Attribute("path")?.Value ?? string.Empty;
+        var origin  = animMotion.Attribute("origin")?.Value ?? "parent";
+        var ptsTypes = animMotion.Attribute("ptsTypes")?.Value;
+
+        // Target shape from p:cBhvr/p:tgtEl/p:spTgt
+        var cBhvr = animMotion.Element(P + "cBhvr");
+        var spTgt = cBhvr?.Element(P + "tgtEl")?.Element(P + "spTgt")
+                 ?? FindSpTgt(buildPar);
+        if (spTgt is null) return null;
+        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
+
+        // Duration from animMotion/cBhvr/cTn
+        var cTnDur = cBhvr?.Element(P + "cTn")?.Attribute("dur")?.Value;
+        if (cTnDur != null && int.TryParse(cTnDur, out var d) && d > 0)
+            durationMs = d;
+
+        // Delay: read from the outer buildPar cTn/stCondLst/cond/@delay, mirroring
+        // ReadBuildItem. The writer emits the delay there for non-OnClick timing.
+        int delayMs = 0;
+        var outerStCondLst = buildPar.Element(P + "cTn")?.Element(P + "stCondLst");
+        if (outerStCondLst is not null)
+        {
+            var delayCond = outerStCondLst.Element(P + "cond");
+            var delayVal = delayCond?.Attribute("delay")?.Value;
+            if (delayVal != null && delayVal != "indefinite" && int.TryParse(delayVal, out var delayParsed))
+            {
+                delayMs = delayParsed;
+                if (trigger != AnimationTrigger.OnClick)
+                    trigger = delayParsed == 0 ? AnimationTrigger.WithPrevious : AnimationTrigger.AfterPrevious;
+            }
+        }
+
+        var motion = ParseMotionPath(pathStr, origin, ptsTypes);
+
+        return new ShapeAnimation
+        {
+            ShapeId        = shapeId,
+            Kind           = AnimationKind.Motion,
+            Preset         = AnimationPreset.Appear, // unused for motion
+            Trigger        = trigger,
+            DelayMs        = delayMs,
+            DurationMs     = durationMs,
+            Motion         = motion,
+            TriggerShapeId = triggerShapeId,
+        };
+    }
+
+    /// <summary>
+    /// Parses the OOXML motion-path mini-language into a <see cref="MotionPath"/>.
+    /// Grammar: (M x,y | L x,y | C x1,y1 x2,y2 x,y | Z | E)*
+    /// Coordinates are fractions of slide size (0..1), origin at shape center.
+    /// Handles both spaced ("M 0 0") and packed ("M0 0") PowerPoint output.
+    /// </summary>
+    private static MotionPath ParseMotionPath(string pathStr, string origin, string? ptsTypes)
+    {
+        var mp = new MotionPath { Origin = origin, PtsTypes = ptsTypes };
+        if (string.IsNullOrWhiteSpace(pathStr)) return mp;
+
+        // Tokenise: split on whitespace + commas, then further split any token that
+        // starts with a command letter immediately followed by a digit/sign (packed
+        // form like "M0" → ["M", "0"] or "L-0.5" → ["L", "-0.5"]).
+        // PowerPoint emits both spaced and packed strings depending on version.
+        var rawTokens = pathStr
+            .Replace(',', ' ')
+            .Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+        var tokenList = new List<string>(rawTokens.Length * 2);
+        foreach (var raw in rawTokens)
+        {
+            // A command letter is one of: M L C Z E (case-insensitive).
+            // If the first char is a letter and is followed by more chars, split it off.
+            if (raw.Length > 1 && char.IsLetter(raw[0]))
+            {
+                tokenList.Add(raw[0].ToString());
+                var rest = raw.Substring(1);
+                if (!string.IsNullOrEmpty(rest))
+                    tokenList.Add(rest);
+            }
+            else
+            {
+                tokenList.Add(raw);
+            }
+        }
+
+        var tokens = tokenList;
+        int count = tokens.Count;
+
+        int i = 0;
+        while (i < count)
+        {
+            var cmd = tokens[i++];
+            switch (cmd.ToUpperInvariant())
+            {
+                case "M":
+                {
+                    if (i + 1 >= count) break;
+                    double x = ParsePathDouble(tokens[i++]);
+                    double y = ParsePathDouble(tokens[i++]);
+                    mp.Segments.Add(MotionPathSegment.MoveTo(x, y));
+                    break;
+                }
+                case "L":
+                {
+                    if (i + 1 >= count) break;
+                    double x = ParsePathDouble(tokens[i++]);
+                    double y = ParsePathDouble(tokens[i++]);
+                    mp.Segments.Add(MotionPathSegment.LineTo(x, y));
+                    break;
+                }
+                case "C":
+                {
+                    if (i + 5 >= count) break;
+                    double x1 = ParsePathDouble(tokens[i++]);
+                    double y1 = ParsePathDouble(tokens[i++]);
+                    double x2 = ParsePathDouble(tokens[i++]);
+                    double y2 = ParsePathDouble(tokens[i++]);
+                    double x  = ParsePathDouble(tokens[i++]);
+                    double y  = ParsePathDouble(tokens[i++]);
+                    mp.Segments.Add(MotionPathSegment.CubicTo(x1, y1, x2, y2, x, y));
+                    break;
+                }
+                case "Z":
+                case "E":
+                    mp.Segments.Add(MotionPathSegment.Close());
+                    break;
+                // Silently skip unknown commands.
+            }
+        }
+
+        return mp;
+    }
+
+    private static double ParsePathDouble(string s)
+    {
+        if (double.TryParse(s.TrimEnd('f'), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var v))
+            return v;
+        return 0;
     }
 
     private static XElement? FindSpTgt(XElement root)
     {
-        // BFS/DFS to find p:spTgt
         foreach (var el in root.Descendants(P + "spTgt"))
             return el;
         return null;

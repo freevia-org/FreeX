@@ -299,12 +299,12 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 0, 0, 12),
             Items =
             {
-                new TabItem { Header = UiText.Get("PivotTableOptions_LayoutAndFormat"), Content = layoutTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotTableOptions_TotalsAndFilters"), Content = totalsTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotTableOptions_Display"), Content = displayTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotTableOptions_Printing"), Content = printTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotTableOptions_Data"), Content = dataTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotTableOptions_AltText"), Content = altTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotTableOptions_LayoutAndFormat")), Content = layoutTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotTableOptions_TotalsAndFilters")), Content = totalsTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotTableOptions_Display")), Content = displayTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotTableOptions_Printing")), Content = printTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotTableOptions_Data")), Content = dataTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotTableOptions_AltText")), Content = altTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
         AutomationProperties.SetAutomationId(tabs, "PivotTableOptionsTabs");
@@ -425,7 +425,7 @@ public sealed partial class MainWindow
         var wrapper = new StackPanel { Spacing = 4 };
         wrapper.Children.Add(new TextBlock
         {
-            Text = label,
+            Text = StripDisplayMnemonic(label),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,

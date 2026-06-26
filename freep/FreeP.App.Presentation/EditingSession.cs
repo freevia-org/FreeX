@@ -1,7 +1,11 @@
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
+using System.Linq;
 
 namespace FreeP.App.Compositor;
+
+// Wave 12B: TextSearchMatch, TextSearchOptions, PresentationTextSearch, ReplaceOneCommand,
+// ReplaceAllCommand are all in FreeP.Core.Model (no extra using needed — same namespace chain).
 
 // Paste offset: ~0.2 inches in EMU  (914400 EMU = 1 inch)
 file static class PasteOffset
@@ -504,6 +508,57 @@ public sealed class EditingSession
         return shape;
     }
 
+    /// <summary>
+    /// Creates and inserts a text-box shape already carrying <paramref name="text"/> as its
+    /// content, as a single undoable <see cref="AddShapeCommand"/>.
+    ///
+    /// Y8 fix: the text is baked into the shape BEFORE the command is executed so it is
+    /// captured atomically by the undo bus — no out-of-band mutation after the fact.
+    ///
+    /// Y9 fix: <paramref name="text"/> is split on line-breaks into separate
+    /// <see cref="Paragraph"/>s so multi-line clipboard content preserves its structure.
+    /// Each paragraph is guaranteed to have at least one <see cref="Run"/> (the empty
+    /// paragraph fallback ensures the shape always has a valid text body).
+    /// </summary>
+    public SlideShape InsertTextBox(string text)
+    {
+        var (x, y, cx, cy) = DefaultShapeBounds();
+        var body = new TextBody { Wrap = true };
+
+        // Split on common line-break sequences; keep empty lines so spacing is preserved.
+        var lines = text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+        foreach (var line in lines)
+        {
+            var para = new Paragraph();
+            para.Runs.Add(new Run { Text = line });
+            body.Paragraphs.Add(para);
+        }
+
+        // Guard: ensure at least one paragraph exists (handles empty string gracefully).
+        if (body.Paragraphs.Count == 0)
+        {
+            var para = new Paragraph();
+            para.Runs.Add(new Run { Text = string.Empty });
+            body.Paragraphs.Add(para);
+        }
+
+        var shape = new SlideShape
+        {
+            Id            = NextShapeId(),
+            Name          = "TextBox",
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = x,
+            OffsetYEmu    = y,
+            ExtentCxEmu   = cx,
+            ExtentCyEmu   = cy,
+            Fill          = ShapeFill.None.Instance,
+            TextBody      = body
+        };
+        AddShape(shape);
+        return shape;
+    }
+
     /// <summary>Creates and inserts a default rectangle autoshape onto the current slide.</summary>
     public SlideShape InsertDefaultRectangle()
     {
@@ -828,6 +883,42 @@ public sealed class EditingSession
         return shape;
     }
 
+    // ── Hyperlinks ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets a shape-level hyperlink on every selected shape.  Undoable.
+    /// Pass <paramref name="url"/> for an external link or <paramref name="targetSlideId"/> for
+    /// an internal slide jump; exactly one should be non-null.
+    /// </summary>
+    public void SetShapeHyperlink(string? url = null, string? targetSlideId = null, string? tooltip = null)
+    {
+        if (CurrentSlide is null) return;
+        var link = (url is not null || targetSlideId is not null)
+            ? new Hyperlink { Url = url, TargetSlideId = targetSlideId, Tooltip = tooltip }
+            : null;
+        foreach (var id in _selectedShapeIds)
+            Bus.Execute(new SetShapeHyperlinkCommand(_currentSlideIndex, id, link));
+    }
+
+    /// <summary>Removes the shape-level hyperlink from every selected shape.  Undoable.</summary>
+    public void RemoveShapeHyperlink()
+        => SetShapeHyperlink(); // null link = remove
+
+    /// <summary>
+    /// Returns the shape-level hyperlink of the first selected shape, if any.
+    /// Used to pre-fill the HyperlinkDialog when editing an existing link.
+    /// </summary>
+    public Hyperlink? SelectedShapeHyperlink
+    {
+        get
+        {
+            if (CurrentSlide is null || _selectedShapeIds.Count == 0) return null;
+            var firstId = _selectedShapeIds[0];
+            var shape   = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == firstId);
+            return shape?.Hyperlink;
+        }
+    }
+
     // ── Font family (named overload matching 5B contract) ─────────────────────────
 
     /// <summary>
@@ -889,6 +980,514 @@ public sealed class EditingSession
             _fmtFill,
             _fmtOutline,
             _fmtRun));
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // TABLE EDITING API  (Wave 9A)
+    // ════════════════════════════════════════════════════════════════════════════════
+    //
+    // All table ops work on the currently-selected shape (must be Kind==Table).
+    // ActiveTableCell tracks the focused cell within that table.
+    //
+    // 9B should NOT touch this region.
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    // ── Active cell selection ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The currently focused (row, col) within the selected table shape.
+    /// Null when no table is selected or no cell is explicitly focused.
+    /// </summary>
+    public (int Row, int Col)? ActiveTableCell { get; private set; }
+
+    /// <summary>Fired when <see cref="ActiveTableCell"/> changes.</summary>
+    public event EventHandler? ActiveTableCellChanged;
+
+    /// <summary>
+    /// Sets the active cell to (<paramref name="row"/>, <paramref name="col"/>).
+    /// Clamps indices to the table's actual bounds.
+    /// Does nothing if the currently selected shape is not a table.
+    /// </summary>
+    public void SetActiveTableCell(int row, int col)
+    {
+        var table = GetSelectedTable();
+        if (table is null) return;
+        int r = Math.Clamp(row, 0, table.Rows.Count - 1);
+        int c = Math.Clamp(col, 0, table.ColumnWidthsEmu.Count - 1);
+        ActiveTableCell = (r, c);
+        ActiveTableCellChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Clears the active cell selection.</summary>
+    public void ClearActiveTableCell()
+    {
+        if (ActiveTableCell is null) return;
+        ActiveTableCell = null;
+        ActiveTableCellChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ── Cell text ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Replaces the text of the cell at (<paramref name="row"/>, <paramref name="col"/>)
+    /// in the selected table with a plain-text string. Undoable.
+    /// </summary>
+    public void SetTableCellText(int row, int col, string text)
+    {
+        var (shapeId, _) = RequireSelectedTable();
+        if (shapeId == 0) return;
+
+        TextBody? body = null;
+        if (!string.IsNullOrEmpty(text))
+        {
+            body = new TextBody { Wrap = true };
+            foreach (var line in text.Split('\n'))
+            {
+                var para = new Paragraph();
+                para.Runs.Add(new Run { Text = line });
+                body.Paragraphs.Add(para);
+            }
+        }
+
+        Bus.Execute(new SetTableCellTextCommand(_currentSlideIndex, shapeId, row, col, body));
+    }
+
+    /// <summary>
+    /// Replaces the <see cref="TextBody"/> of the specified cell in the selected table. Undoable.
+    /// </summary>
+    public void SetTableCellText(int row, int col, TextBody? newBody)
+        => ExecuteTableCommand((si, id) => new SetTableCellTextCommand(si, id, row, col, newBody));
+
+    // ── Row / column insert and delete ────────────────────────────────────────────
+
+    /// <summary>Inserts a row above the active cell's row. Undoable.</summary>
+    public void InsertRowAbove()
+    {
+        int row = ActiveTableCell?.Row ?? 0;
+        ExecuteTableCommand((si, id) => new InsertTableRowCommand(si, id, row));
+        // Active cell shifts down by one because a row was inserted above it.
+        if (ActiveTableCell.HasValue)
+            SetActiveTableCell(ActiveTableCell.Value.Row + 1, ActiveTableCell.Value.Col);
+    }
+
+    /// <summary>Inserts a row below the active cell's row. Undoable.</summary>
+    public void InsertRowBelow()
+    {
+        int row = (ActiveTableCell?.Row ?? -1) + 1;
+        ExecuteTableCommand((si, id) => new InsertTableRowCommand(si, id, row));
+    }
+
+    /// <summary>Deletes the active cell's row. Undoable.</summary>
+    public void DeleteRow()
+    {
+        int row = ActiveTableCell?.Row ?? 0;
+        ExecuteTableCommand((si, id) => new DeleteTableRowCommand(si, id, row));
+
+        // Clamp active cell after deletion.
+        var table = GetSelectedTable();
+        if (table is not null && ActiveTableCell.HasValue)
+        {
+            int r = Math.Clamp(ActiveTableCell.Value.Row, 0, Math.Max(0, table.Rows.Count - 1));
+            ActiveTableCell = (r, Math.Clamp(ActiveTableCell.Value.Col, 0, Math.Max(0, table.ColumnWidthsEmu.Count - 1)));
+            ActiveTableCellChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Inserts a column to the left of the active cell's column. Undoable.</summary>
+    public void InsertColumnLeft()
+    {
+        int col = ActiveTableCell?.Col ?? 0;
+        ExecuteTableCommand((si, id) => new InsertTableColumnCommand(si, id, col));
+        if (ActiveTableCell.HasValue)
+            SetActiveTableCell(ActiveTableCell.Value.Row, ActiveTableCell.Value.Col + 1);
+    }
+
+    /// <summary>Inserts a column to the right of the active cell's column. Undoable.</summary>
+    public void InsertColumnRight()
+    {
+        int col = (ActiveTableCell?.Col ?? -1) + 1;
+        ExecuteTableCommand((si, id) => new InsertTableColumnCommand(si, id, col));
+    }
+
+    /// <summary>Deletes the active cell's column. Undoable.</summary>
+    public void DeleteColumn()
+    {
+        int col = ActiveTableCell?.Col ?? 0;
+        ExecuteTableCommand((si, id) => new DeleteTableColumnCommand(si, id, col));
+
+        var table = GetSelectedTable();
+        if (table is not null && ActiveTableCell.HasValue)
+        {
+            int c = Math.Clamp(ActiveTableCell.Value.Col, 0, Math.Max(0, table.ColumnWidthsEmu.Count - 1));
+            ActiveTableCell = (Math.Clamp(ActiveTableCell.Value.Row, 0, Math.Max(0, table.Rows.Count - 1)), c);
+            ActiveTableCellChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    // ── Merge / split ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Merges the rectangular region [r1,c1]..[r2,c2] in the selected table. Undoable.
+    /// </summary>
+    public void MergeTableCells(int r1, int c1, int r2, int c2)
+        => ExecuteTableCommand((si, id) => new MergeTableCellsCommand(si, id, r1, c1, r2, c2));
+
+    /// <summary>Merges a named selection range. Undoable.</summary>
+    public void MergeSelectedCells(int r1, int c1, int r2, int c2)
+        => MergeTableCells(r1, c1, r2, c2);
+
+    /// <summary>Splits the merged cell at (<paramref name="row"/>, <paramref name="col"/>). Undoable.
+    /// A no-op on an unmerged cell records no undo entry (the bus skips no-effect commands).</summary>
+    public void SplitTableCell(int row, int col)
+        => ExecuteTableCommand((si, id) => new SplitTableCellCommand(si, id, row, col));
+
+    /// <summary>Splits the merged anchor at the active cell (if any). Undoable.</summary>
+    public void SplitSelectedCell()
+    {
+        if (ActiveTableCell is null) return;
+        SplitTableCell(ActiveTableCell.Value.Row, ActiveTableCell.Value.Col);
+    }
+
+    // ── Table helpers ─────────────────────────────────────────────────────────────
+
+    /// <summary>Returns the TableShape of the first selected shape, or null if it is not a table.</summary>
+    public TableShape? GetSelectedTable()
+    {
+        var slide = CurrentSlide;
+        if (slide is null || _selectedShapeIds.Count == 0) return null;
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+        return shape?.Kind == SlideShapeKind.Table ? shape.Table : null;
+    }
+
+    private (uint shapeId, TableShape? table) RequireSelectedTable()
+    {
+        var slide = CurrentSlide;
+        if (slide is null || _selectedShapeIds.Count == 0) return (0, null);
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null) return (0, null);
+        return (shape.Id, shape.Table);
+    }
+
+    private void ExecuteTableCommand(Func<int, uint, IPresentationCommand> factory)
+    {
+        var (shapeId, _) = RequireSelectedTable();
+        if (shapeId == 0) return;
+        Bus.Execute(factory(_currentSlideIndex, shapeId));
+    }
+
+    // ── Chart data API (Wave 9B) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the <see cref="ChartShape"/> for the currently selected chart shape, or null
+    /// if the selection is empty or the first selected shape is not a chart.
+    /// </summary>
+    public ChartShape? SelectedChart
+    {
+        get
+        {
+            if (CurrentSlide is null || _selectedShapeIds.Count == 0) return null;
+            var shape = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+            return shape?.Kind == SlideShapeKind.Chart ? shape.Chart : null;
+        }
+    }
+
+    /// <summary>
+    /// Sets the numeric value at [<paramref name="seriesIndex"/>][<paramref name="categoryIndex"/>]
+    /// in the selected chart.  Undoable.
+    /// </summary>
+    public void SetChartValue(int seriesIndex, int categoryIndex, double value)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new SetChartCellValueCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            seriesIndex, categoryIndex, value));
+    }
+
+    /// <summary>Renames the category at <paramref name="categoryIndex"/>. Undoable.</summary>
+    public void SetChartCategory(int categoryIndex, string label)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new SetChartCategoryLabelCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            categoryIndex, label));
+    }
+
+    /// <summary>Renames the series at <paramref name="seriesIndex"/>. Undoable.</summary>
+    public void SetChartSeriesName(int seriesIndex, string name)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new SetChartSeriesNameCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            seriesIndex, name));
+    }
+
+    /// <summary>Appends a new series to the selected chart. Undoable.</summary>
+    public void AddChartSeries(string name = "New Series")
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new AddChartSeriesCommand(
+            _currentSlideIndex, _selectedShapeIds[0], name));
+    }
+
+    /// <summary>Removes the series at <paramref name="seriesIndex"/> from the selected chart. Undoable.</summary>
+    public void RemoveChartSeries(int seriesIndex)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new RemoveChartSeriesCommand(
+            _currentSlideIndex, _selectedShapeIds[0], seriesIndex));
+    }
+
+    /// <summary>Appends a new category to the selected chart. Undoable.</summary>
+    public void AddChartCategory(string label = "New Category")
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new AddChartCategoryCommand(
+            _currentSlideIndex, _selectedShapeIds[0], label));
+    }
+
+    /// <summary>Removes the category at <paramref name="categoryIndex"/> from the selected chart. Undoable.</summary>
+    public void RemoveChartCategory(int categoryIndex)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new RemoveChartCategoryCommand(
+            _currentSlideIndex, _selectedShapeIds[0], categoryIndex));
+    }
+
+    /// <summary>
+    /// Replaces the entire data payload of the selected chart in one undoable batch command.
+    /// Used by <c>ChartDataDialog</c> so all grid edits become a single undo step.
+    /// Gap points should be passed as null; they are preserved verbatim in the model.
+    /// </summary>
+    public void ReplaceChartData(
+        IEnumerable<string>               categories,
+        IEnumerable<string>               seriesNames,
+        IEnumerable<IEnumerable<double?>> values)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new ReplaceChartDataCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            categories, seriesNames, values));
+    }
+
+    /// <summary>
+    /// Non-nullable overload for callers that already work with <c>double</c> sequences (no gaps).
+    /// </summary>
+    public void ReplaceChartData(
+        IEnumerable<string>              categories,
+        IEnumerable<string>              seriesNames,
+        IEnumerable<IEnumerable<double>> values)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new ReplaceChartDataCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            categories, seriesNames, values));
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // ARRANGE / GROUP / ALIGN / DISTRIBUTE  (Wave 12A)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    // ── Z-order — BringToFront / SendToBack (BringForward/SendBackward remain in the original region above) ──
+
+    /// <summary>
+    /// Brings ALL selected shapes to the very top of z-order, preserving their relative order.
+    /// Processes shapes in ascending z-order so the highest-z-selected ends up on top.
+    /// Wrapped in a single BatchCommand so undo restores all shapes in one step.
+    /// </summary>
+    public void BringToFront()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+
+        if (_selectedShapeIds.Count == 1)
+        {
+            Bus.Execute(new BringToFrontCommand(_currentSlideIndex, _selectedShapeIds[0]));
+            return;
+        }
+
+        // FF2: multi-select — bring all selected shapes to front preserving relative order.
+        // Process in ascending z-order (lowest first) so the last-processed (originally topmost)
+        // ends up at the very top, preserving their relative stacking.
+        var shapes = CurrentSlide.Shapes;
+        var orderedIds = _selectedShapeIds
+            .Select(id => (id, zIdx: shapes.FindIndex(s => s.Id == id)))
+            .Where(t => t.zIdx >= 0)
+            .OrderBy(t => t.zIdx)
+            .Select(t => t.id)
+            .ToList();
+
+        var cmds = orderedIds.Select(id => (IPresentationCommand)new BringToFrontCommand(_currentSlideIndex, id));
+        Bus.Execute(new BatchCommand("Bring to Front", cmds));
+    }
+
+    /// <summary>
+    /// Sends ALL selected shapes to the very bottom of z-order, preserving their relative order.
+    /// Processes shapes in descending z-order so the lowest-z-selected ends up at the bottom.
+    /// Wrapped in a single BatchCommand so undo restores all shapes in one step.
+    /// </summary>
+    public void SendToBack()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+
+        if (_selectedShapeIds.Count == 1)
+        {
+            Bus.Execute(new SendToBackCommand(_currentSlideIndex, _selectedShapeIds[0]));
+            return;
+        }
+
+        // FF2: multi-select — send all selected shapes to back preserving relative order.
+        // Process in descending z-order (highest first) so the last-processed (originally bottommost)
+        // ends up at index 0, preserving their relative stacking.
+        var shapes = CurrentSlide.Shapes;
+        var orderedIds = _selectedShapeIds
+            .Select(id => (id, zIdx: shapes.FindIndex(s => s.Id == id)))
+            .Where(t => t.zIdx >= 0)
+            .OrderByDescending(t => t.zIdx)
+            .Select(t => t.id)
+            .ToList();
+
+        var cmds = orderedIds.Select(id => (IPresentationCommand)new SendToBackCommand(_currentSlideIndex, id));
+        Bus.Execute(new BatchCommand("Send to Back", cmds));
+    }
+
+    // ── Group / Ungroup ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Wraps the selected shapes (≥2) into a new Group shape and selects the group.
+    /// Undoable in one step.
+    /// </summary>
+    public void GroupSelectedShapes()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count < 2) return;
+        var cmd = new GroupShapesCommand(_currentSlideIndex, _selectedShapeIds);
+        Bus.Execute(cmd);
+
+        // After grouping, select the new group (it is the last shape added
+        // at the lowest-z-index slot of the originals; find by Kind=Group + max Id).
+        var group = CurrentSlide.Shapes
+            .Where(s => s.Kind == SlideShapeKind.Group)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefault();
+        if (group is not null)
+        {
+            _selectedShapeIds.Clear();
+            _selectedShapeIds.Add(group.Id);
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Ungroupsthe first selected shape if it is a Group, selects the freed children.
+    /// Undoable in one step.
+    /// </summary>
+    public void UngroupSelected()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        var id     = _selectedShapeIds[0];
+        var shape  = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == id);
+        if (shape?.Kind != SlideShapeKind.Group) return;
+
+        var childIds = shape.Children.Select(c => c.Id).ToList();
+        Bus.Execute(new UngroupShapeCommand(_currentSlideIndex, id));
+
+        // Select the freed children.
+        _selectedShapeIds.Clear();
+        foreach (var cid in childIds)
+            _selectedShapeIds.Add(cid);
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ── Align ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Aligns selected shapes' left edges. One undo step.</summary>
+    public void AlignLeft()         => ExecuteAlignCommand(AlignKind.Left);
+    /// <summary>Centers selected shapes horizontally. One undo step.</summary>
+    public void AlignCenterH()      => ExecuteAlignCommand(AlignKind.CenterH);
+    /// <summary>Aligns selected shapes' right edges. One undo step.</summary>
+    public void AlignRight()        => ExecuteAlignCommand(AlignKind.Right);
+    /// <summary>Aligns selected shapes' top edges. One undo step.</summary>
+    public void AlignTop()          => ExecuteAlignCommand(AlignKind.Top);
+    /// <summary>Centers selected shapes vertically. One undo step.</summary>
+    public void AlignMiddle()       => ExecuteAlignCommand(AlignKind.Middle);
+    /// <summary>Aligns selected shapes' bottom edges. One undo step.</summary>
+    public void AlignBottom()       => ExecuteAlignCommand(AlignKind.Bottom);
+
+    private void ExecuteAlignCommand(AlignKind kind)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new AlignShapesCommand(_currentSlideIndex, _selectedShapeIds, kind));
+    }
+
+    // ── Distribute ────────────────────────────────────────────────────────────────
+
+    /// <summary>Evenly spaces selected shapes horizontally (≥3 required). One undo step.</summary>
+    public void DistributeHorizontally()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count < 3) return;
+        Bus.Execute(new DistributeShapesCommand(_currentSlideIndex, _selectedShapeIds, DistributeKind.Horizontal));
+    }
+
+    /// <summary>Evenly spaces selected shapes vertically (≥3 required). One undo step.</summary>
+    public void DistributeVertically()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count < 3) return;
+        Bus.Execute(new DistributeShapesCommand(_currentSlideIndex, _selectedShapeIds, DistributeKind.Vertical));
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // FIND & REPLACE  (Wave 12B)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Returns all text matches for <paramref name="query"/> across the entire presentation
+    /// (shape TextBody, table cells, slide Notes; not comments).
+    /// Returns an empty list when query is null or empty.
+    /// </summary>
+    public List<TextSearchMatch> FindAll(string? query, TextSearchOptions? opts = null)
+        => PresentationTextSearch.FindAll(Presentation, query, opts);
+
+    /// <summary>
+    /// Navigates to the slide and selects the shape that contains <paramref name="match"/>.
+    /// Does nothing if the match refers to a virtual notes id or the slide/shape cannot be found.
+    /// </summary>
+    public void NavigateTo(TextSearchMatch match)
+    {
+        if (match.SlideIndex < 0 || match.SlideIndex >= Presentation.Slides.Count) return;
+
+        // Go to the slide first.
+        if (_currentSlideIndex != match.SlideIndex)
+            SelectSlide(match.SlideIndex);
+
+        // Select the shape (skip virtual notes shape ids).
+        const uint NotesBase = 0xFFFF0000u;
+        if (match.ShapeId < NotesBase)
+            Select(match.ShapeId);
+    }
+
+    /// <summary>
+    /// Replaces the text matched by <paramref name="match"/> with <paramref name="replacement"/>.
+    /// Navigates to the match's slide and selects the shape. Undoable.
+    /// </summary>
+    public void ReplaceOne(TextSearchMatch match, string replacement)
+    {
+        NavigateTo(match);
+        Bus.Execute(new ReplaceOneCommand(match, replacement));
+    }
+
+    /// <summary>
+    /// Replaces ALL occurrences of <paramref name="query"/> in the presentation with
+    /// <paramref name="replacement"/> in a single undoable step.
+    /// Returns the number of replacements made (0 when nothing matched).
+    /// </summary>
+    public int ReplaceAll(string? query, string replacement, TextSearchOptions? opts = null)
+    {
+        if (string.IsNullOrEmpty(query)) return 0;
+        opts ??= new TextSearchOptions();
+
+        var matches = PresentationTextSearch.FindAll(Presentation, query, opts);
+        if (matches.Count == 0) return 0;
+
+        Bus.Execute(new ReplaceAllCommand(query, replacement, opts));
+        return matches.Count;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────

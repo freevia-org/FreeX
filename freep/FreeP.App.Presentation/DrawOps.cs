@@ -75,18 +75,78 @@ public abstract class ResolvedFill
         public Solid(SrgbColor color) => Color = color;
     }
 
-    /// <summary>Two-stop linear gradient.</summary>
+    /// <summary>A single resolved gradient stop with concrete sRGB color + position.</summary>
+    public sealed class ResolvedGradientStop
+    {
+        /// <summary>Stop position in [0, 1].</summary>
+        public double Position { get; }
+        public SrgbColor Color { get; }
+        public ResolvedGradientStop(double position, SrgbColor color)
+        {
+            Position = position;
+            Color = color;
+        }
+    }
+
+    /// <summary>Multi-stop gradient (linear or radial) with resolved colors.</summary>
     public sealed class Gradient : ResolvedFill
     {
-        public SrgbColor StartColor { get; }
-        public SrgbColor EndColor { get; }
-        /// <summary>Angle in degrees (0 = left->right, 90 = top->bottom).</summary>
+        /// <summary>All gradient stops in position order (positions in [0,1]).</summary>
+        public IReadOnlyList<ResolvedGradientStop> Stops { get; }
+
+        /// <summary>Gradient kind (Linear or Radial).</summary>
+        public GradientKind Kind { get; }
+
+        /// <summary>Angle in degrees (0 = left->right, 90 = top->bottom). Linear only.</summary>
         public double AngleDegrees { get; }
-        public Gradient(SrgbColor startColor, SrgbColor endColor, double angleDegrees)
+
+        // ── Back-compat 2-stop accessors ────────────────────────────────────────────
+        public SrgbColor StartColor => Stops.Count > 0 ? Stops[0].Color : SrgbColor.Black;
+        public SrgbColor EndColor   => Stops.Count > 0 ? Stops[^1].Color : SrgbColor.White;
+
+        public Gradient(IReadOnlyList<ResolvedGradientStop> stops, GradientKind kind, double angleDegrees)
         {
-            StartColor = startColor;
-            EndColor = endColor;
+            Stops = stops;
+            Kind = kind;
             AngleDegrees = angleDegrees;
+        }
+
+        /// <summary>Back-compat 2-stop linear constructor.</summary>
+        public Gradient(SrgbColor startColor, SrgbColor endColor, double angleDegrees)
+            : this(new[]
+            {
+                new ResolvedGradientStop(0.0, startColor),
+                new ResolvedGradientStop(1.0, endColor)
+            }, GradientKind.Linear, angleDegrees)
+        {
+        }
+    }
+
+    /// <summary>Picture (blip) fill with resolved image bytes.</summary>
+    public sealed class Picture : ResolvedFill
+    {
+        public byte[] ImageBytes { get; }
+        public string ContentType { get; }
+        public bool Tile { get; }
+        public Picture(byte[] imageBytes, string contentType, bool tile = false)
+        {
+            ImageBytes = imageBytes;
+            ContentType = contentType;
+            Tile = tile;
+        }
+    }
+
+    /// <summary>Pattern (hatch) fill with resolved fg/bg colors and preset name.</summary>
+    public sealed class PatternFill : ResolvedFill
+    {
+        public string Preset { get; }
+        public SrgbColor ForegroundColor { get; }
+        public SrgbColor BackgroundColor { get; }
+        public PatternFill(string preset, SrgbColor foregroundColor, SrgbColor backgroundColor)
+        {
+            Preset = preset;
+            ForegroundColor = foregroundColor;
+            BackgroundColor = backgroundColor;
         }
     }
 }
@@ -115,6 +175,17 @@ public abstract class ResolvedOutline
 
 // ─── Resolved shape effects ───────────────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Resolved bevel descriptor with DIP values for the renderer.</summary>
+public sealed class ResolvedBevel
+{
+    /// <summary>Bevel width in DIP (converted from EMU).</summary>
+    public double WidthDip { get; init; }
+    /// <summary>Bevel height in DIP (converted from EMU).</summary>
+    public double HeightDip { get; init; }
+    /// <summary>Preset name, e.g. "circle", "relaxedInset", "cross". Empty = circle.</summary>
+    public string PresetName { get; init; } = string.Empty;
+}
+
 /// <summary>Resolved shape effects with concrete DIP values for the renderer.</summary>
 public sealed class ResolvedShapeEffects
 {
@@ -138,6 +209,24 @@ public sealed class ResolvedShapeEffects
     // Soft edge
     public bool HasSoftEdge { get; init; }
     public double SoftEdgeRadiusDip { get; init; }
+
+    // Bevel / 3-D
+    /// <summary>Top-face bevel, or null if none.</summary>
+    public ResolvedBevel? BevelTop { get; init; }
+    /// <summary>Bottom-face bevel, or null if none.</summary>
+    public ResolvedBevel? BevelBottom { get; init; }
+    /// <summary>Extrusion depth in DIP. 0 = none.</summary>
+    public double ExtrusionDepthDip { get; init; }
+    /// <summary>Contour width in DIP. 0 = none.</summary>
+    public double ContourWidthDip { get; init; }
+    /// <summary>Extrusion colour (for contour outline rendering). Null = no override.</summary>
+    public SrgbColor? ContourColor { get; init; }
+    /// <summary>
+    /// Light direction hint (derived from scene3d lightRig dir=). Used to shift
+    /// bevel highlight/shade sides. 0=top, 45=top-right, 90=right, 135=bottom-right etc.
+    /// -1 means no scene3d → use default top-left illumination.
+    /// </summary>
+    public double LightDirDeg { get; init; } = -1;
 }
 
 // ─── Draw operations ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -213,6 +302,12 @@ public abstract class DrawOp
 
         /// <summary>Optional outline drawn around the picture frame (None if no outline).</summary>
         public ResolvedOutline Outline { get; init; } = ResolvedOutline.None.Instance;
+
+        /// <summary>
+        /// When true, this picture is a media placeholder (video/audio poster).
+        /// The renderer draws a play-button triangle overlay on top.
+        /// </summary>
+        public bool IsMedia { get; init; }
     }
 
     // ── Background draw op ────────────────────────────────────────────────────────────────────────────────────────
