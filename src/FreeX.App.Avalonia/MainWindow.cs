@@ -4531,7 +4531,10 @@ public sealed partial class MainWindow : Window
         double width,
         double height)
     {
-        var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
+        // WordArt shapes have no body fill — the visual is entirely the styled text.
+        var fill = (!drawingObject.IsWordArt && drawingObject.FillColor is { } fc)
+            ? Brush(fc)
+            : (!drawingObject.IsWordArt ? Brush(new CellColor(0x5B, 0x9B, 0xD5)) : Brushes.Transparent);
         // When OutlineHasNoFill is set the shape explicitly has no border stroke.
         IBrush? strokeBrush = drawingObject.OutlineHasNoFill
             ? null
@@ -4691,6 +4694,7 @@ public sealed partial class MainWindow : Window
 
     // Renders shape text as a TextBlock overlay that sits inside the shape's bounding box.
     // Padding, alignment, font, and wrap mirror WPF DrawShapeText.
+    // For WordArt shapes: applies gradient Foreground and/or styled border approximation.
     private static TextBlock CreateShapeTextOverlay(DrawingObjectBounds d, double w, double h)
     {
         const double HPad = 4;
@@ -4711,6 +4715,22 @@ public sealed partial class MainWindow : Window
             var fc = d.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5);
             var luminance = 0.299 * fc.R + 0.587 * fc.G + 0.114 * fc.B;
             textBrush = luminance < 128 ? Brushes.White : Brushes.Black;
+        }
+
+        // WordArt gradient text fill: override Foreground with a vertical LinearGradientBrush.
+        // Approximation: the gradient covers the text block bounding box (not per-glyph geometry).
+        if (d.IsWordArt && d.ShapeTextGradientEndColor is { } gradEnd && d.ShapeTextColor is { } startColor)
+        {
+            textBrush = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                EndPoint   = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromRgb(startColor.R, startColor.G, startColor.B), 0),
+                    new GradientStop(Color.FromRgb(gradEnd.R,    gradEnd.G,    gradEnd.B),    1),
+                },
+            };
         }
 
         var hAlign = d.ShapeTextHAlign switch
