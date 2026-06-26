@@ -114,6 +114,13 @@ public sealed class DocumentView : Control
     // Non-null when there is a selection anchor inside a cell (same encoding as _cellCaret).
     private (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? _cellAnchor;
 
+    // ── AV-TBL2: cross-cell rectangular selection ─────────────────────────────────────────────────
+    // When a drag spans more than one cell, we switch from single-cell text selection to a rectangular
+    // block selection. _cellBlockAnchor is the cell where the drag started; _cellBlockFocus is the cell
+    // under the pointer. Non-null only while a multi-cell selection is active.
+    private (int TableBlock, int Row, int Col)? _cellBlockAnchor;
+    private (int TableBlock, int Row, int Col)? _cellBlockFocus;
+
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
     private DocPosition _caret;
@@ -407,6 +414,108 @@ public sealed class DocumentView : Control
         _selectionAnchor = _caret;
         InvalidateVisual();
         CaretMoved?.Invoke();
+    }
+
+    // ── AV-TBL2: row/column insert + delete ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Insert a blank row above the caret's current row in the table.
+    /// No-op when the caret is not inside a table cell. Undoable.
+    /// </summary>
+    public void InsertTableRowAbove() => MutateCaretTable((blockIdx, row, _) =>
+        new InsertTableRowCommand(blockIdx, row));
+
+    /// <summary>
+    /// Insert a blank row below the caret's current row in the table.
+    /// No-op when the caret is not inside a table cell. Undoable.
+    /// </summary>
+    public void InsertTableRowBelow() => MutateCaretTable((blockIdx, row, _) =>
+        new InsertTableRowCommand(blockIdx, row + 1));
+
+    /// <summary>
+    /// Delete the caret's current row from the table. No-op when not in a table or only one row remains.
+    /// Undoable.
+    /// </summary>
+    public void DeleteTableRow() => MutateCaretTable((blockIdx, row, _) =>
+        new DeleteTableRowCommand(blockIdx, row));
+
+    /// <summary>
+    /// Insert a blank column to the left of the caret's current column. Undoable.
+    /// </summary>
+    public void InsertTableColumnLeft() => MutateCaretTable((blockIdx, _, col) =>
+        new InsertTableColumnCommand(blockIdx, col));
+
+    /// <summary>
+    /// Insert a blank column to the right of the caret's current column. Undoable.
+    /// </summary>
+    public void InsertTableColumnRight() => MutateCaretTable((blockIdx, _, col) =>
+        new InsertTableColumnCommand(blockIdx, col + 1));
+
+    /// <summary>
+    /// Delete the caret's current column from the table. No-op when only one column remains. Undoable.
+    /// </summary>
+    public void DeleteTableColumn() => MutateCaretTable((blockIdx, _, col) =>
+        new DeleteTableColumnCommand(blockIdx, col));
+
+    /// <summary>
+    /// Executes a table mutation (insert/delete row or column) keyed on the caret's table location.
+    /// Locates the (blockIndex, row, col) from <see cref="_cellCaret"/>, builds the command with the
+    /// supplied factory, runs it through the command bus (undoable), clears the stale cell caret, and
+    /// triggers a re-layout.
+    /// </summary>
+    private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
+    {
+        if (_cellCaret is not { } cc)
+            return;
+        var blockIdx = cc.TableBlock;
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
+            return;
+        var cmd = build(blockIdx, cc.Row, cc.Col);
+        _bus.Execute(cmd);
+        // Clear the cell caret — row/col indices shift after mutations; ClampCaret handles safe reset.
+        _cellCaret = null;
+        _cellAnchor = null;
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        InvalidateLayoutAndVisual();
+    }
+
+    // ── AV-TBL2: cross-cell rectangular selection ────────────────────────────────────────────────
+
+    /// <summary>
+    /// The rectangular cell range currently selected by a cross-cell drag, or null when only a
+    /// single cell (or body text) is active. Returns (TableBlock, MinRow, MinCol, MaxRow, MaxCol)
+    /// with rows and cols clamped to the inclusive bounds of the anchor → focus rectangle.
+    /// Ribbon commands (delete/merge/format) should check this before falling back to
+    /// <see cref="CellCaretInfo"/>.
+    /// </summary>
+    public (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? SelectedCellRange
+    {
+        get
+        {
+            if (_cellBlockAnchor is not { } a || _cellBlockFocus is not { } f)
+                return null;
+            if (a.TableBlock != f.TableBlock)
+                return null;
+            return (a.TableBlock,
+                Math.Min(a.Row, f.Row), Math.Min(a.Col, f.Col),
+                Math.Max(a.Row, f.Row), Math.Max(a.Col, f.Col));
+        }
+    }
+
+    /// <summary>
+    /// Programmatically set the cross-cell selection anchor and focus for tests and external callers.
+    /// Both cells must be in the same table block.
+    /// </summary>
+    public void SetCellBlockSelection(int tableBlock, int anchorRow, int anchorCol, int focusRow, int focusCol)
+    {
+        _cellBlockAnchor = (tableBlock, anchorRow, anchorCol);
+        _cellBlockFocus  = (tableBlock, focusRow,  focusCol);
+        // Clear single-cell text selection state to avoid ambiguity.
+        _cellCaret  = null;
+        _cellAnchor = null;
+        _selectionAnchor = null;
+        InvalidateVisual();
     }
 
     // ---- Test-only layout introspection (internal — visible to FreeW.App.Avalonia.Tests) ---------
@@ -3073,6 +3182,19 @@ public sealed class DocumentView : Control
         foreach (var sd in _inlineSmartArts)
             DrawFloatingSmartArt(context, sd);
 
+        // AV-TBL2: cross-cell block-selection highlight. Draw a semi-transparent overlay over each
+        // cell-hit rect that falls inside the selected row×col rectangle.
+        if (SelectedCellRange is { } cellSel)
+        {
+            foreach (var (cellRect, cellBlock, cellRow, cellCol) in _cellHits)
+            {
+                if (cellBlock != cellSel.TableBlock) continue;
+                if (cellRow < cellSel.MinRow || cellRow > cellSel.MaxRow) continue;
+                if (cellCol < cellSel.MinCol || cellCol > cellSel.MaxCol) continue;
+                context.FillRectangle(CellBlockSelectionBrush, cellRect);
+            }
+        }
+
         var selection = NormalizedSelection();
         foreach (var pc in _placed)
         {
@@ -3430,6 +3552,13 @@ public sealed class DocumentView : Control
 
         if (TryHitTest(point, out var pos))
         {
+            // AV-TBL2: clear any prior cross-cell block selection on a fresh (non-shift) press.
+            if (!shift)
+            {
+                _cellBlockAnchor = null;
+                _cellBlockFocus  = null;
+            }
+
             // AV-TBL: When entering a cell, _cellCaret was set by TryHitTest.
             // When leaving a cell (hitting body text), _cellCaret is cleared.
             if (!shift)
@@ -3452,11 +3581,36 @@ public sealed class DocumentView : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && TryHitTest(e.GetPosition(this), out var pos))
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        var point = e.GetPosition(this);
+        if (!TryHitTest(point, out var pos))
+            return;
+
+        // AV-TBL2: when a drag starts inside a cell and moves to a DIFFERENT cell, switch to
+        // rectangular cross-cell block selection instead of single-cell text selection.
+        if (_cellAnchor is { } anchor && _cellCaret is { } focus
+            && anchor.TableBlock == focus.TableBlock
+            && (anchor.Row != focus.Row || anchor.Col != focus.Col))
         {
-            _caret = pos;
-            InvalidateVisual();
+            // Different cell than where the drag started → activate block selection.
+            _cellBlockAnchor = (anchor.TableBlock, anchor.Row, anchor.Col);
+            _cellBlockFocus  = (focus.TableBlock,  focus.Row,  focus.Col);
+            // Suppress the single-cell text selection anchor so IsWithin() doesn't highlight glyphs.
+            _selectionAnchor = _caret;
         }
+        else if (_cellAnchor is { } anch && _cellCaret is { } foc
+                 && anch.TableBlock == foc.TableBlock
+                 && anch.Row == foc.Row && anch.Col == foc.Col)
+        {
+            // Still in the same cell — clear block selection if it was set.
+            _cellBlockAnchor = null;
+            _cellBlockFocus  = null;
+        }
+
+        _caret = pos;
+        InvalidateVisual();
     }
 
     protected override void OnTextInput(TextInputEventArgs e)
@@ -4582,6 +4736,9 @@ public sealed class DocumentView : Control
         // AV-TBL: clear cell caret on undo/redo to avoid stale cell addresses.
         _cellCaret = null;
         _cellAnchor = null;
+        // AV-TBL2: also clear cross-cell block selection (indices may have shifted after mutation).
+        _cellBlockAnchor = null;
+        _cellBlockFocus  = null;
         if (_caret.Block >= _doc.Blocks.Count)
             _caret = new DocPosition(Math.Max(0, _doc.Blocks.Count - 1), 0);
         _caret = _caret with { Offset = Math.Clamp(_caret.Offset, 0, CurrentLength()) };
@@ -4802,6 +4959,9 @@ public sealed class DocumentView : Control
     }
 
     private static IBrush SelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x33, 0x99, 0xFF));
+
+    // AV-TBL2: overlay brush for rectangular cross-cell block selection (slightly deeper than glyph selection).
+    private static IBrush CellBlockSelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x66, 0x33, 0x99, 0xFF));
 
     private readonly record struct Cell(char Ch, RunFormatting Fmt);
 
