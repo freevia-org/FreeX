@@ -734,6 +734,108 @@ public sealed class DocumentViewFloatingImageTests
             "SS1 no-break regression: 72pt vertical offset should shift Y by ~96 DIP");
     }
 
+    // ── TT1: boundary-band page-break probe ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// TT1 (boundary-band fix): Fill a page so the anchor paragraph's first line sits in the last
+    /// ~lineHeight px of the text area (posInPage just below textAreaHeight - lineHeight, i.e.
+    /// in the band (textAreaHeight - lineHeight, textAreaHeight)).  Before the fix a 1-px probe
+    /// used by PeekFirstLineContentY did NOT trigger the page-break, so anchorContentY stayed on
+    /// page 1 while the first line was pushed to page 2 → float landed on page 1 (wrong).
+    ///
+    /// We fill the page to leave just enough room for ~1px but not a full line, then add the
+    /// anchor paragraph.  The float with vOffset=0 must land on page 2 (the same page as the
+    /// paragraph's first line).
+    ///
+    /// Layout geometry (96 DPI, US Letter, 1-in margins):
+    ///   textAreaHeight = (792-72-72) × (96/72) = 864 DIP
+    ///   lineHeight ≈ 11pt × (96/72) × 1.3 ≈ 20.3 DIP
+    ///   We fill 863 DIP (864 - 1) of the text area, leaving 1 DIP at the bottom.
+    ///   The anchor para's first line (≈20 DIP) overflows → page 2.
+    ///   Page 2 content start Y ≈ 24 + 864 + 20 + 96 = 1004 DIP.
+    /// </summary>
+    [Fact]
+    public async Task TT1_boundary_band_anchor_float_lands_on_same_page_as_first_line()
+    {
+        Rect floatRect = default;
+        double firstGlyphY = double.MaxValue;
+        int pageCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            // US-Letter defaults: 612×792pt, 72pt margins → textAreaHeight = 864 DIP.
+            const double textAreaHeightDip = 864.0;
+            // Default 11pt line ≈ 20.3 DIP.  Fill to textAreaHeight - 1 px so the band test fires.
+            const double lineHDip = 20.3;
+            // We need to fill exactly enough that posInPage ∈ (textAreaHeight - lineH, textAreaHeight).
+            // Strategy: add filler paragraphs totalling ~(textAreaHeight - 1) DIP.
+            // Each filler line ≈ lineHDip. Count = floor((textAreaHeight - 1) / lineHDip).
+            var fillerCount = (int)((textAreaHeightDip - 1) / lineHDip); // ≈ 42
+
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var bodyFmt = RunFormatting.Default with { FontSizePt = 11 };
+
+            for (var i = 0; i < fillerCount; i++)
+            {
+                var filler = new Paragraph();
+                filler.Runs.Add(new Run($"Fill {i + 1}.", bodyFmt));
+                doc.Blocks.Add(filler);
+            }
+
+            // Anchor paragraph at the boundary band — its first line must overflow to page 2.
+            var anchorPara = new Paragraph();
+            anchorPara.Runs.Add(new Run("Boundary anchor.", bodyFmt));
+
+            var floatImg = new InlineImage(SmallPng(), 72, 54)
+            {
+                Wrapping           = ImageWrapping.Square,
+                HorizontalOffsetPt = 0,
+                VerticalOffsetPt   = 0,
+                HorizontalAnchor   = HorizontalAnchor.Column,
+                VerticalAnchor     = VerticalAnchor.Paragraph,
+                ZOrderIndex        = 0,
+            };
+            anchorPara.Runs.Add(new Run(string.Empty, bodyFmt) { Image = floatImg });
+            doc.Blocks.Add(anchorPara);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, double.PositiveInfinity));
+
+            pageCount = view.PageCount;
+            if (view.FloatingImageRects.Count > 0)
+                floatRect = view.FloatingImageRects[0].Rect;
+
+            // Find the Y of the first glyph in the anchor paragraph (last block = fillerCount).
+            var placed = view.GetPlacedForBlock(fillerCount);
+            if (placed.Count > 0)
+                firstGlyphY = placed.Min(g => g.Y);
+        });
+
+        if (!ran) return;
+
+        // The anchor paragraph must have been pushed to page 2.
+        pageCount.Should().BeGreaterThan(1,
+            "TT1: filler paragraphs should fill page 1, pushing the anchor to page 2");
+
+        // Page 2 content start ≈ DeskPadding(24) + textAreaHeight(864) + PageGap(20) + marginTop(96) = 1004.
+        const double page2Threshold = 1000.0;
+
+        floatRect.Y.Should().BeGreaterThanOrEqualTo(page2Threshold,
+            $"TT1 boundary-band: paragraph-anchored float must be on page 2 (Y ≥ {page2Threshold}), " +
+            $"got Y={floatRect.Y:F1}. Before fix, PeekFirstLineContentY(1) didn't trigger the break " +
+            $"but the actual line (≈20px) did, landing the float one page too early.");
+
+        // Float Y must match the anchor paragraph's first glyph Y (both on page 2, vOffset=0).
+        if (firstGlyphY < double.MaxValue)
+        {
+            var delta = Math.Abs(floatRect.Y - firstGlyphY);
+            delta.Should().BeLessThanOrEqualTo(4.0,
+                $"TT1: float Y ({floatRect.Y:F1}) should match first glyph Y ({firstGlyphY:F1}) of anchor paragraph");
+        }
+    }
+
     // ── PNG encoder (shared with PrintLayoutCaptureTests) ────────────────────────────────────────────
 
     private static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)

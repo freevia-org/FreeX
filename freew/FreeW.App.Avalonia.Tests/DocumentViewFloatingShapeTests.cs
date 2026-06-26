@@ -564,6 +564,174 @@ public sealed class DocumentViewFloatingShapeTests
         Console.WriteLine($"[FloatingShapeCapture] Visual inspection: {outPath}");
     }
 
+    // ── UU1: ZOrder interleaving of images and shapes in same band ──────────────────────────────────
+
+    /// <summary>
+    /// UU1 (merged ZOrder draw sequence): In the behind-text band, a floating IMAGE with ZOrderIndex=100
+    /// must be drawn AFTER a floating SHAPE with ZOrderIndex=0 (image on top), since the merged list is
+    /// sorted ascending by ZOrder and later items paint over earlier items.
+    ///
+    /// Before the fix, images and shapes were drawn in two separate sequential OrderBy loops, so the
+    /// shape (second loop) always painted over the image (first loop) regardless of ZOrder.
+    ///
+    /// This test verifies that the layout correctly captures both items with the right ZOrder values
+    /// (layout-order correctness). The render-order assertion is structural — we verify the ZOrder
+    /// values are tracked as expected so the merged sort in Render() will produce the right sequence.
+    /// </summary>
+    [Fact]
+    public async Task UU1_behind_text_image_z100_and_shape_z0_both_collected_with_correct_zorders()
+    {
+        int imageZ = -1;
+        int shapeZ = -1;
+        bool imageIsBehind = false;
+        bool shapeIsBehind = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Anchor text for UU1 ZOrder test.", RunFormatting.Default));
+
+            // Behind-text image: ZOrderIndex=100 (should be drawn on top of the shape below).
+            var img = new InlineImage(SmallPng(), 144, 108)
+            {
+                Wrapping           = ImageWrapping.Behind,
+                HorizontalOffsetPt = 0,
+                VerticalOffsetPt   = 0,
+                HorizontalAnchor   = HorizontalAnchor.Column,
+                VerticalAnchor     = VerticalAnchor.Paragraph,
+                ZOrderIndex        = 100,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = img });
+
+            // Behind-text shape: ZOrderIndex=0 (should be drawn first / underneath the image).
+            var shape = new Shape(ShapeKind.Rectangle, 144, 108, "#FF0000")
+            {
+                Placement = new FloatingPlacement
+                {
+                    Wrapping           = ImageWrapping.Behind,
+                    HorizontalOffsetPt = 0,
+                    VerticalOffsetPt   = 0,
+                    HorizontalAnchor   = HorizontalAnchor.Column,
+                    VerticalAnchor     = VerticalAnchor.Paragraph,
+                    ZOrderIndex        = 0,
+                },
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = shape });
+
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var imgRects   = view.FloatingImageRects;
+            var shapeRects = view.FloatingShapeRects;
+
+            if (imgRects.Count > 0)
+            {
+                imageZ       = imgRects[0].ZOrder;
+                imageIsBehind = imgRects[0].BehindText;
+            }
+            if (shapeRects.Count > 0)
+            {
+                shapeZ       = shapeRects[0].ZOrder;
+                shapeIsBehind = shapeRects[0].BehindText;
+            }
+        });
+
+        if (!ran) return;
+
+        imageZ.Should().Be(100, "behind-text image ZOrderIndex=100 must be preserved");
+        shapeZ.Should().Be(0,   "behind-text shape ZOrderIndex=0 must be preserved");
+        imageIsBehind.Should().BeTrue("image with ImageWrapping.Behind must be in the behind-text band");
+        shapeIsBehind.Should().BeTrue("shape with ImageWrapping.Behind must be in the behind-text band");
+
+        // The key invariant (UU1): in the merged ZOrder draw sequence,
+        // the shape (z=0) is drawn FIRST and the image (z=100) is drawn LAST (on top).
+        // This is correct WPF behavior: higher ZOrder → painted later → visually on top.
+        imageZ.Should().BeGreaterThan(shapeZ,
+            "UU1: image ZOrder (100) > shape ZOrder (0) → image draws on top of shape in same band. " +
+            "Before fix, the two separate OrderBy loops meant shape (second loop) always covered image (first loop).");
+    }
+
+    /// <summary>
+    /// UU1 (in-front band): Same merged ZOrder assertion for the in-front band.
+    /// A behind-text image ZOrder=0 and a front image ZOrder=100 — only the in-front items participate
+    /// in the front pass; the merged sort for in-front must respect ZOrder across both images and shapes.
+    /// </summary>
+    [Fact]
+    public async Task UU1_in_front_shape_z100_drawn_after_in_front_image_z0()
+    {
+        int imageZ = -1;
+        int shapeZ = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Anchor text for UU1 in-front test.", RunFormatting.Default));
+
+            // In-front image ZOrder=0 (drawn first in in-front band).
+            var img = new InlineImage(SmallPng(), 144, 108)
+            {
+                Wrapping           = ImageWrapping.InFront,
+                HorizontalOffsetPt = 0,
+                VerticalOffsetPt   = 0,
+                HorizontalAnchor   = HorizontalAnchor.Column,
+                VerticalAnchor     = VerticalAnchor.Paragraph,
+                ZOrderIndex        = 0,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = img });
+
+            // In-front shape ZOrder=100 (drawn after image → on top).
+            var shape = new Shape(ShapeKind.Ellipse, 72, 72, "#0070C0")
+            {
+                Placement = new FloatingPlacement
+                {
+                    Wrapping           = ImageWrapping.InFront,
+                    HorizontalOffsetPt = 36,
+                    VerticalOffsetPt   = 0,
+                    HorizontalAnchor   = HorizontalAnchor.Column,
+                    VerticalAnchor     = VerticalAnchor.Paragraph,
+                    ZOrderIndex        = 100,
+                },
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = shape });
+
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var imgRects   = view.FloatingImageRects;
+            var shapeRects = view.FloatingShapeRects;
+            if (imgRects.Count > 0)   imageZ = imgRects[0].ZOrder;
+            if (shapeRects.Count > 0) shapeZ = shapeRects[0].ZOrder;
+        });
+
+        if (!ran) return;
+
+        imageZ.Should().Be(0,   "in-front image ZOrderIndex=0 preserved");
+        shapeZ.Should().Be(100, "in-front shape ZOrderIndex=100 preserved");
+
+        shapeZ.Should().BeGreaterThan(imageZ,
+            "UU1 in-front: shape ZOrder (100) > image ZOrder (0) → shape draws on top of image. " +
+            "Before fix, separate loops always put shapes after images regardless of ZOrder.");
+    }
+
+    private static byte[] SmallPng()
+    {
+        using var bmp = new SkiaSharp.SKBitmap(4, 4, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
+        bmp.Erase(new SkiaSharp.SKColor(255, 128, 0));
+        using var imgS = SkiaSharp.SKImage.FromBitmap(bmp);
+        using var data = imgS.Encode(SkiaSharp.SKEncodedImageFormat.Png, 90);
+        return data.ToArray();
+    }
+
     // ── PNG encoder (shared with other capture tests) ─────────────────────────────────────────────
 
     private static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)

@@ -876,7 +876,26 @@ public sealed class DocumentView : Control
         // paragraph's first line ACTUALLY lands (correct page after any page-break, correct Y after
         // SpaceBefore). PeekFirstLineContentY is non-mutating — it simulates ReserveContentY without
         // side effects.
-        var anchorContentY = PeekFirstLineContentY();
+        //
+        // TT1 fix: compute the paragraph's actual first-line height (the same way EmitLinePaged does)
+        // and pass it to PeekFirstLineContentY so the page-break decision matches the real first
+        // ReserveContentY call.  Without this, a 1-px probe misses the boundary band where
+        // posInPage ∈ (textAreaHeight - lineHeight, textAreaHeight - 1], causing floats to land on
+        // the wrong page.
+        var firstLineNaturalH = DefaultFontSizePt * PxPerPoint * 1.3; // default natural height
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Image is not null || run.Shape is not null) continue; // skip non-text
+            foreach (var ch in run.Text)
+            {
+                var h = Build(ch.ToString(), ResolveRunFmt(run.Formatting, paragraph)).Height;
+                if (h > firstLineNaturalH) firstLineNaturalH = h;
+                break; // only need first char to approximate max height
+            }
+            break; // first text run is enough
+        }
+        var firstLineHeight = ApplyLineSpacing(firstLineNaturalH, pf);
+        var anchorContentY = PeekFirstLineContentY(firstLineHeight);
         CollectFloatingImages(paragraph, anchorContentY);
         CollectFloatingShapes(paragraph, anchorContentY);
         // FO3: collect charts, WordArt, SmartArt, and drawing groups at the same accurate anchor Y.
@@ -1186,7 +1205,19 @@ public sealed class DocumentView : Control
 
         // Collect floating images and shapes using the post-break first-line content Y so that
         // VerticalAnchor.Paragraph floats land on the same page as the first inline image.
-        var anchorContentY = PeekFirstLineContentY();
+        //
+        // TT1 fix: compute the image paragraph's first-line height (the first inline image's pixel
+        // height) and pass it to PeekFirstLineContentY so the page-break probe matches the actual
+        // first ReserveContentY call for that image.
+        double firstImgLineH = 1; // fallback: default probe height
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Image is not { IsFloating: false } firstImg) continue;
+            var imgH = firstImg.HeightPt > 0 ? firstImg.HeightPt * PxPerPoint : 80;
+            firstImgLineH = imgH;
+            break;
+        }
+        var anchorContentY = PeekFirstLineContentY(firstImgLineH);
         CollectFloatingImages(paragraph, anchorContentY);
         CollectFloatingShapes(paragraph, anchorContentY);
         // FO3: collect charts, WordArt, SmartArt, and drawing groups at the same accurate anchor Y.
@@ -1449,9 +1480,17 @@ public sealed class DocumentView : Control
         // Each family gets a distinct 8×8 tile.
         Drawing tile;
 
+        // UU2 fix: preset→family bucketing aligned to WPF BuildPatternBrush groupings.
+        // Previously: upDiag/ltUpDiag were NW→SE (wrong); pct50/60/70 were dot (wrong);
+        //             dkDiag was grouped with down-diag (wrong); cross/smGrid/lgGrid were grouped
+        //             together (wrong — WPF puts smGrid with dot family).
+        // Now matches WPF exactly: down-diag vs up-diag are separate; pct50 → down-diag;
+        // pct60/pct70 → up-diag; cross/ltGrid/dkGrid/pct75/pct80 → H+V grid;
+        // dotGrid/dotDmnd/smGrid/pct90 → dot tile.
+
         if (preset is "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20")
         {
-            // Horizontal line across the middle
+            // Horizontal line across the middle (matches WPF)
             var dg = new global::Avalonia.Media.DrawingGroup();
             dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
             dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 4), new Point(8, 4)) });
@@ -1459,49 +1498,49 @@ public sealed class DocumentView : Control
         }
         else if (preset is "vert" or "ltVert" or "dkVert" or "pct25" or "pct30")
         {
-            // Vertical line
+            // Vertical line (matches WPF)
             var dg = new global::Avalonia.Media.DrawingGroup();
             dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
             dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(4, 0), new Point(4, 8)) });
             tile = dg;
         }
-        else if (preset is "diagStripe" or "ltDnDiag" or "ltUpDiag" or "dkDiag" or "dnDiag" or "upDiag")
+        else if (preset is "diagStripe" or "ltDnDiag" or "dkDnDiag" or "dnDiag" or "pct50")
         {
-            // Diagonal line (NW→SE)
+            // Down-diagonal: top-left to bottom-right (NW→SE). Matches WPF "diagStripe/ltDnDiag/dkDnDiag/dnDiag/pct50".
             var dg = new global::Avalonia.Media.DrawingGroup();
             dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
             dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 0), new Point(8, 8)) });
             tile = dg;
         }
-        else if (preset is "diagCross" or "smConfetti" or "lgConfetti")
+        else if (preset is "ltUpDiag" or "dkUpDiag" or "upDiag" or "pct60" or "pct70")
         {
-            // Cross (both diagonals)
+            // Up-diagonal: bottom-left to top-right (SW→NE). Matches WPF "ltUpDiag/dkUpDiag/upDiag/pct60/pct70".
             var dg = new global::Avalonia.Media.DrawingGroup();
             dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 0), new Point(8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(8, 0), new Point(0, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 8), new Point(8, 0)) });
             tile = dg;
         }
-        else if (preset is "cross" or "plus" or "smGrid" or "lgGrid")
+        else if (preset is "cross" or "ltGrid" or "dkGrid" or "pct75" or "pct80")
         {
-            // Horizontal + vertical cross
+            // Horizontal + vertical cross/grid. Matches WPF "cross/ltGrid/dkGrid/pct75/pct80".
             var dg = new global::Avalonia.Media.DrawingGroup();
             dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
             dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 4), new Point(8, 4)) });
             dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(4, 0), new Point(4, 8)) });
             tile = dg;
         }
-        else if (preset is "smDot" or "dotGrid" or "dotDmnd" or "pct40" or "pct50" or "pct60" or "pct70")
+        else if (preset is "dotGrid" or "dotDmnd" or "smGrid" or "smDot" or "pct40" or "pct90")
         {
-            // Small dot at centre
+            // Dot tile. Matches WPF "dotGrid/dotDmnd/smGrid/pct90".
             var dg = new global::Avalonia.Media.DrawingGroup();
             dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Brush = fgBrush, Geometry = new EllipseGeometry(new Rect(2.5, 2.5, 3, 3)) });
+            dg.Children.Add(new GeometryDrawing { Brush = fgBrush, Geometry = new EllipseGeometry(new Rect(3, 3, 2, 2)) });
             tile = dg;
         }
         else
         {
-            // Fallback: diagonal cross
+            // Default / diagCross: covers "diagCross", "dkDiag", "lgGrid", "lgConfetti", "smConfetti", unknowns.
+            // Matches WPF fallback (both diagonals).
             var dg = new global::Avalonia.Media.DrawingGroup();
             dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
             dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 0), new Point(8, 8)) });
@@ -1511,7 +1550,7 @@ public sealed class DocumentView : Control
 
         return new DrawingBrush(tile)
         {
-            TileMode       = TileMode.Tile,
+            TileMode        = TileMode.Tile,
             DestinationRect = new RelativeRect(0, 0, 8, 8, RelativeUnit.Absolute),
         };
     }
@@ -1652,20 +1691,24 @@ public sealed class DocumentView : Control
                 context.DrawRectangle(null, TableBorderPen, rect);
         }
 
-        // Behind-text floating images: drawn before inline images and body text, sorted by z-order.
-        foreach (var (rect, bitmap, _, _) in _floatingImages
-            .Where(fi => fi.BehindText)
-            .OrderBy(fi => fi.ZOrder))
+        // Behind-text pass: merge floating images + shapes into ONE list sorted by ZOrderIndex.
+        // UU1 fix: previously images and shapes were drawn in two separate OrderBy loops so any
+        // shape in a band always painted over any image in the same band regardless of ZOrder.
+        // The WPF reference (SyncFloatingObjectsCanvas) merges everything into one z-sorted list.
         {
-            DrawFloatingImage(context, rect, bitmap);
-        }
-
-        // Behind-text floating shapes: same z-ordered pass, interleaved with images by ZOrder.
-        foreach (var sd in _floatingShapes
-            .Where(sd => sd.BehindText)
-            .OrderBy(sd => sd.ZOrder))
-        {
-            DrawFloatingShape(context, sd);
+            var behindDraws = new List<(int ZOrder, Action Draw)>();
+            foreach (var fi in _floatingImages.Where(fi => fi.BehindText))
+            {
+                var (rect, bitmap, _, _) = fi;
+                behindDraws.Add((fi.ZOrder, () => DrawFloatingImage(context, rect, bitmap)));
+            }
+            foreach (var sd in _floatingShapes.Where(sd => sd.BehindText))
+            {
+                var captured = sd;
+                behindDraws.Add((sd.ZOrder, () => DrawFloatingShape(context, captured)));
+            }
+            foreach (var (_, draw) in behindDraws.OrderBy(d => d.ZOrder))
+                draw();
         }
 
         // FO3: behind-text charts, WordArt, SmartArt, groups.
@@ -1749,20 +1792,21 @@ public sealed class DocumentView : Control
             }
         }
 
-        // In-front floating images: drawn after body text so they appear on top, sorted by z-order.
-        foreach (var (rect, bitmap, _, _) in _floatingImages
-            .Where(fi => !fi.BehindText)
-            .OrderBy(fi => fi.ZOrder))
+        // In-front pass: same merged ZOrder logic for in-front items (UU1 fix).
         {
-            DrawFloatingImage(context, rect, bitmap);
-        }
-
-        // In-front floating shapes: same z-ordered pass.
-        foreach (var sd in _floatingShapes
-            .Where(sd => !sd.BehindText)
-            .OrderBy(sd => sd.ZOrder))
-        {
-            DrawFloatingShape(context, sd);
+            var frontDraws = new List<(int ZOrder, Action Draw)>();
+            foreach (var fi in _floatingImages.Where(fi => !fi.BehindText))
+            {
+                var (rect, bitmap, _, _) = fi;
+                frontDraws.Add((fi.ZOrder, () => DrawFloatingImage(context, rect, bitmap)));
+            }
+            foreach (var sd in _floatingShapes.Where(sd => !sd.BehindText))
+            {
+                var captured = sd;
+                frontDraws.Add((sd.ZOrder, () => DrawFloatingShape(context, captured)));
+            }
+            foreach (var (_, draw) in frontDraws.OrderBy(d => d.ZOrder))
+                draw();
         }
 
         // FO3: in-front charts, WordArt, SmartArt, groups.
@@ -1905,14 +1949,20 @@ public sealed class DocumentView : Control
                 }
             }
 
-            // ── Draw centred text ──────────────────────────────────────────────────
+            // ── Draw shape text (UU3 fix) ──────────────────────────────────────────
+            // WPF reference (BuildShapeRun ~8319-8324): TextBlock with Margin=4, TextWrapping.Wrap,
+            // VerticalAlignment.Top. Avalonia previously centred a single non-wrapping line.
+            // Fix: set MaxTextWidth to the inset shape width to enable wrapping; top-anchor with 4px inset.
             if (!string.IsNullOrEmpty(sd.Text))
             {
+                const double TextInset = 4.0; // matches WPF Margin(4) on TextBlock
                 var textFmt = new RunFormatting { FontSizePt = 9 };
+                var insetWidth = Math.Max(1, rect.Width - 2 * TextInset);
                 var ft = Build(sd.Text, textFmt);
-                // Clip text to shape bounds and centre it.
-                var tx = rect.X + Math.Max(0, (rect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
-                var ty = rect.Y + Math.Max(0, (rect.Height - ft.Height) / 2);
+                ft.MaxTextWidth = insetWidth; // enables word wrapping (FormattedText clips+wraps at this width)
+                // Top-anchor: place text at the top of the shape with the inset offset.
+                var tx = rect.X + TextInset;
+                var ty = rect.Y + TextInset;
                 using var _ = context.PushClip(rect);
                 context.DrawText(ft, new Point(tx, ty));
             }
