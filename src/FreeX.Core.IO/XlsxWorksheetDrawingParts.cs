@@ -959,6 +959,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             "borderCallout1" or "borderCallout2" or "borderCallout3" or "borderCallout4" => DrawingShapeKind.LineCallout,
             "chevron" => DrawingShapeKind.Chevron,
             "homePlate" => DrawingShapeKind.HomePlate,
+            "can" => DrawingShapeKind.Cylinder,
             _ => null
         };
 

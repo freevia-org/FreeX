@@ -1922,6 +1922,28 @@ public static class DocxWriter
     }
 
     /// <summary>
+    /// Builds a w:pPrChange (tracked paragraph-formatting change) carrying a unique w:id plus the
+    /// author/date, with a nested w:pPr holding the paragraph's <em>previous</em> formatting. The nested
+    /// w:pPr is always present (even when empty) because that empty element is how Word records "the
+    /// paragraph previously had default formatting". This element is the LAST child of the paragraph's
+    /// w:pPr, after w:sectPr, mirroring how w:rPrChange is the last child of w:rPr.
+    /// </summary>
+    private static XElement BuildPPrChange(ParagraphFormatRevision revision, IdAllocator ids)
+    {
+        var change = new XElement(W + "pPrChange",
+            new XAttribute(W + "id", ids.NextRevisionId()));
+        if (revision.Author is { Length: > 0 } author)
+            change.Add(new XAttribute(W + "author", author));
+        if (revision.DateXml is { Length: > 0 } date)
+            change.Add(new XAttribute(W + "date", date));
+        // The nested w:pPr captures the previous paragraph formatting. Use the style-scoped builder
+        // (alignment, indents, spacing) since pPrChange carries only formatting, never list/section
+        // instance concerns. Always emit the element even when empty to signal "previously default".
+        change.Add(BuildStyleParagraphProperties(revision.PreviousParagraphFormatting) ?? new XElement(W + "pPr"));
+        return change;
+    }
+
+    /// <summary>
     /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
     /// set, then the control-kind element: w:text for a plain-text control; a w14:checkbox carrying the
     /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
@@ -1986,7 +2008,7 @@ public static class DocxWriter
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         var p = new XElement(W + "p");
-        var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering, restartOverrides);
+        var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering, restartOverrides, drawings.Ids);
         if (pPr is not null)
             p.Add(pPr);
 
@@ -2169,21 +2191,24 @@ public static class DocxWriter
         Paragraph paragraph,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null,
+        IdAllocator? ids = null)
     {
         var pPr = new XElement(W + "pPr");
         if (!string.IsNullOrEmpty(paragraph.StyleId))
             pPr.Add(new XElement(W + "pStyle", new XAttribute(W + "val", paragraph.StyleId)));
 
         var f = paragraph.Formatting;
-        // Children MUST follow the CT_PPrBase schema sequence, otherwise Word's strict validator
+        // Children MUST follow the CT_PPr schema sequence, otherwise Word's strict validator
         // rejects the paragraph. The relevant slots, in order (subset emitted here), are:
         //   pStyle, keepNext, keepLines, pageBreakBefore, framePr, widowControl, numPr,
         //   suppressLineNumbers, pBdr, shd, tabs, suppressAutoHyphens, kinsoku, wordWrap,
         //   overflowPunct, topLinePunct, autoSpaceDE, autoSpaceDN, bidi, adjustRightInd,
         //   snapToGrid, spacing, ind, contextualSpacing, mirrorIndents, suppressOverlap,
         //   jc, textDirection, textAlignment, textboxTightWrap, outlineLvl, divId, cnfStyle,
-        //   rPr, sectPr.
+        //   rPr, sectPr, pPrChange.
+        // w:pPrChange is always the LAST child of w:pPr (after sectPr), carrying the paragraph's
+        // previous formatting snapshot when the paragraph's properties were changed under Track Changes.
 
         // Flow control toggles: keepNext, keepLines, pageBreakBefore, widowControl.
         if (f.KeepWithNext)
@@ -2335,6 +2360,16 @@ public static class DocxWriter
                 : (IReadOnlyList<HeaderFooterPart>)[];
             pPr.Add(BuildSectionProperties(section.Page, sectionParts, breakKind: section.BreakKind));
         }
+
+        // w:pPrChange (tracked paragraph-formatting change) — LAST child of w:pPr, after sectPr.
+        // When the paragraph's properties were changed under Track Changes, emit the change marker with a
+        // unique w:id, author/date, and a nested w:pPr holding the previous (pre-change) formatting.
+        // The nested w:pPr is built via BuildStyleParagraphProperties (the common subset: alignment,
+        // indents, spacing) because the previous snapshot is a formatting-only pPr, not a full paragraph.
+        // An empty nested w:pPr is always emitted (signals "previous default formatting"), mirroring how
+        // w:rPrChange always carries a nested w:rPr even when empty.
+        if (paragraph.ParagraphFormatRevision is { } pPrRevision && ids is not null)
+            pPr.Add(BuildPPrChange(pPrRevision, ids));
 
         return pPr.HasElements ? pPr : null;
     }

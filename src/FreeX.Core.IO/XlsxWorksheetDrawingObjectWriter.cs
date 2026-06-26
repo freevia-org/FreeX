@@ -813,6 +813,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
             DrawingShapeKind.LineCallout => "lineCallout1",
             DrawingShapeKind.Chevron => "chevron",
             DrawingShapeKind.HomePlate => "homePlate",
+            DrawingShapeKind.Cylinder => "can",
             _ => "rect"
         };
 

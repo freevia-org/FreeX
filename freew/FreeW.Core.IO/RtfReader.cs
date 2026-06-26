@@ -57,6 +57,10 @@ public static class RtfReader
         public bool InTable;
         // True while inside an unknown/ignored destination group whose text must be discarded.
         public bool Ignore;
+        // Pending \ls / \ilvl seen in the current paragraph scope (applied at \par / paragraph flush).
+        // -1 = not set.
+        public int PendingListId = -1;
+        public int PendingListLevel = 0;
 
         public State(Encoding encoding) => Encoding = encoding;
 
@@ -67,6 +71,8 @@ public static class RtfReader
             Ucskip = Ucskip,
             InTable = InTable,
             Ignore = Ignore,
+            PendingListId = PendingListId,
+            PendingListLevel = PendingListLevel,
         };
     }
 
@@ -99,6 +105,8 @@ public static class RtfReader
         // auto/null) and \fonttbl names keyed by \fN id.
         private readonly List<string?> _colorTable = new();
         private readonly Dictionary<int, string> _fontTable = new();
+        // \listtable: maps \listid → ListKind, populated by ParseListTable.
+        private readonly Dictionary<int, ListKind> _listTable = new();
 
         public Parser(string rtf)
         {
@@ -293,6 +301,16 @@ public static class RtfReader
                         _state.Run = ApplyFlushedColor(null);
                     break;
 
+                // ---- list table (CC1) ----
+                case "listtable":
+                    ParseListTable();
+                    break;
+                // \listoverridetable and other list-related destinations we don't need to parse are skipped.
+                case "listoverridetable":
+                    _state.Ignore = true;
+                    SkipToGroupEnd();
+                    break;
+
                 // ---- destinations we deliberately skip whole (header tables, info, etc.) ----
                 case "stylesheet":
                 case "info":
@@ -328,9 +346,38 @@ public static class RtfReader
                 case "sub": FlushRun(); _state.Run = _state.Run with { VerticalAlign = VerticalAlign.Subscript }; break;
                 case "nosupersub": FlushRun(); _state.Run = _state.Run with { VerticalAlign = VerticalAlign.Baseline }; break;
                 case "plain": FlushRun(); _state.Run = RunFormatting.Default; break;
+                // CC2: highlight / caps / rtl run properties.
+                case "highlight":
+                    FlushRun();
+                    if (param is { } hlIdx && hlIdx > 0 && hlIdx < _colorTable.Count && _colorTable[hlIdx] is { } hlHex)
+                        _state.Run = _state.Run with { HighlightColorHex = hlHex };
+                    else if (param == 0)
+                        _state.Run = _state.Run with { HighlightColorHex = null };
+                    break;
+                case "caps":
+                    FlushRun();
+                    _state.Run = _state.Run with { AllCaps = param != 0 };
+                    break;
+                case "scaps":
+                    FlushRun();
+                    _state.Run = _state.Run with { SmallCaps = param != 0 };
+                    break;
+                case "rtlch":
+                    FlushRun();
+                    _state.Run = _state.Run with { Rtl = true };
+                    break;
+                case "ltrch":
+                    FlushRun();
+                    _state.Run = _state.Run with { Rtl = false };
+                    break;
 
                 // ---- paragraph formatting ----
-                case "pard": _state.Paragraph = ParagraphFormatting.Default; break;
+                case "pard":
+                    _state.Paragraph = ParagraphFormatting.Default;
+                    // \pard also resets pending list state for this paragraph scope.
+                    _state.PendingListId = -1;
+                    _state.PendingListLevel = 0;
+                    break;
                 case "ql": _state.Paragraph = _state.Paragraph with { Alignment = TextAlignment.Left }; break;
                 case "qc": _state.Paragraph = _state.Paragraph with { Alignment = TextAlignment.Center }; break;
                 case "qr": _state.Paragraph = _state.Paragraph with { Alignment = TextAlignment.Right }; break;
@@ -340,6 +387,17 @@ public static class RtfReader
                 case "fi": _state.Paragraph = _state.Paragraph with { FirstLineIndentPt = TwipsToPt(param ?? 0) }; break;
                 case "sb": _state.Paragraph = _state.Paragraph with { SpaceBeforePt = TwipsToPt(param ?? 0) }; break;
                 case "sa": _state.Paragraph = _state.Paragraph with { SpaceAfterPt = TwipsToPt(param ?? 0) }; break;
+                // CC1: list identity control words.
+                case "ls":
+                    // \lsN sets the list-stream reference for the current paragraph. The ListKind is
+                    // resolved from _listTable when the paragraph is flushed.
+                    if (param is { } lsId)
+                        _state.PendingListId = lsId;
+                    break;
+                case "ilvl":
+                    if (param is { } ilvl)
+                        _state.PendingListLevel = ilvl;
+                    break;
 
                 // ---- binary data ----
                 // \binN is followed by exactly N raw binary bytes that must be skipped wholesale;
@@ -539,6 +597,145 @@ public static class RtfReader
             PopAfterTableGroup();
         }
 
+        /// <summary>
+        /// Parses a <c>{\listtable …}</c> group into <see cref="_listTable"/>. For each <c>\list</c>
+        /// sub-group we record: <c>\listid</c> and the number format of the first level (<c>\levelnfc</c>)
+        /// to classify as Bullet (nfc 23 = bullet) vs Number/MultiLevel.  Multi-level detection is done
+        /// heuristically: if the first level's text has <c>%1.%2</c>-style references to multiple levels we
+        /// call it MultiLevel; otherwise it's Number.  Consumes the closing <c>}</c>.
+        /// </summary>
+        private void ParseListTable()
+        {
+            // The opening '{' for \listtable has already been pushed. We iterate balanced sub-groups.
+            var depth = 1;
+            var currentListId = -1;
+            var firstLevelNfc = -1;   // \levelnfc of the first \listlevel
+            var inListLevel = false;   // true while inside a {\listlevel …} sub-group
+            var firstLevelSeen = false;
+            var levelDepth = 0;
+
+            while (_pos < _rtf.Length && depth > 0)
+            {
+                var c = _rtf[_pos];
+                if (c == '{')
+                {
+                    depth++;
+                    if (inListLevel)
+                        levelDepth++;
+                    _pos++;
+                }
+                else if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        // Closing brace of the \listtable group itself — commit the last list and exit.
+                        if (currentListId >= 0 && firstLevelNfc >= 0)
+                            _listTable[currentListId] = ResolveListKind(currentListId, firstLevelNfc);
+                        if (_stack.Count > 0)
+                            _state = _stack.Pop();
+                        _pos++;
+                        return;
+                    }
+                    if (inListLevel && levelDepth > 0)
+                    {
+                        levelDepth--;
+                    }
+                    else if (inListLevel && levelDepth == 0)
+                    {
+                        // Closing the {\listlevel} itself — stop tracking level content.
+                        inListLevel = false;
+                    }
+                    else
+                    {
+                        // Closing a {\list} sub-group — commit and reset.
+                        if (currentListId >= 0 && firstLevelNfc >= 0)
+                            _listTable[currentListId] = ResolveListKind(currentListId, firstLevelNfc);
+                        currentListId = -1;
+                        firstLevelNfc = -1;
+                        firstLevelSeen = false;
+                    }
+                    _pos++;
+                }
+                else if (c == '\\')
+                {
+                    _pos++; // consume backslash
+                    var start = _pos;
+                    while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
+                        _pos++;
+                    var word = _rtf.Substring(start, _pos - start);
+                    var negative = false;
+                    if (_pos < _rtf.Length && _rtf[_pos] == '-') { negative = true; _pos++; }
+                    int val = 0;
+                    var hasVal = false;
+                    if (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
+                    {
+                        hasVal = true;
+                        var ns = _pos;
+                        while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
+                            _pos++;
+                        val = int.Parse(_rtf.AsSpan(ns, _pos - ns), CultureInfo.InvariantCulture);
+                        if (negative) val = -val;
+                    }
+                    if (_pos < _rtf.Length && _rtf[_pos] == ' ')
+                        _pos++;
+
+                    switch (word)
+                    {
+                        case "list":
+                            // Start of a {\list …} sub-group.
+                            currentListId = -1;
+                            firstLevelNfc = -1;
+                            firstLevelSeen = false;
+                            inListLevel = false;
+                            levelDepth = 0;
+                            break;
+                        case "listid":
+                            if (hasVal) currentListId = val;
+                            break;
+                        case "listlevel":
+                            // Beginning of {\listlevel …}: track if it's the first level.
+                            if (!firstLevelSeen)
+                            {
+                                inListLevel = true;
+                                levelDepth = 0;
+                            }
+                            break;
+                        case "levelnfc":
+                        case "levelnfcn":
+                            // Only record for the FIRST level (inListLevel true, level not yet recorded).
+                            if (inListLevel && !firstLevelSeen && hasVal)
+                            {
+                                firstLevelNfc = val;
+                                firstLevelSeen = true;
+                            }
+                            break;
+                        // All other \control words inside the list table are irrelevant — skip.
+                    }
+                }
+                else
+                {
+                    _pos++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resolves a <see cref="ListKind"/> from the list ID and the first-level number format.
+        /// The writer uses fixed IDs (1=Bullet, 2=Number, 3=MultiLevel) so we can detect MultiLevel
+        /// precisely for our own round-trip. For third-party RTFs where the ID is arbitrary, non-bullet
+        /// decimal lists fall back to Number.
+        /// </summary>
+        private static ListKind ResolveListKind(int listId, int nfc)
+        {
+            if (nfc == 23)
+                return ListKind.Bullet;
+            // Our own writer assigns listId=3 to MultiLevel (decimal with per-level dotted text).
+            if (listId == RtfWriter.ListIdMultiLevel)
+                return ListKind.MultiLevel;
+            return ListKind.Number;
+        }
+
         private void SkipControlInTable()
         {
             // Consume control-word letters + optional numeric param + optional trailing space.
@@ -687,21 +884,46 @@ public static class RtfReader
             // order is preserved (table, then this paragraph).
             CommitTableIfComplete();
 
-            var paragraph = new Paragraph { Formatting = _state.Paragraph };
+            var paragraph = new Paragraph { Formatting = BuildParagraphFormatting() };
             foreach (var run in _currentRuns)
                 paragraph.Runs.Add(run);
             _currentRuns.Clear();
+            // Reset pending list state for the next paragraph.
+            _state.PendingListId = -1;
+            _state.PendingListLevel = 0;
             _document.Blocks.Add(paragraph);
         }
 
         private Paragraph BuildCurrentParagraph()
         {
             FlushRun();
-            var paragraph = new Paragraph { Formatting = _state.Paragraph };
+            var paragraph = new Paragraph { Formatting = BuildParagraphFormatting() };
             foreach (var run in _currentRuns)
                 paragraph.Runs.Add(run);
             _currentRuns.Clear();
+            // Reset pending list state for the next paragraph (within cell).
+            _state.PendingListId = -1;
+            _state.PendingListLevel = 0;
             return paragraph;
+        }
+
+        /// <summary>
+        /// Builds the <see cref="ParagraphFormatting"/> for the paragraph being completed, merging any
+        /// pending <c>\ls</c>/<c>\ilvl</c> list identity into the formatting record.
+        /// </summary>
+        private ParagraphFormatting BuildParagraphFormatting()
+        {
+            var f = _state.Paragraph;
+            if (_state.PendingListId >= 0
+                && _listTable.TryGetValue(_state.PendingListId, out var kind))
+            {
+                f = f with
+                {
+                    ListKind  = kind,
+                    ListLevel = _state.PendingListLevel,
+                };
+            }
+            return f;
         }
 
         // ---- tables -------------------------------------------------------------------------------------

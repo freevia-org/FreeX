@@ -1108,6 +1108,9 @@ public static class DocxReader
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, docDefaults, startOverrides);
+            // A paragraph whose formatting was changed under Track Changes carries a w:pPrChange as the
+            // last child of its w:pPr; parse the author/date and the nested previous w:pPr into the model.
+            ApplyParagraphFormatRevision(paragraph, pPr);
             // When the paragraph carries a w:numPr that FreeW did NOT map to one of its own ListKinds, keep
             // the original numId+ilvl so the writer can re-emit it against the preserved numbering.xml (only
             // for body / table-cell paragraphs — header/footer/footnote numbering is not modelled).
@@ -4432,6 +4435,30 @@ public static class DocxReader
         var author = rPrChange.Attribute(W + "author")?.Value;
         var date = rPrChange.Attribute(W + "date")?.Value;
         run.FormatRevision = new FormatRevision(previous, author, date);
+    }
+
+    /// <summary>
+    /// Reads a tracked paragraph-formatting change (w:pPrChange) from a paragraph's <paramref name="pPr"/>
+    /// and stamps it onto <paramref name="paragraph"/> as a <see cref="ParagraphFormatRevision"/>. The
+    /// pPrChange carries the paragraph's <em>previous</em> formatting in a nested w:pPr plus the
+    /// w:author/w:date of the change. A paragraph with no pPrChange is left untouched. Mirrors
+    /// <see cref="ApplyFormatRevision"/> for run-level changes.
+    /// </summary>
+    private static void ApplyParagraphFormatRevision(Paragraph paragraph, XElement? pPr)
+    {
+        var pPrChange = pPr?.Element(W + "pPrChange");
+        if (pPrChange is null)
+            return;
+        // The nested w:pPr inside w:pPrChange holds the previous paragraph formatting. Parse it using
+        // the same path as the current pPr, without numbering resolution (list state is not tracked
+        // in pPrChange) and without document defaults (the previous snapshot is self-contained).
+        var previousPPr = pPrChange.Element(W + "pPr");
+        var previous = previousPPr is not null
+            ? ReadParagraphFormatting(previousPPr)
+            : ParagraphFormatting.Default;
+        var author = pPrChange.Attribute(W + "author")?.Value;
+        var date = pPrChange.Attribute(W + "date")?.Value;
+        paragraph.ParagraphFormatRevision = new ParagraphFormatRevision(previous, author, date);
     }
 
     internal static RunFormatting ReadRunFormatting(XElement? rPr)

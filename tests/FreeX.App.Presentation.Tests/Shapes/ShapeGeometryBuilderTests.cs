@@ -284,4 +284,83 @@ public sealed class ShapeGeometryBuilderTests
         crossPoints.Should().Equal(plusPoints);
         crossPoints.Should().HaveCount(12);
     }
+
+    // ── Cylinder ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Cylinder_HasTwoContours_BodyAndTopEllipse()
+    {
+        var geometry = ShapeGeometryBuilder.Build(DrawingShapeKind.Cylinder, Bounds);
+
+        geometry.Contours.Should().HaveCount(2,
+            "Cylinder must emit two contours: body outline + top ellipse cap");
+    }
+
+    [Fact]
+    public void Cylinder_BodyContour_IsClosedAndFilled()
+    {
+        var body = ShapeGeometryBuilder.Build(DrawingShapeKind.Cylinder, Bounds).Contours[0];
+
+        body.Closed.Should().BeTrue();
+        body.Filled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Cylinder_BodyContour_ContainsTwoStraightSidesAndTwoArcs()
+    {
+        var body = ShapeGeometryBuilder.Build(DrawingShapeKind.Cylinder, Bounds).Contours[0];
+
+        // Body: start + LineTo(leftBottom) + ArcTo(rightBottom) + LineTo(rightTop) + ArcTo(start)
+        body.Segments.Count(s => s.Kind == ShapeSegmentKind.Line).Should().Be(2,
+            "body must have left-side and right-side straight lines");
+        body.Segments.Count(s => s.Kind == ShapeSegmentKind.Arc).Should().Be(2,
+            "body must have bottom (convex) and top (concave) arc segments");
+    }
+
+    [Fact]
+    public void Cylinder_TopCap_IsTwoArcs_FullEllipse()
+    {
+        var cap = ShapeGeometryBuilder.Build(DrawingShapeKind.Cylinder, Bounds).Contours[1];
+
+        cap.Segments.Should().HaveCount(2);
+        cap.Segments.Should().OnlyContain(s => s.Kind == ShapeSegmentKind.Arc,
+            "top cap must be a full ellipse (two half-arc segments)");
+    }
+
+    [Fact]
+    public void Cylinder_IsRenderable()
+    {
+        DrawingShapeKindSupport.IsRenderable(DrawingShapeKind.Cylinder).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Cylinder_IsNotLineLike()
+    {
+        DrawingShapeKindSupport.IsLineLike(DrawingShapeKind.Cylinder).Should().BeFalse();
+    }
+
+    // ── CurvedConnector S-curve improvement ─────────────────────────────────
+
+    [Fact]
+    public void CurvedConnector_StartsAtTopLeft_EndsAtBottomRight()
+    {
+        var geometry = ShapeGeometryBuilder.Build(DrawingShapeKind.CurvedConnector, Bounds);
+        var contour = geometry.Contours.Single();
+
+        // Start: top-left corner (rect.Left, rect.Top) = (100, 200)
+        contour.Start.Should().Be(new LayoutPoint(Bounds.Left, Bounds.Top));
+        // End (segment.End): bottom-right corner (rect.Right, rect.Bottom) = (180, 260)
+        contour.Segments.Single().End.Should().Be(new LayoutPoint(Bounds.Right, Bounds.Bottom));
+    }
+
+    [Fact]
+    public void CurvedConnector_IsOpenUnfilledSingleBezier()
+    {
+        var contour = ShapeGeometryBuilder.Build(DrawingShapeKind.CurvedConnector, Bounds).Contours.Single();
+
+        contour.Closed.Should().BeFalse();
+        contour.Filled.Should().BeFalse();
+        contour.Segments.Should().ContainSingle();
+        contour.Segments[0].Kind.Should().Be(ShapeSegmentKind.CubicBezier);
+    }
 }
