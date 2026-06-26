@@ -3,14 +3,14 @@ namespace FreeX.App.Presentation.SlicerTimeline;
 /// <summary>
 /// Shared, framework-free helper that maps a <see cref="TimelineHitKind"/> + a hit date to the
 /// concrete (Start, End) date range a timeline filter command should apply. Extracted from the
-/// Avalonia interaction planner so the WPF renderer can reuse the same period-snap math without
-/// depending on the Avalonia assembly.
+/// shell interaction planner so both desktop renderers reuse the same period-snap math without
+/// depending on any UI-framework assembly.
 /// </summary>
 public static class SlicerTimelineHitDateResolver
 {
     /// <summary>
     /// Given a timeline layout and a hit result (kind + date), computes the new (Start, End) date
-    /// range using the same period-snapping logic as the Avalonia interaction planner:
+    /// range using the same period-snapping logic as the shell interaction planner:
     /// <list type="bullet">
     ///   <item>Handle drags: snap the moved boundary to the period edge (start→first day, end→last day).</item>
     ///   <item>Track / selection clicks: snap the whole range to the clicked period's full extent.</item>
