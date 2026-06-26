@@ -401,8 +401,11 @@ public partial class GridView
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
         var shapeThemeEffect = ResolveDrawingShapeThemeEffect(shape, themeEffect);
         var pen = GetDrawingShapeOutlinePen(colors.Outline, shape);
-        // WordArt shapes have no body fill — the visual is entirely the styled text.
-        var bodyFill = (shape.HasFill && !shape.IsWordArt) ? CreateDrawingShapeFill(shape, colors.Fill) : null;
+        // Render the body fill when the shape has an authored fill (HasFill=true).
+        // WordArt with no body fill (HasFill=false) correctly produces null here.
+        // WordArt WITH an authored body fill still renders the box behind the styled text,
+        // matching Excel which shows the filled box and the styled run text together.
+        var bodyFill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;
         DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
         DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : bodyFill, pen);

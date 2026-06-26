@@ -533,6 +533,42 @@ public sealed class DocumentView : Control
         }
     }
 
+    // ── XX1 draw-order introspection (tests only) ────────────────────────────────────────────────────
+
+    /// <summary>Merged BehindText floating-object draw order (ZOrder, type) — verifies XX1 interleave.</summary>
+    public IReadOnlyList<(int ZOrder, string TypeTag)> MergedBehindDrawOrder
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            var list = new List<(int, string)>();
+            foreach (var fi in _floatingImages.Where(fi => fi.BehindText)) list.Add((fi.ZOrder, "Image"));
+            foreach (var sd in _floatingShapes.Where(sd => sd.BehindText)) list.Add((sd.ZOrder, "Shape"));
+            foreach (var cd in _floatingCharts.Where(c => c.BehindText)) list.Add((cd.ZOrder, "Chart"));
+            foreach (var wd in _floatingWordArts.Where(w => w.BehindText)) list.Add((wd.ZOrder, "WordArt"));
+            foreach (var sa in _floatingSmartArts.Where(s => s.BehindText)) list.Add((sa.ZOrder, "SmartArt"));
+            foreach (var gd in _floatingGroups.Where(g => g.BehindText)) list.Add((gd.ZOrder, "Group"));
+            return list.OrderBy(d => d.Item1).ToList();
+        }
+    }
+
+    /// <summary>Merged in-front floating-object draw order (ZOrder, type).</summary>
+    public IReadOnlyList<(int ZOrder, string TypeTag)> MergedFrontDrawOrder
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            var list = new List<(int, string)>();
+            foreach (var fi in _floatingImages.Where(fi => !fi.BehindText)) list.Add((fi.ZOrder, "Image"));
+            foreach (var sd in _floatingShapes.Where(sd => !sd.BehindText)) list.Add((sd.ZOrder, "Shape"));
+            foreach (var cd in _floatingCharts.Where(c => !c.BehindText)) list.Add((cd.ZOrder, "Chart"));
+            foreach (var wd in _floatingWordArts.Where(w => !w.BehindText)) list.Add((wd.ZOrder, "WordArt"));
+            foreach (var sa in _floatingSmartArts.Where(s => !s.BehindText)) list.Add((sa.ZOrder, "SmartArt"));
+            foreach (var gd in _floatingGroups.Where(g => !g.BehindText)) list.Add((gd.ZOrder, "Group"));
+            return list.OrderBy(d => d.Item1).ToList();
+        }
+    }
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -946,12 +982,16 @@ public sealed class DocumentView : Control
         // SpaceBefore). PeekFirstLineContentY is non-mutating — it simulates ReserveContentY without
         // side effects.
         //
-        // TT1 fix: compute the paragraph's actual first-line height (the same way EmitLinePaged does)
-        // and pass it to PeekFirstLineContentY so the page-break decision matches the real first
-        // ReserveContentY call.  Without this, a 1-px probe misses the boundary band where
-        // posInPage ∈ (textAreaHeight - lineHeight, textAreaHeight - 1], causing floats to land on
-        // the wrong page.
-        var firstLineNaturalH = DefaultFontSizePt * PxPerPoint * 1.3; // default natural height
+        // VV1 fix (extends TT1): compute the paragraph's first-line height by taking the MAX glyph
+        // height over ALL cells in the paragraph (an over-estimate: at most includes later-line cells,
+        // but that only makes Peek break EARLIER, never later — so it is safe).
+        //
+        // The prior TT1 code took only the FIRST character of the FIRST text run (double break), which
+        // under-estimates when line 0's tallest run is not its first character (e.g. small "see " then
+        // a 24pt word).  EmitLinePaged uses max(heights[from..to)) over the line's cells; mirroring
+        // that over ALL cells (safe upper bound) ensures Peek breaks whenever the real first-line
+        // ReserveContentY would.  Empty paragraphs (no cells) fall back to the default line height.
+        var firstLineNaturalH = DefaultFontSizePt * PxPerPoint * 1.3; // default / fallback
         foreach (var run in paragraph.Runs)
         {
             if (run.Image is not null || run.Shape is not null) continue; // skip non-text
@@ -959,9 +999,9 @@ public sealed class DocumentView : Control
             {
                 var h = Build(ch.ToString(), ResolveRunFmt(run.Formatting, paragraph)).Height;
                 if (h > firstLineNaturalH) firstLineNaturalH = h;
-                break; // only need first char to approximate max height
+                // VV1: do NOT break — scan all chars across ALL text runs (max over all cells).
             }
-            break; // first text run is enough
+            // VV1: do NOT break — scan all runs.
         }
         var firstLineHeight = ApplyLineSpacing(firstLineNaturalH, pf);
         var anchorContentY = PeekFirstLineContentY(firstLineHeight);
@@ -1920,10 +1960,13 @@ public sealed class DocumentView : Control
                 context.DrawRectangle(null, TableBorderPen, rect);
         }
 
-        // Behind-text pass: merge floating images + shapes into ONE list sorted by ZOrderIndex.
+        // Behind-text pass: merge ALL six floating types into ONE list sorted by ZOrderIndex.
         // UU1 fix: previously images and shapes were drawn in two separate OrderBy loops so any
-        // shape in a band always painted over any image in the same band regardless of ZOrder.
-        // The WPF reference (SyncFloatingObjectsCanvas) merges everything into one z-sorted list.
+        // shape always painted over any image regardless of ZOrder.
+        // XX1 fix: the FO3 wave (charts/WordArt/SmartArt/groups) was added as FOUR SEPARATE
+        // post-pass loops, re-introducing the same UU1 bug.  The WPF reference
+        // (SyncFloatingObjectsCanvas) adds ALL types to ONE list and sorts by ZOrder — we do the
+        // same here so all six types interleave correctly within each band.
         {
             var behindDraws = new List<(int ZOrder, Action Draw)>();
             foreach (var fi in _floatingImages.Where(fi => fi.BehindText))
@@ -1936,19 +1979,29 @@ public sealed class DocumentView : Control
                 var captured = sd;
                 behindDraws.Add((sd.ZOrder, () => DrawFloatingShape(context, captured)));
             }
+            foreach (var cd in _floatingCharts.Where(c => c.BehindText))
+            {
+                var captured = cd;
+                behindDraws.Add((cd.ZOrder, () => DrawFloatingChart(context, captured)));
+            }
+            foreach (var wd in _floatingWordArts.Where(w => w.BehindText))
+            {
+                var captured = wd;
+                behindDraws.Add((wd.ZOrder, () => DrawFloatingWordArt(context, captured)));
+            }
+            foreach (var sd in _floatingSmartArts.Where(s => s.BehindText))
+            {
+                var captured = sd;
+                behindDraws.Add((sd.ZOrder, () => DrawFloatingSmartArt(context, captured)));
+            }
+            foreach (var gd in _floatingGroups.Where(g => g.BehindText))
+            {
+                var captured = gd;
+                behindDraws.Add((gd.ZOrder, () => DrawFloatingGroup(context, captured)));
+            }
             foreach (var (_, draw) in behindDraws.OrderBy(d => d.ZOrder))
                 draw();
         }
-
-        // FO3: behind-text charts, WordArt, SmartArt, groups.
-        foreach (var cd in _floatingCharts.Where(c => c.BehindText).OrderBy(c => c.ZOrder))
-            DrawFloatingChart(context, cd);
-        foreach (var wd in _floatingWordArts.Where(w => w.BehindText).OrderBy(w => w.ZOrder))
-            DrawFloatingWordArt(context, wd);
-        foreach (var sd in _floatingSmartArts.Where(s => s.BehindText).OrderBy(s => s.ZOrder))
-            DrawFloatingSmartArt(context, sd);
-        foreach (var gd in _floatingGroups.Where(g => g.BehindText).OrderBy(g => g.ZOrder))
-            DrawFloatingGroup(context, gd);
 
         // Inline images (non-floating).
         foreach (var (rect, bitmap) in _images)
@@ -2029,7 +2082,7 @@ public sealed class DocumentView : Control
             }
         }
 
-        // In-front pass: same merged ZOrder logic for in-front items (UU1 fix).
+        // In-front pass: same merged ZOrder logic for all six types (UU1 + XX1 fix).
         {
             var frontDraws = new List<(int ZOrder, Action Draw)>();
             foreach (var fi in _floatingImages.Where(fi => !fi.BehindText))
@@ -2042,19 +2095,29 @@ public sealed class DocumentView : Control
                 var captured = sd;
                 frontDraws.Add((sd.ZOrder, () => DrawFloatingShape(context, captured)));
             }
+            foreach (var cd in _floatingCharts.Where(c => !c.BehindText))
+            {
+                var captured = cd;
+                frontDraws.Add((cd.ZOrder, () => DrawFloatingChart(context, captured)));
+            }
+            foreach (var wd in _floatingWordArts.Where(w => !w.BehindText))
+            {
+                var captured = wd;
+                frontDraws.Add((wd.ZOrder, () => DrawFloatingWordArt(context, captured)));
+            }
+            foreach (var sd in _floatingSmartArts.Where(s => !s.BehindText))
+            {
+                var captured = sd;
+                frontDraws.Add((sd.ZOrder, () => DrawFloatingSmartArt(context, captured)));
+            }
+            foreach (var gd in _floatingGroups.Where(g => !g.BehindText))
+            {
+                var captured = gd;
+                frontDraws.Add((gd.ZOrder, () => DrawFloatingGroup(context, captured)));
+            }
             foreach (var (_, draw) in frontDraws.OrderBy(d => d.ZOrder))
                 draw();
         }
-
-        // FO3: in-front charts, WordArt, SmartArt, groups.
-        foreach (var cd in _floatingCharts.Where(c => !c.BehindText).OrderBy(c => c.ZOrder))
-            DrawFloatingChart(context, cd);
-        foreach (var wd in _floatingWordArts.Where(w => !w.BehindText).OrderBy(w => w.ZOrder))
-            DrawFloatingWordArt(context, wd);
-        foreach (var sd in _floatingSmartArts.Where(s => !s.BehindText).OrderBy(s => s.ZOrder))
-            DrawFloatingSmartArt(context, sd);
-        foreach (var gd in _floatingGroups.Where(g => !g.BehindText).OrderBy(g => g.ZOrder))
-            DrawFloatingGroup(context, gd);
 
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);

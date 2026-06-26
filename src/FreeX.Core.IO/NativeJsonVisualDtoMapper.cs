@@ -205,6 +205,7 @@ internal static class NativeJsonVisualDtoMapper
         WarpPreset = shape.WarpPreset,
         ShapeTextGradientEndColor = shape.ShapeTextGradientEndColor is { } gradEnd ? FormatColor(gradEnd) : null,
         ShapeTextGradientEndThemeColor = FromThemeColorReference(shape.ShapeTextGradientEndThemeColor),
+        ShapeTextGradientAngle = shape.ShapeTextGradientAngle,
         ShapeTextOutlineColor = shape.ShapeTextOutlineColor is { } outlineC ? FormatColor(outlineC) : null,
         ShapeTextOutlineThemeColor = FromThemeColorReference(shape.ShapeTextOutlineThemeColor),
         ShapeTextOutlineWidthPoints = shape.ShapeTextOutlineWidthPoints
@@ -272,6 +273,7 @@ internal static class NativeJsonVisualDtoMapper
                 WarpPreset = shapeDto.WarpPreset,
                 ShapeTextGradientEndColor = shapeDto.ShapeTextGradientEndColor is { } gradEnd ? ParseColor(gradEnd) : null,
                 ShapeTextGradientEndThemeColor = ToThemeColorReference(shapeDto.ShapeTextGradientEndThemeColor),
+                ShapeTextGradientAngle = shapeDto.ShapeTextGradientAngle,
                 ShapeTextOutlineColor = shapeDto.ShapeTextOutlineColor is { } outlineC ? ParseColor(outlineC) : null,
                 ShapeTextOutlineThemeColor = ToThemeColorReference(shapeDto.ShapeTextOutlineThemeColor),
                 ShapeTextOutlineWidthPoints = shapeDto.ShapeTextOutlineWidthPoints
@@ -430,6 +432,7 @@ internal class DrawingShapeDto
     public string? WarpPreset { get; set; }
     public string? ShapeTextGradientEndColor { get; set; }
     public ThemeColorReferenceDto? ShapeTextGradientEndThemeColor { get; set; }
+    public long ShapeTextGradientAngle { get; set; } = 5400000;
     public string? ShapeTextOutlineColor { get; set; }
     public ThemeColorReferenceDto? ShapeTextOutlineThemeColor { get; set; }
     public double ShapeTextOutlineWidthPoints { get; set; }

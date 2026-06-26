@@ -836,6 +836,103 @@ public sealed class DocumentViewFloatingImageTests
         }
     }
 
+    // ── VV1: first-line height probe uses MAX height over all runs, not just first char ────────────────
+
+    /// <summary>
+    /// VV1 (refinement of TT1): When line 0 of a paragraph contains a MIX of font sizes — a small
+    /// run first ("see " at 9pt) followed by a large run ("IMPORTANT" at 24pt) — the TT1 code took
+    /// only the first char of the first run, under-estimating line-0 height.  PeekFirstLineContentY
+    /// then failed to detect the page-break that ReserveContentY made for the real 24pt-tall line,
+    /// so the paragraph-anchored float landed one page too early.
+    ///
+    /// VV1 fix: scan ALL cells (max height) so the probe height matches or exceeds EmitLinePaged's
+    /// naturalHeight, guaranteeing Peek breaks whenever the real first line does.
+    ///
+    /// Layout: fill the page to the boundary band, then add a paragraph whose first text run is 9pt
+    /// ("see ") and whose second run is 24pt ("IMPORTANT").  The 24pt run drives line-0 height
+    /// (~38 DIP after line-spacing).  With the fix, Peek uses ~38 DIP and correctly sees the
+    /// overflow → anchorContentY is on page 2 → float lands on page 2 (same as the first glyph).
+    /// </summary>
+    [Fact]
+    public async Task VV1_mixed_font_size_first_line_float_lands_on_same_page_as_paragraph()
+    {
+        Rect floatRect = default;
+        double firstGlyphY = double.MaxValue;
+        int pageCount = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            // US-Letter: textAreaHeight = 864 DIP.
+            // The large run (24pt) has naturalH ≈ 24 * (96/72) * 1.3 ≈ 42.7 DIP.
+            // Fill so that (textAreaHeight - fillHeight) < 42.7 DIP but > 0 — 1 DIP gap is enough.
+            const double textAreaHeightDip = 864.0;
+            const double smallFontPt  = 9.0;
+            const double smallLineH   = smallFontPt * (96.0 / 72.0) * 1.3; // ≈ 16.6 DIP
+            var fillerCount = (int)((textAreaHeightDip - 1) / smallLineH);   // fill with 9pt lines
+
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            var smallFmt = RunFormatting.Default with { FontSizePt = smallFontPt };
+            var largeFmt = RunFormatting.Default with { FontSizePt = 24.0 };
+
+            for (var i = 0; i < fillerCount; i++)
+            {
+                var filler = new Paragraph();
+                filler.Runs.Add(new Run($"Fill {i + 1}.", smallFmt));
+                doc.Blocks.Add(filler);
+            }
+
+            // Anchor paragraph: FIRST run is small (9pt), SECOND run is large (24pt) on the same line.
+            // The 24pt run drives line-0 height — VV1 bug: old code would only see the 9pt first char.
+            var anchorPara = new Paragraph();
+            anchorPara.Runs.Add(new Run("see ", smallFmt));
+            anchorPara.Runs.Add(new Run("IMPORTANT", largeFmt));
+
+            var floatImg = new InlineImage(SmallPng(), 72, 54)
+            {
+                Wrapping           = ImageWrapping.Square,
+                HorizontalOffsetPt = 0,
+                VerticalOffsetPt   = 0,
+                HorizontalAnchor   = HorizontalAnchor.Column,
+                VerticalAnchor     = VerticalAnchor.Paragraph,
+                ZOrderIndex        = 0,
+            };
+            anchorPara.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = floatImg });
+            doc.Blocks.Add(anchorPara);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, double.PositiveInfinity));
+
+            pageCount = view.PageCount;
+            if (view.FloatingImageRects.Count > 0)
+                floatRect = view.FloatingImageRects[0].Rect;
+
+            var placed = view.GetPlacedForBlock(fillerCount); // anchor paragraph
+            if (placed.Count > 0)
+                firstGlyphY = placed.Min(g => g.Y);
+        });
+
+        if (!ran) return;
+
+        pageCount.Should().BeGreaterThan(1,
+            "VV1: filler paragraphs (9pt) should fill page 1, pushing the mixed-size anchor to page 2");
+
+        const double page2Threshold = 1000.0;
+        floatRect.Y.Should().BeGreaterThanOrEqualTo(page2Threshold,
+            $"VV1: paragraph-anchored float must be on page 2 (Y ≥ {page2Threshold}), got Y={floatRect.Y:F1}. " +
+            "Before VV1 fix, PeekFirstLineContentY used 9pt height (first char of first run) and missed " +
+            "the break caused by the 24pt second run — landing the float one page too early.");
+
+        if (firstGlyphY < double.MaxValue)
+        {
+            var delta = Math.Abs(floatRect.Y - firstGlyphY);
+            delta.Should().BeLessThanOrEqualTo(6.0,
+                $"VV1: float Y ({floatRect.Y:F1}) should match first glyph Y ({firstGlyphY:F1}) of anchor paragraph");
+        }
+    }
+
     // ── PNG encoder (shared with PrintLayoutCaptureTests) ────────────────────────────────────────────
 
     private static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)

@@ -610,6 +610,126 @@ public sealed class DocumentViewFloatingFO3Tests
         rectX.Should().BeGreaterThan(0, "floating group X should be positive (content left + offset)");
     }
 
+    // ── XX1: FO3 types z-interleave with images+shapes (unified draw-order list) ─────────────────
+
+    /// <summary>
+    /// XX1 (HIGH) regression test: Before the fix, charts/WordArt/SmartArt/groups ran in FOUR
+    /// SEPARATE OrderBy loops AFTER the merged images+shapes pass, so a chart with ZOrderIndex=1
+    /// always painted over an image with ZOrderIndex=99 in the same band — re-introducing the exact
+    /// UU1 bug.  The fix merges all six types into ONE OrderBy list.
+    ///
+    /// Scenario: behind-text CHART (z=1) + behind-text IMAGE (z=99) in the same band.
+    /// Expected merged draw order: Chart first (z=1), then Image (z=99), i.e. Image is on top.
+    /// Mirror: in-front WordArt (z=1) + in-front Shape (z=99) → WordArt first, Shape on top.
+    /// </summary>
+    [Fact]
+    public async Task XX1_behind_chart_z1_is_drawn_before_image_z99_in_merged_order()
+    {
+        IReadOnlyList<(int ZOrder, string TypeTag)>? order = null;
+        var ran = await OnUiThread(() =>
+        {
+            // Image behind-text z=99 and Chart behind-text z=1 in the same paragraph.
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Anchor.", RunFormatting.Default));
+
+            // Floating image: BehindText, ZOrder=99.
+            var img = new InlineImage([], 72, 54)
+            {
+                Wrapping         = ImageWrapping.Behind,
+                HorizontalAnchor = HorizontalAnchor.Column,
+                VerticalAnchor   = VerticalAnchor.Paragraph,
+                ZOrderIndex      = 99,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = img });
+
+            // Floating chart: BehindText, ZOrder=1.
+            var chart = Chart.Create(ChartKind.Column,
+                new[] { "A", "B" }, new[] { 1.0, 2.0 }, "S", "Test");
+            chart.WidthPt  = 100;
+            chart.HeightPt = 80;
+            chart.Placement = new FloatingPlacement
+            {
+                Wrapping         = ImageWrapping.Behind,
+                HorizontalAnchor = HorizontalAnchor.Column,
+                VerticalAnchor   = VerticalAnchor.Paragraph,
+                ZOrderIndex      = 1,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            order = view.MergedBehindDrawOrder;
+        });
+
+        if (!ran) return;
+        order.Should().NotBeNull();
+        order!.Count.Should().Be(2, "one image (z=99) + one chart (z=1) should produce 2 entries in behind draw list");
+
+        // The merged list is sorted by ZOrder ascending (lower ZOrder drawn first = appears under).
+        order[0].TypeTag.Should().Be("Chart",  "chart (z=1) must be drawn FIRST (beneath) in the merged list");
+        order[0].ZOrder.Should().Be(1);
+        order[1].TypeTag.Should().Be("Image",  "image (z=99) must be drawn SECOND (on top) in the merged list");
+        order[1].ZOrder.Should().Be(99);
+    }
+
+    [Fact]
+    public async Task XX1_infront_wordart_z1_is_drawn_before_shape_z99_in_merged_order()
+    {
+        IReadOnlyList<(int ZOrder, string TypeTag)>? order = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Anchor.", RunFormatting.Default));
+
+            // Floating shape: InFront, ZOrder=99.
+            var shape = new Shape(ShapeKind.Rectangle, 80, 60, "#4472C4")
+            {
+                Placement = new FloatingPlacement
+                {
+                    Wrapping         = ImageWrapping.InFront,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor   = VerticalAnchor.Paragraph,
+                    ZOrderIndex      = 99,
+                },
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = shape });
+
+            // Floating WordArt: InFront, ZOrder=1.
+            var wa = new WordArt("Hello", WordArtStyle.FillBlue, 24)
+            {
+                Placement = new FloatingPlacement
+                {
+                    Wrapping         = ImageWrapping.InFront,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor   = VerticalAnchor.Paragraph,
+                    ZOrderIndex      = 1,
+                },
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wa });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            order = view.MergedFrontDrawOrder;
+        });
+
+        if (!ran) return;
+        order.Should().NotBeNull();
+        order!.Count.Should().Be(2, "one shape (z=99) + one WordArt (z=1) should produce 2 entries in front draw list");
+
+        order[0].TypeTag.Should().Be("WordArt", "WordArt (z=1) must be drawn FIRST (beneath) in the merged list");
+        order[0].ZOrder.Should().Be(1);
+        order[1].TypeTag.Should().Be("Shape",   "shape (z=99) must be drawn SECOND (on top) in the merged list");
+        order[1].ZOrder.Should().Be(99);
+    }
+
     // ── Body text still lays out with mixed FO3 objects ───────────────────────────────────────────
 
     [Fact]

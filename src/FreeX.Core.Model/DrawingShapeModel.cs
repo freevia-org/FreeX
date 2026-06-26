@@ -249,6 +249,15 @@ public sealed class DrawingShapeModel
     public WorkbookThemeColorReference? ShapeTextGradientEndThemeColor { get; set; }
 
     /// <summary>
+    /// Linear gradient direction angle in OOXML 60,000ths-of-a-degree (same unit as
+    /// <c>&lt;a:lin ang="..."&gt;</c>).  5400000 = 90° = top-to-bottom (default).
+    /// Only meaningful when a gradient text fill is present
+    /// (<see cref="ShapeTextGradientEndColor"/> or <see cref="ShapeTextGradientEndThemeColor"/>
+    /// is non-null).
+    /// </summary>
+    public long ShapeTextGradientAngle { get; set; } = 5400000;
+
+    /// <summary>
     /// Outline color for WordArt text (from <c>&lt;a:rPr&gt;&lt;a:ln&gt;&lt;a:solidFill&gt;</c>).
     /// <see langword="null"/> means no text outline.
     /// </summary>

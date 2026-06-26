@@ -1,5 +1,8 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -54,10 +57,10 @@ public sealed class WordArtRoundTripTests
                       <a:pPr algn="ctr"/>
                       <a:r>
                         <a:rPr lang="en-US" dirty="0" sz="3600" b="1">
-                          <a:solidFill><a:srgbClr val="FF4500"/></a:solidFill>
                           <a:ln w="12700">
                             <a:solidFill><a:srgbClr val="8B0000"/></a:solidFill>
                           </a:ln>
+                          <a:solidFill><a:srgbClr val="FF4500"/></a:solidFill>
                         </a:rPr>
                         <a:t>FreeX</a:t>
                       </a:r>
@@ -347,7 +350,382 @@ public sealed class WordArtRoundTripTests
         loaded.ShapeTextOutlineWidthPoints.Should().Be(0);
     }
 
+    // ── WW1 — rPr child order: <a:ln> before fill group ─────────────────
+
+    /// <summary>
+    /// WW1: The writer must emit <c>&lt;a:ln&gt;</c> BEFORE the fill (gradFill/solidFill) on
+    /// <c>&lt;a:rPr&gt;</c>, matching CT_TextCharacterProperties order.  Reversed order causes
+    /// Excel to report the workbook as corrupt and drop the WordArt styling.
+    /// </summary>
+    [Fact]
+    public void XlsxAdapter_WordArt_RprChildOrder_LnBeforeFill_Gradient()
+    {
+        var workbook = CreateWordArtWorkbook(
+            isWordArt: true,
+            warpPreset: "textWave1",
+            textColor: new CellColor(0xFF, 0x00, 0x00),
+            gradEndColor: new CellColor(0x00, 0x00, 0xFF),
+            outlineColor: new CellColor(0x00, 0x00, 0x00),
+            outlineWidthPt: 1.0);
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        // Verify element order in the XML: <a:ln> index must be less than <a:gradFill> index.
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var xml = LoadDrawingXml(archive);
+            var rPr = xml.Descendants(DrawingNs + "rPr").Should().ContainSingle().Subject;
+            var children = rPr.Elements().Select(e => e.Name.LocalName).ToList();
+            var idxLn = children.IndexOf("ln");
+            var idxGradFill = children.IndexOf("gradFill");
+            idxLn.Should().BeGreaterThanOrEqualTo(0, "<a:ln> must be present");
+            idxGradFill.Should().BeGreaterThanOrEqualTo(0, "<a:gradFill> must be present");
+            idxLn.Should().BeLessThan(idxGradFill,
+                "CT_TextCharacterProperties requires <a:ln> before the fill group");
+        }
+
+        // OpenXmlValidator must report no schema errors (WW1 fix: wrong order triggered repair).
+        stream.Position = 0;
+        SchemaErrors(stream).Should().BeEmpty("ln-before-fill order must satisfy OOXML schema");
+    }
+
+    [Fact]
+    public void XlsxAdapter_WordArt_RprChildOrder_LnBeforeFill_Solid()
+    {
+        // Solid fill (no gradient) also needs ln before solidFill.
+        var workbook = CreateWordArtWorkbook(
+            isWordArt: true,
+            warpPreset: null,
+            textColor: new CellColor(0xFF, 0x45, 0x00),
+            gradEndColor: null,
+            outlineColor: new CellColor(0x8B, 0x00, 0x00),
+            outlineWidthPt: 1.5);
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var xml = LoadDrawingXml(archive);
+            var rPr = xml.Descendants(DrawingNs + "rPr").Should().ContainSingle().Subject;
+            var children = rPr.Elements().Select(e => e.Name.LocalName).ToList();
+            var idxLn = children.IndexOf("ln");
+            var idxSolidFill = children.IndexOf("solidFill");
+            idxLn.Should().BeGreaterThanOrEqualTo(0, "<a:ln> must be present");
+            idxSolidFill.Should().BeGreaterThanOrEqualTo(0, "<a:solidFill> must be present");
+            idxLn.Should().BeLessThan(idxSolidFill,
+                "CT_TextCharacterProperties requires <a:ln> before solidFill");
+        }
+
+        stream.Position = 0;
+        SchemaErrors(stream).Should().BeEmpty("ln-before-solidFill must satisfy OOXML schema");
+    }
+
+    // ── WW2 — gradient theme-color stops round-trip ───────────────────────
+
+    /// <summary>
+    /// WW2: A WordArt gradient text fill using schemeClr (theme) stops must survive a
+    /// round-trip: start and end stops must be read as <see cref="WorkbookThemeColorReference"/>
+    /// (not null/dropped) and re-emitted as <c>&lt;a:schemeClr&gt;</c> in the writer.
+    /// </summary>
+    [Fact]
+    public void XlsxDrawingPartReader_Reads_WordArt_ThemeGradientStops()
+    {
+        var drawingXml = XDocument.Parse("""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <xdr:oneCellAnchor>
+                <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:ext cx="2700000" cy="900000"/>
+                <xdr:sp>
+                  <xdr:nvSpPr><xdr:cNvPr id="2" name="WordArt 1"/><xdr:cNvSpPr/></xdr:nvSpPr>
+                  <xdr:spPr>
+                    <a:xfrm><a:off x="0" y="0"/><a:ext cx="2700000" cy="900000"/></a:xfrm>
+                    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/>
+                  </xdr:spPr>
+                  <xdr:txBody>
+                    <a:bodyPr anchor="ctr" wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="ctr"/>
+                      <a:r>
+                        <a:rPr lang="en-US" dirty="0" sz="4800" b="1">
+                          <a:gradFill>
+                            <a:gsLst>
+                              <a:gs pos="0"><a:schemeClr val="accent1"/></a:gs>
+                              <a:gs pos="100000"><a:schemeClr val="accent2"/></a:gs>
+                            </a:gsLst>
+                            <a:lin ang="0" scaled="0"/>
+                          </a:gradFill>
+                        </a:rPr>
+                        <a:t>ThemeGrad</a:t>
+                      </a:r>
+                    </a:p>
+                  </xdr:txBody>
+                  <xdr:clientData/>
+                </xdr:sp>
+              </xdr:oneCellAnchor>
+            </xdr:wsDr>
+            """);
+
+        var (_, shapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
+        var shape = shapes.Should().ContainSingle().Subject;
+
+        shape.IsWordArt.Should().BeTrue("gradFill on run = WordArt");
+        shape.ShapeTextThemeColor.Should().NotBeNull("start stop is schemeClr accent1");
+        shape.ShapeTextThemeColor.GetValueOrDefault().Slot.Should().Be(WorkbookThemeColorSlot.Accent1);
+        shape.ShapeTextGradientEndThemeColor.Should().NotBeNull("end stop is schemeClr accent2");
+        shape.ShapeTextGradientEndThemeColor.GetValueOrDefault().Slot.Should().Be(WorkbookThemeColorSlot.Accent2);
+        // Explicit color must be null — theme ref takes precedence.
+        shape.ShapeTextColor.Should().BeNull("theme-color start stop: explicit color should be null");
+        shape.ShapeTextGradientEndColor.Should().BeNull("theme-color end stop: explicit color should be null");
+    }
+
+    [Fact]
+    public void XlsxAdapter_WordArt_ThemeGradient_SchemeClrPreservedOnRoundTrip()
+    {
+        // Build a WordArt with theme-color gradient (accent1 → accent2) by setting
+        // ShapeTextThemeColor and ShapeTextGradientEndThemeColor directly on the model.
+        var workbook = new Workbook("ThemeGradTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 240,
+            Height = 80,
+            HasFill = false,
+            ShapeText = "ThemeGrad",
+            ShapeTextFontSizePoints = 36,
+            ShapeTextBold = true,
+            ShapeTextHAlign = DrawingShapeTextHAlign.Center,
+            ShapeTextVAnchor = DrawingShapeTextVAnchor.Middle,
+            IsWordArt = true,
+            ShapeTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0),
+            ShapeTextGradientEndThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0),
+        });
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        // The written XML must use schemeClr, not srgbClr, for both stops.
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var xml = LoadDrawingXml(archive);
+            var rPr = xml.Descendants(DrawingNs + "rPr").Should().ContainSingle().Subject;
+            var gradFill = rPr.Element(DrawingNs + "gradFill");
+            gradFill.Should().NotBeNull("gradient fill emitted");
+            var stops = gradFill!.Descendants(DrawingNs + "gs").ToList();
+            stops.Should().HaveCount(2, "two gradient stops");
+            stops[0].Element(DrawingNs + "schemeClr").Should().NotBeNull("start stop must be schemeClr (accent1)");
+            stops[1].Element(DrawingNs + "schemeClr").Should().NotBeNull("end stop must be schemeClr (accent2)");
+        }
+
+        // Reload and verify model — theme colors must survive round-trip.
+        stream.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(stream).GetSheetAt(0).DrawingShapes
+            .Should().ContainSingle().Subject;
+        loaded.IsWordArt.Should().BeTrue();
+        loaded.ShapeTextThemeColor.Should().NotBeNull();
+        loaded.ShapeTextThemeColor.GetValueOrDefault().Slot.Should().Be(WorkbookThemeColorSlot.Accent1);
+        loaded.ShapeTextGradientEndThemeColor.Should().NotBeNull();
+        loaded.ShapeTextGradientEndThemeColor.GetValueOrDefault().Slot.Should().Be(WorkbookThemeColorSlot.Accent2);
+    }
+
+    // ── WW5 — solid/single-stop WordArt stays solid across round-trips ────
+
+    /// <summary>
+    /// WW5: When a WordArt rPr carries a <c>&lt;gradFill&gt;</c> with only one distinct stop
+    /// (or start==end), the reader must NOT synthesise a dummy end color equal to the start.
+    /// On re-save, the writer must emit a solid fill, not a degenerate 2-stop gradient.
+    /// </summary>
+    [Fact]
+    public void XlsxDrawingPartReader_SingleStopGradient_ReadAsSolid()
+    {
+        // A single-stop gradFill: only one <a:gs> present.
+        var drawingXml = XDocument.Parse("""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <xdr:oneCellAnchor>
+                <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:ext cx="2700000" cy="900000"/>
+                <xdr:sp>
+                  <xdr:nvSpPr><xdr:cNvPr id="2" name="WordArt 1"/><xdr:cNvSpPr/></xdr:nvSpPr>
+                  <xdr:spPr>
+                    <a:xfrm><a:off x="0" y="0"/><a:ext cx="2700000" cy="900000"/></a:xfrm>
+                    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/>
+                  </xdr:spPr>
+                  <xdr:txBody>
+                    <a:bodyPr anchor="ctr" wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="ctr"/>
+                      <a:r>
+                        <a:rPr lang="en-US" dirty="0" sz="3600">
+                          <a:gradFill>
+                            <a:gsLst>
+                              <a:gs pos="0"><a:srgbClr val="AA1122"/></a:gs>
+                            </a:gsLst>
+                            <a:lin ang="5400000" scaled="0"/>
+                          </a:gradFill>
+                        </a:rPr>
+                        <a:t>SingleStop</a:t>
+                      </a:r>
+                    </a:p>
+                  </xdr:txBody>
+                  <xdr:clientData/>
+                </xdr:sp>
+              </xdr:oneCellAnchor>
+            </xdr:wsDr>
+            """);
+
+        var (_, shapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
+        var shape = shapes.Should().ContainSingle().Subject;
+
+        shape.ShapeTextColor.Should().Be(new CellColor(0xAA, 0x11, 0x22));
+        // Key assertion: no synthesised end color — must be null so the writer falls back to solid.
+        shape.ShapeTextGradientEndColor.Should().BeNull("single-stop gradient must not synthesise an end stop");
+        shape.ShapeTextGradientEndThemeColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_WordArtSolid_StaysSolid_NoGradientEmitted()
+    {
+        // A solid-fill WordArt (no gradient end) must save as solidFill, not gradFill.
+        var workbook = CreateWordArtWorkbook(
+            isWordArt: true,
+            warpPreset: "textWave1",
+            textColor: new CellColor(0xFF, 0x45, 0x00),
+            gradEndColor: null,          // no gradient
+            outlineColor: null,
+            outlineWidthPt: 0);
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        var xml = LoadDrawingXml(archive);
+        var rPr = xml.Descendants(DrawingNs + "rPr").Should().ContainSingle().Subject;
+        rPr.Element(DrawingNs + "gradFill").Should().BeNull("solid WordArt must not emit gradFill");
+        rPr.Element(DrawingNs + "solidFill").Should().NotBeNull("solid WordArt must emit solidFill");
+    }
+
+    // ── WW6 — gradient direction angle round-trips ────────────────────────
+
+    /// <summary>
+    /// WW6: The authored <c>&lt;a:lin ang="..."&gt;</c> value must survive a read→write round-trip.
+    /// A horizontal gradient (ang=0) must not be reoriented to vertical (ang=5400000).
+    /// </summary>
+    [Fact]
+    public void XlsxDrawingPartReader_Reads_WordArt_GradientAngle()
+    {
+        var drawingXml = XDocument.Parse("""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <xdr:oneCellAnchor>
+                <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:ext cx="2700000" cy="900000"/>
+                <xdr:sp>
+                  <xdr:nvSpPr><xdr:cNvPr id="2" name="WordArt 1"/><xdr:cNvSpPr/></xdr:nvSpPr>
+                  <xdr:spPr>
+                    <a:xfrm><a:off x="0" y="0"/><a:ext cx="2700000" cy="900000"/></a:xfrm>
+                    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/>
+                  </xdr:spPr>
+                  <xdr:txBody>
+                    <a:bodyPr anchor="ctr" wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="ctr"/>
+                      <a:r>
+                        <a:rPr lang="en-US" dirty="0" sz="4800" b="1">
+                          <a:gradFill>
+                            <a:gsLst>
+                              <a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs>
+                              <a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>
+                            </a:gsLst>
+                            <a:lin ang="0" scaled="0"/>
+                          </a:gradFill>
+                        </a:rPr>
+                        <a:t>HorizGrad</a:t>
+                      </a:r>
+                    </a:p>
+                  </xdr:txBody>
+                  <xdr:clientData/>
+                </xdr:sp>
+              </xdr:oneCellAnchor>
+            </xdr:wsDr>
+            """);
+
+        var (_, shapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
+        var shape = shapes.Should().ContainSingle().Subject;
+
+        shape.ShapeTextGradientAngle.Should().Be(0, "ang=0 (horizontal) must be captured");
+    }
+
+    [Fact]
+    public void XlsxAdapter_WordArt_GradientAngle_RoundTrips()
+    {
+        // Build a WordArt with a horizontal gradient (ang=0) and verify the angle survives save/load.
+        var workbook = new Workbook("GradAngleTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 240,
+            Height = 80,
+            HasFill = false,
+            ShapeText = "HorizGrad",
+            ShapeTextFontSizePoints = 36,
+            ShapeTextHAlign = DrawingShapeTextHAlign.Center,
+            ShapeTextVAnchor = DrawingShapeTextVAnchor.Middle,
+            IsWordArt = true,
+            ShapeTextColor = new CellColor(0xFF, 0x00, 0x00),
+            ShapeTextGradientEndColor = new CellColor(0x00, 0x00, 0xFF),
+            ShapeTextGradientAngle = 0,  // horizontal: left-to-right
+        });
+
+        using var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        // XML: ang attribute must be "0".
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var xml = LoadDrawingXml(archive);
+            var linEl = xml.Descendants(DrawingNs + "lin").FirstOrDefault(
+                e => e.Parent?.Name.LocalName == "gradFill" && e.Parent?.Parent?.Name.LocalName == "rPr");
+            linEl.Should().NotBeNull("<a:lin> under rPr/gradFill must be present");
+            linEl!.Attribute("ang")?.Value.Should().Be("0", "authored angle 0 must be written as-is");
+        }
+
+        // Reload: angle must come back as 0.
+        stream.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(stream).GetSheetAt(0).DrawingShapes
+            .Should().ContainSingle().Subject;
+        loaded.ShapeTextGradientAngle.Should().Be(0, "gradient angle must survive round-trip");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    private static List<string> SchemaErrors(Stream stream)
+    {
+        stream.Position = 0;
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        copy.Position = 0;
+        using var document = SpreadsheetDocument.Open(copy, isEditable: false);
+        var validator = new OpenXmlValidator(FileFormatVersions.Microsoft365);
+        return validator.Validate(document)
+            .Where(e => e.ErrorType == ValidationErrorType.Schema)
+            .Select(e => $"{e.Description} @ {e.Path?.XPath}")
+            .ToList();
+    }
 
     private static Workbook CreateWordArtWorkbook(
         bool isWordArt,

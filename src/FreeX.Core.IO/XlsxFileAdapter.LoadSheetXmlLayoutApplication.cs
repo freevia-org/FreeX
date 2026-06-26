@@ -208,6 +208,7 @@ public sealed partial class XlsxFileAdapter
                 WarpPreset = shapePart.WarpPreset,
                 ShapeTextGradientEndColor = shapePart.ShapeTextGradientEndColor,
                 ShapeTextGradientEndThemeColor = shapePart.ShapeTextGradientEndThemeColor,
+                ShapeTextGradientAngle = shapePart.ShapeTextGradientAngle,
                 ShapeTextOutlineColor = shapePart.ShapeTextOutlineColor,
                 ShapeTextOutlineThemeColor = shapePart.ShapeTextOutlineThemeColor,
                 ShapeTextOutlineWidthPoints = shapePart.ShapeTextOutlineWidthPoints

@@ -464,31 +464,11 @@ internal static class XlsxWorksheetDrawingObjectWriter
         if (shape.ShapeTextUnderline)
             rPr.Add(new XAttribute("u", "sng"));
 
-        // Text fill: gradient (WordArt) takes priority over solid fill.
-        // Gradient: emit <a:gradFill> with two stops (start = ShapeTextColor, end = GradientEndColor).
-        var hasGradEnd = shape.ShapeTextGradientEndColor is not null ||
-                         shape.ShapeTextGradientEndThemeColor is not null;
-        if (shape.IsWordArt && hasGradEnd)
-        {
-            // Build a simple linear gradient with two stops: position 0 = start, position 100000 = end.
-            var gradFill = new XElement(drawingNs + "gradFill",
-                new XElement(drawingNs + "gsLst",
-                    BuildGradStop(drawingNs, "0",      shape.ShapeTextThemeColor,       shape.ShapeTextColor),
-                    BuildGradStop(drawingNs, "100000", shape.ShapeTextGradientEndThemeColor, shape.ShapeTextGradientEndColor)),
-                new XElement(drawingNs + "lin",
-                    new XAttribute("ang", "5400000"),  // 90° = top-to-bottom
-                    new XAttribute("scaled", "0")));
-            rPr.Add(gradFill);
-        }
-        else
-        {
-            // Normal solid text fill.
-            var textFill = ToSolidFill(shape.ShapeTextThemeColor, shape.ShapeTextColor, drawingNs);
-            if (textFill is not null)
-                rPr.Add(textFill);
-        }
+        // CT_TextCharacterProperties child order (ECMA-376 §21.1.2.3.9):
+        //   <a:ln>  (outline)  MUST come BEFORE the fill group (noFill/solidFill/gradFill/...).
+        // NOTE: CT_ShapeProperties is fill-then-ln; rPr is the inverse — ln-then-fill.
 
-        // WordArt text outline (<a:rPr><a:ln>).
+        // WordArt text outline (<a:rPr><a:ln>) — emitted FIRST per CT_TextCharacterProperties.
         if (shape.IsWordArt && (shape.ShapeTextOutlineColor is not null || shape.ShapeTextOutlineThemeColor is not null))
         {
             var textLn = new XElement(drawingNs + "ln");
@@ -498,6 +478,30 @@ internal static class XlsxWorksheetDrawingObjectWriter
             if (outlineFill is not null)
                 textLn.Add(outlineFill);
             rPr.Add(textLn);
+        }
+
+        // Text fill group — emitted AFTER <a:ln> per CT_TextCharacterProperties.
+        // Gradient (WordArt) takes priority over solid fill.
+        var hasGradEnd = shape.ShapeTextGradientEndColor is not null ||
+                         shape.ShapeTextGradientEndThemeColor is not null;
+        if (shape.IsWordArt && hasGradEnd)
+        {
+            // Emit <a:gradFill> with two stops; use the authored angle (default 5400000 = 90° top-to-bottom).
+            var gradFill = new XElement(drawingNs + "gradFill",
+                new XElement(drawingNs + "gsLst",
+                    BuildGradStop(drawingNs, "0",      shape.ShapeTextThemeColor,               shape.ShapeTextColor),
+                    BuildGradStop(drawingNs, "100000", shape.ShapeTextGradientEndThemeColor, shape.ShapeTextGradientEndColor)),
+                new XElement(drawingNs + "lin",
+                    new XAttribute("ang", shape.ShapeTextGradientAngle.ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("scaled", "0")));
+            rPr.Add(gradFill);
+        }
+        else
+        {
+            // Normal solid text fill.
+            var textFill = ToSolidFill(shape.ShapeTextThemeColor, shape.ShapeTextColor, drawingNs);
+            if (textFill is not null)
+                rPr.Add(textFill);
         }
 
         // Paragraph alignment
