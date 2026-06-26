@@ -6465,6 +6465,8 @@ internal static class ExcelSmokeFixtures
             Path.Combine(outputDirectory, "Excel_native_chart_pie_004.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_chart_area_005.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_chart_scatter_006.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_chart_3dcolumn_007.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_chart_3dbar_008.xlsx"),
         ];
     }
 
@@ -6483,6 +6485,10 @@ internal static class ExcelSmokeFixtures
             GenerateChartFixture_Area(workbooks, outputPath);
         else if (fileName.Contains("scatter_006", StringComparison.OrdinalIgnoreCase))
             GenerateChartFixture_Scatter(workbooks, outputPath);
+        else if (fileName.Contains("3dcolumn_007", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_3DColumn(workbooks, outputPath);
+        else if (fileName.Contains("3dbar_008", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_3DBar(workbooks, outputPath);
         else
             throw new ArgumentException($"Unknown chart corpus fixture: {fileName}");
     }
@@ -6495,6 +6501,8 @@ internal static class ExcelSmokeFixtures
     private const int XlPie              = 5;   // xlPie
     private const int XlArea             = 1;   // xlArea
     private const int XlXYScatter        = -4169; // xlXYScatter
+    private const int Xl3DColumnClustered = 54; // xl3DColumnClustered
+    private const int Xl3DBarClustered    = 60; // xl3DBarClustered
 
     /// <summary>
     /// Write a 2-series data block into the worksheet (rows 1-5):
@@ -6841,6 +6849,86 @@ internal static class ExcelSmokeFixtures
             SetChartTitle(chart, "Scatter — Two Series");
             SetChartAxisTitle(chart, 1, 1, "X");
             SetChartAxisTitle(chart, 1, 2, "Y");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // ── case 007 — 3-D Clustered Column ──────────────────────────────────────
+
+    private static void GenerateChartFixture_3DColumn(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "3DColumnData", out object ws);
+            worksheet = ws;
+
+            string[] cats = ["Q1", "Q2", "Q3", "Q4"];
+            double[] v1   = [120, 150, 180, 200];
+            double[] v2   = [80,  100, 130, 160];
+            var range = WriteChartData(worksheet, "Revenue", "Cost", cats, v1, v2);
+
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            // xl3DColumnClustered = 54
+            chart = AddChartToWorksheet(worksheet, Xl3DColumnClustered, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, range);
+            SetChartTitle(chart, "3-D Column — Revenue vs Cost");
+            SetChartAxisTitle(chart, 1, 1, "Quarter");
+            SetChartAxisTitle(chart, 1, 2, "Amount ($)");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // ── case 008 — 3-D Clustered Bar ─────────────────────────────────────────
+
+    private static void GenerateChartFixture_3DBar(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "3DBarData", out object ws);
+            worksheet = ws;
+
+            string[] cats = ["North", "South", "East", "West"];
+            double[] v1   = [340, 280, 410, 300];
+            double[] v2   = [210, 190, 250, 180];
+            var range = WriteChartData(worksheet, "Sales", "Target", cats, v1, v2);
+
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            // xl3DBarClustered = 60
+            chart = AddChartToWorksheet(worksheet, Xl3DBarClustered, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, range);
+            SetChartTitle(chart, "3-D Bar — Sales vs Target");
+            SetChartAxisTitle(chart, 1, 1, "Region");
+            SetChartAxisTitle(chart, 1, 2, "Units");
             ((dynamic)chart).HasLegend = true;
 
             SaveExcelWorkbook(workbook, outputPath);
