@@ -591,6 +591,184 @@ public sealed class DocumentViewInlineFO4Tests
         Console.WriteLine($"[FO4Capture] Visual inspection: {outPath}");
     }
 
+    // ── YY1: floating objects anchored to an inline-object paragraph land on the correct page ────────
+
+    /// <summary>Builds a minimal 4x4 orange PNG as a stand-in for a real floating image.</summary>
+    private static byte[] SmallPng()
+    {
+        using var bmp = new SKBitmap(4, 4, SKColorType.Rgba8888, SKAlphaType.Premul);
+        bmp.Erase(new SKColor(255, 128, 0));
+        using var img = SKImage.FromBitmap(bmp);
+        using var data = img.Encode(SKEncodedImageFormat.Png, 90);
+        return data.ToArray();
+    }
+
+    /// <summary>
+    /// YY1: Fill a page so the anchor paragraph (with a tall inline chart, 216pt ≈ 288 DIP) sits
+    /// in the last band of the first page.  The inline chart correctly overflows to page 2 via
+    /// ReserveContentY, but before the fix PeekFirstLineContentY(1) didn't detect the page-break
+    /// and the floating image anchored to this paragraph landed on page 1 (wrong page).
+    ///
+    /// After the YY1 fix PeekFirstLineContentY receives the chart's actual height (288 DIP), detects
+    /// the overflow, and returns a contentY on page 2 → the floating image anchors on page 2.
+    ///
+    /// Layout geometry (96 DPI, US Letter, 1-in margins):
+    ///   textAreaHeight = (792 - 72 - 72) × (96/72) = 864 DIP
+    ///   chartHeight ≈ 216pt × (96/72) = 288 DIP
+    ///   Fill to leave &lt;288 DIP at the bottom but &gt;1 DIP (so the chart overflows to page 2).
+    ///   Default 11pt line ≈ 20.3 DIP;  fillerCount = floor((864 - 1) / 20.3) ≈ 42 lines.
+    ///   After filler, remaining space = 864 - 42×20.3 ≈ 11.4 DIP &lt; 288 DIP → chart overflows.
+    ///   Page 2 threshold ≈ 24 (desk) + 864 (page 1 area) + 20 (gap) + 96 (top margin) = 1004 DIP.
+    /// </summary>
+    [Fact]
+    public async Task YY1_floating_object_anchored_to_inline_chart_paragraph_lands_on_same_page_as_chart()
+    {
+        Rect floatRect = default;
+        int pageCount = 0;
+        double inlineChartRectY = double.MaxValue;
+
+        var ran = await OnUiThread(() =>
+        {
+            const double textAreaHeightDip = 864.0;
+            const double lineHDip = 20.3;  // default 11pt line height
+            // Fill to within <chartHeight but >1 DIP of the page bottom.
+            var fillerCount = (int)((textAreaHeightDip - 1) / lineHDip); // ≈ 42
+
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var bodyFmt = RunFormatting.Default with { FontSizePt = 11 };
+
+            // Filler paragraphs to push the anchor near page bottom.
+            for (var i = 0; i < fillerCount; i++)
+            {
+                var filler = new Paragraph();
+                filler.Runs.Add(new Run($"Fill {i + 1}.", bodyFmt));
+                doc.Blocks.Add(filler);
+            }
+
+            // Anchor paragraph: tall inline chart (216pt = 288 DIP) + floating image with vOffset=0.
+            var anchorPara = new Paragraph();
+            var chart = Chart.Create(ChartKind.Column,
+                new[] { "A", "B" }, new[] { 10.0, 20.0 }, "S1");
+            chart.WidthPt  = 360;  // default width
+            chart.HeightPt = 216;  // default height → 288 DIP, causes page break
+            anchorPara.Runs.Add(new Run(string.Empty, bodyFmt) { Chart = chart });
+
+            var floatImg = new InlineImage(SmallPng(), 72, 54)
+            {
+                Wrapping           = ImageWrapping.Square,
+                HorizontalOffsetPt = 0,
+                VerticalOffsetPt   = 0,
+                HorizontalAnchor   = HorizontalAnchor.Column,
+                VerticalAnchor     = VerticalAnchor.Paragraph,
+                ZOrderIndex        = 0,
+            };
+            anchorPara.Runs.Add(new Run(string.Empty, bodyFmt) { Image = floatImg });
+            doc.Blocks.Add(anchorPara);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, double.PositiveInfinity));
+
+            pageCount = view.PageCount;
+            if (view.FloatingImageRects.Count > 0)
+                floatRect = view.FloatingImageRects[0].Rect;
+
+            // Inline chart rect Y — both float and chart should be on page 2.
+            var chartRects = view.InlineChartRects;
+            if (chartRects.Count > 0)
+                inlineChartRectY = chartRects[0].Rect.Y;
+        });
+
+        if (!ran) return;
+
+        pageCount.Should().BeGreaterThan(1,
+            "YY1: filler paragraphs should fill page 1 and push the inline-chart paragraph to page 2");
+
+        const double page2Threshold = 1000.0;
+
+        // The inline chart must be on page 2.
+        inlineChartRectY.Should().BeGreaterThanOrEqualTo(page2Threshold,
+            $"YY1: the tall inline chart must overflow to page 2 (Y ≥ {page2Threshold}), got Y={inlineChartRectY:F1}");
+
+        // The floating image anchored to this paragraph must ALSO be on page 2.
+        floatRect.Y.Should().BeGreaterThanOrEqualTo(page2Threshold,
+            $"YY1: paragraph-anchored float must land on page 2 (Y ≥ {page2Threshold}), got Y={floatRect.Y:F1}. " +
+            "Before YY1 fix, PeekFirstLineContentY(1) didn't detect the chart's page-break so the " +
+            "float was anchored on page 1 while the inline chart rendered on page 2.");
+
+        // Float Y should be close to the inline chart's Y (both on page 2, vOffset=0).
+        if (inlineChartRectY < double.MaxValue)
+        {
+            var delta = Math.Abs(floatRect.Y - inlineChartRectY);
+            delta.Should().BeLessThanOrEqualTo(8.0,
+                $"YY1: float Y ({floatRect.Y:F1}) should be near the inline chart Y ({inlineChartRectY:F1}) since vOffset=0");
+        }
+    }
+
+    // ── YY3: inline object sentinel Y is at the baseline (bottom of object box) ─────────────────────
+
+    /// <summary>
+    /// YY3: Verifies that the caret sentinel placed for an inline chart has its Y at the BOTTOM of
+    /// the inline chart's line box (baseline-aligned) rather than the TOP.
+    /// WPF uses BaselineAlignment.Bottom for inline charts, so the caret cursor appears at the
+    /// object's bottom.  After the YY3 fix, sentinelY = pageSpaceY + height - caretLineH,
+    /// so sentinel.Y + sentinel.LineHeight == pageSpaceY + height (the object bottom).
+    /// </summary>
+    [Fact]
+    public async Task YY3_inline_chart_sentinel_Y_is_at_baseline_not_top()
+    {
+        double sentinelY = double.MinValue;
+        double sentinelLineH = 0;
+        double chartRectTop = double.MaxValue;
+        double chartRectBottom = double.MaxValue;
+
+        var ran = await OnUiThread(() =>
+        {
+            const double heightPt = 216; // 216pt → 288 DIP at 96 DPI
+            var doc = DocWithInlineChart(ChartKind.Column, heightPt: heightPt);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            // Block 0 = the inline-chart paragraph.
+            var placed = view.GetPlacedForBlock(0);
+            // Find the atomic sentinel for the inline chart (width=0, '\0' char).
+            var chartGlyphs = placed.Where(p => p.W == 0).ToList();
+            if (chartGlyphs.Count > 0)
+            {
+                var g = chartGlyphs[0];
+                sentinelY     = g.Y;
+                sentinelLineH = g.LineHeight;
+            }
+
+            var chartRects = view.InlineChartRects;
+            if (chartRects.Count > 0)
+            {
+                chartRectTop    = chartRects[0].Rect.Top;
+                chartRectBottom = chartRects[0].Rect.Bottom;
+            }
+        });
+
+        if (!ran) return;
+        if (sentinelY < double.MinValue + 1 || chartRectTop >= double.MaxValue) return; // couldn't introspect
+
+        // The sentinel bottom (Y + LineHeight) must equal the chart rect bottom (baseline).
+        var sentinelBottom = sentinelY + sentinelLineH;
+        var delta = Math.Abs(sentinelBottom - chartRectBottom);
+        delta.Should().BeLessThanOrEqualTo(2.0,
+            $"YY3: sentinel bottom ({sentinelBottom:F1}) should equal chart rect bottom ({chartRectBottom:F1}) " +
+            "— the caret must sit at the object baseline (WPF BaselineAlignment.Bottom).");
+
+        // The sentinel Y must be BELOW the chart rect top (not top-aligned).
+        if (chartRectBottom - chartRectTop > 4)
+        {
+            sentinelY.Should().BeGreaterThan(chartRectTop,
+                $"YY3: sentinel Y ({sentinelY:F1}) must be below chart top ({chartRectTop:F1}) — " +
+                "before the fix the sentinel was top-aligned (Y == chartTop).");
+        }
+    }
+
     // ── PNG encoder ───────────────────────────────────────────────────────────────────────────────
 
     private static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)

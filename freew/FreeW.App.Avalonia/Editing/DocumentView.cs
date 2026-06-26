@@ -1370,8 +1370,55 @@ public sealed class DocumentView : Control
         const double gap = 6;
         var alignment = paragraph.Formatting.Alignment;
 
+        // YY1 fix: compute the first inline object's pixel height (chart/WordArt/SmartArt/image, in
+        // document order, using the same size formulas as the layout loop below) and pass it to
+        // PeekFirstLineContentY so that Peek's page-break probe matches the actual first
+        // ReserveContentY call.  Before this fix, PeekFirstLineContentY() used the default lineHeight=1,
+        // which failed to detect the page-break for a tall inline chart/SmartArt near a page bottom —
+        // the inline object correctly broke to the next page but the floating object anchored to this
+        // paragraph stayed on the prior page (wrong).  Mirrors the TT1/VV1 fix in LayoutImageParagraphPaged.
+        double firstObjHeight = DefaultFontSizePt * PxPerPoint * 1.3; // fallback: default text line height
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Chart is { IsFloating: false } firstChart)
+            {
+                var h = firstChart.HeightPt > 0 ? firstChart.HeightPt * PxPerPoint : 216 * PxPerPoint;
+                // Apply width-constrained scale if needed (mirrors the layout loop).
+                var w = firstChart.WidthPt > 0 ? firstChart.WidthPt * PxPerPoint : 360 * PxPerPoint;
+                if (w > textWidth) h *= textWidth / w;
+                firstObjHeight = h;
+                break;
+            }
+            if (run.WordArt is { IsFloating: false } firstWa)
+            {
+                var w = Math.Max(72, firstWa.FontSizePt * Math.Max(1, firstWa.Text.Length) * 0.62) * PxPerPoint;
+                var h = Math.Max(40, firstWa.FontSizePt * 1.6) * PxPerPoint;
+                if (w > textWidth) h *= textWidth / w;
+                firstObjHeight = h;
+                break;
+            }
+            if (run.SmartArt is { IsFloating: false } firstSa)
+            {
+                var h = firstSa.HeightPt > 0 ? firstSa.HeightPt * PxPerPoint : 216 * PxPerPoint;
+                var w = firstSa.WidthPt  > 0 ? firstSa.WidthPt  * PxPerPoint : 468 * PxPerPoint;
+                if (w > textWidth) h *= textWidth / w;
+                firstObjHeight = h;
+                break;
+            }
+            if (run.Image is { IsFloating: false } firstImg)
+            {
+                firstObjHeight = firstImg.HeightPt > 0 ? firstImg.HeightPt * PxPerPoint : 80;
+                break;
+            }
+            // Plain text run: use text-line height as the Peek estimate.
+            if (!string.IsNullOrEmpty(run.Text))
+            {
+                firstObjHeight = Build("Ag", run.Formatting).Height;
+                break;
+            }
+        }
         // Collect floating objects anchored to this paragraph (mirrors LayoutImageParagraphPaged).
-        var anchorContentY = PeekFirstLineContentY();
+        var anchorContentY = PeekFirstLineContentY(firstObjHeight);
         CollectFloatingImages(paragraph, anchorContentY);
         CollectFloatingShapes(paragraph, anchorContentY);
         CollectFloatingCharts(paragraph, anchorContentY);
@@ -1383,6 +1430,13 @@ public sealed class DocumentView : Control
         var glyphOffset = _placed.Count > 0
             ? _placed.Max(p => p.Block == blockIndex ? p.Offset : -1) + 1
             : 0;
+
+        // YY3: caret line height for baseline-aligned sentinels.
+        // WPF uses BaselineAlignment.Bottom for inline charts/SmartArt/images (and .Center for WordArt).
+        // We mirror this by placing the PlacedChar sentinel at (pageSpaceY + height - caretLineH) so
+        // the caret cursor sits at the bottom (baseline) of the inline object rather than its top.
+        // The visual Rect for the object is unchanged; only the caret probe position moves to baseline.
+        var caretLineH = DefaultFontSizePt * PxPerPoint * 1.3;
 
         foreach (var run in paragraph.Runs)
         {
@@ -1411,8 +1465,12 @@ public sealed class DocumentView : Control
                     Series     = series,
                 });
 
-                // Emit atomic sentinel so caret navigates over the object.
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                // YY3: emit sentinel at the baseline (bottom of the object box) so the caret cursor
+                // appears at the object's bottom, matching WPF's BaselineAlignment.Bottom behaviour.
+                // Named objSentH/objSentY to avoid CS0136 conflict with the method-level sentinelY below.
+                var objSentH = Math.Min(caretLineH, height);
+                var objSentY = pageSpaceY + height - objSentH;
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;
@@ -1443,7 +1501,11 @@ public sealed class DocumentView : Control
                     Warp       = wa.Warp,
                 });
 
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                // YY3: WordArt uses Center alignment in WPF; approximate here with bottom-align too
+                // (simpler, low-risk — exact centre would need half-height offset into the object).
+                var objSentH = Math.Min(caretLineH, height);
+                var objSentY = pageSpaceY + height - objSentH;
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;
@@ -1479,7 +1541,10 @@ public sealed class DocumentView : Control
                     NodeTexts  = texts,
                 });
 
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                // YY3: baseline-aligned sentinel (bottom of object box).
+                var objSentH = Math.Min(caretLineH, height);
+                var objSentY = pageSpaceY + height - objSentH;
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;
