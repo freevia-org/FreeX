@@ -265,6 +265,141 @@ public sealed class PptxRoundTripTests : IDisposable
         grad.AngleDegrees.Should().BeApproximately(90.0, 0.1);
     }
 
+    [Fact]
+    public void RoundTrip_MultiStopGradientFill_ThreeStops()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var stops = new[]
+        {
+            new GradientStop(0.0,  new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00))),
+            new GradientStop(0.5,  new ThemeAwareColor(new SrgbColor(0x00, 0xFF, 0x00))),
+            new GradientStop(1.0,  new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF))),
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "Grad3Shape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Linear, angleDegrees: 45.0),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "Grad3Shape");
+        s.Fill.Should().BeOfType<ShapeFill.Gradient>();
+        var grad = (ShapeFill.Gradient)s.Fill!;
+        grad.Stops.Should().HaveCount(3, "all 3 stops must survive round-trip");
+        grad.Kind.Should().Be(GradientKind.Linear);
+        grad.AngleDegrees.Should().BeApproximately(45.0, 0.1);
+        grad.Stops[0].Color.Resolved.R.Should().Be(0xFF);
+        grad.Stops[1].Color.Resolved.G.Should().Be(0xFF);
+        grad.Stops[2].Color.Resolved.B.Should().Be(0xFF);
+        grad.Stops[0].Position.Should().BeApproximately(0.0, 0.001);
+        grad.Stops[1].Position.Should().BeApproximately(0.5, 0.001);
+        grad.Stops[2].Position.Should().BeApproximately(1.0, 0.001);
+    }
+
+    [Fact]
+    public void RoundTrip_RadialGradientFill()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var stops = new[]
+        {
+            new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF))),
+            new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00))),
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "RadialShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Ellipse,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Radial, angleDegrees: 0.0),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "RadialShape");
+        s.Fill.Should().BeOfType<ShapeFill.Gradient>();
+        var grad = (ShapeFill.Gradient)s.Fill!;
+        grad.Kind.Should().Be(GradientKind.Radial);
+        grad.Stops.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void RoundTrip_PictureFill()
+    {
+        // Minimal 1x1 PNG (89 bytes)
+        var pngBytes = new byte[]
+        {
+            0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A, // PNG signature
+            0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52, // IHDR chunk
+            0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,
+            0x08,0x02,0x00,0x00,0x00,0x90,0x77,0x53,
+            0xDE,0x00,0x00,0x00,0x0C,0x49,0x44,0x41, // IDAT chunk
+            0x54,0x08,0xD7,0x63,0xF8,0xCF,0xC0,0x00,
+            0x00,0x00,0x02,0x00,0x01,0xE2,0x21,0xBC,
+            0x33,0x00,0x00,0x00,0x00,0x49,0x45,0x4E, // IEND chunk
+            0x44,0xAE,0x42,0x60,0x82
+        };
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "PicFillShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Picture(pngBytes, "image/png", tile: false),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "PicFillShape");
+        s.Fill.Should().BeOfType<ShapeFill.Picture>("picture fill must survive round-trip");
+        var pic = (ShapeFill.Picture)s.Fill!;
+        pic.ImageBytes.Should().NotBeEmpty("image bytes must be preserved");
+        pic.Tile.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RoundTrip_PatternFill()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "PatternShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Pattern(
+                preset: "diagStripe",
+                foregroundColor: new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)),
+                backgroundColor: new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF))),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "PatternShape");
+        s.Fill.Should().BeOfType<ShapeFill.Pattern>("pattern fill must survive round-trip");
+        var pat = (ShapeFill.Pattern)s.Fill!;
+        pat.Preset.Should().Be("diagStripe");
+        pat.ForegroundColor.Resolved.B.Should().Be(0xFF);
+        pat.BackgroundColor.Resolved.R.Should().Be(0xFF);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // 4. Outline round-trip
     // ─────────────────────────────────────────────────────────────────────────────

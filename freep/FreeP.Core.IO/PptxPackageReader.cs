@@ -717,9 +717,9 @@ public static class PptxPackageReader
         {
             SlideShape? shape = child.Name.LocalName switch
             {
-                "sp"           => ReadSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId),
+                "sp"           => ReadSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
                 "pic"          => ReadPic(child, archive, partPath, scheme),
-                "cxnSp"        => ReadCxnSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId),
+                "cxnSp"        => ReadCxnSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
                 "grpSp"        => ReadGrpSp(child, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
                 "graphicFrame" => ReadGraphicFrame(child, archive, partPath, scheme, tableStyles),
                 _ => null
@@ -1293,7 +1293,9 @@ public static class PptxPackageReader
         List<(string id, string type, string target)>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
-        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        ZipArchive? archive = null,
+        string? partPath = null)
     {
         var cNvPr = sp.Element(P + "nvSpPr")?.Element(P + "cNvPr");
         var nvPr = sp.Element(P + "nvSpPr")?.Element(P + "nvPr");
@@ -1314,7 +1316,10 @@ public static class PptxPackageReader
         if (ph is not null) shape.Placeholder = ReadPlaceholder(ph);
 
         var spPr = sp.Element(P + "spPr");
-        ReadSpPr(spPr, shape, scheme);
+        var blipResolver = (archive is not null && slideRels is not null && partPath is not null)
+            ? BuildBlipResolver(archive, slideRels, partPath)
+            : null;
+        ReadSpPr(spPr, shape, scheme, blipResolver);
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
         shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
@@ -1470,7 +1475,9 @@ public static class PptxPackageReader
         List<(string id, string type, string target)>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
-        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        ZipArchive? archive = null,
+        string? partPath = null)
     {
         var cNvPr = cxnSp.Element(P + "nvCxnSpPr")?.Element(P + "cNvPr");
 
@@ -1487,7 +1494,10 @@ public static class PptxPackageReader
             shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides, slideDir, slidePartPathToId);
 
         var spPr = cxnSp.Element(P + "spPr");
-        ReadSpPr(spPr, shape, scheme);
+        var blipResolver = (archive is not null && slideRels is not null && partPath is not null)
+            ? BuildBlipResolver(archive, slideRels, partPath)
+            : null;
+        ReadSpPr(spPr, shape, scheme, blipResolver);
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
         shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
@@ -1523,7 +1533,11 @@ public static class PptxPackageReader
 
     // ── spPr ─────────────────────────────────────────────────────────────────────
 
-    private static void ReadSpPr(XElement? spPr, SlideShape shape, PresentationColorScheme scheme)
+    private static void ReadSpPr(
+        XElement? spPr,
+        SlideShape shape,
+        PresentationColorScheme scheme,
+        Func<string, (byte[] bytes, string contentType)?>? resolveBlip = null)
     {
         if (spPr is null) return;
 
@@ -1542,7 +1556,7 @@ public static class PptxPackageReader
             shape.FlipV = xfrm.Attribute("flipV")?.Value is "1" or "true";
         }
 
-        shape.Fill = PptxColorReader.TryReadFill(spPr, scheme);
+        shape.Fill = PptxColorReader.TryReadFill(spPr, scheme, resolveBlip);
         shape.Outline = PptxColorReader.TryReadOutline(spPr.Element(A + "ln"), scheme);
 
         // Custom geometry
@@ -1575,6 +1589,34 @@ public static class PptxPackageReader
             if (hasSomething)
                 shape.Effects = fx;
         }
+    }
+
+    // ── Blip resolver ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a delegate that resolves a blip embed rId to (bytes, contentType) using
+    /// the slide's image rels and the archive. Used for a:blipFill shape fills.
+    /// </summary>
+    private static Func<string, (byte[] bytes, string contentType)?> BuildBlipResolver(
+        ZipArchive archive,
+        List<(string id, string type, string target)> slideRels,
+        string partPath)
+    {
+        return (embedId) =>
+        {
+            var imageTarget = slideRels
+                .FirstOrDefault(r => r.id == embedId && r.type == ImageRelType).target;
+            if (string.IsNullOrWhiteSpace(imageTarget)) return null;
+
+            var imagePath = ResolvePath(GetDirectory(partPath), imageTarget);
+            var entry = archive.GetEntry(imagePath);
+            if (entry is null) return null;
+
+            using var imgStream = entry.Open();
+            using var ms = new MemoryStream();
+            imgStream.CopyTo(ms);
+            return (ms.ToArray(), GuessContentType(imagePath));
+        };
     }
 
     // ── a:sp3d ───────────────────────────────────────────────────────────────

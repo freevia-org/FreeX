@@ -682,9 +682,16 @@ public static class SlideCompositor
         ShapeFill.None => ResolvedFill.None.Instance,
         ShapeFill.Solid s => new ResolvedFill.Solid(ThemeColorResolver.Resolve(s.Color, theme)),
         ShapeFill.Gradient g => new ResolvedFill.Gradient(
-            ThemeColorResolver.Resolve(g.StartColor, theme),
-            ThemeColorResolver.Resolve(g.EndColor, theme),
+            g.Stops.Select(stop => new ResolvedFill.ResolvedGradientStop(
+                stop.Position,
+                ThemeColorResolver.Resolve(stop.Color, theme))).ToArray(),
+            g.Kind,
             g.AngleDegrees),
+        ShapeFill.Picture p => new ResolvedFill.Picture(p.ImageBytes, p.ContentType, p.Tile),
+        ShapeFill.Pattern pat => new ResolvedFill.PatternFill(
+            pat.Preset,
+            ThemeColorResolver.Resolve(pat.ForegroundColor, theme),
+            ThemeColorResolver.Resolve(pat.BackgroundColor, theme)),
         _ => ResolvedFill.None.Instance
     };
 
