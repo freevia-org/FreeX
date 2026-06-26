@@ -1138,6 +1138,231 @@ public sealed class PptxRoundTripTests : IDisposable
         var rt = reloaded.Slides[0].Shapes.Single(s => s.Kind == SlideShapeKind.Table).Table!;
         rt.Flags.BandRow.Should().BeFalse("absent bandRow attribute must default to false (Q7)");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Wave 18B: slide backgrounds, tab stops, vertical text
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void W18B_SlideGradientBackground_RoundTrip()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Background = new ShapeFill.Gradient(
+            new[]
+            {
+                new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0x00, 0x40, 0x80))),
+                new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0xA0, 0xC0, 0xFF))),
+            }, GradientKind.Linear, 90.0);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var loaded = PptxPackageReader.Read(path);
+
+        loaded.Slides[0].Background.Should().BeOfType<ShapeFill.Gradient>(
+            "gradient background must survive write→read");
+        var grad = (ShapeFill.Gradient)loaded.Slides[0].Background!;
+        grad.Stops.Should().HaveCount(2);
+        grad.AngleDegrees.Should().BeApproximately(90.0, 1.0);
+    }
+
+    [Fact]
+    public void W18B_LayoutPictureBackground_RoundTrip()
+    {
+        // Minimal 1×1 PNG
+        var pngBytes = new byte[]
+        {
+            0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A,
+            0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52,
+            0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,
+            0x08,0x02,0x00,0x00,0x00,0x90,0x77,0x53,
+            0xDE,0x00,0x00,0x00,0x0C,0x49,0x44,0x41,
+            0x54,0x08,0xD7,0x63,0xF8,0xCF,0xC0,0x00,
+            0x00,0x00,0x02,0x00,0x01,0xE2,0x21,0xBC,
+            0x33,0x00,0x00,0x00,0x00,0x49,0x45,0x4E,
+            0x44,0xAE,0x42,0x60,0x82
+        };
+        var pres = new Presentation();
+        var layout = pres.Layouts.FirstOrDefault();
+        if (layout is null)
+        {
+            layout = new SlideLayout { Id = "L1", MasterId = pres.Masters.FirstOrDefault()?.Id ?? "M1" };
+            pres.Layouts.Add(layout);
+        }
+        layout.Background = new ShapeFill.Picture(pngBytes, "image/png", tile: false);
+        pres.Slides.Add(new Slide { LayoutId = layout.Id });
+
+        var path = WriteToPptx(pres);
+        var loaded = PptxPackageReader.Read(path);
+
+        var reloadedLayout = loaded.Layouts.FirstOrDefault(l => l.Id == layout.Id);
+        reloadedLayout?.Background.Should().BeOfType<ShapeFill.Picture>(
+            "picture background on layout must survive write→read");
+    }
+
+    [Fact]
+    public void W18B_BackgroundResolution_SlideOverridesLayout()
+    {
+        // Compositor resolves slide.Background in preference to master.Background.
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+
+        var masterBg = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x10, 0x10, 0x10)));
+        var slideBg  = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)));
+
+        if (pres.Masters.Count > 0) pres.Masters[0].Background = masterBg;
+        slide.Background = slideBg;
+
+        var ops = FreeP.App.Compositor.SlideCompositor.Compose(pres, slide);
+        var bgOp = ops.OfType<FreeP.App.Compositor.DrawOp.Background>().First();
+
+        bgOp.Fill.Should().BeOfType<FreeP.App.Compositor.ResolvedFill.Solid>(
+            "slide bg must override master bg");
+        var solid = (FreeP.App.Compositor.ResolvedFill.Solid)bgOp.Fill;
+        solid.Color.R.Should().Be(0xFF);
+    }
+
+    [Fact]
+    public void W18B_TabStops_RoundTrip()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var para = new Paragraph();
+        para.TabStops.Add(new TabStop { PositionEmu = 914400,  Alignment = TabStopAlignment.Left   });
+        para.TabStops.Add(new TabStop { PositionEmu = 1828800, Alignment = TabStopAlignment.Center });
+        para.TabStops.Add(new TabStop { PositionEmu = 2743200, Alignment = TabStopAlignment.Right  });
+        para.Runs.Add(new Run { Text = "A\tB\tC" });
+        var shape = new SlideShape
+        {
+            Id = 1, Name = "TabShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 3657600, ExtentCyEmu = 914400,
+            TextBody = new TextBody()
+        };
+        shape.TextBody!.Paragraphs.Add(para);
+        slide.Shapes.Add(shape);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var loaded = PptxPackageReader.Read(path);
+
+        var reloadedShape = loaded.Slides[0].Shapes.First(s => s.Name == "TabShape");
+        var reloadedPara = reloadedShape.TextBody!.Paragraphs[0];
+        reloadedPara.TabStops.Should().HaveCount(3, "all three tab stops must survive write→read");
+        reloadedPara.TabStops[0].PositionEmu.Should().Be(914400);
+        reloadedPara.TabStops[0].Alignment.Should().Be(TabStopAlignment.Left);
+        reloadedPara.TabStops[1].Alignment.Should().Be(TabStopAlignment.Center);
+        reloadedPara.TabStops[2].Alignment.Should().Be(TabStopAlignment.Right);
+    }
+
+    [Fact]
+    public void W18B_TabAdvance_UsesStopPosition()
+    {
+        // Compositor converts a tab stop at 914400 EMU (=96 DIP) into a ResolvedTabStop.
+        // Use a fresh presentation (not CreateEmpty) so the only shape is the tab shape.
+        var pres = new Presentation();
+        var slide = new Slide();
+        pres.Slides.Add(slide);
+        var para = new Paragraph();
+        para.TabStops.Add(new TabStop { PositionEmu = 914400, Alignment = TabStopAlignment.Left });
+        para.Runs.Add(new Run { Text = "A\tB" });
+        var shape = new SlideShape
+        {
+            Id = 1, Name = "TabCalc",
+            Kind = SlideShapeKind.AutoShape,
+            ExtentCxEmu = 5000000, ExtentCyEmu = 1000000,
+            TextBody = new TextBody()
+        };
+        shape.TextBody!.Paragraphs.Add(para);
+        slide.Shapes.Add(shape);
+
+        var ops = FreeP.App.Compositor.SlideCompositor.Compose(pres, slide);
+        // The only shape with Text is our TabCalc shape.
+        var shapeDraw = ops.OfType<FreeP.App.Compositor.DrawOp.Shape>()
+            .FirstOrDefault(s => s.Text is not null && s.Text.Paragraphs.Any(p => p.TabStops.Count > 0));
+        shapeDraw.Should().NotBeNull("compositor must produce a DrawOp.Shape with resolved tab stops");
+        var resolvedPara = shapeDraw!.Text!.Paragraphs.First(p => p.TabStops.Count > 0);
+        resolvedPara.TabStops.Should().HaveCount(1);
+        resolvedPara.TabStops[0].PositionDip.Should().BeApproximately(914400.0 / 9525.0, 0.5,
+            "tab stop must convert from EMU to DIP correctly");
+    }
+
+    [Fact]
+    public void W18B_VerticalText_RoundTrip()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Id = 1, Name = "VertText",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400, ExtentCyEmu = 2743200,
+            TextBody = new TextBody { VerticalType = TextVerticalType.Vertical }
+        };
+        var vertPara = new Paragraph();
+        vertPara.Runs.Add(new Run { Text = "Vertical" });
+        shape.TextBody.Paragraphs.Add(vertPara);
+        slide.Shapes.Add(shape);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var loaded = PptxPackageReader.Read(path);
+
+        var s = loaded.Slides[0].Shapes.First(x => x.Name == "VertText");
+        s.TextBody!.VerticalType.Should().Be(TextVerticalType.Vertical,
+            "vert= attribute must survive write→read");
+    }
+
+    [Fact]
+    public void W18B_VerticalText270_RoundTrip()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Id = 1, Name = "Vert270",
+            Kind = SlideShapeKind.AutoShape,
+            ExtentCxEmu = 914400, ExtentCyEmu = 2743200,
+            TextBody = new TextBody { VerticalType = TextVerticalType.Vertical270 }
+        };
+        var vert270Para = new Paragraph();
+        vert270Para.Runs.Add(new Run { Text = "Up" });
+        shape.TextBody.Paragraphs.Add(vert270Para);
+        slide.Shapes.Add(shape);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var loaded = PptxPackageReader.Read(path);
+
+        var s = loaded.Slides[0].Shapes.First(x => x.Name == "Vert270");
+        s.TextBody!.VerticalType.Should().Be(TextVerticalType.Vertical270,
+            "vert270 attribute must survive write→read");
+    }
+
+    [Fact]
+    public void W18B_VerticalText_Compositor_EmitsOrientation()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        var shape = new SlideShape
+        {
+            Id = 1, Name = "VT",
+            Kind = SlideShapeKind.AutoShape,
+            ExtentCxEmu = 914400, ExtentCyEmu = 2743200,
+            TextBody = new TextBody { VerticalType = TextVerticalType.Vertical }
+        };
+        var vtPara = new Paragraph();
+        vtPara.Runs.Add(new Run { Text = "V" });
+        shape.TextBody.Paragraphs.Add(vtPara);
+        slide.Shapes.Add(shape);
+
+        var ops = FreeP.App.Compositor.SlideCompositor.Compose(pres, slide);
+        var shapeDraw = ops.OfType<FreeP.App.Compositor.DrawOp.Shape>()
+            .FirstOrDefault(s => s.Text?.VerticalType == TextVerticalType.Vertical);
+        shapeDraw.Should().NotBeNull("compositor must propagate VerticalType to ResolvedTextLayout");
+    }
 }
 
 /// <summary>
@@ -1478,4 +1703,5 @@ public sealed class Shape3dAndMotionRegressionTests
 
         return dstMs.ToArray();
     }
+
 }
