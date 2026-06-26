@@ -158,6 +158,15 @@ public static class SlideCompositor
                 ComposeOle(shape, slide, presentation, theme, ops, effectiveClrMap);
                 break;
 
+            // Wave 25A: preserved modern objects — fallback preview image or grey placeholder.
+            case SlideShapeKind.Zoom:
+            case SlideShapeKind.Ink:
+            case SlideShapeKind.Model3d:
+            case SlideShapeKind.PreservedObject:
+                if (shape.PreservedObject is not null)
+                    ComposePreservedObject(shape, slide, presentation, theme, ops, effectiveClrMap);
+                break;
+
             default:
                 ComposeAutoShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
                 break;
@@ -421,6 +430,49 @@ public static class SlideCompositor
             {
                 Geometry    = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
                 Fill        = new ResolvedFill.Solid(new SrgbColor(0xC0, 0xC0, 0xC0)),
+                Outline     = ResolvedOutline.None.Instance,
+                BoundsDip   = boundsDip,
+                RotationDeg = anchor.RotationDeg,
+            });
+        }
+    }
+
+    // ─── Preserved modern objects (Wave 25A: zoom / ink / 3D / unknown) ─────────────────────
+
+    /// <summary>
+    /// Renders a preserved modern object (slide zoom, ink annotation, 3D model, or unknown
+    /// graphicFrame) by drawing its fallback preview image if present, or a grey rectangle
+    /// placeholder when no preview is available.
+    /// </summary>
+    private static void ComposePreservedObject(
+        SlideShape shape,
+        Slide slide,
+        PresentationModel presentation,
+        PresentationTheme theme,
+        List<DrawOp> ops,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+    {
+        var anchor    = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
+        var boundsDip = AnchorToBounds(anchor);
+
+        if (shape.Picture is { Bytes.Length: > 0 } pic)
+        {
+            ops.Add(new DrawOp.Picture
+            {
+                Bytes       = pic.Bytes,
+                ContentType = pic.ContentType,
+                DestDip     = boundsDip,
+                RotationDeg = anchor.RotationDeg,
+                Outline     = ResolvedOutline.None.Instance,
+            });
+        }
+        else
+        {
+            // No preview — grey rectangle placeholder (slightly lighter than OLE's 0xC0).
+            ops.Add(new DrawOp.Shape
+            {
+                Geometry    = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
+                Fill        = new ResolvedFill.Solid(new SrgbColor(0xCC, 0xCC, 0xCC)),
                 Outline     = ResolvedOutline.None.Instance,
                 BoundsDip   = boundsDip,
                 RotationDeg = anchor.RotationDeg,

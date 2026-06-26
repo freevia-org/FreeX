@@ -634,7 +634,7 @@ public static class PptxPackageReader
         // Transition — may be a plain p:transition (legacy) or wrapped in mc:AlternateContent (modern).
         // AC1: resolve mc:AlternateContent → use mc:Choice p:transition (has p14:dur); fall back to
         // mc:Fallback p:transition or a bare p:transition for files written without the extension.
-        slide.Transition = ResolveTransitionEl(xml.Root);
+        slide.Transition = ResolveTransitionEl(xml.Root, archive, slideRels, slidePath);
 
         // Animations (main sequence only)
         var timingEl = xml.Root.Element(P + "timing");
@@ -786,6 +786,8 @@ public static class PptxPackageReader
                 "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
                 "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
                                       wasAlternateContent: child != effectiveEl),
+                // Wave 25A: ink annotations arrive as p:contentPart (possibly inside mc:AlternateContent)
+                "contentPart"  => ReadContentPartInk(child, effectiveEl, archive, partPath),
                 _ => null
             };
 
@@ -937,6 +939,10 @@ public static class PptxPackageReader
     private const string DiagramColorsRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
     private const string DiagramDrawingRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
+    // ── Wave 25A: Zoom, 3D-model, and ink URIs / rel-types ───────────────────
+    // InkML relationship type
+    private const string InkRelType = "http://schemas.microsoft.com/office/2016/05/19/relationships/ink";
+
     private static SlideShape? ReadGraphicFrame(
         XElement gfEl, ZipArchive archive, string partPath,
         PresentationColorScheme scheme,
@@ -1053,8 +1059,251 @@ public static class PptxPackageReader
             }
         }
 
-        // Unknown graphicFrame type — skip for now.
-        return null;
+        // Unknown graphicFrame type — preserve verbatim (Wave 25A: no-silent-loss guarantee).
+        return ReadPreservedGraphicFrame(gfEl, graphicData, uri, cNvPr, offX, offY, extCx, extCy,
+            archive, partPath, wasAlternateContent);
+    }
+
+    // ── Wave 25A: Preserved modern objects (zoom / 3D / unknown graphicFrame) ─────────
+
+    private static bool IsZoomUri(string? uri) =>
+        uri is not null && (
+            uri.Contains("zoom", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2010", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2011", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2012", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2013", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2014", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2015", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2016", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2017", StringComparison.OrdinalIgnoreCase));
+
+    private static bool Is3dModelUri(string? uri) =>
+        uri is not null && uri.Contains("model3d", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Preserves an unknown or modern graphicFrame verbatim, capturing any referenced parts.
+    /// </summary>
+    private static SlideShape ReadPreservedGraphicFrame(
+        XElement gfEl, XElement graphicData, string? uri,
+        XElement? cNvPr, long offX, long offY, long extCx, long extCy,
+        ZipArchive archive, string partPath, bool wasAlternateContent)
+    {
+        var kind = IsZoomUri(uri) ? PreservedObjectKind.Zoom
+                 : Is3dModelUri(uri) ? PreservedObjectKind.Model3d
+                 : PreservedObjectKind.Unknown;
+
+        var slideShapeKind = kind switch
+        {
+            PreservedObjectKind.Zoom    => SlideShapeKind.Zoom,
+            PreservedObjectKind.Model3d => SlideShapeKind.Model3d,
+            _                           => SlideShapeKind.PreservedObject,
+        };
+
+        var info = new PreservedObjectInfo
+        {
+            ObjectKind          = kind,
+            RawXml              = gfEl.ToString(SaveOptions.DisableFormatting),
+            WasAlternateContent = wasAlternateContent,
+        };
+
+        // Capture all referenced parts via the slide's rels
+        var slideRels2 = LoadRels(archive, GetRelsPath(partPath));
+        CaptureReferencedParts(gfEl, slideRels2, archive, partPath, info);
+
+        // Extract fallback preview image if present (a:blip or p:pic inside graphicData or nearby)
+        var fallbackImage = ExtractPreservedFallbackImage(gfEl, graphicData, slideRels2, archive, partPath);
+
+        return new SlideShape
+        {
+            Id              = ParseUint(cNvPr?.Attribute("id")?.Value),
+            Name            = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            Kind            = slideShapeKind,
+            OffsetXEmu      = offX,
+            OffsetYEmu      = offY,
+            ExtentCxEmu     = extCx,
+            ExtentCyEmu     = extCy,
+            Picture         = fallbackImage,
+            PreservedObject = info,
+        };
+    }
+
+    /// <summary>
+    /// Reads a p:contentPart element (ink annotation). May be wrapped in mc:AlternateContent.
+    /// The mc:Fallback branch often contains a picture fallback image.
+    /// </summary>
+    private static SlideShape? ReadContentPartInk(
+        XElement originalEl, XElement contentPartEl,
+        ZipArchive archive, string partPath)
+    {
+        // Extract cNvPr from nvContentPartPr if present
+        var cNvPr = contentPartEl
+            .Element(P + "nvContentPartPr")
+            ?.Element(P + "cNvPr");
+
+        // Get xfrm from p:xfrm with a:off/a:ext
+        var xfrmEl = contentPartEl.Element(P + "xfrm")
+                  ?? contentPartEl.Descendants(A + "xfrm").FirstOrDefault();
+        long offX  = ParseLong(xfrmEl?.Element(A + "off")?.Attribute("x")?.Value);
+        long offY  = ParseLong(xfrmEl?.Element(A + "off")?.Attribute("y")?.Value);
+        long extCx = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cx")?.Value);
+        long extCy = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cy")?.Value);
+
+        var slideRels2 = LoadRels(archive, GetRelsPath(partPath));
+
+        var info = new PreservedObjectInfo
+        {
+            ObjectKind          = PreservedObjectKind.Ink,
+            RawXml              = contentPartEl.ToString(SaveOptions.DisableFormatting),
+            WasAlternateContent = originalEl != contentPartEl,
+        };
+
+        // Follow r:id to the InkML part and capture its bytes
+        var rId = contentPartEl.Attribute(R + "id")?.Value;
+        if (!string.IsNullOrEmpty(rId))
+        {
+            var rel = slideRels2.FirstOrDefault(r => r.id == rId);
+            if (rel != default)
+            {
+                var inkPath = ResolvePath(GetDirectory(partPath), rel.target);
+                info.SlideRels[rId] = (rel.type, inkPath);
+                CapturePartBytes(inkPath, archive, info);
+            }
+        }
+
+        // Try to extract fallback image from mc:Fallback
+        ImagePart? fallback = null;
+        if (originalEl != contentPartEl)
+        {
+            // originalEl is the mc:AlternateContent — look for a pic in mc:Fallback
+            var fallbackEl = originalEl.Element(MC + "Fallback");
+            if (fallbackEl is not null)
+            {
+                var blipEl = fallbackEl.Descendants(A + "blip").FirstOrDefault();
+                var imgRelId = blipEl?.Attribute(R + "embed")?.Value;
+                if (!string.IsNullOrEmpty(imgRelId))
+                {
+                    var imgRel = slideRels2.FirstOrDefault(r => r.id == imgRelId);
+                    if (imgRel != default)
+                    {
+                        var imgPath = ResolvePath(GetDirectory(partPath), imgRel.target);
+                        var imgBytes = ReadEntryBytes(archive, imgPath);
+                        if (imgBytes is not null)
+                        {
+                            fallback = new ImagePart
+                            {
+                                Bytes       = imgBytes,
+                                ContentType = GuessPreservedContentType(imgPath),
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        return new SlideShape
+        {
+            Id              = ParseUint(cNvPr?.Attribute("id")?.Value),
+            Name            = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            Kind            = SlideShapeKind.Ink,
+            OffsetXEmu      = offX,
+            OffsetYEmu      = offY,
+            ExtentCxEmu     = extCx,
+            ExtentCyEmu     = extCy,
+            Picture         = fallback,
+            PreservedObject = info,
+        };
+    }
+
+    /// <summary>
+    /// Walks all r:id / r:embed / r:link attributes in <paramref name="el"/> and captures
+    /// the referenced OPC parts into <paramref name="info"/>.
+    /// </summary>
+    private static void CaptureReferencedParts(
+        XElement el,
+        List<(string id, string type, string target)> slideRels2,
+        ZipArchive archive, string partPath,
+        PreservedObjectInfo info)
+    {
+        var rNs = R.NamespaceName;
+        foreach (var attr in el.Descendants()
+                                .SelectMany(e => e.Attributes())
+                                .Where(a => a.Name.NamespaceName == rNs)
+                                .ToList())
+        {
+            var rId = attr.Value;
+            var rel = slideRels2.FirstOrDefault(r => r.id == rId);
+            if (rel == default) continue;
+            var targetPath = ResolvePath(GetDirectory(partPath), rel.target);
+            if (info.SlideRels.ContainsKey(rId)) continue;
+            info.SlideRels[rId] = (rel.type, targetPath);
+            CapturePartBytes(targetPath, archive, info);
+        }
+    }
+
+    private static void CapturePartBytes(string partPath2, ZipArchive archive, PreservedObjectInfo info)
+    {
+        if (info.Parts.ContainsKey(partPath2)) return;
+        var bytes = ReadEntryBytes(archive, partPath2);
+        if (bytes is null) return;
+        info.Parts[partPath2]            = bytes;
+        info.PartContentTypes[partPath2] = GuessPreservedContentType(partPath2);
+
+        // Capture rels file for this part if it exists
+        var relsPath2 = GetRelsPath(partPath2);
+        if (!info.PartRels.ContainsKey(partPath2))
+        {
+            var relsBytes = ReadEntryBytes(archive, relsPath2);
+            if (relsBytes is not null)
+                info.PartRels[partPath2] = relsBytes;
+        }
+    }
+
+    private static ImagePart? ExtractPreservedFallbackImage(
+        XElement gfEl, XElement graphicData,
+        List<(string id, string type, string target)> slideRels2,
+        ZipArchive archive, string partPath)
+    {
+        // Look for an a:blip with r:embed inside the graphicData (common for 3D model preview)
+        var blipEl = graphicData.Descendants(A + "blip").FirstOrDefault();
+        var imgRelId = blipEl?.Attribute(R + "embed")?.Value;
+        if (string.IsNullOrEmpty(imgRelId))
+        {
+            // Also check the top-level graphicFrame (some zoom variants embed preview at frame level)
+            imgRelId = gfEl.Descendants(A + "blip").FirstOrDefault()
+                           ?.Attribute(R + "embed")?.Value;
+        }
+        if (string.IsNullOrEmpty(imgRelId)) return null;
+
+        var imgRel = slideRels2.FirstOrDefault(r => r.id == imgRelId);
+        if (imgRel == default) return null;
+
+        var imgPath = ResolvePath(GetDirectory(partPath), imgRel.target);
+        var imgBytes = ReadEntryBytes(archive, imgPath);
+        if (imgBytes is null) return null;
+
+        return new ImagePart
+        {
+            Bytes       = imgBytes,
+            ContentType = GuessPreservedContentType(imgPath),
+        };
+    }
+
+    private static string GuessPreservedContentType(string path)
+    {
+        var ext = path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..].ToLowerInvariant() : "";
+        return ext switch
+        {
+            "png"  => "image/png",
+            "jpg" or "jpeg" => "image/jpeg",
+            "gif"  => "image/gif",
+            "svg"  => "image/svg+xml",
+            "wmf"  => "image/x-wmf",
+            "emf"  => "image/x-emf",
+            "glb" or "gltf" => "model/gltf-binary",
+            "xml"  => "application/xml",
+            _      => "application/octet-stream",
+        };
     }
 
     // ── SmartArt diagram parsing ──────────────────────────────────────────────────
@@ -2700,7 +2949,11 @@ public static class PptxPackageReader
     /// When an mc:AlternateContent is present, use the mc:Choice p:transition (which carries p14:dur);
     /// if no Choice exists, fall back to mc:Fallback's p:transition.
     /// </summary>
-    private static SlideTransition? ResolveTransitionEl(XElement? root)
+    private static SlideTransition? ResolveTransitionEl(
+        XElement? root,
+        ZipArchive? archive = null,
+        List<(string id, string type, string target)>? slideRels = null,
+        string? slidePath = null)
     {
         if (root is null) return null;
 
@@ -2711,24 +2964,29 @@ public static class PptxPackageReader
             var choice = altContent.Element(MC + "Choice");
             var choiceTrans = choice?.Element(P + "transition");
             if (choiceTrans is not null)
-                return ReadTransition(choiceTrans, preferP14Dur: true);
+                return ReadTransition(choiceTrans, preferP14Dur: true, archive, slideRels, slidePath);
 
             // Fallback inside mc:AlternateContent
             var fallback = altContent.Element(MC + "Fallback");
             var fallbackTrans = fallback?.Element(P + "transition");
             if (fallbackTrans is not null)
-                return ReadTransition(fallbackTrans, preferP14Dur: false);
+                return ReadTransition(fallbackTrans, preferP14Dur: false, archive, slideRels, slidePath);
         }
 
         // Legacy: bare p:transition (no mc:AlternateContent wrapper)
         var transEl = root.Element(P + "transition");
         if (transEl is not null)
-            return ReadTransition(transEl, preferP14Dur: false);
+            return ReadTransition(transEl, preferP14Dur: false, archive, slideRels, slidePath);
 
         return null;
     }
 
-    private static SlideTransition ReadTransition(XElement transEl, bool preferP14Dur)
+    private static SlideTransition ReadTransition(
+        XElement transEl,
+        bool preferP14Dur,
+        ZipArchive? archive = null,
+        List<(string id, string type, string target)>? slideRels = null,
+        string? slidePath = null)
     {
         var t = new SlideTransition();
 
@@ -2753,17 +3011,90 @@ public static class PptxPackageReader
         if (int.TryParse(transEl.Attribute("advTm")?.Value, out var advTm) && advTm > 0)
             t.AdvanceAfterMs = advTm;
 
-        // Find the effect child element: first P-namespace child (skip any mc: / extension elements).
-        var effectEl = transEl.Elements().FirstOrDefault(e => e.Name.Namespace == P);
+        // Find the effect child element: first P-namespace child that is NOT sndAc/extLst.
+        // (sndAc and extLst are also P-namespace children but are not the effect.)
+        var effectEl = transEl.Elements()
+            .FirstOrDefault(e => e.Name.Namespace == P
+                                 && e.Name.LocalName != "sndAc"
+                                 && e.Name.LocalName != "extLst");
+
         if (effectEl is not null)
         {
             t.Kind = PptxAnimationMap.ElementNameToTransitionKind(effectEl.Name.LocalName);
+
             // Direction: try "dir" first, then "orient"
             var dirAttr = effectEl.Attribute("dir")?.Value ?? effectEl.Attribute("orient")?.Value;
             t.Direction = PptxAnimationMap.AttrToTransitionDirection(dirAttr);
+
+            // Morph option
+            if (t.Kind == TransitionKind.Morph)
+                t.MorphOption = effectEl.Attribute("option")?.Value;
+
+            // For unrecognized (Other) transitions, capture the entire p:transition element verbatim
+            // so the writer can re-emit it byte-faithfully — ensuring NO transition is silently dropped.
+            if (t.Kind == TransitionKind.Other)
+                t.RawXml = transEl.ToString(SaveOptions.DisableFormatting);
         }
 
+        // p:sndAc / p:stSnd — transition sound
+        var sndAcEl = transEl.Element(P + "sndAc");
+        if (sndAcEl is not null)
+            t.Sound = ReadTransitionSound(sndAcEl, archive, slideRels, slidePath);
+
         return t;
+    }
+
+    /// <summary>
+    /// Parses a <c>p:sndAc</c> element and resolves the referenced audio part bytes.
+    /// </summary>
+    private static TransitionSound? ReadTransitionSound(
+        XElement sndAcEl,
+        ZipArchive? archive,
+        List<(string id, string type, string target)>? slideRels,
+        string? slidePath)
+    {
+        // p:sndAc > p:stSnd > p:snd  (snd has r:embed or r:link)
+        var stSnd = sndAcEl.Element(P + "stSnd");
+        if (stSnd is null) return null;
+
+        var sndEl = stSnd.Element(P + "snd");
+        if (sndEl is null) return null;
+
+        var sound = new TransitionSound();
+        sound.Loop      = stSnd.Attribute("loop")?.Value == "1";
+        sound.RelId     = sndEl.Attribute(R + "embed")?.Value
+                       ?? sndEl.Attribute(R + "link")?.Value;
+
+        // Try to resolve the audio part from the slide's relationships.
+        if (sound.RelId is not null && slideRels is not null && archive is not null && slidePath is not null)
+        {
+            var slideDir = GetDirectory(slidePath);
+            var audioTarget = slideRels.FirstOrDefault(r => r.id == sound.RelId).target;
+            if (!string.IsNullOrEmpty(audioTarget))
+            {
+                var audioPath = ResolvePath(slideDir, audioTarget);
+                sound.PartPath = audioPath;
+
+                // Try to load the audio bytes.
+                try
+                {
+                    var entry = archive.GetEntry(audioPath) ?? archive.GetEntry(audioPath.TrimStart('/'));
+                    if (entry is not null)
+                    {
+                        using var audioStream = entry.Open();
+                        using var ms = new MemoryStream();
+                        audioStream.CopyTo(ms);
+                        sound.AudioBytes = ms.ToArray();
+                    }
+                }
+                catch
+                {
+                    // Audio part missing or unreadable — still preserve relId for re-emit.
+                }
+            }
+        }
+
+        return sound;
     }
 
     // ── p:timing (main sequence + trigger sequences) ─────────────────────────────

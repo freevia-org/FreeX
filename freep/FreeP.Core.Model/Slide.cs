@@ -396,6 +396,14 @@ public sealed class SlideShape
     /// </summary>
     public OleObjectInfo? OleObject { get; set; }
 
+    // ── Preserved modern objects (zoom / ink / 3D / unknown) ────────────────────────
+
+    /// <summary>
+    /// Preserved modern object payload when Kind is Zoom, Ink, Model3d, or PreservedObject.
+    /// The fallback/preview image is in <see cref="Picture"/> for rendering.
+    /// </summary>
+    public PreservedObjectInfo? PreservedObject { get; set; }
+
     // ── Group children ────────────────────────────────────────────────────────────
 
     /// <summary>Child shapes when Kind == Group.</summary>

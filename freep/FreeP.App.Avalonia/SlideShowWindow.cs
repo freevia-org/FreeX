@@ -511,6 +511,10 @@ public sealed class SlideShowWindow : Window
     {
         int ms = Math.Max(50, t.DurationMs);
 
+        // Transition sound: Avalonia has no built-in MediaElement.
+        // Sound playback on the Avalonia host is deferred / no-op.
+        // (The sound bytes are preserved on the model and will re-emit on save.)
+
         switch (t.Kind)
         {
             case TransitionKind.Cut:
@@ -519,6 +523,7 @@ public sealed class SlideShowWindow : Window
 
             case TransitionKind.Fade:
             case TransitionKind.Dissolve:
+            case TransitionKind.Flash:       // flash → fast fade approximation
                 PlayFadeTransition(slide, ms);
                 return;
 
@@ -529,6 +534,23 @@ public sealed class SlideShowWindow : Window
                 PlayPushTransition(slide, t, ms);
                 return;
 
+            // Directional / slide-like transitions: Push approximation
+            case TransitionKind.Gallery:
+            case TransitionKind.Conveyor:
+            case TransitionKind.Pan:
+            case TransitionKind.Reveal:
+            case TransitionKind.Comb:
+            case TransitionKind.Doors:
+            case TransitionKind.Window:
+                PlayPushTransition(slide, t, ms);
+                return;
+
+            // Exotic / 3-D transitions and morph: Fade fallback.
+            // Full morph/3D engines are out of scope. Fade is the safe approximation for:
+            // Morph, Cube, Box, Rotate, Flip, Ferris, Flythrough, Switch, Orbit, Honeycomb,
+            // Glitter, Vortex, Shred, Wind, Ripple, Warp, Fracture, Crush, PeelOff,
+            // PageCurlDouble/Single, Airplane, Origami, Prism, Curtains, Drape, Prestige,
+            // WheelReverse, Zoom, Wheel, RandomBar, Strips, Blinds, Split, Random, Fly, Other.
             default:
                 PlayFadeTransition(slide, ms);
                 return;

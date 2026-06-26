@@ -114,6 +114,14 @@ public static class PptxPackageWriter
         var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in presentation.Slides)
         {
+            // Register transition sound audio extension (if any).
+            if (slide.Transition?.Sound?.AudioBytes is { Length: > 0 })
+            {
+                var sndCt  = slide.Transition.Sound.ContentType ?? "audio/mpeg";
+                var sndExt = MediaContentTypeToExtension(sndCt);
+                mediaExtensions.Add(sndExt);
+            }
+
             foreach (var shape in AllShapes(slide.Shapes))
             {
                 if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
@@ -296,6 +304,9 @@ public static class PptxPackageWriter
             //          imgRels = (shapeId, imgRelId, imgPath)
             var (oleEmbRels, oleImgRels) = WriteSlideOleObjects(archive, slide, si + 1, usedRelIds);
 
+            // Wave 25A: preserved modern objects (zoom / ink / 3D / unknown)
+            var (prvRels, prvRelIdPatch) = WriteSlidePreservedObjects(archive, slide, si + 1, usedRelIds);
+
             // Combined shapeId→relId map for shape element building (picture shapes + charts + OLE)
             var mediaById = new Dictionary<uint, string>();
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
@@ -306,6 +317,9 @@ public static class PptxPackageWriter
             foreach (var (shapeId, embRelId, _, _) in oleEmbRels)  mediaById[shapeId] = embRelId;
             // OLE fallback image rel IDs use synthetic key: shape.Id | 0x40000000
             foreach (var (shapeId, imgRelId, _) in oleImgRels)     mediaById[shapeId | 0x40000000u] = imgRelId;
+            // Wave 25A: preserved object rel-id patch map (HashRelId(shapeId, oldRelId) → newRelId)
+            foreach (var (sid, oldRelId, newRelId, _, _) in prvRels)
+                mediaById[PrvHashRelId(sid, oldRelId)] = newRelId;
 
             // Fill-blip relId map (shapeId -> relId) for ShapeFill.Picture fills
             var fillBlipById = new Dictionary<uint, string>();
@@ -317,8 +331,21 @@ public static class PptxPackageWriter
             var hlinkRelEntries = new List<(string relId, string relType, string target, bool external)>();
             CollectHyperlinkRels(slide, presentation.Slides, si + 1, hlinkRelIds, hlinkRelEntries);
 
+            // Transition sound: write audio part (if present) and get relId for XML wiring.
+            string? transSoundRelId = null;
+            (string relId, string contentType, string partPath)? transSoundPart = null;
+            if (slide.Transition?.Sound?.AudioBytes is { Length: > 0 })
+            {
+                transSoundPart = WriteTransitionSoundPart(archive, slide.Transition, si + 1, usedRelIds);
+                if (transSoundPart.HasValue)
+                {
+                    transSoundRelId = transSoundPart.Value.relId;
+                    usedRelIds.Add(transSoundRelId);
+                }
+            }
+
             // Slide xml — use the owning master's theme color scheme for scheme-color pre-resolution.
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId));
 
             // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
             var slideRels = new RelsDoc();
@@ -339,9 +366,16 @@ public static class PptxPackageWriter
                 slideRels.Add(embRelId, embRelType, $"../embeddings/{embPath.Split('/').Last()}");
             foreach (var (_, imgRelId, imgPath) in oleImgRels)
                 slideRels.Add(imgRelId, ImageRelType, $"../media/{imgPath.Split('/').Last()}");
+            // Wave 25A: preserved modern object rels (absolute paths in prvRelIdPatch, relative in rels entry)
+            foreach (var (_, _, newRelId, relType, targetPath) in prvRels)
+                slideRels.Add(newRelId, relType, MakeRelativePath(slidePath, targetPath));
             // Hyperlink rels (external with TargetMode=External; internal slide rels without)
             foreach (var (hlRelId, hlRelType, hlTarget, isExternal) in hlinkRelEntries)
                 slideRels.Add(hlRelId, hlRelType, hlTarget, isExternal);
+            // Transition sound audio part rel
+            if (transSoundPart.HasValue)
+                slideRels.Add(transSoundPart.Value.relId, AudioRelType,
+                    $"../media/{transSoundPart.Value.partPath.Split('/').Last()}");
 
             // Write notes slide and add rel when the slide has speaker notes
             if (slide.Notes is not null)
@@ -560,6 +594,29 @@ public static class PptxPackageWriter
             }
         }
 
+        // Wave 25A: Preserved modern object part content types
+        var seenPrvParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var slide in p.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.PreservedObject is { } info)
+                {
+                    foreach (var kv in info.PartContentTypes)
+                    {
+                        if (!string.IsNullOrEmpty(kv.Key) &&
+                            !string.IsNullOrEmpty(kv.Value) &&
+                            seenPrvParts.Add(kv.Key))
+                        {
+                            overrides.Add(Override(CT,
+                                kv.Key.StartsWith('/') ? kv.Key : "/" + kv.Key,
+                                kv.Value));
+                        }
+                    }
+                }
+            }
+        }
+
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(CT + "Types",
@@ -678,7 +735,8 @@ public static class PptxPackageWriter
         Dictionary<uint, Dictionary<string, string>> smartArtRelIdRemap,
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
-        Dictionary<uint, string>? fillBlipById = null)
+        Dictionary<uint, string>? fillBlipById = null,
+        string? transSoundRelId = null)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -702,7 +760,7 @@ public static class PptxPackageWriter
                 // HfVisibility is preserved on the model for read-back from real .pptx files
                 // that carry it on the master/layout (which the reader already handles).
                 BuildSlideClrMapOvrEl(slide.ColorMapOverride),
-                BuildTransitionEl(slide.Transition),
+                BuildTransitionEl(slide.Transition, transSoundRelId),
                 BuildTimingEl(slide.Animations)));
     }
 
@@ -909,30 +967,71 @@ public static class PptxPackageWriter
 
     // ── p:transition ─────────────────────────────────────────────────────────────
 
-    private static XElement? BuildTransitionEl(SlideTransition? transition)
+    /// <summary>
+    /// Builds the mc:AlternateContent wrapping a p:transition element, or re-emits
+    /// the verbatim RawXml for unrecognized (Other) transitions.
+    /// <paramref name="soundRelId"/> is the r:embed relationship id of the audio part, if any.
+    /// </summary>
+    private static XElement? BuildTransitionEl(SlideTransition? transition, string? soundRelId = null)
     {
         if (transition is null || transition.Kind == TransitionKind.None)
             return null;
+
+        // ── Other / unrecognized: re-emit the verbatim raw XML ────────────────────
+        // This guarantees NO transition is silently dropped on round-trip, even for
+        // future or proprietary transition kinds we don't enumerate.
+        if (transition.Kind == TransitionKind.Other && transition.RawXml is not null)
+        {
+            try
+            {
+                var rawEl = XElement.Parse(transition.RawXml, LoadOptions.PreserveWhitespace);
+
+                // If there's a sound to re-attach and the raw XML doesn't already contain
+                // a sndAc element, inject it.
+                if (soundRelId is not null && rawEl.Element(P + "sndAc") is null)
+                    rawEl.Add(BuildSndAcEl(soundRelId, transition.Sound));
+
+                // Wrap in mc:AlternateContent so modern readers benefit from p14:dur (if present).
+                // If the raw XML already has p14:dur we just re-emit as-is inside a wrapper.
+                return rawEl;
+            }
+            catch
+            {
+                // Malformed raw XML — fall through to synthesize a fade fallback so we don't crash.
+                return BuildFadeTransitionEl(transition.DurationMs, transition.AdvanceOnClick,
+                    transition.AdvanceAfterMs, soundRelId, transition.Sound);
+            }
+        }
 
         var spd = PptxAnimationMap.DurationToSpd(transition.DurationMs);
 
         // Effect child element (shared between Choice and Fallback)
         var effectName = PptxAnimationMap.TransitionKindToElementName(transition.Kind);
-        var dirAttr = PptxAnimationMap.TransitionDirectionToAttr(transition.Direction);
+        var dirAttr    = PptxAnimationMap.TransitionDirectionToAttr(transition.Direction);
 
-        XElement BuildEffectEl() =>
-            effectName is not null
-                ? new XElement(P + effectName,
-                    dirAttr is not null ? new XAttribute("dir", dirAttr) : null!)
-                : null!;
+        XElement? BuildEffectEl()
+        {
+            if (effectName is null) return null;
+            var attrs = new List<object?>();
+            if (dirAttr is not null)
+                attrs.Add(new XAttribute("dir", dirAttr));
+            // Morph option
+            if (transition.Kind == TransitionKind.Morph && transition.MorphOption is not null)
+                attrs.Add(new XAttribute("option", transition.MorphOption));
+            return new XElement(P + effectName,
+                attrs.Where(x => x is not null).Cast<object>().ToArray());
+        }
 
-        // Build a p:transition element with the given attrs + effect child.
+        // Build a p:transition element with the given attrs + effect child + optional sound.
         XElement BuildTransEl(IEnumerable<object?> extraAttrs)
         {
             var ch = new List<object?>();
             ch.AddRange(extraAttrs);
             var eff = BuildEffectEl();
             if (eff is not null) ch.Add(eff);
+            // Sound: re-emit p:sndAc if we have a sound rel.
+            if (soundRelId is not null)
+                ch.Add(BuildSndAcEl(soundRelId, transition.Sound));
             return new XElement(P + "transition",
                 ch.Where(x => x is not null).Cast<object>().ToArray());
         }
@@ -963,6 +1062,93 @@ public static class PptxPackageWriter
                 BuildTransEl(choiceAttrs)),
             new XElement(MC + "Fallback",
                 BuildTransEl(commonAttrs)));
+    }
+
+    /// <summary>Builds a Fade mc:AlternateContent — used as last-resort fallback.</summary>
+    private static XElement BuildFadeTransitionEl(
+        int durationMs, bool advanceOnClick, int? advanceAfterMs,
+        string? soundRelId, TransitionSound? sound)
+    {
+        var spd = PptxAnimationMap.DurationToSpd(durationMs);
+        var common = new List<object?> { new XAttribute("spd", spd) };
+        if (!advanceOnClick) common.Add(new XAttribute("advClick", "0"));
+        if (advanceAfterMs.HasValue) common.Add(new XAttribute("advTm", advanceAfterMs.Value));
+
+        XElement BuildFadeEl(IEnumerable<object?> attrs)
+        {
+            var ch = new List<object?>(attrs);
+            ch.Add(new XElement(P + "fade"));
+            if (soundRelId is not null) ch.Add(BuildSndAcEl(soundRelId, sound));
+            return new XElement(P + "transition", ch.Where(x => x is not null).Cast<object>().ToArray());
+        }
+
+        var choice = new List<object?>(common) { new XAttribute(P14 + "dur", durationMs) };
+        return new XElement(MC + "AlternateContent",
+            new XAttribute(XNamespace.Xmlns + "mc", MC.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+            new XElement(MC + "Choice", new XAttribute("Requires", "p14"), BuildFadeEl(choice)),
+            new XElement(MC + "Fallback", BuildFadeEl(common)));
+    }
+
+    /// <summary>
+    /// Builds the <c>p:sndAc</c> element that carries the transition sound reference.
+    /// </summary>
+    private static XElement BuildSndAcEl(string soundRelId, TransitionSound? sound)
+    {
+        var sndEl = new XElement(P + "snd",
+            new XAttribute(R + "embed", soundRelId));
+
+        var stSndAttrs = new List<object?> { sndEl };
+        if (sound?.Loop == true)
+            stSndAttrs.Insert(0, new XAttribute("loop", "1"));
+
+        return new XElement(P + "sndAc",
+            new XElement(P + "stSnd", stSndAttrs.Cast<object>().ToArray()));
+    }
+
+    /// <summary>
+    /// Writes the transition sound audio bytes as an embedded part in the archive,
+    /// returning the assigned relId and content-type. Returns null if no sound bytes are available.
+    /// </summary>
+    private static (string relId, string contentType, string partPath)? WriteTransitionSoundPart(
+        ZipArchive archive, SlideTransition transition, int slideIndex, HashSet<string> usedRelIds)
+    {
+        var sound = transition.Sound;
+        if (sound is null || sound.AudioBytes is null || sound.AudioBytes.Length == 0)
+            return null;
+
+        // Determine extension from content-type.
+        var ct = sound.ContentType ?? "audio/mpeg";
+        var ext = ct switch
+        {
+            "audio/mpeg" or "audio/mp3"  => "mp3",
+            "audio/wav"                  => "wav",
+            "audio/ogg"                  => "ogg",
+            "audio/aac"                  => "aac",
+            "audio/x-ms-wma"             => "wma",
+            _                            => "mp3"
+        };
+
+        var partPath = $"ppt/media/transitionSnd{slideIndex}.{ext}";
+        var relId    = $"rIdSnd{slideIndex}";
+
+        // Avoid relId collision.
+        int suffix = 1;
+        while (usedRelIds.Contains(relId))
+            relId = $"rIdSnd{slideIndex}x{suffix++}";
+
+        try
+        {
+            var entry = archive.CreateEntry(partPath, System.IO.Compression.CompressionLevel.Optimal);
+            using var s = entry.Open();
+            s.Write(sound.AudioBytes, 0, sound.AudioBytes.Length);
+        }
+        catch
+        {
+            return null;
+        }
+
+        return (relId, ct, partPath);
     }
 
     // ── p:timing ─────────────────────────────────────────────────────────────────
@@ -1519,6 +1705,10 @@ public static class PptxPackageWriter
             // Theme 21: OLE embedded objects — emit the verbatim graphicFrame wrapper
             SlideShapeKind.Ole when shape.OleObject is not null =>
                 BuildOleGraphicFrameEl(shape, mediaById),
+            // Wave 25A: preserved modern objects — emit verbatim XML with patched rel IDs
+            SlideShapeKind.Zoom or SlideShapeKind.Ink or SlideShapeKind.Model3d
+                or SlideShapeKind.PreservedObject when shape.PreservedObject is not null =>
+                    BuildPreservedObjectEl(shape, mediaById),
             _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById)
         };
 
@@ -3049,6 +3239,202 @@ public static class PptxPackageWriter
 
         return smart.Parts.Keys
             .FirstOrDefault(p => p.Contains(nameKeyword, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ── Wave 25A: Preserved modern objects (zoom / ink / 3D / unknown) ─────────────
+
+    /// <summary>
+    /// Builds a relative OPC path from a slide's absolute path to an absolute target part path.
+    /// E.g. slide="ppt/slides/slide1.xml", target="ppt/media/foo.glb" → "../media/foo.glb"
+    /// </summary>
+    private static string MakeRelativePath(string slidePath, string targetPath)
+    {
+        // Normalize: ensure no leading slash
+        slidePath  = slidePath.TrimStart('/');
+        targetPath = targetPath.TrimStart('/');
+
+        var slideDir  = GetDirectory(slidePath);
+        var targetDir = GetDirectory(targetPath);
+        var fileName  = targetPath[(targetPath.LastIndexOf('/') + 1)..];
+
+        // Count how many levels up we need to go from slideDir
+        var slideParts  = slideDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var targetParts = targetDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        // Find common prefix length
+        int common = 0;
+        while (common < slideParts.Length && common < targetParts.Length &&
+               string.Equals(slideParts[common], targetParts[common], StringComparison.OrdinalIgnoreCase))
+            common++;
+
+        var ups   = string.Join("/", Enumerable.Repeat("..", slideParts.Length - common));
+        var down  = string.Join("/", targetParts[common..]);
+        var parts = new[] { ups, down, fileName }.Where(s => !string.IsNullOrEmpty(s));
+        return string.Join("/", parts);
+    }
+
+    /// <summary>
+    /// Compact hash that packs (shapeId, oldRelId) into a uint key for the mediaById dictionary.
+    /// Uses the 0x20000000 bit-range to avoid collisions with OLE (0x40000000) and media (0x80000000) keys.
+    /// </summary>
+    private static uint PrvHashRelId(uint shapeId, string oldRelId)
+    {
+        unchecked
+        {
+            uint h = 2166136261u;
+            foreach (char c in oldRelId) h = (h ^ c) * 16777619u;
+            return (shapeId & 0xFFu) | ((h & 0x1FFFFFu) << 8) | 0x20000000u;
+        }
+    }
+
+    /// <summary>
+    /// Writes all OPC parts for preserved modern objects on the slide.
+    /// Returns:
+    ///   prvRels: (shapeId, oldRelId, newRelId, relType, absoluteTargetPath)
+    ///   relIdPatch: unused (patch happens via PrvHashRelId + mediaById)
+    /// </summary>
+    private static (
+        List<(uint shapeId, string oldRelId, string newRelId, string relType, string targetPath)> prvRels,
+        bool unused
+    ) WriteSlidePreservedObjects(ZipArchive archive, Slide slide, int slideIdx, HashSet<string> usedRelIds)
+    {
+        var prvRels    = new List<(uint, string, string, string, string)>();
+        var relCounter = 1;
+        var partCounter = 1;
+
+        string NextRelId()
+        {
+            string id;
+            do { id = $"rIdPrv{relCounter++}"; } while (usedRelIds.Contains(id));
+            usedRelIds.Add(id);
+            return id;
+        }
+
+        // Track written part paths to avoid duplicate zip entries
+        var writtenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.PreservedObject is not { } info) continue;
+
+            // Write each referenced OPC part that isn't already in the archive
+            var pathRemap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in info.Parts)
+            {
+                var origPath = kv.Key;
+                if (pathRemap.ContainsKey(origPath)) continue;
+
+                var ext       = origPath.Contains('.') ? origPath[(origPath.LastIndexOf('.') + 1)..] : "bin";
+                var freshPath = origPath;
+                // If the path is already written (e.g. by another slide/shape), reindex
+                if (writtenPaths.Contains(freshPath))
+                {
+                    freshPath = $"ppt/media/preserved_{slideIdx}_{partCounter++}.{ext}";
+                }
+
+                if (!writtenPaths.Contains(freshPath))
+                {
+                    var entry = archive.CreateEntry(freshPath, CompressionLevel.Optimal);
+                    using (var s = entry.Open())
+                        s.Write(kv.Value, 0, kv.Value.Length);
+                    writtenPaths.Add(freshPath);
+                }
+                pathRemap[origPath] = freshPath;
+            }
+
+            // Write part rels files (use writtenPaths to avoid duplicate zip entries in Create mode)
+            foreach (var kv in info.PartRels)
+            {
+                var origPath = kv.Key;
+                if (!pathRemap.TryGetValue(origPath, out var freshPath)) freshPath = origPath;
+                var relsPath = MakePartRelsPath(freshPath);
+                if (!writtenPaths.Contains(relsPath))
+                {
+                    var rEntry = archive.CreateEntry(relsPath, CompressionLevel.Optimal);
+                    using var s = rEntry.Open();
+                    s.Write(kv.Value, 0, kv.Value.Length);
+                    writtenPaths.Add(relsPath);
+                }
+            }
+
+            // Allocate fresh slide-rel entries for each SlideRels entry on this shape
+            foreach (var kv in info.SlideRels)
+            {
+                var origPath = kv.Value.TargetPath;
+                if (!pathRemap.TryGetValue(origPath, out var freshPath)) freshPath = origPath;
+                var newRelId = NextRelId();
+                prvRels.Add((shape.Id, kv.Key, newRelId, kv.Value.RelType, freshPath));
+            }
+
+            // Write the fallback image (shape.Picture) if present
+            if (shape.Picture is { Bytes.Length: > 0 } pic)
+            {
+                var imgExt    = ContentTypeToExtension(pic.ContentType ?? "image/png");
+                var imgPath   = $"ppt/media/preservedImg{slideIdx}_{shape.Id}.{imgExt}";
+                if (!writtenPaths.Contains(imgPath))
+                {
+                    var imgEntry = archive.CreateEntry(imgPath, CompressionLevel.Optimal);
+                    using var s  = imgEntry.Open();
+                    s.Write(pic.Bytes, 0, pic.Bytes.Length);
+                    writtenPaths.Add(imgPath);
+                }
+                var imgRelId = NextRelId();
+                prvRels.Add((shape.Id, $"__img__{shape.Id}", imgRelId, ImageRelType, imgPath));
+            }
+        }
+
+        return (prvRels, false);
+    }
+
+    private static string MakePartRelsPath(string partPath)
+    {
+        var dir  = GetDirectory(partPath);
+        var file = partPath[(partPath.LastIndexOf('/') + 1)..];
+        return string.IsNullOrEmpty(dir) ? $"_rels/{file}.rels" : $"{dir}/_rels/{file}.rels";
+    }
+
+    /// <summary>
+    /// Builds the slide element for a preserved modern object by re-emitting RawXml
+    /// with rel-id attributes patched to the freshly allocated rIds (via mediaById).
+    /// </summary>
+    private static XElement? BuildPreservedObjectEl(
+        SlideShape shape, Dictionary<uint, string> mediaById)
+    {
+        if (shape.PreservedObject is not { } info) return null;
+        if (string.IsNullOrWhiteSpace(info.RawXml)) return null;
+
+        XElement el;
+        try { el = XElement.Parse(info.RawXml); }
+        catch { return null; }
+
+        // Patch r-namespace id attributes to use the fresh relIds
+        var rNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        foreach (var attr in el.DescendantsAndSelf()
+                                .SelectMany(e => e.Attributes())
+                                .Where(a => a.Name.NamespaceName == rNs)
+                                .ToList())
+        {
+            var oldId  = attr.Value;
+            var key    = PrvHashRelId(shape.Id, oldId);
+            if (mediaById.TryGetValue(key, out var newId))
+                attr.SetValue(newId);
+        }
+
+        // Re-wrap in mc:AlternateContent if the original was wrapped
+        if (info.WasAlternateContent)
+        {
+            var clone = new XElement(el);   // deep clone for the Fallback branch
+            return new XElement(MC + "AlternateContent",
+                new XAttribute(XNamespace.Xmlns + "mc",
+                    "http://schemas.openxmlformats.org/markup-compatibility/2006"),
+                new XElement(MC + "Choice",
+                    new XAttribute("Requires", "p14"),
+                    el),
+                new XElement(MC + "Fallback",
+                    clone));
+        }
+
+        return el;
     }
 
     // ── OLE embedded object writing (Theme 21) ────────────────────────────────────

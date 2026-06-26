@@ -82,6 +82,9 @@ public static class SlideCloner
         // Theme 21: OLE — byte arrays are treated as immutable once loaded; share reference.
         copy.OleObject = shape.OleObject is null ? null : CloneOleObject(shape.OleObject);
 
+        // Wave 25A: preserved modern objects — byte arrays are immutable once loaded; share references.
+        copy.PreservedObject = shape.PreservedObject is null ? null : ClonePreservedObject(shape.PreservedObject);
+
         // Connector attachments — small value-like objects, always deep-copied.
         copy.ConnectionStart = shape.ConnectionStart is null ? null : CloneConnectorAttachment(shape.ConnectionStart);
         copy.ConnectionEnd   = shape.ConnectionEnd   is null ? null : CloneConnectorAttachment(shape.ConnectionEnd);
@@ -295,6 +298,17 @@ public static class SlideCloner
         DurationMs      = t.DurationMs,
         AdvanceOnClick  = t.AdvanceOnClick,
         AdvanceAfterMs  = t.AdvanceAfterMs,
+        RawXml          = t.RawXml,
+        MorphOption     = t.MorphOption,
+        Sound           = t.Sound is null ? null : new TransitionSound
+        {
+            AudioBytes  = t.Sound.AudioBytes is not null ? (byte[])t.Sound.AudioBytes.Clone() : null,
+            ContentType = t.Sound.ContentType,
+            RelId       = t.Sound.RelId,
+            PartPath    = t.Sound.PartPath,
+            Loop        = t.Sound.Loop,
+            IsBuiltIn   = t.Sound.IsBuiltIn,
+        },
     };
 
     private static ShapeAnimation CloneAnimation(ShapeAnimation a)
@@ -356,4 +370,24 @@ public static class SlideCloner
         WasAlternateContent  = src.WasAlternateContent,
         EmbeddedExtension    = src.EmbeddedExtension,
     };
+
+    // Wave 25A: PreservedObject cloner — share byte arrays (immutable once loaded).
+    private static PreservedObjectInfo ClonePreservedObject(PreservedObjectInfo src)
+    {
+        var copy = new PreservedObjectInfo
+        {
+            ObjectKind          = src.ObjectKind,
+            RawXml              = src.RawXml,
+            WasAlternateContent = src.WasAlternateContent,
+        };
+        foreach (var kv in src.Parts)
+            copy.Parts[kv.Key] = kv.Value;
+        foreach (var kv in src.PartContentTypes)
+            copy.PartContentTypes[kv.Key] = kv.Value;
+        foreach (var kv in src.PartRels)
+            copy.PartRels[kv.Key] = kv.Value;
+        foreach (var kv in src.SlideRels)
+            copy.SlideRels[kv.Key] = kv.Value;
+        return copy;
+    }
 }
