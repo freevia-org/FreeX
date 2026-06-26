@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
@@ -365,6 +366,7 @@ public sealed class MainWindow : Window
             ToggleOrientation:   ToggleOrientation,
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,
+            InsertPicture:       () => _ = InsertPictureAsync(),
             ApplyZoom: (absolute, delta) =>
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
@@ -782,6 +784,75 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             _status.Text = $"PDF export failed: {ex.Message}";
+        }
+    }
+
+    private static readonly FilePickerFileType ImageFileType = new("Pictures")
+    {
+        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
+        MimeTypes = ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"],
+    };
+
+    /// <summary>
+    /// Insert &gt; Picture (AV-INSERT): open a file picker, read the chosen image, and insert it at the
+    /// caret as an inline image. The display size is derived from the image's natural pixel dimensions
+    /// (96 DPI → points), capped so a large photo does not overflow the page; the bytes are stored verbatim.
+    /// </summary>
+    private async Task InsertPictureAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Insert Picture",
+            AllowMultiple = false,
+            FileTypeFilter = [ImageFileType],
+        });
+        if (files.Count == 0)
+            return;
+        var path = files[0].TryGetLocalPath();
+        if (path is null)
+            return;
+
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(path);
+            var (widthPt, heightPt) = MeasureImagePoints(bytes);
+            _editor.InsertInlineImage(bytes, widthPt, heightPt);
+            _editor.Focus();
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Insert picture failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Decode <paramref name="bytes"/> to recover the natural pixel size, convert to points at 96 DPI, and
+    /// cap the longest edge so the image fits a typical page body. Falls back to a sensible default size
+    /// when the bytes cannot be decoded (e.g. EMF/WMF, which Avalonia's Bitmap cannot read).
+    /// </summary>
+    private static (double WidthPt, double HeightPt) MeasureImagePoints(byte[] bytes)
+    {
+        const double maxEdgePt = 360.0; // ~5 inches — fits the body of a Letter/A4 page with 1in margins
+        try
+        {
+            using var ms = new MemoryStream(bytes);
+            var bitmap = new Bitmap(ms);
+            var widthPt = bitmap.PixelSize.Width * 72.0 / 96.0;
+            var heightPt = bitmap.PixelSize.Height * 72.0 / 96.0;
+            if (widthPt <= 0 || heightPt <= 0)
+                return (200, 150);
+            var longest = Math.Max(widthPt, heightPt);
+            if (longest > maxEdgePt)
+            {
+                var scale = maxEdgePt / longest;
+                widthPt *= scale;
+                heightPt *= scale;
+            }
+            return (widthPt, heightPt);
+        }
+        catch
+        {
+            return (200, 150); // undecodable (metafile) → default box; bytes still round-trip verbatim
         }
     }
 

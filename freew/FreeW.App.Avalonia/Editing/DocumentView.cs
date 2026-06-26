@@ -6217,6 +6217,120 @@ public sealed class DocumentView : Control
         _bus.Execute(new InsertBlockCommand(insertAt, table));
     }
 
+    // ── AV-INSERT: Insert-tab inserts (page break / picture / shape / text box / symbol) ──────────
+
+    /// <summary>
+    /// Insert a page break at the caret: an empty paragraph that forces a page break before it,
+    /// placed after the caret's block. Routed through the undo/redo bus, so a single undo removes it.
+    /// Mirrors the WPF host's <c>DocumentView.InsertPageBreak</c>.
+    /// </summary>
+    public void InsertPageBreak()
+    {
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreatePageBreak()));
+    }
+
+    /// <summary>
+    /// Insert an inline image at the caret's paragraph (AV-INSERT). The image is appended as a textless
+    /// object run to the caret's body paragraph (mirroring the WPF host, which adds the image container to
+    /// the caret paragraph's inlines). Undoable. When the caret is not in a body paragraph the image is
+    /// appended to the nearest editable paragraph (or a new one is created when the body has none).
+    /// </summary>
+    /// <param name="bytes">Raw image bytes (stored verbatim; never transcoded).</param>
+    /// <param name="widthPt">Display width in points.</param>
+    /// <param name="heightPt">Display height in points.</param>
+    /// <param name="format">Binary format; auto-detected from <paramref name="bytes"/> when null.</param>
+    public void InsertInlineImage(byte[] bytes, double widthPt, double heightPt, ImageFormat? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        var fmt = format ?? InlineImage.DetectFormat(bytes);
+        var image = new InlineImage(bytes, Math.Max(1, widthPt), Math.Max(1, heightPt), fmt)
+        {
+            Wrapping = ImageWrapping.Inline,
+        };
+        InsertObjectRun(new Run(string.Empty, RunFormatting.Default) { Image = image });
+    }
+
+    /// <summary>
+    /// Insert a shape at the caret as a floating object (AV-INSERT). The shape is appended as a textless
+    /// object run to the caret's body paragraph; its <see cref="Shape.Placement"/> is set so it floats
+    /// (square wrap) over the text, matching the WPF host's drawing inserts. Undoable.
+    /// </summary>
+    public void InsertShape(Shape shape)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        // Make the shape floating (square wrap) so it renders on the floating-object overlay lane.
+        shape.Placement ??= new FloatingPlacement();
+        if (shape.Placement.Wrapping == ImageWrapping.Inline)
+            shape.Placement.Wrapping = ImageWrapping.Square;
+        InsertObjectRun(new Run(string.Empty, RunFormatting.Default) { Shape = shape });
+    }
+
+    /// <summary>
+    /// Insert a default rectangle shape at the caret (AV-INSERT). Convenience over
+    /// <see cref="InsertShape(Shape)"/> wired to the <c>freew.shape</c> ribbon command.
+    /// </summary>
+    public void InsertShape() =>
+        InsertShape(Shape.Preset(ShapeKind.Rectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
+
+    /// <summary>
+    /// Insert a floating text box at the caret (AV-INSERT). Wired to the <c>freew.text-box</c> ribbon
+    /// command. The text box carries a single placeholder paragraph and floats over the body text.
+    /// </summary>
+    public void InsertTextBox() =>
+        InsertShape(Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
+
+    /// <summary>
+    /// Insert a symbol / special character at the caret as ordinary text (AV-INSERT). Flows through the
+    /// normal text-edit/undo path (<see cref="InsertText"/>), so it works inside table cells too.
+    /// Wired to the <c>freew.symbol</c> ribbon command's per-glyph sub-commands.
+    /// </summary>
+    public void InsertSymbol(string symbol)
+    {
+        if (!string.IsNullOrEmpty(symbol))
+            InsertText(symbol);
+    }
+
+    /// <summary>
+    /// Enable (create) the document header region if missing/empty so it renders in the top page-margin
+    /// region (AV-INSERT). Undoable. Wired to the <c>freew.header</c> ribbon command. In-region caret
+    /// editing of the header is a separate UI surface (deferred); this readies the region.
+    /// </summary>
+    public void EnsureHeader() => _bus.Execute(new EnsureHeaderFooterCommand(isFooter: false));
+
+    /// <summary>
+    /// Enable (create) the document footer region if missing/empty so it renders in the bottom
+    /// page-margin region (AV-INSERT). Undoable. Wired to the <c>freew.footer</c> ribbon command.
+    /// </summary>
+    public void EnsureFooter() => _bus.Execute(new EnsureHeaderFooterCommand(isFooter: true));
+
+    /// <summary>
+    /// Append an object-carrying run to the caret's paragraph (or the nearest editable body paragraph),
+    /// routed through the undo/redo bus. Shared by the picture/shape/text-box inserts. Updates the caret
+    /// to sit just after the host paragraph's text so subsequent typing lands sensibly.
+    /// </summary>
+    private void InsertObjectRun(Run run)
+    {
+        // Resolve a body paragraph to host the object. Prefer the caret's block; otherwise the first
+        // editable body paragraph; otherwise append a fresh empty paragraph and target that.
+        var index = _caret.Block;
+        if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
+        {
+            index = FirstEditableBlock();
+            if (index < 0)
+            {
+                index = _doc.Blocks.Count;
+                _bus.Execute(new InsertBlockCommand(index, new Paragraph()));
+            }
+        }
+
+        _bus.Execute(new InsertObjectRunCommand(index, run));
+        // Park the caret at the end of the host paragraph's text (object runs carry no text offset).
+        _cellCaret = null;
+        _caret = new DocPosition(index, BlockLength(index));
+        _selectionAnchor = _caret;
+    }
+
     /// <summary>Toggle the current paragraph's list kind (bullet/number); re-applying the same kind clears it.</summary>
     public void ToggleList(ListKind kind)
     {

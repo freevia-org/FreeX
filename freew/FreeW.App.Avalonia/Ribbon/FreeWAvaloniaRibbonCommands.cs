@@ -144,7 +144,33 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.find-replace-dialog", new RelayCommand(callbacks.OpenFindReplaceDialog));
 
         // ── Insert ───────────────────────────────────────────────────────────
+        // AV-INSERT: Insert-tab depth. Table dropdown (default + sized presets), page break, picture
+        // (file-picker via host callback), shape, text box, and a symbol palette.
         r.Register("freew.insert-table", new RelayCommand(() => editor.InsertTable(3, 3)));
+        // Table size presets (dropdown items). The top-level "freew.table" id opens the menu (no-op).
+        r.Register("freew.table", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.table-2x2", new RelayCommand(() => editor.InsertTable(2, 2)));
+        r.Register("freew.table-3x3", new RelayCommand(() => editor.InsertTable(3, 3)));
+        r.Register("freew.table-4x4", new RelayCommand(() => editor.InsertTable(4, 4)));
+        r.Register("freew.table-5x2", new RelayCommand(() => editor.InsertTable(2, 5)));
+
+        // Page break — empty paragraph forcing a page break before it, after the caret block.
+        r.Register("freew.page-break", new RelayCommand(editor.InsertPageBreak));
+
+        // Picture — open a file picker, load the bytes, insert as an inline image (host callback).
+        r.Register("freew.picture", new RelayCommand(callbacks.InsertPicture));
+
+        // Shape / Text Box — floating drawing objects at the caret.
+        r.Register("freew.shape",    new RelayCommand(editor.InsertShape));
+        r.Register("freew.text-box", new RelayCommand(editor.InsertTextBox));
+
+        // Symbol — palette dropdown; the opener is a no-op and each glyph is its own sub-command.
+        r.Register("freew.symbol", new RelayCommand(() => { /* flyout opener */ }));
+        RegisterSymbolPalette(r, editor);
+
+        // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
+        r.Register("freew.header", new RelayCommand(editor.EnsureHeader));
+        r.Register("freew.footer", new RelayCommand(editor.EnsureFooter));
 
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
@@ -269,6 +295,45 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.font-color.dark-blue", "#00008B");
         Add(r, editor, "freew.font-color.purple",    "#7030A0");
         Add(r, editor, "freew.font-color.white",     "#FFFFFF");
+    }
+
+    /// <summary>
+    /// AV-INSERT: common symbols / special characters for the Insert &gt; Symbol palette. Each entry maps a
+    /// stable command-id suffix to the literal character it inserts (via <see cref="DocumentView.InsertSymbol"/>).
+    /// The set mirrors Word's default "recently used symbols" grid (currency, typography, math, arrows).
+    /// </summary>
+    internal static readonly IReadOnlyList<(string Id, string Glyph, string Label)> Symbols =
+    [
+        ("freew.symbol.euro",        "€", "Euro Sign"),
+        ("freew.symbol.pound",       "£", "Pound Sign"),
+        ("freew.symbol.yen",         "¥", "Yen Sign"),
+        ("freew.symbol.cent",        "¢", "Cent Sign"),
+        ("freew.symbol.copyright",   "©", "Copyright"),
+        ("freew.symbol.registered",  "®", "Registered"),
+        ("freew.symbol.trademark",   "™", "Trademark"),
+        ("freew.symbol.degree",      "°", "Degree Sign"),
+        ("freew.symbol.plusminus",   "±", "Plus-Minus"),
+        ("freew.symbol.multiply",    "×", "Multiplication"),
+        ("freew.symbol.divide",      "÷", "Division"),
+        ("freew.symbol.notequal",    "≠", "Not Equal"),
+        ("freew.symbol.lessequal",   "≤", "Less-Or-Equal"),
+        ("freew.symbol.greaterequal","≥", "Greater-Or-Equal"),
+        ("freew.symbol.bullet",      "•", "Bullet"),
+        ("freew.symbol.ellipsis",    "…", "Ellipsis"),
+        ("freew.symbol.emdash",      "—", "Em Dash"),
+        ("freew.symbol.endash",      "–", "En Dash"),
+        ("freew.symbol.arrow-right", "→", "Right Arrow"),
+        ("freew.symbol.arrow-left",  "←", "Left Arrow"),
+    ];
+
+    /// <summary>
+    /// Registers the per-glyph sub-commands for the Insert &gt; Symbol palette dropdown. Each command id
+    /// matches an entry in <see cref="Symbols"/> and inserts that character at the caret as ordinary text.
+    /// </summary>
+    private static void RegisterSymbolPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        foreach (var (id, glyph, _) in Symbols)
+            r.Register(id, new RelayCommand(() => editor.InsertSymbol(glyph)));
     }
 
     /// <summary>

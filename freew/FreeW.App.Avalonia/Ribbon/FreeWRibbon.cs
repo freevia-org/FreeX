@@ -95,6 +95,22 @@ internal static class FreeWRibbon
             new("Right Border",     new RibbonCommandId("freew.table-borders.right")),
         });
 
+    /// <summary>AV-INSERT: Insert &gt; Table dropdown — common row×column size presets.</summary>
+    private static RibbonMenu BuildTableSizeMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("2 × 2 Table",       new RibbonCommandId("freew.table-2x2")),
+            new("3 × 3 Table",       new RibbonCommandId("freew.table-3x3")),
+            new("4 × 4 Table",       new RibbonCommandId("freew.table-4x4")),
+            new("5 × 2 Table",       new RibbonCommandId("freew.table-5x2")),
+        });
+
+    /// <summary>AV-INSERT: Insert &gt; Symbol palette — common special characters.</summary>
+    private static RibbonMenu BuildSymbolMenu() =>
+        new(FreeWAvaloniaRibbonCommands.Symbols
+            .Select(s => new RibbonMenuItem($"{s.Glyph}   {s.Label}", new RibbonCommandId(s.Id)))
+            .ToArray());
+
     public static RibbonDefinition BuildDefinition() =>
         new RibbonDefinitionBuilder()
             .Tab("file", "File", "F", tab =>
@@ -167,10 +183,33 @@ internal static class FreeWRibbon
                 });
             })
             .Tab("insert", "Insert", "I", tab =>
-                tab.Group("tables", "Tables", null, 100, g =>
+            {
+                // AV-INSERT: Insert-tab depth.
+                tab.Group("pages", "Pages", null, 100, g =>
+                {
+                    g.Button("freew.page-break", "Page Break");
+                });
+                tab.Group("tables", "Tables", null, 98, g =>
                 {
                     g.Button("freew.insert-table", "Table");
-                }))
+                    g.Dropdown("freew.table", "Table…", BuildTableSizeMenu());
+                });
+                tab.Group("illustrations", "Illustrations", null, 96, g =>
+                {
+                    g.Button("freew.picture",  "Picture");
+                    g.Button("freew.shape",    "Shape");
+                    g.Button("freew.text-box", "Text Box");
+                });
+                tab.Group("header-footer", "Header & Footer", null, 94, g =>
+                {
+                    g.Button("freew.header", "Header");
+                    g.Button("freew.footer", "Footer");
+                });
+                tab.Group("symbols", "Symbols", null, 92, g =>
+                {
+                    g.Dropdown("freew.symbol", "Symbol", BuildSymbolMenu());
+                });
+            })
             .Tab("layout", "Layout", "L", tab =>
             {
                 // AV-PAGE: page-setup group — dialog launcher + quick orientation/margins/size.
@@ -355,6 +394,8 @@ internal sealed record RibbonHostCallbacks(
     Action<string> ApplyMarginPreset,
     /// <summary>Quick paper-size switch: "letter" (US Letter 8.5×11) or "a4" (210×297 mm).</summary>
     Action<string> ApplyPaperSize,
+    /// <summary>Insert &gt; Picture: open a file picker, load the image, insert it at the caret (AV-INSERT).</summary>
+    Action InsertPicture,
     /// <summary>
     /// Adjust zoom. Pass <paramref name="absolute"/> to set zoom to that scale; pass
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
