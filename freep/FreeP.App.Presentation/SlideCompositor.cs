@@ -357,13 +357,24 @@ public static class SlideCompositor
             ? ResolveOutline(shape.Outline, theme, effectiveClrMap)
             : ResolvedOutline.None.Instance;
 
+        // 18A: carry crop + colour-effect fields from PictureFormat onto the draw op
+        var pf = shape.PictureFormat;
         ops.Add(new DrawOp.Picture
         {
-            Bytes = shape.Picture.Bytes,
-            ContentType = shape.Picture.ContentType,
-            DestDip = boundsDip,
-            RotationDeg = anchor.RotationDeg,
-            Outline = outline
+            Bytes        = shape.Picture.Bytes,
+            ContentType  = shape.Picture.ContentType,
+            DestDip      = boundsDip,
+            RotationDeg  = anchor.RotationDeg,
+            Outline      = outline,
+            CropLeft     = pf?.CropLeft   ?? 0,
+            CropTop      = pf?.CropTop    ?? 0,
+            CropRight    = pf?.CropRight  ?? 0,
+            CropBottom   = pf?.CropBottom ?? 0,
+            Grayscale    = pf?.Grayscale  ?? false,
+            BiLevelThreshold = pf?.BiLevelThreshold,
+            Brightness   = pf?.Brightness,
+            Contrast     = pf?.Contrast,
+            AlphaModPct  = pf?.AlphaModPct,
         });
     }
 
@@ -386,14 +397,24 @@ public static class SlideCompositor
 
         if (shape.Picture is { Bytes.Length: > 0 })
         {
+            var mpf = shape.PictureFormat;
             ops.Add(new DrawOp.Picture
             {
-                Bytes       = shape.Picture.Bytes,
-                ContentType = shape.Picture.ContentType,
-                DestDip     = boundsDip,
-                RotationDeg = anchor.RotationDeg,
-                Outline     = outline,
-                IsMedia     = true,
+                Bytes        = shape.Picture.Bytes,
+                ContentType  = shape.Picture.ContentType,
+                DestDip      = boundsDip,
+                RotationDeg  = anchor.RotationDeg,
+                Outline      = outline,
+                IsMedia      = true,
+                CropLeft     = mpf?.CropLeft   ?? 0,
+                CropTop      = mpf?.CropTop    ?? 0,
+                CropRight    = mpf?.CropRight  ?? 0,
+                CropBottom   = mpf?.CropBottom ?? 0,
+                Grayscale    = mpf?.Grayscale  ?? false,
+                BiLevelThreshold = mpf?.BiLevelThreshold,
+                Brightness   = mpf?.Brightness,
+                Contrast     = mpf?.Contrast,
+                AlphaModPct  = mpf?.AlphaModPct,
             });
         }
         else

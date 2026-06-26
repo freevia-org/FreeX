@@ -375,7 +375,14 @@ public sealed class SlideCanvas : Control
 
         var dest = new Rect(pic.DestDip.X, pic.DestDip.Y, pic.DestDip.Width, pic.DestDip.Height);
 
-        IDisposable? rotScope = null;
+        // 18A: colour effects — produce a modified bitmap via pixel manipulation
+        IImage renderBitmap = bitmap;
+        if (pic.Grayscale || pic.BiLevelThreshold.HasValue || pic.Brightness.HasValue || pic.Contrast.HasValue)
+            renderBitmap = ApplyColorEffectsAvalonia(bitmap, pic);
+
+        IDisposable? rotScope   = null;
+        IDisposable? alphaScope = null;
+
         if (pic.RotationDeg != 0)
         {
             double cx  = dest.Left + dest.Width  / 2;
@@ -387,7 +394,38 @@ public sealed class SlideCanvas : Control
                 * Matrix.CreateTranslation(cx, cy));
         }
 
-        dc.DrawImage(bitmap, dest);
+        // 18A: alpha opacity
+        if (pic.AlphaModPct.HasValue && pic.AlphaModPct.Value < 1.0)
+            alphaScope = dc.PushOpacity(Math.Max(0, Math.Min(1, pic.AlphaModPct.Value)));
+
+        // 18A: crop — expand the dest rect to show only the cropped sub-region of the image.
+        // We do this by scaling the dest rect outward so that the uncropped image region maps to
+        // exactly dest. No clip is needed; the shape bounds act as a natural clip.
+        if (pic.HasCrop)
+        {
+            // The visible fraction in each dimension
+            double visW = 1.0 - pic.CropLeft - pic.CropRight;
+            double visH = 1.0 - pic.CropTop  - pic.CropBottom;
+            if (visW > 0 && visH > 0)
+            {
+                // Full image rendered into expanded rect so that the visible portion fills dest
+                double fullW = dest.Width  / visW;
+                double fullH = dest.Height / visH;
+                double offX  = dest.X - pic.CropLeft  * fullW;
+                double offY  = dest.Y - pic.CropTop   * fullH;
+                var expandedDest = new Rect(offX, offY, fullW, fullH);
+
+                // Clip to dest so the cropped-off margins aren't visible
+                using var clip = dc.PushClip(dest);
+                dc.DrawImage(renderBitmap, expandedDest);
+            }
+        }
+        else
+        {
+            dc.DrawImage(renderBitmap, dest);
+        }
+
+        alphaScope?.Dispose();
 
         if (pic.Outline is ResolvedOutline.Visible visOutline)
         {
@@ -400,6 +438,126 @@ public sealed class SlideCanvas : Control
             DrawPlayButtonOverlay(dc, dest);
 
         rotScope?.Dispose();
+    }
+
+    /// <summary>
+    /// 18A: Applies grayscale, biLevel, brightness/contrast effects to an Avalonia Bitmap.
+    /// Decodes pixels via System.Drawing (GDI+, available on .NET 10 Windows / Linux with libgdiplus).
+    /// Falls back to returning a blank WriteableBitmap when GDI+ is unavailable so crop still works.
+    /// Alpha opacity is handled via dc.PushOpacity upstream and is NOT applied here.
+    /// </summary>
+    private static WriteableBitmap ApplyColorEffectsAvalonia(Bitmap src, DrawOp.Picture pic)
+    {
+        int pw = src.PixelSize.Width;
+        int ph = src.PixelSize.Height;
+        int stride = pw * 4; // BGRA
+
+        var wb = new WriteableBitmap(
+            new PixelSize(pw, ph),
+            new Vector(96, 96),
+            PixelFormat.Bgra8888,
+            AlphaFormat.Premul);
+
+        // ── Decode source pixels via System.Drawing ──────────────────────────────────
+        var pixels = new byte[ph * stride];
+        bool pixelsLoaded = false;
+        try
+        {
+            // Save src as PNG to memory, then load with System.Drawing to get ARGB pixels.
+            byte[] rawPng;
+            using (var pngMs = new MemoryStream())
+            {
+                src.Save(pngMs);
+                rawPng = pngMs.ToArray();
+            }
+
+#pragma warning disable CA1416 // Windows-only GDI+ — entire block is in try/catch for graceful fallback
+            using var sysBmp = (System.Drawing.Bitmap)System.Drawing.Image.FromStream(new MemoryStream(rawPng));
+            var bmpData = sysBmp.LockBits(
+                new System.Drawing.Rectangle(0, 0, pw, ph),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
+            {
+                // System.Drawing Format32bppArgb on little-endian = B,G,R,A in memory (same as BGRA).
+                for (int row = 0; row < ph; row++)
+                {
+                    int srcOff = (bmpData.Stride >= 0 ? row : ph - 1 - row) * Math.Abs(bmpData.Stride);
+                    Marshal.Copy(bmpData.Scan0 + srcOff, pixels, row * stride,
+                        Math.Min(stride, Math.Abs(bmpData.Stride)));
+                }
+                pixelsLoaded = true;
+            }
+            finally { sysBmp.UnlockBits(bmpData); }
+#pragma warning restore CA1416
+        }
+        catch
+        {
+            // GDI+ unavailable — colour effects skipped; crop still works in RenderPicture.
+            return wb;
+        }
+
+        if (!pixelsLoaded) return wb;
+
+        // ── Apply effects ────────────────────────────────────────────────────────────
+        bool doGray    = pic.Grayscale;
+        bool doBiLevel = pic.BiLevelThreshold.HasValue;
+        double biThresh = doBiLevel ? pic.BiLevelThreshold!.Value : 0;
+        bool doLum      = pic.Brightness.HasValue || pic.Contrast.HasValue;
+        double bright   = pic.Brightness ?? 0;
+        double contrast = pic.Contrast  ?? 0;
+
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            double b = pixels[i]     / 255.0;
+            double g = pixels[i + 1] / 255.0;
+            double r = pixels[i + 2] / 255.0;
+
+            if (doGray)
+            {
+                double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                r = g = b = lum;
+            }
+
+            if (doLum)
+            {
+                r = Math.Clamp(r + bright, 0, 1);
+                g = Math.Clamp(g + bright, 0, 1);
+                b = Math.Clamp(b + bright, 0, 1);
+
+                if (contrast > 0)
+                {
+                    double den = Math.Max(1.0 - contrast, 0.001);
+                    r = Math.Clamp((r - 0.5) / den + 0.5, 0, 1);
+                    g = Math.Clamp((g - 0.5) / den + 0.5, 0, 1);
+                    b = Math.Clamp((b - 0.5) / den + 0.5, 0, 1);
+                }
+                else if (contrast < 0)
+                {
+                    r = Math.Clamp((r - 0.5) * (1 + contrast) + 0.5, 0, 1);
+                    g = Math.Clamp((g - 0.5) * (1 + contrast) + 0.5, 0, 1);
+                    b = Math.Clamp((b - 0.5) * (1 + contrast) + 0.5, 0, 1);
+                }
+            }
+
+            if (doBiLevel)
+            {
+                double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                double bw  = lum >= biThresh ? 1.0 : 0.0;
+                r = g = b = bw;
+            }
+
+            pixels[i]     = (byte)(b * 255);
+            pixels[i + 1] = (byte)(g * 255);
+            pixels[i + 2] = (byte)(r * 255);
+            // pixels[i+3] = alpha — preserved unchanged
+        }
+
+        // ── Write processed pixels into WriteableBitmap ───────────────────────────────
+        using (var buf = wb.Lock())
+            Marshal.Copy(pixels, 0, buf.Address, Math.Min(pixels.Length, ph * buf.RowBytes));
+
+        return wb;
     }
 
     private static void DrawPlayButtonOverlay(DrawingContext dc, Rect dest)

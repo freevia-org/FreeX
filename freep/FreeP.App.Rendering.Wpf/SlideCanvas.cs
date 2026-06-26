@@ -476,6 +476,29 @@ public sealed class SlideCanvas : FrameworkElement
             return;
         }
 
+        // 18A: apply crop via CroppedBitmap (source sub-rect)
+        if (pic.HasCrop)
+        {
+            int pw = bitmap.PixelWidth;
+            int ph = bitmap.PixelHeight;
+            int x  = (int)Math.Round(pic.CropLeft   * pw);
+            int y  = (int)Math.Round(pic.CropTop    * ph);
+            int w  = (int)Math.Round((1.0 - pic.CropLeft - pic.CropRight)  * pw);
+            int h  = (int)Math.Round((1.0 - pic.CropTop  - pic.CropBottom) * ph);
+            // Clamp to valid pixel dimensions
+            x = Math.Max(0, Math.Min(x, pw - 1));
+            y = Math.Max(0, Math.Min(y, ph - 1));
+            w = Math.Max(1, Math.Min(w, pw - x));
+            h = Math.Max(1, Math.Min(h, ph - y));
+            var cropped = new CroppedBitmap(bitmap, new Int32Rect(x, y, w, h));
+            if (cropped.CanFreeze) cropped.Freeze();
+            bitmap = cropped;
+        }
+
+        // 18A: apply colour effects (grayscale, brightness/contrast, biLevel, alpha)
+        if (pic.Grayscale || pic.BiLevelThreshold.HasValue || pic.Brightness.HasValue || pic.Contrast.HasValue || pic.AlphaModPct.HasValue)
+            bitmap = ApplyColorEffectsWpf(bitmap, pic);
+
         var dest = new Rect(pic.DestDip.X, pic.DestDip.Y, pic.DestDip.Width, pic.DestDip.Height);
 
         bool hasRotation = pic.RotationDeg != 0;
@@ -486,7 +509,14 @@ public sealed class SlideCanvas : FrameworkElement
             dc.PushTransform(new RotateTransform(pic.RotationDeg, cx, cy));
         }
 
+        // 18A: apply alpha opacity layer if needed
+        bool hasAlpha = pic.AlphaModPct.HasValue && pic.AlphaModPct.Value < 1.0;
+        if (hasAlpha)
+            dc.PushOpacity(Math.Max(0, Math.Min(1, pic.AlphaModPct!.Value)));
+
         dc.DrawImage(bitmap, dest);
+
+        if (hasAlpha) dc.Pop();
 
         // P3: draw the picture frame outline if present.
         if (pic.Outline is ResolvedOutline.Visible visOutline)
@@ -501,6 +531,84 @@ public sealed class SlideCanvas : FrameworkElement
             DrawPlayButtonOverlay(dc, dest);
 
         if (hasRotation) dc.Pop();
+    }
+
+    /// <summary>
+    /// 18A: Applies grayscale, biLevel and brightness/contrast effects to a decoded WPF bitmap.
+    /// Returns a new (frozen) <see cref="WriteableBitmap"/> with effects applied.
+    /// Alpha is handled separately via PushOpacity — only pixel-level effects are done here.
+    /// </summary>
+    private static BitmapSource ApplyColorEffectsWpf(BitmapSource src, DrawOp.Picture pic)
+    {
+        // Convert to Bgra32 for direct pixel access
+        var bgra = new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
+        int pw = bgra.PixelWidth;
+        int ph = bgra.PixelHeight;
+        int stride = pw * 4;
+        var pixels = new byte[ph * stride];
+        bgra.CopyPixels(pixels, stride, 0);
+
+        bool doGray    = pic.Grayscale;
+        bool doBiLevel = pic.BiLevelThreshold.HasValue;
+        double biThresh = doBiLevel ? pic.BiLevelThreshold!.Value : 0;
+        bool doLum     = pic.Brightness.HasValue || pic.Contrast.HasValue;
+        double bright  = pic.Brightness ?? 0;
+        double contrast = pic.Contrast  ?? 0;
+
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            double b = pixels[i]     / 255.0;
+            double g = pixels[i + 1] / 255.0;
+            double r = pixels[i + 2] / 255.0;
+            // a = pixels[i + 3] — untouched here; AlphaModPct handled via PushOpacity
+
+            // Grayscale: luminosity-preserving (ITU-R BT.709)
+            if (doGray)
+            {
+                double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                r = g = b = lum;
+            }
+
+            // Brightness/contrast (PowerPoint model: brightness shifts midpoint, contrast scales range)
+            if (doLum)
+            {
+                // Apply brightness (additive offset)
+                r = Math.Clamp(r + bright, 0, 1);
+                g = Math.Clamp(g + bright, 0, 1);
+                b = Math.Clamp(b + bright, 0, 1);
+
+                // Apply contrast (scale around 0.5)
+                if (contrast > 0)
+                {
+                    r = Math.Clamp((r - 0.5) / (1 - contrast) + 0.5, 0, 1);
+                    g = Math.Clamp((g - 0.5) / (1 - contrast) + 0.5, 0, 1);
+                    b = Math.Clamp((b - 0.5) / (1 - contrast) + 0.5, 0, 1);
+                }
+                else if (contrast < 0)
+                {
+                    r = Math.Clamp((r - 0.5) * (1 + contrast) + 0.5, 0, 1);
+                    g = Math.Clamp((g - 0.5) * (1 + contrast) + 0.5, 0, 1);
+                    b = Math.Clamp((b - 0.5) * (1 + contrast) + 0.5, 0, 1);
+                }
+            }
+
+            // BiLevel: threshold to pure black or white (after grayscale/lum)
+            if (doBiLevel)
+            {
+                double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                double bw  = lum >= biThresh ? 1.0 : 0.0;
+                r = g = b = bw;
+            }
+
+            pixels[i]     = (byte)(b * 255);
+            pixels[i + 1] = (byte)(g * 255);
+            pixels[i + 2] = (byte)(r * 255);
+        }
+
+        var wb = new WriteableBitmap(pw, ph, bgra.DpiX, bgra.DpiY, PixelFormats.Bgra32, null);
+        wb.WritePixels(new Int32Rect(0, 0, pw, ph), pixels, stride, 0);
+        if (wb.CanFreeze) wb.Freeze();
+        return wb;
     }
 
     private static void DrawPlayButtonOverlay(DrawingContext dc, Rect dest)

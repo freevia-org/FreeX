@@ -18,6 +18,10 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
+    <!-- 18A: System.Drawing.Common for pixel access in ApplyColorEffectsAvalonia.
+         The call site is wrapped in try/catch so the renderer degrades gracefully when
+         GDI+ is unavailable (headless CI, Linux without libgdiplus). -->
+    <PackageReference Include="System.Drawing.Common" />
   </ItemGroup>
 
   <ItemGroup>

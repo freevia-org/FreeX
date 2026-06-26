@@ -342,6 +342,42 @@ public abstract class DrawOp
         /// The renderer draws a play-button triangle overlay on top.
         /// </summary>
         public bool IsMedia { get; init; }
+
+        // ── 18A: Crop + colour effects ────────────────────────────────────────────
+
+        /// <summary>
+        /// Fraction of the source image to remove from the left edge.
+        /// 0 = no crop. Combined with CropRight: visible width fraction = 1 - CropLeft - CropRight.
+        /// </summary>
+        public double CropLeft   { get; init; }
+        /// <summary>Fraction of source image to crop from the top.</summary>
+        public double CropTop    { get; init; }
+        /// <summary>Fraction of source image to crop from the right.</summary>
+        public double CropRight  { get; init; }
+        /// <summary>Fraction of source image to crop from the bottom.</summary>
+        public double CropBottom { get; init; }
+
+        /// <summary>True when any crop fraction is non-zero.</summary>
+        public bool HasCrop =>
+            CropLeft != 0 || CropTop != 0 || CropRight != 0 || CropBottom != 0;
+
+        /// <summary>Convert to grayscale.</summary>
+        public bool Grayscale { get; init; }
+
+        /// <summary>
+        /// Black/white threshold (0..1). Null = not active.
+        /// Pixels above threshold render white, below render black.
+        /// </summary>
+        public double? BiLevelThreshold { get; init; }
+
+        /// <summary>Brightness adjustment -1..1. Null = not active.</summary>
+        public double? Brightness { get; init; }
+
+        /// <summary>Contrast adjustment -1..1. Null = not active.</summary>
+        public double? Contrast { get; init; }
+
+        /// <summary>Opacity multiplier 0..1. Null = fully opaque.</summary>
+        public double? AlphaModPct { get; init; }
     }
 
     // ── Background draw op ────────────────────────────────────────────────────────────────────────────────────────

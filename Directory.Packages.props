@@ -28,6 +28,9 @@
     <!-- In-box Windows text-to-speech for Review > Read Aloud. Microsoft-published; the modern .NET home
          of the classic System.Speech.Synthesis API (Windows-only, local synthesis — no cloud). -->
     <PackageVersion Include="System.Speech" Version="10.0.0" />
+    <!-- 18A: System.Drawing.Common for pixel-level image decode in the Avalonia colour-effects helper.
+         Wrapped in try/catch so the renderer degrades gracefully when GDI+ is absent. -->
+    <PackageVersion Include="System.Drawing.Common" Version="10.0.0" />
     <!-- Microsoft extensions -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.7" />
