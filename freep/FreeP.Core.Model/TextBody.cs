@@ -91,6 +91,40 @@ public enum BulletKind
 }
 
 /// <summary>
+/// Auto-number format for an Auto bullet paragraph.
+/// Corresponds to <c>a:buAutoNum type=</c> attribute values.
+/// </summary>
+public enum AutoNumType
+{
+    /// <summary>Arabic numerals with period: 1. 2. 3.</summary>
+    ArabicPeriod = 0,
+    /// <summary>Arabic numerals with close-paren: 1) 2) 3)</summary>
+    ArabicParenR = 1,
+    /// <summary>Arabic numerals with surrounding parens: (1) (2) (3)</summary>
+    ArabicParenBoth = 2,
+    /// <summary>Uppercase Roman numeral with period: I. II. III.</summary>
+    RomanUcPeriod = 3,
+    /// <summary>Lowercase Roman numeral with period: i. ii. iii.</summary>
+    RomanLcPeriod = 4,
+    /// <summary>Uppercase Roman numeral with close-paren: I) II)</summary>
+    RomanUcParenR = 5,
+    /// <summary>Lowercase Roman numeral with close-paren: i) ii)</summary>
+    RomanLcParenR = 6,
+    /// <summary>Uppercase alpha with period: A. B. C.</summary>
+    AlphaUcPeriod = 7,
+    /// <summary>Lowercase alpha with period: a. b. c.</summary>
+    AlphaLcPeriod = 8,
+    /// <summary>Uppercase alpha with close-paren: A) B)</summary>
+    AlphaUcParenR = 9,
+    /// <summary>Lowercase alpha with close-paren: a) b)</summary>
+    AlphaLcParenR = 10,
+    /// <summary>Uppercase alpha with surrounding parens: (A) (B)</summary>
+    AlphaUcParenBoth = 11,
+    /// <summary>Lowercase alpha with surrounding parens: (a) (b)</summary>
+    AlphaLcParenBoth = 12,
+}
+
+/// <summary>
 /// A field run inside a paragraph — corresponds to <c>a:fld</c> in OOXML.
 /// Examples: type="slidenum", type="datetime1", type="footer".
 /// The <see cref="CachedText"/> is the value baked in by PowerPoint on save (used as
@@ -221,6 +255,52 @@ public sealed class Paragraph
     /// <summary>The bullet character when <see cref="BulletKind"/> == Char (e.g. "•").</summary>
     public string? BulletChar { get; set; }
 
+    // ── Wave 19A: extended bullet fields ──────────────────────────────────────
+
+    /// <summary>
+    /// Auto-number list format when <see cref="BulletKind"/> == Auto.
+    /// Corresponds to <c>a:buAutoNum type=</c>.
+    /// </summary>
+    public AutoNumType AutoNumType { get; set; } = AutoNumType.ArabicPeriod;
+
+    /// <summary>
+    /// Start-at value for auto-numbered lists (<c>a:buAutoNum startAt=</c>).
+    /// 1-based; 1 is the default.
+    /// </summary>
+    public int AutoNumStartAt { get; set; } = 1;
+
+    /// <summary>
+    /// Left margin (indent from shape inset) in EMU from <c>a:pPr marL=</c>.
+    /// Null means inherit from layout/master/style.
+    /// Positive = bullet + text indented from the left edge.
+    /// </summary>
+    public long? MarginLeftEmu { get; set; }
+
+    /// <summary>
+    /// First-line/hanging indent in EMU from <c>a:pPr indent=</c>.
+    /// Null means inherit. Typically negative (hanging: bullet is to the left of the text indent).
+    /// </summary>
+    public long? IndentEmu { get; set; }
+
+    /// <summary>
+    /// Bullet color override from <c>a:buClr/a:srgbClr</c> or theme color.
+    /// Null = inherit the run's effective text color.
+    /// </summary>
+    public ThemeAwareColor? BulletColor { get; set; }
+
+    /// <summary>
+    /// Bullet size as a percentage of the run font size, from <c>a:buSzPct val=</c>.
+    /// Stored as 1000ths-of-a-percent per OOXML (e.g. 100000 = 100%).
+    /// Null = 100% (same size as text).
+    /// </summary>
+    public int? BulletSizePct { get; set; }
+
+    /// <summary>
+    /// Override font for the bullet glyph, from <c>a:buFont typeface=</c>.
+    /// Null = same font as the first run in the paragraph.
+    /// </summary>
+    public string? BulletFontFamily { get; set; }
+
     /// <summary>The text runs that make up this paragraph, in order.</summary>
     public List<Run> Runs { get; } = new();
 
@@ -272,8 +352,24 @@ public sealed class TextBody
     /// <summary>True if text should wrap within the bounding box (default). False for no-wrap.</summary>
     public bool Wrap { get; set; } = true;
 
-    /// <summary>True if the shape auto-fits (resizes) to its text content.</summary>
+    /// <summary>True if the shape auto-fits (resizes) to its text content (<c>a:spAutoFit</c>).</summary>
     public bool AutoFit { get; set; }
+
+    // ── Wave 19A: normAutofit cached scaling ──────────────────────────────────
+
+    /// <summary>
+    /// Stored font-scale factor from <c>a:normAutofit fontScale=</c>, in 1000ths-of-a-percent.
+    /// E.g. 62500 = 62.5%.  Zero / null means no normAutofit scaling was stored.
+    /// Apply by multiplying every run's resolved font size by FontScalePPT / 100000.
+    /// </summary>
+    public int? FontScalePPT { get; set; }
+
+    /// <summary>
+    /// Stored line-spacing reduction from <c>a:normAutofit lnSpcReduction=</c>,
+    /// in 1000ths-of-a-percent.  E.g. 20000 = 20% reduction applied to line spacing.
+    /// Zero / null means no reduction.
+    /// </summary>
+    public int? LnSpcReductionPPT { get; set; }
 
     /// <summary>
     /// Full per-level list style from <c>a:lstStyle</c> on this text body.

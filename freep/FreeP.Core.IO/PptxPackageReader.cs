@@ -526,8 +526,22 @@ public static class PptxPackageReader
             level.BulletKind = BulletKind.Char;
             level.BulletChar = buChar.Attribute("char")?.Value ?? "•";
         }
-        else if (lvlEl.Element(A + "buAutoNum") is not null)
+        else if (lvlEl.Element(A + "buAutoNum") is { } buAutoNum2)
+        {
             level.BulletKind = BulletKind.Auto;
+            level.AutoNumType = ParseAutoNumType(buAutoNum2.Attribute("type")?.Value);
+        }
+
+        // Wave 19A: extended bullet style fields
+        var buClrL = lvlEl.Element(A + "buClr");
+        if (buClrL is not null)
+            level.BulletColor = PptxColorReader.TryReadColor(buClrL, scheme);
+        var buSzPctL = lvlEl.Element(A + "buSzPct");
+        if (buSzPctL is not null && int.TryParse(buSzPctL.Attribute("val")?.Value, out var szPctL))
+            level.BulletSizePct = szPctL;
+        var buFontL = lvlEl.Element(A + "buFont");
+        if (buFontL is not null)
+            level.BulletFontFamily = buFontL.Attribute("typeface")?.Value;
 
         // a:defRPr — default run properties
         var defRPr = lvlEl.Element(A + "defRPr");
@@ -2109,7 +2123,17 @@ public static class PptxPackageReader
             if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = ti / 12700.0;
             if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = bi / 12700.0;
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
-            body.AutoFit = bodyPr.Element(A + "normAutofit") is not null || bodyPr.Element(A + "spAutoFit") is not null;
+            var normAf = bodyPr.Element(A + "normAutofit");
+            var spAf   = bodyPr.Element(A + "spAutoFit");
+            body.AutoFit = normAf is not null || spAf is not null;
+            // Wave 19A: parse cached normAutofit scaling values
+            if (normAf is not null)
+            {
+                if (int.TryParse(normAf.Attribute("fontScale")?.Value, out var fs) && fs > 0)
+                    body.FontScalePPT = fs;
+                if (int.TryParse(normAf.Attribute("lnSpcReduction")?.Value, out var lsr) && lsr > 0)
+                    body.LnSpcReductionPPT = lsr;
+            }
 
             // Wave 18B: text vertical orientation (a:bodyPr vert=)
             body.VerticalType = bodyPr.Attribute("vert")?.Value switch
@@ -2202,8 +2226,26 @@ public static class PptxPackageReader
                 para.BulletKind = BulletKind.Char;
                 para.BulletChar = buChar.Attribute("char")?.Value ?? "•";
             }
-            else if (pPr.Element(A + "buAutoNum") is not null)
+            else if (pPr.Element(A + "buAutoNum") is { } buAutoNum)
+            {
                 para.BulletKind = BulletKind.Auto;
+                para.AutoNumType = ParseAutoNumType(buAutoNum.Attribute("type")?.Value);
+                if (int.TryParse(buAutoNum.Attribute("startAt")?.Value, out var startAt) && startAt >= 1)
+                    para.AutoNumStartAt = startAt;
+            }
+
+            // Wave 19A: marL/indent/buClr/buSzPct/buFont
+            if (ParseLongNullable(pPr.Attribute("marL")?.Value) is { } paraMarL) para.MarginLeftEmu = paraMarL;
+            if (ParseLongNullable(pPr.Attribute("indent")?.Value) is { } paraInd) para.IndentEmu = paraInd;
+            var buClr = pPr.Element(A + "buClr");
+            if (buClr is not null)
+                para.BulletColor = PptxColorReader.TryReadColor(buClr, scheme);
+            var buSzPct = pPr.Element(A + "buSzPct");
+            if (buSzPct is not null && int.TryParse(buSzPct.Attribute("val")?.Value, out var szPct))
+                para.BulletSizePct = szPct;
+            var buFont = pPr.Element(A + "buFont");
+            if (buFont is not null)
+                para.BulletFontFamily = buFont.Attribute("typeface")?.Value;
 
             var spcBef = pPr.Element(A + "spcBef")?.Element(A + "spcPts")?.Attribute("val")?.Value;
             if (!string.IsNullOrWhiteSpace(spcBef) && int.TryParse(spcBef, out var sb))
@@ -3146,6 +3188,25 @@ public static class PptxPackageReader
     }
 
     // ── Value parsers ─────────────────────────────────────────────────────────────
+
+    /// <summary>Maps OOXML a:buAutoNum type= string to the <see cref="AutoNumType"/> enum.</summary>
+    private static AutoNumType ParseAutoNumType(string? typeStr) => typeStr switch
+    {
+        "arabicPeriod"     => AutoNumType.ArabicPeriod,
+        "arabicParenR"     => AutoNumType.ArabicParenR,
+        "arabicParenBoth"  => AutoNumType.ArabicParenBoth,
+        "romanUcPeriod"    => AutoNumType.RomanUcPeriod,
+        "romanLcPeriod"    => AutoNumType.RomanLcPeriod,
+        "romanUcParenR"    => AutoNumType.RomanUcParenR,
+        "romanLcParenR"    => AutoNumType.RomanLcParenR,
+        "alphaUcPeriod"    => AutoNumType.AlphaUcPeriod,
+        "alphaLcPeriod"    => AutoNumType.AlphaLcPeriod,
+        "alphaUcParenR"    => AutoNumType.AlphaUcParenR,
+        "alphaLcParenR"    => AutoNumType.AlphaLcParenR,
+        "alphaUcParenBoth" => AutoNumType.AlphaUcParenBoth,
+        "alphaLcParenBoth" => AutoNumType.AlphaLcParenBoth,
+        _                  => AutoNumType.ArabicPeriod
+    };
 
     private static uint ParseUint(string? value) =>
         uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;

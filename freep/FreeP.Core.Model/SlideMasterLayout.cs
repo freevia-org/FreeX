@@ -38,6 +38,20 @@ public sealed class TextStyleLevel
 
     /// <summary>Bullet character (when BulletKind == Char).</summary>
     public string? BulletChar { get; set; }
+
+    // ── Wave 19A: extended style-level bullet fields ───────────────────────────
+
+    /// <summary>Auto-number type for Auto bullets at this level.</summary>
+    public AutoNumType AutoNumType { get; set; } = AutoNumType.ArabicPeriod;
+
+    /// <summary>Bullet color at this level (null = inherit).</summary>
+    public ThemeAwareColor? BulletColor { get; set; }
+
+    /// <summary>Bullet size percent at this level in 1000ths-of-a-percent (null = inherit).</summary>
+    public int? BulletSizePct { get; set; }
+
+    /// <summary>Bullet font family override at this level (null = inherit).</summary>
+    public string? BulletFontFamily { get; set; }
 }
 
 /// <summary>

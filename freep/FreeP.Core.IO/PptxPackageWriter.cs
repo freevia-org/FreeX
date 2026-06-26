@@ -1312,15 +1312,40 @@ public static class PptxPackageWriter
         if (level.MarginLeftEmu.HasValue) el.Add(new XAttribute("marL", level.MarginLeftEmu.Value));
         if (level.IndentEmu.HasValue)     el.Add(new XAttribute("indent", level.IndentEmu.Value));
 
-        // Bullet
+        // Bullet (Wave 19A: extended round-trip)
         switch (level.BulletKind)
         {
             case BulletKind.None:
                 el.Add(new XElement(A + "buNone")); break;
             case BulletKind.Char:
+                if (level.BulletColor is not null)
+                {
+                    var rc = level.BulletColor.Resolved;
+                    el.Add(new XElement(A + "buClr",
+                        new XElement(A + "srgbClr",
+                            new XAttribute("val", $"{rc.R:X2}{rc.G:X2}{rc.B:X2}"))));
+                }
+                if (level.BulletSizePct.HasValue) el.Add(new XElement(A + "buSzPct", new XAttribute("val", level.BulletSizePct.Value)));
+                if (!string.IsNullOrEmpty(level.BulletFontFamily)) el.Add(new XElement(A + "buFont", new XAttribute("typeface", level.BulletFontFamily)));
                 el.Add(new XElement(A + "buChar", new XAttribute("char", level.BulletChar ?? "•"))); break;
             case BulletKind.Auto:
-                el.Add(new XElement(A + "buAutoNum", new XAttribute("type", "arabicPeriod"))); break;
+                var lvlAutoNumTypeStr = level.AutoNumType switch
+                {
+                    AutoNumType.ArabicParenR    => "arabicParenR",
+                    AutoNumType.ArabicParenBoth => "arabicParenBoth",
+                    AutoNumType.RomanUcPeriod   => "romanUcPeriod",
+                    AutoNumType.RomanLcPeriod   => "romanLcPeriod",
+                    AutoNumType.RomanUcParenR   => "romanUcParenR",
+                    AutoNumType.RomanLcParenR   => "romanLcParenR",
+                    AutoNumType.AlphaUcPeriod   => "alphaUcPeriod",
+                    AutoNumType.AlphaLcPeriod   => "alphaLcPeriod",
+                    AutoNumType.AlphaUcParenR   => "alphaUcParenR",
+                    AutoNumType.AlphaLcParenR   => "alphaLcParenR",
+                    AutoNumType.AlphaUcParenBoth => "alphaUcParenBoth",
+                    AutoNumType.AlphaLcParenBoth => "alphaLcParenBoth",
+                    _                           => "arabicPeriod"
+                };
+                el.Add(new XElement(A + "buAutoNum", new XAttribute("type", lvlAutoNumTypeStr))); break;
         }
 
         // a:defRPr
@@ -2322,7 +2347,16 @@ public static class PptxPackageWriter
         if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", (long)Math.Round(body.InsetRightPt.Value * 12700)));
         if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", (long)Math.Round(body.InsetTopPt.Value * 12700)));
         if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", (long)Math.Round(body.InsetBottomPt.Value * 12700)));
-        if (body.AutoFit) bodyPr.Add(new XElement(A + "normAutofit"));
+        // Wave 19A: write normAutofit with cached fontScale/lnSpcReduction
+        if (body.AutoFit)
+        {
+            var nafEl = new XElement(A + "normAutofit");
+            if (body.FontScalePPT.HasValue && body.FontScalePPT.Value > 0)
+                nafEl.Add(new XAttribute("fontScale", body.FontScalePPT.Value));
+            if (body.LnSpcReductionPPT.HasValue && body.LnSpcReductionPPT.Value > 0)
+                nafEl.Add(new XAttribute("lnSpcReduction", body.LnSpcReductionPPT.Value));
+            bodyPr.Add(nafEl);
+        }
 
         // Wave 16A: warp preset + adjust guides (BA4)
         if (!string.IsNullOrWhiteSpace(body.WarpPreset))
@@ -2366,14 +2400,48 @@ public static class PptxPackageWriter
         }
         if (para.Level > 0) { pPr.Add(new XAttribute("lvl", para.Level)); hasPPr = true; }
 
+        // Wave 19A: write marL/indent when set
+        if (para.MarginLeftEmu.HasValue) { pPr.Add(new XAttribute("marL", para.MarginLeftEmu.Value)); hasPPr = true; }
+        if (para.IndentEmu.HasValue)     { pPr.Add(new XAttribute("indent", para.IndentEmu.Value)); hasPPr = true; }
+
         switch (para.BulletKind)
         {
             case BulletKind.None:
                 pPr.Add(new XElement(A + "buNone")); hasPPr = true; break;
             case BulletKind.Char:
+                // Write buClr/buSzPct/buFont when set (Wave 19A)
+                if (para.BulletColor is not null)
+                {
+                    // Emit as sRGB solid fill
+                    var resolved = para.BulletColor.Resolved;
+                    pPr.Add(new XElement(A + "buClr",
+                        new XElement(A + "srgbClr",
+                            new XAttribute("val", $"{resolved.R:X2}{resolved.G:X2}{resolved.B:X2}"))));
+                    hasPPr = true;
+                }
+                if (para.BulletSizePct.HasValue) { pPr.Add(new XElement(A + "buSzPct", new XAttribute("val", para.BulletSizePct.Value))); hasPPr = true; }
+                if (!string.IsNullOrEmpty(para.BulletFontFamily)) { pPr.Add(new XElement(A + "buFont", new XAttribute("typeface", para.BulletFontFamily))); hasPPr = true; }
                 pPr.Add(new XElement(A + "buChar", new XAttribute("char", para.BulletChar ?? "•"))); hasPPr = true; break;
             case BulletKind.Auto:
-                pPr.Add(new XElement(A + "buAutoNum", new XAttribute("type", "arabicPeriod"))); hasPPr = true; break;
+                var autoNumTypeStr = para.AutoNumType switch
+                {
+                    AutoNumType.ArabicParenR    => "arabicParenR",
+                    AutoNumType.ArabicParenBoth => "arabicParenBoth",
+                    AutoNumType.RomanUcPeriod   => "romanUcPeriod",
+                    AutoNumType.RomanLcPeriod   => "romanLcPeriod",
+                    AutoNumType.RomanUcParenR   => "romanUcParenR",
+                    AutoNumType.RomanLcParenR   => "romanLcParenR",
+                    AutoNumType.AlphaUcPeriod   => "alphaUcPeriod",
+                    AutoNumType.AlphaLcPeriod   => "alphaLcPeriod",
+                    AutoNumType.AlphaUcParenR   => "alphaUcParenR",
+                    AutoNumType.AlphaLcParenR   => "alphaLcParenR",
+                    AutoNumType.AlphaUcParenBoth => "alphaUcParenBoth",
+                    AutoNumType.AlphaLcParenBoth => "alphaLcParenBoth",
+                    _                           => "arabicPeriod"
+                };
+                var autoNumEl = new XElement(A + "buAutoNum", new XAttribute("type", autoNumTypeStr));
+                if (para.AutoNumStartAt != 1) autoNumEl.Add(new XAttribute("startAt", para.AutoNumStartAt));
+                pPr.Add(autoNumEl); hasPPr = true; break;
         }
 
         if (para.SpaceBeforePt.HasValue)
