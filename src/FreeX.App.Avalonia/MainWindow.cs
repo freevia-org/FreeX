@@ -18910,26 +18910,26 @@ public sealed partial class MainWindow : Window
                 HasLaunchSmokeComboBox(probe.OperatorBox, "DataValidationOperatorBox", "Data") &&
                 HasLaunchSmokeAutomationId(probe.Formula1Box, "DataValidationFormula1Box") &&
                 HasLaunchSmokeAutomationId(probe.Formula2Box, "DataValidationFormula2Box") &&
-                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", "Allow blank") &&
-                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", "In-cell dropdown") &&
+                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", UiText.Get("DataValidation_IgnoreBlank")) &&
+                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", UiText.Get("DataValidation_InCellDropdown")) &&
                 !probe.ShowDropdownBox.IsVisible &&
                 string.Equals(probe.TypeBox.SelectedItem?.ToString(), "Whole number", StringComparison.Ordinal) &&
                 string.Equals(probe.Formula1Box.Text, "1", StringComparison.Ordinal) &&
                 string.Equals(probe.Formula2Box.Text, "100", StringComparison.Ordinal);
             hasDataValidationDialogMessageControls =
-                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", "Show input message") &&
+                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", UiText.Get("DataValidation_ShowInputMessageWhenCellIsSelected")) &&
                 HasLaunchSmokeAutomationId(probe.PromptTitleBox, "DataValidationPromptTitleBox") &&
                 HasLaunchSmokeAutomationId(probe.PromptMessageBox, "DataValidationPromptMessageBox") &&
-                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", "Show error alert") &&
+                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", UiText.Get("DataValidation_ShowErrorAlertAfterInvalidDataIsEntered")) &&
                 HasLaunchSmokeComboBox(probe.AlertStyleBox, "DataValidationAlertStyleBox", "Style") &&
                 HasLaunchSmokeAutomationId(probe.ErrorTitleBox, "DataValidationErrorTitleBox") &&
                 HasLaunchSmokeAutomationId(probe.ErrorMessageBox, "DataValidationErrorMessageBox") &&
                 string.Equals(probe.AlertStyleBox.SelectedItem?.ToString(), "Stop", StringComparison.Ordinal);
             hasDataValidationDialogActionButtons =
-                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", "Apply") &&
-                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", "Clear Validation") &&
-                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", "Cancel");
-            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 540, height: 560, minWidth: 460, minHeight: 440);
+                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", UiText.Get("Common_Ok")) &&
+                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", UiText.Get("DataValidation_ClearAll")) &&
+                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", UiText.Get("Common_Cancel"));
+            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 520, height: 560, minWidth: 480, minHeight: 460);
         });
 
         var hasConditionalFormatRuleDialog = false;
