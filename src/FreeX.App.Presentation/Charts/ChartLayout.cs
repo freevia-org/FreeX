@@ -55,7 +55,11 @@ public enum TrendlineFitKind
 public readonly record struct SeriesPoint(int PointIndex, double DataX, double DataY, LayoutPoint Position);
 
 /// <summary>A laid-out rectangular bar/column with its source value and category index.</summary>
-public readonly record struct SeriesBar(int PointIndex, double Value, LayoutRect Rect);
+/// <param name="FillColorOverride">
+/// Optional per-bar fill override. When non-null the renderer uses this color instead of the
+/// series-level palette fill (used for waterfall increase/decrease/total coloring).
+/// </param>
+public readonly record struct SeriesBar(int PointIndex, double Value, LayoutRect Rect, CellColor? FillColorOverride = null);
 
 /// <summary>A laid-out pie/doughnut slice: its arc geometry, value, and share of the total.</summary>
 public readonly record struct SeriesSlice(int PointIndex, double Value, double Fraction, string Label, LayoutArc Arc);
@@ -139,6 +143,13 @@ public sealed record SeriesLayout
     /// Consumers map the series with <see cref="ChartLayout.SecondaryValueAxis"/> when set.
     /// </summary>
     public bool UsesSecondaryAxis { get; init; }
+
+    /// <summary>
+    /// For waterfall series: the horizontal connector lines between adjacent bars. Each entry is a
+    /// pair of pixel points forming a short horizontal segment at the running-total level after
+    /// bar <em>i</em>. Empty for non-waterfall series.
+    /// </summary>
+    public IReadOnlyList<(LayoutPoint Left, LayoutPoint Right)> WaterfallConnectors { get; init; } = [];
 }
 
 /// <summary>A single laid-out legend entry: its swatch rectangle and its label box.</summary>

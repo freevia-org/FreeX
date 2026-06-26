@@ -24,6 +24,11 @@ public sealed class ChartLayoutEngineSupportTests
     [InlineData(ChartType.Stock)]
     [InlineData(ChartType.Pie)]
     [InlineData(ChartType.Doughnut)]
+    // chartEx types now ported into the portable engine (Wave 4):
+    [InlineData(ChartType.Funnel)]
+    [InlineData(ChartType.Waterfall)]
+    [InlineData(ChartType.Histogram)]
+    [InlineData(ChartType.Pareto)]
     public void Supported_types_lay_out_without_throwing(ChartType type)
     {
         ChartLayoutEngine.IsSupported(type).Should().BeTrue();
@@ -34,10 +39,9 @@ public sealed class ChartLayoutEngineSupportTests
 
     [Theory]
     [InlineData(ChartType.Surface)]
-    [InlineData(ChartType.Waterfall)]
-    [InlineData(ChartType.Histogram)]
     [InlineData(ChartType.Treemap)]
-    [InlineData(ChartType.Funnel)]
+    [InlineData(ChartType.Sunburst)]
+    [InlineData(ChartType.BoxAndWhisker)]
     public void Deferred_types_are_not_supported_and_throw(ChartType type)
     {
         ChartLayoutEngine.IsSupported(type).Should().BeFalse();

@@ -44,7 +44,11 @@ public static class ChartLayoutEngine
             or ChartType.Stock
             or ChartType.Pie
             or ChartType.ThreeDPie
-            or ChartType.Doughnut;
+            or ChartType.Doughnut
+            or ChartType.Funnel
+            or ChartType.Waterfall
+            or ChartType.Histogram
+            or ChartType.Pareto;
 
     /// <summary>
     /// Lays out <paramref name="request"/> into a <see cref="ChartLayout"/>. Throws
@@ -67,6 +71,10 @@ public static class ChartLayoutEngine
             ChartType.Bubble => LayoutBubble(request),
             ChartType.Radar => LayoutRadar(request),
             ChartType.Stock => LayoutStock(request),
+            ChartType.Funnel => LayoutFunnel(request),
+            ChartType.Waterfall => LayoutWaterfall(request),
+            ChartType.Histogram => LayoutHistogram(request),
+            ChartType.Pareto => LayoutPareto(request),
             _ => LayoutColumnLineArea(request),
         };
     }
@@ -1186,4 +1194,470 @@ public static class ChartLayoutEngine
 
     private static LayoutRect CenteredRect(LayoutPoint center, TextSize size) =>
         new(center.X - (size.Width / 2), center.Y - (size.Height / 2), size.Width, size.Height);
+
+    // ---- Funnel ---------------------------------------------------------------------------
+
+    // Funnel: horizontal bars centered on a vertical axis, widths proportional to value, stacked
+    // top-to-bottom (first item widest, last narrowest). Produces Bars geometry (horizontal).
+    // Math mirrors WPF BuildFunnelModel: halfWidth = value/maxVal * 0.45, placed at index i.
+    // Each bar is colored from the palette (per-point, cycling).
+    private static ChartLayout LayoutFunnel(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+
+        var series = request.Series.Count > 0 ? request.Series[0] : null;
+        var allValues = new List<(int Index, double Value, string Label)>();
+        var maxVal = 0.0;
+        if (series is not null)
+        {
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                if (series.Values[i] is not { } v)
+                    continue;
+                var absVal = Math.Abs(v);
+                var label = i < request.Categories.Count ? request.Categories[i] : $"Stage {i + 1}";
+                allValues.Add((i, absVal, label));
+                if (absVal > maxVal)
+                    maxVal = absVal;
+            }
+        }
+
+        if (maxVal <= 0)
+            maxVal = 1;
+
+        var n = allValues.Count;
+
+        // Funnel axis: category-Y runs 0..n-1 (top-to-bottom), value-X is symmetric around 0.5
+        // mirroring WPF's 0..1 X range. We map to pixel coords directly rather than going through
+        // AxisScale because funnel axes are hidden — we just need the plot-rect extents.
+        var plotW = plot.Width;
+        var plotH = plot.Height;
+        var barHeight = n > 0 ? plotH / n : plotH;
+        var half = 0.45; // max half-width fraction of plot width
+
+        var bars = new List<SeriesBar>(n);
+        var palette = BuildFunnelPalette();
+        for (var i = 0; i < n; i++)
+        {
+            var (index, value, _) = allValues[i];
+            var barHalfW = value / maxVal * half * plotW;
+            var cx = plot.Left + plotW / 2;
+            var yTop = plot.Top + i * barHeight;
+            var yBot = yTop + barHeight * 0.9;
+            var rect = LayoutRect.FromCorners(cx - barHalfW, yTop, cx + barHalfW, yBot);
+            var color = palette[i % palette.Length];
+            bars.Add(new SeriesBar(index, value, rect, color));
+        }
+
+        var seriesLayout = new SeriesLayout
+        {
+            SeriesIndex = series?.SeriesIndex ?? 0,
+            Name = series?.Name,
+            Kind = SeriesGeometryKind.Bars,
+            Bars = bars,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plot.ToRect(),
+            Series = [seriesLayout],
+            Legend = legend,
+        };
+    }
+
+    // Funnel uses a fixed palette of 6 Office-style accent colors (no theme dependency in the engine
+    // itself; the renderer overrides per-bar via FillColorOverride from the SeriesBar).
+    private static readonly CellColor[] FunnelPaletteColors =
+    [
+        new CellColor(0x15, 0x60, 0x82), // Accent1-ish
+        new CellColor(0xFF, 0x69, 0x1E), // Accent2-ish
+        new CellColor(0xA9, 0xD1, 0x8E), // Accent3-ish
+        new CellColor(0xFF, 0xC0, 0x00), // Accent4-ish
+        new CellColor(0x5B, 0x9B, 0xD5), // Accent5-ish
+        new CellColor(0x70, 0xAD, 0x47), // Accent6-ish
+    ];
+
+    private static CellColor[] BuildFunnelPalette() => FunnelPaletteColors;
+
+    // ---- Waterfall ------------------------------------------------------------------------
+
+    // Waterfall colors (match WPF: green for increase, red for decrease, blue for total).
+    private static readonly CellColor WaterfallPositiveColor = new CellColor(0x54, 0x82, 0x35);
+    private static readonly CellColor WaterfallNegativeColor = new CellColor(0xC0, 0x00, 0x00);
+    private static readonly CellColor WaterfallTotalColor    = new CellColor(0x44, 0x72, 0xC4);
+
+    // Waterfall: vertical floating bars — each bar starts at the running total of prior values.
+    // Increase/decrease/total bars are colored differently. Connectors are emitted as WaterfallConnectors.
+    // Math: uses the existing WaterfallBarPlanner.Compute() from Core.Model (same as WPF renderer).
+    private static ChartLayout LayoutWaterfall(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+        var categoryCount = ResolveCategoryCount(request);
+
+        // Collect values from the first series (waterfall is single-series).
+        var series = request.Series.Count > 0 ? request.Series[0] : null;
+        var rawValues = new List<double>(categoryCount);
+        if (series is not null)
+        {
+            foreach (var v in series.Values)
+                rawValues.Add(v ?? 0.0);
+        }
+
+        // Waterfall geometry is computed by the shared WaterfallBarPlanner (ported from WPF).
+        var plan = WaterfallBarPlanner.Compute(rawValues, chart.WaterfallTotalPointIndices);
+
+        // Compute the full value range so we can build a proper value axis.
+        var yMin = double.PositiveInfinity;
+        var yMax = double.NegativeInfinity;
+        foreach (var bar in plan)
+        {
+            yMin = Math.Min(yMin, bar.Bottom);
+            yMax = Math.Max(yMax, bar.Top);
+        }
+        if (double.IsInfinity(yMin) || double.IsInfinity(yMax))
+        {
+            yMin = 0;
+            yMax = 1;
+        }
+
+        var categoryScale = AxisScale.CreateIndexAxis(-0.5, Math.Max(0.5, plan.Count - 0.5), plot, AxisSide.Bottom);
+        var valueScale = AxisScale.CreateValueAxis(
+            yMin, yMax, plot, AxisSide.Left,
+            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
+
+        const double WaterfallHalfWidth = 0.35;
+        var bars = new List<SeriesBar>(plan.Count);
+        var connectors = new List<(LayoutPoint Left, LayoutPoint Right)>(plan.Count);
+
+        for (var i = 0; i < plan.Count; i++)
+        {
+            var bar = plan[i];
+            var color = bar.Kind switch
+            {
+                WaterfallBarKind.Total    => WaterfallTotalColor,
+                WaterfallBarKind.Increase => WaterfallPositiveColor,
+                _                         => WaterfallNegativeColor,
+            };
+
+            var x0 = categoryScale.Transform(i - WaterfallHalfWidth);
+            var x1 = categoryScale.Transform(i + WaterfallHalfWidth);
+            var yLow = valueScale.Transform(bar.Bottom);
+            var yHigh = valueScale.Transform(bar.Top);
+            var rect = LayoutRect.FromCorners(x0, yHigh, x1, yLow);
+            bars.Add(new SeriesBar(i, rawValues.Count > i ? rawValues[i] : 0, rect, color));
+
+            // Connector line: horizontal segment at the cumulative-after level, connecting right
+            // edge of bar i to the left edge of bar i+1. Mirrors WPF AddWaterfallConnector.
+            if (i < plan.Count - 1)
+            {
+                var cy = valueScale.Transform(bar.CumulativeAfter);
+                var leftPt  = new LayoutPoint(x1, cy);
+                var rightPt = new LayoutPoint(categoryScale.Transform(i + 1 - WaterfallHalfWidth), cy);
+                connectors.Add((leftPt, rightPt));
+            }
+        }
+
+        // Category labels
+        var catLabels = new List<string>(plan.Count);
+        for (var i = 0; i < plan.Count; i++)
+            catLabels.Add(i < request.Categories.Count ? request.Categories[i] : $"Point {i + 1}");
+
+        var catAxis = BuildWaterfallCategoryAxis(request, categoryScale, catLabels);
+        var valAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat);
+
+        var seriesLayout = new SeriesLayout
+        {
+            SeriesIndex = series?.SeriesIndex ?? 0,
+            Name = series?.Name,
+            Kind = SeriesGeometryKind.Columns,
+            Bars = bars,
+            WaterfallConnectors = connectors,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plot.ToRect(),
+            CategoryAxis = catAxis,
+            ValueAxis = valAxis,
+            Series = [seriesLayout],
+            Legend = legend,
+        };
+    }
+
+    private static AxisLayout BuildWaterfallCategoryAxis(
+        ChartLayoutRequest request,
+        AxisScale scale,
+        List<string> labels)
+    {
+        var ticks = new List<AxisTick>(labels.Count);
+        for (var i = 0; i < labels.Count; i++)
+            ticks.Add(new AxisTick(i, scale.Transform(i), labels[i]));
+
+        return new AxisLayout
+        {
+            Side = AxisSide.Bottom,
+            Title = request.Chart.XAxisTitle,
+            LinePosition = scale.Transform(0),
+            Ticks = ticks,
+            Scale = scale,
+        };
+    }
+
+    // ---- Histogram ------------------------------------------------------------------------
+
+    // Histogram: bin the single data series into equal-width buckets (using HistogramBinPlanner,
+    // the same binning logic the WPF renderer uses), then emit one SeriesBar per bin. Category
+    // labels are the bin-range strings produced by the planner. Math is fully ported from WPF.
+    private static ChartLayout LayoutHistogram(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+
+        // Collect all numeric values from the first series.
+        var series = request.Series.Count > 0 ? request.Series[0] : null;
+        var rawValues = new List<double>();
+        if (series is not null)
+        {
+            foreach (var v in series.Values)
+                if (v is { } val)
+                    rawValues.Add(val);
+        }
+
+        if (rawValues.Count == 0)
+        {
+            return new ChartLayout
+            {
+                Type = chart.Type,
+                PlotArea = plot.ToRect(),
+                Series = [],
+                Legend = legend,
+            };
+        }
+
+        // Binning: uses HistogramBinPlanner from Core.Model (same as WPF renderer).
+        var bins = HistogramBinPlanner.Compute(rawValues, chart.HistogramBinning ?? new HistogramBinningModel());
+        if (bins.Count == 0)
+        {
+            return new ChartLayout
+            {
+                Type = chart.Type,
+                PlotArea = plot.ToRect(),
+                Series = [],
+                Legend = legend,
+            };
+        }
+
+        var maxCount = bins.Max(b => b.Count);
+        var categoryScale = AxisScale.CreateIndexAxis(-0.5, Math.Max(0.5, bins.Count - 0.5), plot, AxisSide.Bottom);
+        var valueScale = AxisScale.CreateValueAxis(
+            0, Math.Max(1, maxCount), plot, AxisSide.Left,
+            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
+
+        const double HistogramHalfWidth = 0.45;
+        var bars = new List<SeriesBar>(bins.Count);
+        var baselineY = valueScale.Transform(0);
+        for (var i = 0; i < bins.Count; i++)
+        {
+            var bin = bins[i];
+            var x0 = categoryScale.Transform(i - HistogramHalfWidth);
+            var x1 = categoryScale.Transform(i + HistogramHalfWidth);
+            var yHigh = valueScale.Transform(bin.Count);
+            var rect = LayoutRect.FromCorners(x0, yHigh, x1, baselineY);
+            bars.Add(new SeriesBar(i, bin.Count, rect));
+        }
+
+        // Category axis ticks use bin labels (e.g. "0–10", "10–20").
+        var catTicks = new List<AxisTick>(bins.Count);
+        for (var i = 0; i < bins.Count; i++)
+            catTicks.Add(new AxisTick(i, categoryScale.Transform(i), bins[i].Label));
+
+        var catAxis = new AxisLayout
+        {
+            Side = AxisSide.Bottom,
+            Title = chart.XAxisTitle,
+            LinePosition = baselineY,
+            Ticks = catTicks,
+            Scale = categoryScale,
+        };
+
+        var freqTitle = !string.IsNullOrEmpty(chart.YAxisTitle) ? chart.YAxisTitle : "Frequency";
+        var valAxis = new AxisLayout
+        {
+            Side = AxisSide.Left,
+            Title = freqTitle,
+            LinePosition = plot.Left,
+            Ticks = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat).Ticks,
+            Scale = valueScale,
+        };
+
+        var seriesLayout = new SeriesLayout
+        {
+            SeriesIndex = series?.SeriesIndex ?? 0,
+            Name = series?.Name,
+            Kind = SeriesGeometryKind.Columns,
+            Bars = bars,
+            AreaBaseline = baselineY,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plot.ToRect(),
+            CategoryAxis = catAxis,
+            ValueAxis = valAxis,
+            Series = [seriesLayout],
+            Legend = legend,
+        };
+    }
+
+    // ---- Pareto ---------------------------------------------------------------------------
+
+    // Pareto: histogram-style bars sorted descending by value + a cumulative-% line on a secondary
+    // axis (0–100%). Bars are sorted by value (largest first), the cumulative line plots the
+    // running percentage at each bar's right edge. Math matches WPF BuildParetoModel.
+    private static ChartLayout LayoutPareto(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+
+        var series = request.Series.Count > 0 ? request.Series[0] : null;
+
+        // Collect values + labels.
+        var items = new List<(string Label, double Value)>();
+        var total = 0.0;
+        if (series is not null)
+        {
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                if (series.Values[i] is not { } v)
+                    continue;
+                var label = i < request.Categories.Count ? request.Categories[i] : $"Item {i + 1}";
+                items.Add((label, v));
+                total += v;
+            }
+        }
+
+        // Sort descending by value (Pareto order).
+        items.Sort((a, b) => b.Value.CompareTo(a.Value));
+        var n = items.Count;
+
+        if (n == 0)
+        {
+            return new ChartLayout
+            {
+                Type = chart.Type,
+                PlotArea = plot.ToRect(),
+                Series = [],
+                Legend = legend,
+            };
+        }
+
+        var maxValue = items.Count > 0 ? items[0].Value : 1;
+        var categoryScale = AxisScale.CreateIndexAxis(-0.5, Math.Max(0.5, n - 0.5), plot, AxisSide.Bottom);
+        var valueScale = AxisScale.CreateValueAxis(
+            0, Math.Max(1, maxValue), plot, AxisSide.Left,
+            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
+
+        // Secondary axis: 0–100% for the cumulative line.
+        var pctScale = AxisScale.CreateValueAxis(0, 100, plot, AxisSide.Right);
+
+        const double ParetoHalfWidth = 0.40;
+        var bars = new List<SeriesBar>(n);
+        var linePoints = new List<SeriesPoint>(n);
+        var baselineY = valueScale.Transform(0);
+        var runningSum = 0.0;
+
+        for (var i = 0; i < n; i++)
+        {
+            var (_, value) = items[i];
+
+            // Bar geometry.
+            var x0 = categoryScale.Transform(i - ParetoHalfWidth);
+            var x1 = categoryScale.Transform(i + ParetoHalfWidth);
+            var yHigh = valueScale.Transform(value);
+            var rect = LayoutRect.FromCorners(x0, yHigh, x1, baselineY);
+            bars.Add(new SeriesBar(i, value, rect));
+
+            // Cumulative % line point at the right edge of each bar (bar center x).
+            runningSum += value;
+            var pct = total > 0 ? 100.0 * runningSum / total : 0;
+            var px = categoryScale.Transform(i);
+            var py = pctScale.Transform(pct);
+            linePoints.Add(new SeriesPoint(i, i, pct, new LayoutPoint(px, py)));
+        }
+
+        // Category axis ticks from the sorted labels.
+        var catTicks = new List<AxisTick>(n);
+        for (var i = 0; i < n; i++)
+            catTicks.Add(new AxisTick(i, categoryScale.Transform(i), items[i].Label));
+
+        var catAxis = new AxisLayout
+        {
+            Side = AxisSide.Bottom,
+            Title = chart.XAxisTitle,
+            LinePosition = baselineY,
+            Ticks = catTicks,
+            Scale = categoryScale,
+        };
+
+        var leftTitle = !string.IsNullOrEmpty(chart.YAxisTitle) ? chart.YAxisTitle : "Count";
+        var valAxis = new AxisLayout
+        {
+            Side = AxisSide.Left,
+            Title = leftTitle,
+            LinePosition = plot.Left,
+            Ticks = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat).Ticks,
+            Scale = valueScale,
+        };
+
+        // Right axis: 0–100% with 20% major ticks.
+        var pctTicks = new List<AxisTick>();
+        for (var pct = 0; pct <= 100; pct += 20)
+            pctTicks.Add(new AxisTick(pct, pctScale.Transform(pct), $"{pct}%"));
+
+        var pctAxis = new AxisLayout
+        {
+            Side = AxisSide.Right,
+            Title = "%",
+            LinePosition = plot.Right,
+            Ticks = pctTicks,
+            Scale = pctScale,
+        };
+
+        // Bars series (index 0 of the layout) + cumulative-% line (index 1, uses secondary axis).
+        var barSeries = new SeriesLayout
+        {
+            SeriesIndex = series?.SeriesIndex ?? 0,
+            Name = series?.Name,
+            Kind = SeriesGeometryKind.Columns,
+            Bars = bars,
+            AreaBaseline = baselineY,
+        };
+
+        // The line series gets SeriesIndex = -1 (a sentinel that does not appear in ChartModel.SeriesFormats),
+        // flagged as secondary so the renderer knows it maps to the right axis.
+        var lineSeries = new SeriesLayout
+        {
+            SeriesIndex = -1,
+            Name = "%",
+            Kind = SeriesGeometryKind.Line,
+            Points = linePoints,
+            UsesSecondaryAxis = true,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plot.ToRect(),
+            CategoryAxis = catAxis,
+            ValueAxis = valAxis,
+            SecondaryValueAxis = pctAxis,
+            Series = [barSeries, lineSeries],
+            Legend = legend,
+        };
+    }
 }

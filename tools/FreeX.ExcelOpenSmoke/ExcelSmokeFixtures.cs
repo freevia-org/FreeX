@@ -48,6 +48,8 @@ internal static class ExcelSmokeFixtures
         {
             SaveWorkbook(CreateHistogramWorkbook(), Path.Combine(outputDirectory, "FreeX_histogram_smoke.xlsx")),
             SaveWorkbook(CreateWaterfallWorkbook(), Path.Combine(outputDirectory, "FreeX_waterfall_smoke.xlsx")),
+            SaveWorkbook(CreateFunnelWorkbook(),    Path.Combine(outputDirectory, "FreeX_funnel_smoke.xlsx")),
+            SaveWorkbook(CreateParetoWorkbook(),    Path.Combine(outputDirectory, "FreeX_pareto_smoke.xlsx")),
         };
 
         foreach (var file in generated)
@@ -947,6 +949,82 @@ internal static class ExcelSmokeFixtures
             Title = "Waterfall Smoke",
             ShowLegend = false,
             WaterfallTotalPointIndices = [0, rows.Length - 1],
+            Left = 320,
+            Top = 40,
+            Width = 500,
+            Height = 320,
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateFunnelWorkbook()
+    {
+        var workbook = new Workbook("FunnelSmoke");
+        var sheet = workbook.AddSheet("Funnel");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Stage"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Count"));
+
+        (string Stage, double Count)[] stages =
+        [
+            ("Leads",        500),
+            ("Qualified",    350),
+            ("Proposals",    200),
+            ("Negotiations",  80),
+            ("Closed",        30),
+        ];
+
+        for (var i = 0; i < stages.Length; i++)
+        {
+            var row = (uint)i + 2;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(stages[i].Stage));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(stages[i].Count));
+        }
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Funnel,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, (uint)stages.Length + 1, 2)),
+            Title = "Funnel Smoke",
+            ShowLegend = false,
+            Left = 320,
+            Top = 40,
+            Width = 500,
+            Height = 320,
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateParetoWorkbook()
+    {
+        var workbook = new Workbook("ParetoSmoke");
+        var sheet = workbook.AddSheet("Pareto");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Defect"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Count"));
+
+        (string Defect, double Count)[] defects =
+        [
+            ("Wrong size",    42),
+            ("Color mismatch", 28),
+            ("Missing parts",  15),
+            ("Packaging",       9),
+            ("Other",           6),
+        ];
+
+        for (var i = 0; i < defects.Length; i++)
+        {
+            var row = (uint)i + 2;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(defects[i].Defect));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(defects[i].Count));
+        }
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Pareto,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, (uint)defects.Length + 1, 2)),
+            Title = "Pareto Smoke",
+            ShowLegend = false,
             Left = 320,
             Top = 40,
             Width = 500,

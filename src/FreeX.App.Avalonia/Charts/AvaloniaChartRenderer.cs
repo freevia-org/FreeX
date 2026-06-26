@@ -297,17 +297,44 @@ public sealed class AvaloniaChartRenderer
             if (bar.Rect.Width <= 0 && bar.Rect.Height <= 0)
                 continue;
 
+            // Per-bar fill override (used by waterfall increase/decrease/total coloring).
+            IBrush barFill = bar.FillColorOverride is { } overrideColor
+                ? SolidBrush(overrideColor)
+                : fill;
+
             var rect = new AvaloniaRectangle
             {
                 Width = Math.Max(1, bar.Rect.Width),
                 Height = Math.Max(1, bar.Rect.Height),
-                Fill = fill,
+                Fill = barFill,
                 Stroke = stroke,
                 StrokeThickness = strokeThickness,
             };
             Canvas.SetLeft(rect, bar.Rect.Left);
             Canvas.SetTop(rect, bar.Rect.Top);
             canvas.Children.Add(rect);
+        }
+
+        // Waterfall connector lines between bars.
+        if (series.WaterfallConnectors.Count > 0)
+            RenderWaterfallConnectors(canvas, series.WaterfallConnectors);
+    }
+
+    private static void RenderWaterfallConnectors(
+        Canvas canvas,
+        IReadOnlyList<(LayoutPoint Left, LayoutPoint Right)> connectors)
+    {
+        var stroke = SolidBrush(0x59, 0x59, 0x59);
+        foreach (var (left, right) in connectors)
+        {
+            var line = new global::Avalonia.Controls.Shapes.Line
+            {
+                StartPoint = new AvaloniaPoint(left.X, left.Y),
+                EndPoint   = new AvaloniaPoint(right.X, right.Y),
+                Stroke = stroke,
+                StrokeThickness = 1,
+            };
+            canvas.Children.Add(line);
         }
     }
 
