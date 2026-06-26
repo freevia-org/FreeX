@@ -474,6 +474,8 @@ public partial class MainWindow
         }
         SheetGrid.FormControls = keepObjectData ? sheet?.FormControls : null;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
+        SheetGrid.ActiveSheetId = _currentSheetId;
+        SheetGrid.SheetRichTextRuns = sheet?.RichTextRuns;
         SheetGrid.Sparklines = sheet?.Sparklines;
         SheetGrid.SparklineValues = sheet is null
             ? null

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -348,6 +349,18 @@ public partial class GridView
         if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
             text.SetTextDecorations(decorations);
 
+        // Per-run rich text (split-pane path mirrors the main RenderCells path).
+        if (SheetRichTextRuns is { } richTextMapSplit)
+        {
+            var cellAddrSplit = new CellAddress(ActiveSheetId, cell.Row, cell.Col);
+            if (richTextMapSplit.TryGetValue(cellAddrSplit, out var rawRunsSplit) && style is not null)
+            {
+                var resolvedRunsSplit = CellRichRunLayoutPlanner.Resolve(rawRunsSplit, style);
+                if (resolvedRunsSplit.Count > 0)
+                    ApplyRichRunFormatting(text, resolvedRunsSplit, _brushCache);
+            }
+        }
+
         if (wrapText && !useDefaultWrappedTextLayout)
         {
             text.MaxTextWidth = wrapMaxTextWidth;
@@ -663,6 +676,25 @@ public partial class GridView
 
             if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
+
+            // Per-run rich text: apply per-character-range formatting when the active sheet has
+            // rich text registered for this cell.  The shared planner resolves null props against
+            // the cell style; ApplyRichRunFormatting applies the resolved ranges to the already-
+            // constructed FormattedText using SetFontWeight/Style/Size/Family/ForegroundBrush.
+            // Cell-level super/subscript is already applied above (font size + baseline offset);
+            // rich-text runs additionally set per-run size and suppress that cell-level path when
+            // the runs are present (see below — ResolveSuperSubFontAdjustment is still called first
+            // to handle the cell-level baseline shift, but run sizes override it per range).
+            if (SheetRichTextRuns is { } richTextMap)
+            {
+                var cellAddr = new CellAddress(ActiveSheetId, cell.Row, cell.Col);
+                if (richTextMap.TryGetValue(cellAddr, out var rawRuns) && style is not null)
+                {
+                    var resolvedRuns = CellRichRunLayoutPlanner.Resolve(rawRuns, style);
+                    if (resolvedRuns.Count > 0)
+                        ApplyRichRunFormatting(text, resolvedRuns, _brushCache);
+                }
+            }
 
             if (wrapText && !useDefaultWrappedTextLayout)
             {
