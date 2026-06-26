@@ -266,7 +266,7 @@ public sealed partial class MainWindow : Window
         CellBorderPreset? BorderPreset,
         BorderStyle BorderStyle,
         CellColor? BorderColor);
-    private sealed record FormatCellsNullableChoice<T>(string Label, T? Value)
+    internal sealed record FormatCellsNullableChoice<T>(string Label, T? Value)
         where T : struct
     {
         public override string ToString() => Label;
@@ -12732,19 +12732,29 @@ public sealed partial class MainWindow : Window
     ];
 
     // The Windows Format Cells "Line" group renders the available border styles as a
-    // scrollable LIST where each row is drawn as a horizontal LINE SAMPLE (None, Thin,
-    // Medium, Thick, Dashed, Dotted, Double) rather than a text combo. This builds that
-    // ListBox; the SelectedItem stays a FormatCellsNullableChoice<BorderStyle> so the
-    // existing Accept()/SelectedBorderLineStyle() reads are unchanged.
-    private static IReadOnlyList<FormatCellsNullableChoice<BorderStyle>> CreateFormatCellsBorderStyleListChoices() =>
+    // scrollable LIST where each row is drawn as a horizontal LINE SAMPLE rather than a
+    // text combo. This builds that ListBox; the SelectedItem stays a
+    // FormatCellsNullableChoice<BorderStyle> so the existing Accept()/SelectedBorderLineStyle()
+    // reads are unchanged.  All 14 BorderStyle values (plus the "None" sentinel) are listed so
+    // that opening FormatCells on a cell whose edge carries Hair / MediumDashed / DashDot / etc.
+    // seeds the correct entry instead of falling back to "None" and silently losing a
+    // subsequent color-only edit.
+    internal static IReadOnlyList<FormatCellsNullableChoice<BorderStyle>> CreateFormatCellsBorderStyleListChoices() =>
     [
-        new("None", null),
-        new("Thin", BorderStyle.Thin),
-        new("Medium", BorderStyle.Medium),
-        new("Thick", BorderStyle.Thick),
-        new("Dashed", BorderStyle.Dashed),
-        new("Dotted", BorderStyle.Dotted),
-        new("Double", BorderStyle.Double),
+        new("None",              null),
+        new("Thin",              BorderStyle.Thin),
+        new("Medium",            BorderStyle.Medium),
+        new("Thick",             BorderStyle.Thick),
+        new("Dashed",            BorderStyle.Dashed),
+        new("Dotted",            BorderStyle.Dotted),
+        new("Double",            BorderStyle.Double),
+        new("Hair",              BorderStyle.Hair),
+        new("Medium Dashed",     BorderStyle.MediumDashed),
+        new("Dash Dot",          BorderStyle.DashDot),
+        new("Medium Dash Dot",   BorderStyle.MediumDashDot),
+        new("Dash Dot Dot",      BorderStyle.DashDotDot),
+        new("Medium Dash Dot Dot", BorderStyle.MediumDashDotDot),
+        new("Slant Dash Dot",    BorderStyle.SlantDashDot),
     ];
 
     private static ListBox CreateFormatCellsBorderStyleListBox(string automationId, BorderStyle currentValue)

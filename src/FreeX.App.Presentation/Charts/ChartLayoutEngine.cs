@@ -25,6 +25,37 @@ public static class ChartLayoutEngine
     private const double DefaultColumnHalfWidth = 0.4;
     private const double StackedColumnHalfWidth = 0.35;
 
+    /// <summary>
+    /// Returns the half-width of the full category slot for a clustered (non-stacked) column or bar
+    /// chart, mirroring WPF ColumnBarHalfWidth. When <see cref="ChartModel.BarGapWidth"/> is set,
+    /// the half-width is computed so that the gap between adjacent bars equals the requested
+    /// percentage of the bar width (gapWidth=0 ⇒ no gap; gapWidth=150 ⇒ Excel default).
+    /// </summary>
+    private static double ClusteredBarHalfWidth(ChartModel chart) =>
+        chart.BarGapWidth is int gapWidth
+            ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.5)
+            : DefaultColumnHalfWidth;
+
+    /// <summary>
+    /// Returns the left/right offsets (relative to the category centre) for the bar of the
+    /// <paramref name="clusterOrdinal"/>-th clustered series, given the full category half-width
+    /// and the total clustered-series count. Mirrors WPF ClusteredBarOffsets exactly:
+    /// with one series the bar fills the whole slot; with N series each occupies a disjoint 1/N
+    /// sub-slot so the bars sit side by side (Excel's clustered layout).
+    /// </summary>
+    private static (double Left, double Right) ClusteredBarOffsets(
+        double halfWidth,
+        int clusterOrdinal,
+        int clusterCount)
+    {
+        if (clusterCount <= 1)
+            return (-halfWidth, halfWidth);
+
+        var slotWidth = 2.0 * halfWidth / clusterCount;
+        var left = -halfWidth + clusterOrdinal * slotWidth;
+        return (left, left + slotWidth);
+    }
+
     /// <summary>Returns true when this engine can lay out the given chart type.</summary>
     public static bool IsSupported(ChartType type) =>
         type is ChartType.Column
@@ -228,19 +259,35 @@ public static class ChartLayoutEngine
         }
         else
         {
+            // For clustered (non-stacked) Column/ThreeDColumn charts each series gets a disjoint
+            // sub-slot within the category so the bars sit side by side rather than overdrawing
+            // each other (mirroring WPF ClusteredBarOffsets). The cluster count is the number of
+            // series that will be laid out as columns; the ordinal increments for each such series.
+            var isClusteredColumn = chart.Type is ChartType.Column or ChartType.ThreeDColumn;
+            var clusteredColumnCount = isClusteredColumn ? request.Series.Count : 0;
+            var clusteredColumnOrdinal = 0;
+
             foreach (var series in request.Series)
             {
                 var onSecondary = useSecondary && UsesSecondaryAxis(chart, series.SeriesIndex);
                 var yScale = onSecondary ? secondaryScale! : valueScale;
                 var baseY = yScale.Transform(Clamp0(yScale));
-                var laid = chart.Type switch
+                SeriesLayout laid;
+                if (isClusteredColumn)
                 {
-                    ChartType.Column or ChartType.ThreeDColumn =>
-                        LayoutColumnSeries(request, series, categoryScale, yScale, baseY, dataLabels),
-                    ChartType.Area or ChartType.ThreeDArea =>
-                        LayoutAreaSeries(request, series, categoryScale, yScale, baseY, dataLabels),
-                    _ => LayoutLineSeries(request, series, categoryScale, yScale, dataLabels),
-                };
+                    laid = LayoutColumnSeries(request, series, categoryScale, yScale, baseY, dataLabels,
+                        clusteredColumnOrdinal, clusteredColumnCount);
+                    clusteredColumnOrdinal++;
+                }
+                else
+                {
+                    laid = chart.Type switch
+                    {
+                        ChartType.Area or ChartType.ThreeDArea =>
+                            LayoutAreaSeries(request, series, categoryScale, yScale, baseY, dataLabels),
+                        _ => LayoutLineSeries(request, series, categoryScale, yScale, dataLabels),
+                    };
+                }
                 seriesLayouts.Add(laid with { UsesSecondaryAxis = onSecondary });
             }
         }
@@ -268,11 +315,18 @@ public static class ChartLayoutEngine
         AxisScale categoryScale,
         AxisScale valueScale,
         double baselineY,
-        List<DataLabelBox> dataLabels)
+        List<DataLabelBox> dataLabels,
+        int clusterOrdinal = 0,
+        int clusterCount = 1)
     {
         var chart = request.Chart;
         var bars = new List<SeriesBar>();
-        var half = DefaultColumnHalfWidth;
+        // Compute the disjoint sub-slot for this series within the category slot.
+        // With one series (clusterCount=1) the bar fills the full slot (no change).
+        // With N series each occupies a 1/N sub-slot positioned at ordinal*subWidth,
+        // mirroring WPF ClusteredBarOffsets so multi-series bars sit side by side.
+        var halfWidth = ClusteredBarHalfWidth(chart);
+        var (clusterLeft, clusterRight) = ClusteredBarOffsets(halfWidth, clusterOrdinal, clusterCount);
         for (var i = 0; i < series.Values.Count; i++)
         {
             double v;
@@ -283,9 +337,9 @@ public static class ChartLayoutEngine
             else
                 continue;
 
-            // Mirrors RectangleBarItem(i - half, min(0,v), i + half, max(0,v)).
-            var x0 = categoryScale.Transform(i - half);
-            var x1 = categoryScale.Transform(i + half);
+            // Mirrors WPF RectangleBarItem(i + clusterLeft, min(0,v), i + clusterRight, max(0,v)).
+            var x0 = categoryScale.Transform(i + clusterLeft);
+            var x1 = categoryScale.Transform(i + clusterRight);
             var yLow = valueScale.Transform(Math.Min(0, v));
             var yHigh = valueScale.Transform(Math.Max(0, v));
             var rect = LayoutRect.FromCorners(x0, yLow, x1, yHigh);
@@ -422,15 +476,35 @@ public static class ChartLayoutEngine
 
         var seriesLayouts = new List<SeriesLayout>(request.Series.Count);
         var dataLabels = new List<DataLabelBox>();
-        var half = isStacked ? StackedColumnHalfWidth : DefaultColumnHalfWidth;
         var (posTotals, negTotals) = isStacked ? StackedTotals(request, categoryCount) : ([], []);
         var posBases = new double[categoryCount];
         var negBases = new double[categoryCount];
         var baselineX = valueScale.Transform(Clamp0(valueScale));
 
+        // For clustered (non-stacked) Bar/ThreeDBar each series gets a disjoint sub-slot within
+        // the category so the bars sit side by side rather than overdrawing each other, mirroring
+        // WPF ClusteredBarOffsets. Stacked bars keep the full slot (half=StackedColumnHalfWidth).
+        var clusteredBarCount = isStacked ? 0 : request.Series.Count;
+        var clusteredBarOrdinal = 0;
+
         foreach (var series in request.Series)
         {
             var bars = new List<SeriesBar>();
+
+            // Determine the y-slot offsets (category axis) for this series.
+            double ySlotLeft, ySlotRight;
+            if (isStacked)
+            {
+                ySlotLeft  = -StackedColumnHalfWidth;
+                ySlotRight =  StackedColumnHalfWidth;
+            }
+            else
+            {
+                var barHalfWidth = ClusteredBarHalfWidth(chart);
+                (ySlotLeft, ySlotRight) = ClusteredBarOffsets(barHalfWidth, clusteredBarOrdinal, clusteredBarCount);
+                clusteredBarOrdinal++;
+            }
+
             for (var i = 0; i < series.Values.Count && i < categoryCount; i++)
             {
                 double raw;
@@ -458,8 +532,8 @@ public static class ChartLayoutEngine
                     x1 = valueScale.Transform(Math.Max(0, raw));
                 }
 
-                var y0 = categoryScale.Transform(i - half);
-                var y1 = categoryScale.Transform(i + half);
+                var y0 = categoryScale.Transform(i + ySlotLeft);
+                var y1 = categoryScale.Transform(i + ySlotRight);
                 var rect = LayoutRect.FromCorners(x0, y0, x1, y1);
                 bars.Add(new SeriesBar(i, raw, rect));
 
