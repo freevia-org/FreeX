@@ -58,8 +58,9 @@ internal static class Program
                 "--diff"              => RunDiff(args[1..]),
                 "--compare"           => RunCompare(args[1..]),
                 "--avalonia-compare"  => RunAvaloniaCompare(args[1..]),
-                "--generate-corpus"   => RunGenerateCorpus(args[1..]),
-                _                     => PrintUsageAndError($"Unknown mode: {args[0]}")
+                "--generate-corpus"           => RunGenerateCorpus(args[1..]),
+                "--generate-smartart-fixture" => RunGenerateSmartArtFixture(args[1..]),
+                _                             => PrintUsageAndError($"Unknown mode: {args[0]}")
             };
         }
         catch (Exception ex)
@@ -411,6 +412,25 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
+    // Mode: --generate-smartart-fixture
+    // -----------------------------------------------------------------------
+    private static int RunGenerateSmartArtFixture(string[] args)
+    {
+        if (args.Length < 1)
+        {
+            Console.Error.WriteLine("usage: --generate-smartart-fixture <outPath.pptx>");
+            return 2;
+        }
+
+        var outputPath = Path.GetFullPath(args[0]);
+        Console.WriteLine($"Generate SmartArt live fixture -> {outputPath}");
+
+        SmartArtFixtureGenerator.Generate(outputPath);
+        Console.WriteLine("Done.");
+        return 0;
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
     private static (int width, int height) ParseWidthHeight(string[] args, int defaultWidth, int defaultHeight)
@@ -450,6 +470,10 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");
+        Console.WriteLine();
+        Console.WriteLine("  --generate-smartart-fixture <outPath.pptx>");
+        Console.WriteLine("      Generate 14-smartart-live.pptx (4 slides: Process/Hierarchy/Cycle/List).");
+        Console.WriteLine("      Pure XML — no PowerPoint COM required. Use with --compare for parity.");
     }
 
     private static int PrintUsageAndError(string error)

@@ -1,0 +1,417 @@
+using System;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Xml.Linq;
+
+namespace FreeP.RenderCompare;
+
+/// <summary>
+/// Theme 17: Generates 14-smartart-live.pptx programmatically (pure XML, no COM required).
+///
+/// Creates a 4-slide deck:
+///   Slide 1 — Process:   Plan → Design → Build → Test → Deploy
+///   Slide 2 — Hierarchy: CEO with VP Sales / VP Engineering / VP Marketing children
+///   Slide 3 — Cycle:     Idea → Plan → Execute → Review → Improve
+///   Slide 4 — List:      Requirement 1 through 4
+///
+/// Each slide has a real dgm:dataModel (ptLst + parOf cxnLst) and a layout1.xml with
+/// the correct uniqueId so the FreeP live layout engine classifies and renders it.
+/// The dsp:drawing is empty (no cached fallback) so the live engine MUST be used.
+/// </summary>
+internal static class SmartArtFixtureGenerator
+{
+    // Namespaces
+    private static readonly XNamespace P   = "http://schemas.openxmlformats.org/presentationml/2006/main";
+    private static readonly XNamespace A   = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+    private static readonly XNamespace Dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
+    private static readonly XNamespace Pkg = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace Ct  = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+    // Relationship types
+    private const string SlideRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+    private const string LayoutRelType     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
+    private const string MasterRelType     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster";
+    private const string ThemeRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+    private const string PresRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+    private const string DmRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+    private const string LoRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
+    private const string QsRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
+    private const string CsRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
+    private const string DgmDrawRelType    = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
+
+    private const string DiagramDataCT    = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml";
+    private const string DiagramLayoutCT  = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml";
+    private const string DiagramQsCT      = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
+    private const string DiagramColorsCT  = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml";
+    private const string DiagramDrawingCT = "application/vnd.ms-office.drawingml.diagramDrawing+xml";
+
+    public static void Generate(string outputPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+
+        // Define the 4 slides
+        var slides = new[]
+        {
+            new SlideSpec
+            {
+                Title     = "SmartArt Live — Process",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+                Nodes     = [("n1","Plan"), ("n2","Design"), ("n3","Build"), ("n4","Test"), ("n5","Deploy")],
+                Connections = [("n1","n2"), ("n2","n3"), ("n3","n4"), ("n4","n5")]
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live — Hierarchy",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+                Nodes     = [("r","CEO"), ("c1","VP Sales"), ("c2","VP Engineering"), ("c3","VP Marketing")],
+                Connections = [("r","c1"), ("r","c2"), ("r","c3")]
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live — Cycle",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/cycle1",
+                Nodes     = [("a","Idea"), ("b","Plan"), ("c","Execute"), ("d","Review"), ("e","Improve")],
+                Connections = []
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live — List",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/list1",
+                Nodes     = [("i1","Requirement 1"), ("i2","Requirement 2"), ("i3","Requirement 3"), ("i4","Requirement 4")],
+                Connections = []
+            }
+        };
+
+        using var zipStream = File.Create(outputPath);
+        using var archive   = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: false);
+
+        void WriteEntry(string entryPath, byte[] bytes)
+        {
+            var e = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
+            using var s = e.Open();
+            s.Write(bytes);
+        }
+        void WriteXml(string entryPath, XDocument doc)
+        {
+            using var ms = new MemoryStream();
+            doc.Save(ms);
+            WriteEntry(entryPath, ms.ToArray());
+        }
+
+        // ── [Content_Types].xml ────────────────────────────────────────────────
+        var ctDoc = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Ct + "Types",
+                new XElement(Ct + "Default", new XAttribute("Extension", "rels"),  new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
+                new XElement(Ct + "Default", new XAttribute("Extension", "xml"),   new XAttribute("ContentType", "application/xml")),
+                new XElement(Ct + "Override", new XAttribute("PartName", "/ppt/presentation.xml"),              new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml")),
+                new XElement(Ct + "Override", new XAttribute("PartName", "/ppt/theme/theme1.xml"),               new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.theme+xml")),
+                new XElement(Ct + "Override", new XAttribute("PartName", "/ppt/slideMasters/slideMaster1.xml"),  new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml")),
+                new XElement(Ct + "Override", new XAttribute("PartName", "/ppt/slideLayouts/slideLayout1.xml"),  new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml")),
+                slides.SelectMany((_, i) => new[]
+                {
+                    new XElement(Ct + "Override", new XAttribute("PartName", $"/ppt/slides/slide{i+1}.xml"),         new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slide+xml")),
+                    new XElement(Ct + "Override", new XAttribute("PartName", $"/ppt/diagrams/data{i+1}.xml"),        new XAttribute("ContentType", DiagramDataCT)),
+                    new XElement(Ct + "Override", new XAttribute("PartName", $"/ppt/diagrams/layout{i+1}.xml"),      new XAttribute("ContentType", DiagramLayoutCT)),
+                    new XElement(Ct + "Override", new XAttribute("PartName", $"/ppt/diagrams/quickStyle{i+1}.xml"),  new XAttribute("ContentType", DiagramQsCT)),
+                    new XElement(Ct + "Override", new XAttribute("PartName", $"/ppt/diagrams/colors{i+1}.xml"),      new XAttribute("ContentType", DiagramColorsCT)),
+                    new XElement(Ct + "Override", new XAttribute("PartName", $"/ppt/diagrams/drawing{i+1}.xml"),     new XAttribute("ContentType", DiagramDrawingCT))
+                })
+            ));
+        WriteXml("[Content_Types].xml", ctDoc);
+
+        // ── Root rels ─────────────────────────────────────────────────────────
+        WriteXml("_rels/.rels", MakeRels(("rId1", PresRelType, "ppt/presentation.xml")));
+
+        // ── Presentation ──────────────────────────────────────────────────────
+        var sldIds = slides.Select((_, i) =>
+            (XObject)new XElement(P + "sldId",
+                new XAttribute("id", 256 + i),
+                new XAttribute(R + "id", $"rIdSlide{i+1}"))).ToArray();
+
+        WriteXml("ppt/presentation.xml", new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(P + "presentation",
+                new XAttribute(XNamespace.Xmlns + "p", P.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                new XElement(P + "sldMasterIdLst",
+                    new XElement(P + "sldMasterId", new XAttribute("id", 2147483648u), new XAttribute(R + "id", "rIdMaster1"))),
+                new XElement(P + "sldIdLst", sldIds),
+                new XElement(P + "sldSz", new XAttribute("cx", 9144000), new XAttribute("cy", 6858000)),
+                new XElement(P + "notesSz", new XAttribute("cx", 6858000), new XAttribute("cy", 9144000)))));
+
+        var presRels = slides.Select((_, i) => ($"rIdSlide{i+1}", SlideRelType, $"slides/slide{i+1}.xml"))
+            .Prepend(("rIdMaster1", MasterRelType, "slideMasters/slideMaster1.xml"))
+            .ToArray();
+        WriteXml("ppt/_rels/presentation.xml.rels", MakeRels(presRels));
+
+        // ── Theme (minimal accent colors) ─────────────────────────────────────
+        WriteXml("ppt/theme/theme1.xml", BuildTheme());
+
+        // ── Slide Master ──────────────────────────────────────────────────────
+        WriteXml("ppt/slideMasters/slideMaster1.xml", BuildMinimalMaster());
+        WriteXml("ppt/slideMasters/_rels/slideMaster1.xml.rels", MakeRels(
+            ("rId1", ThemeRelType, "../theme/theme1.xml"),
+            ("rId2", LayoutRelType, "../slideLayouts/slideLayout1.xml")));
+
+        // ── Slide Layout ──────────────────────────────────────────────────────
+        WriteXml("ppt/slideLayouts/slideLayout1.xml", BuildMinimalLayout());
+        WriteXml("ppt/slideLayouts/_rels/slideLayout1.xml.rels", MakeRels(
+            ("rId1", MasterRelType, "../slideMasters/slideMaster1.xml")));
+
+        // ── Slides + diagram parts ─────────────────────────────────────────────
+        for (int i = 0; i < slides.Length; i++)
+        {
+            var spec = slides[i];
+            int si   = i + 1;
+
+            // Slide XML
+            WriteXml($"ppt/slides/slide{si}.xml", BuildSlide(spec.Title, si));
+
+            // Slide rels
+            WriteXml($"ppt/slides/_rels/slide{si}.xml.rels", MakeRels(
+                ("rId1",   LayoutRelType, "../slideLayouts/slideLayout1.xml"),
+                ("rIdDm1", DmRelType,     $"../diagrams/data{si}.xml"),
+                ("rIdLo1", LoRelType,     $"../diagrams/layout{si}.xml"),
+                ("rIdQs1", QsRelType,     $"../diagrams/quickStyle{si}.xml"),
+                ("rIdCs1", CsRelType,     $"../diagrams/colors{si}.xml")));
+
+            // data#.xml (ptLst + cxnLst)
+            WriteXml($"ppt/diagrams/data{si}.xml",  BuildDataXml(spec));
+            WriteXml($"ppt/diagrams/layout{si}.xml", BuildLayoutXml(spec.LayoutUid));
+            WriteXml($"ppt/diagrams/quickStyle{si}.xml", MakeSimpleDoc(Dgm + "styleDef"));
+            WriteXml($"ppt/diagrams/colors{si}.xml",     MakeSimpleDoc(Dgm + "colorsDef"));
+            WriteXml($"ppt/diagrams/drawing{si}.xml",    BuildEmptyDrawing());
+
+            // data rels (points to drawing for dsp:drawing lookup)
+            WriteXml($"ppt/diagrams/_rels/data{si}.xml.rels", MakeRels(
+                ("rIdDraw1", DgmDrawRelType, $"drawing{si}.xml")));
+        }
+
+        Console.WriteLine($"  Written: {outputPath}");
+    }
+
+    // ── Slide builder ─────────────────────────────────────────────────────────
+
+    private static XDocument BuildSlide(string title, int slideIndex)
+    {
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(P + "sld",
+                new XAttribute(XNamespace.Xmlns + "p", P.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                new XElement(P + "cSld",
+                    new XElement(P + "spTree",
+                        // required group shape header
+                        new XElement(P + "nvGrpSpPr",
+                            new XElement(P + "cNvPr", new XAttribute("id","1"), new XAttribute("name","")),
+                            new XElement(P + "cNvGrpSpPr"),
+                            new XElement(P + "nvPr")),
+                        new XElement(P + "grpSpPr",
+                            new XElement(A + "xfrm",
+                                new XElement(A + "off", new XAttribute("x","0"), new XAttribute("y","0")),
+                                new XElement(A + "ext", new XAttribute("cx","0"), new XAttribute("cy","0")),
+                                new XElement(A + "chOff", new XAttribute("x","0"), new XAttribute("y","0")),
+                                new XElement(A + "chExt", new XAttribute("cx","0"), new XAttribute("cy","0")))),
+                        // Title textbox
+                        new XElement(P + "sp",
+                            new XElement(P + "nvSpPr",
+                                new XElement(P + "cNvPr", new XAttribute("id","2"), new XAttribute("name","Title")),
+                                new XElement(P + "cNvSpPr"),
+                                new XElement(P + "nvPr")),
+                            new XElement(P + "spPr",
+                                new XElement(A + "xfrm",
+                                    new XElement(A + "off", new XAttribute("x","457200"), new XAttribute("y","130000")),
+                                    new XElement(A + "ext", new XAttribute("cx","8229600"), new XAttribute("cy","430000"))),
+                                new XElement(A + "prstGeom", new XAttribute("prst","rect"), new XElement(A + "avLst")),
+                                new XElement(A + "noFill")),
+                            new XElement(P + "txBody",
+                                new XElement(A + "bodyPr"),
+                                new XElement(A + "lstStyle"),
+                                new XElement(A + "p",
+                                    new XElement(A + "r",
+                                        new XElement(A + "rPr", new XAttribute("lang","en-US"), new XAttribute("sz","1800"), new XAttribute("b","1")),
+                                        new XElement(A + "t", title))))),
+                        // SmartArt graphicFrame
+                        new XElement(P + "graphicFrame",
+                            new XElement(P + "nvGraphicFramePr",
+                                new XElement(P + "cNvPr", new XAttribute("id","3"), new XAttribute("name",$"SmartArt {slideIndex}")),
+                                new XElement(P + "cNvGraphicFramePr"),
+                                new XElement(P + "nvPr")),
+                            new XElement(P + "xfrm",
+                                new XElement(A + "off", new XAttribute("x","457200"), new XAttribute("y","680000")),
+                                new XElement(A + "ext", new XAttribute("cx","8229600"), new XAttribute("cy","5744800"))),
+                            new XElement(A + "graphic",
+                                new XElement(A + "graphicData",
+                                    new XAttribute("uri","http://schemas.openxmlformats.org/drawingml/2006/diagram"),
+                                    new XElement(Dgm + "relIds",
+                                        new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                                        new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                                        new XAttribute(R + "dm", "rIdDm1"),
+                                        new XAttribute(R + "lo", "rIdLo1"),
+                                        new XAttribute(R + "qs", "rIdQs1"),
+                                        new XAttribute(R + "cs", "rIdCs1")))))))));
+    }
+
+    // ── data1.xml builder ─────────────────────────────────────────────────────
+
+    private static XDocument BuildDataXml(SlideSpec spec)
+    {
+        var ptElems = spec.Nodes.Select(n =>
+            new XElement(Dgm + "pt",
+                new XAttribute("modelId", n.id),
+                new XAttribute("type", "node"),
+                new XElement(Dgm + "t",
+                    new XElement(A + "p",
+                        new XElement(A + "r",
+                            new XElement(A + "rPr", new XAttribute("lang","en-US")),
+                            new XElement(A + "t", n.text)))))).ToArray();
+
+        var cxnElems = spec.Connections.Select(c =>
+            new XElement(Dgm + "cxn",
+                new XAttribute("type", "parOf"),
+                new XAttribute("srcId", c.src),
+                new XAttribute("destId", c.dst))).ToArray();
+
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(Dgm + "dataModel",
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dgm + "ptLst", ptElems),
+                new XElement(Dgm + "cxnLst", cxnElems)));
+    }
+
+    // ── layout1.xml builder ───────────────────────────────────────────────────
+
+    private static XDocument BuildLayoutXml(string uniqueId)
+    {
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(Dgm + "layoutDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                new XAttribute("uniqueId", uniqueId)));
+    }
+
+    // ── Empty dsp:drawing ──────────────────────────────────────────────────────
+
+    private static XDocument BuildEmptyDrawing()
+    {
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XElement(Dsp + "spTree")));
+    }
+
+    // ── Theme with accent colors ──────────────────────────────────────────────
+
+    private static XDocument BuildTheme()
+    {
+        // Minimal theme with the 6 Office accent colors
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(A + "theme",
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute("name", "Office Theme"),
+                new XElement(A + "themeElements",
+                    new XElement(A + "clrScheme", new XAttribute("name", "Office"),
+                        new XElement(A + "dk1",  new XElement(A + "srgbClr", new XAttribute("val","000000"))),
+                        new XElement(A + "lt1",  new XElement(A + "srgbClr", new XAttribute("val","FFFFFF"))),
+                        new XElement(A + "dk2",  new XElement(A + "srgbClr", new XAttribute("val","44546A"))),
+                        new XElement(A + "lt2",  new XElement(A + "srgbClr", new XAttribute("val","E7E6E6"))),
+                        new XElement(A + "accent1", new XElement(A + "srgbClr", new XAttribute("val","4472C4"))),
+                        new XElement(A + "accent2", new XElement(A + "srgbClr", new XAttribute("val","ED7D31"))),
+                        new XElement(A + "accent3", new XElement(A + "srgbClr", new XAttribute("val","A9D18E"))),
+                        new XElement(A + "accent4", new XElement(A + "srgbClr", new XAttribute("val","FFC000"))),
+                        new XElement(A + "accent5", new XElement(A + "srgbClr", new XAttribute("val","5B9BD5"))),
+                        new XElement(A + "accent6", new XElement(A + "srgbClr", new XAttribute("val","70AD47"))),
+                        new XElement(A + "hlink", new XElement(A + "srgbClr", new XAttribute("val","0563C1"))),
+                        new XElement(A + "folHlink", new XElement(A + "srgbClr", new XAttribute("val","954F72")))),
+                    new XElement(A + "fontScheme", new XAttribute("name","Office"),
+                        new XElement(A + "majorFont",
+                            new XElement(A + "latin", new XAttribute("typeface","Calibri Light"))),
+                        new XElement(A + "minorFont",
+                            new XElement(A + "latin", new XAttribute("typeface","Calibri")))),
+                    new XElement(A + "fmtScheme", new XAttribute("name","Office")))));
+    }
+
+    // ── Minimal slide master ───────────────────────────────────────────────────
+
+    private static XDocument BuildMinimalMaster()
+    {
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(P + "sldMaster",
+                new XAttribute(XNamespace.Xmlns + "p", P.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                new XElement(P + "cSld",
+                    new XElement(P + "spTree",
+                        new XElement(P + "nvGrpSpPr",
+                            new XElement(P + "cNvPr", new XAttribute("id","1"), new XAttribute("name","")),
+                            new XElement(P + "cNvGrpSpPr"),
+                            new XElement(P + "nvPr")),
+                        new XElement(P + "grpSpPr",
+                            new XElement(A + "xfrm",
+                                new XElement(A + "off", new XAttribute("x","0"), new XAttribute("y","0")),
+                                new XElement(A + "ext", new XAttribute("cx","0"), new XAttribute("cy","0")),
+                                new XElement(A + "chOff", new XAttribute("x","0"), new XAttribute("y","0")),
+                                new XElement(A + "chExt", new XAttribute("cx","0"), new XAttribute("cy","0")))))),
+                new XElement(P + "clrMap",
+                    new XAttribute("bg1","lt1"), new XAttribute("tx1","dk1"),
+                    new XAttribute("bg2","lt2"), new XAttribute("tx2","dk2"),
+                    new XAttribute("accent1","accent1"), new XAttribute("accent2","accent2"),
+                    new XAttribute("accent3","accent3"), new XAttribute("accent4","accent4"),
+                    new XAttribute("accent5","accent5"), new XAttribute("accent6","accent6"),
+                    new XAttribute("hlink","hlink"), new XAttribute("folHlink","folHlink"))));
+    }
+
+    // ── Minimal slide layout ───────────────────────────────────────────────────
+
+    private static XDocument BuildMinimalLayout()
+    {
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(P + "sldLayout",
+                new XAttribute(XNamespace.Xmlns + "p", P.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                new XAttribute("type","blank"),
+                new XElement(P + "cSld",
+                    new XElement(P + "spTree",
+                        new XElement(P + "nvGrpSpPr",
+                            new XElement(P + "cNvPr", new XAttribute("id","1"), new XAttribute("name","")),
+                            new XElement(P + "cNvGrpSpPr"),
+                            new XElement(P + "nvPr")),
+                        new XElement(P + "grpSpPr",
+                            new XElement(A + "xfrm",
+                                new XElement(A + "off", new XAttribute("x","0"), new XAttribute("y","0")),
+                                new XElement(A + "ext", new XAttribute("cx","0"), new XAttribute("cy","0")),
+                                new XElement(A + "chOff", new XAttribute("x","0"), new XAttribute("y","0")),
+                                new XElement(A + "chExt", new XAttribute("cx","0"), new XAttribute("cy","0"))))))));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static XDocument MakeSimpleDoc(XName rootElement) =>
+        new(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(rootElement,
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName)));
+
+    private static XDocument MakeRels(params (string id, string type, string target)[] rels)
+    {
+        return new XDocument(new XDeclaration("1.0","UTF-8","yes"),
+            new XElement(Pkg + "Relationships",
+                rels.Select(r => new XElement(Pkg + "Relationship",
+                    new XAttribute("Id", r.id),
+                    new XAttribute("Type", r.type),
+                    new XAttribute("Target", r.target)))));
+    }
+
+    // ── Inner types ───────────────────────────────────────────────────────────
+
+    private sealed class SlideSpec
+    {
+        public string Title     { get; init; } = string.Empty;
+        public string LayoutUid { get; init; } = string.Empty;
+        public (string id, string text)[]   Nodes       { get; init; } = [];
+        public (string src, string dst)[]   Connections { get; init; } = [];
+    }
+}

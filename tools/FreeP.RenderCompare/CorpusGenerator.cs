@@ -73,6 +73,7 @@ internal static class CorpusGenerator
                 ("11-bevel3d",      GenerateBevel3d),
                 ("12-fills",        GenerateFills),
                 ("13-wordart",      GenerateWordArt),
+                ("14-smartart-live", GenerateSmartArtLive),
             };
 
             var errors = 0;
@@ -1450,6 +1451,120 @@ internal static class CorpusGenerator
             if (!Process.GetProcessesByName("POWERPNT").Any(p => pids.Contains(p.Id)))
                 return;
             Thread.Sleep(300);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 14-smartart-live: Process + Hierarchy/OrgChart + Cycle + List SmartArt
+    //   — four slides, one family per slide, with node text
+    //   — used for live-layout parity measurement (Theme 17)
+    // -----------------------------------------------------------------------
+    private static void GenerateSmartArtLive(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+
+            // Helper: find a layout by family keyword, fallback to index 1
+            dynamic FindLayout(string keyword)
+            {
+                dynamic layouts = app.SmartArtLayouts;
+                for (int li = 1; li <= (int)layouts.Count; li++)
+                {
+                    dynamic layout = layouts.Item(li);
+                    string name = (string)layout.Name;
+                    if (name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+                        return layout;
+                }
+                return layouts.Item(1);
+            }
+
+            // ── Slide 1: Process ──────────────────────────────────────────────
+            {
+                dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+                dynamic tb = slide.Shapes.AddTextbox(1, 20f, 6f, 920f, 30f);
+                tb.TextFrame.TextRange.Text = "SmartArt Live — Process";
+                tb.TextFrame.TextRange.Font.Size = 18; tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+                try
+                {
+                    dynamic layout = FindLayout("Process");
+                    dynamic sa = slide.Shapes.AddSmartArt(layout, 50f, 50f, 860f, 380f);
+                    dynamic nodes = sa.SmartArt.AllNodes;
+                    string[] texts = ["Plan", "Design", "Build", "Test", "Deploy"];
+                    for (int ni = 1; ni <= Math.Min((int)nodes.Count, texts.Length); ni++)
+                        try { nodes.Item(ni).TextFrame2.TextRange.Text = texts[ni - 1]; } catch { }
+                }
+                catch (Exception ex) { Console.Write($"(Process SmartArt: {ex.Message}) "); }
+            }
+
+            // ── Slide 2: Hierarchy / OrgChart ─────────────────────────────────
+            {
+                dynamic slide = pres.Slides.Add(2, PpLayoutBlank);
+                dynamic tb = slide.Shapes.AddTextbox(1, 20f, 6f, 920f, 30f);
+                tb.TextFrame.TextRange.Text = "SmartArt Live — Hierarchy";
+                tb.TextFrame.TextRange.Font.Size = 18; tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+                try
+                {
+                    dynamic layout = FindLayout("Org");
+                    if ((string)layout.Name == (string)app.SmartArtLayouts.Item(1).Name)
+                        layout = FindLayout("Hierarch");
+
+                    dynamic sa = slide.Shapes.AddSmartArt(layout, 50f, 50f, 860f, 380f);
+                    dynamic nodes = sa.SmartArt.AllNodes;
+                    // Populate root + children
+                    string[] texts = ["CEO", "VP Sales", "VP Engineering", "VP Marketing"];
+                    for (int ni = 1; ni <= Math.Min((int)nodes.Count, texts.Length); ni++)
+                        try { nodes.Item(ni).TextFrame2.TextRange.Text = texts[ni - 1]; } catch { }
+                }
+                catch (Exception ex) { Console.Write($"(Hierarchy SmartArt: {ex.Message}) "); }
+            }
+
+            // ── Slide 3: Cycle ─────────────────────────────────────────────────
+            {
+                dynamic slide = pres.Slides.Add(3, PpLayoutBlank);
+                dynamic tb = slide.Shapes.AddTextbox(1, 20f, 6f, 920f, 30f);
+                tb.TextFrame.TextRange.Text = "SmartArt Live — Cycle";
+                tb.TextFrame.TextRange.Font.Size = 18; tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+                try
+                {
+                    dynamic layout = FindLayout("Cycle");
+                    dynamic sa = slide.Shapes.AddSmartArt(layout, 50f, 50f, 860f, 380f);
+                    dynamic nodes = sa.SmartArt.AllNodes;
+                    string[] texts = ["Idea", "Plan", "Execute", "Review", "Improve"];
+                    for (int ni = 1; ni <= Math.Min((int)nodes.Count, texts.Length); ni++)
+                        try { nodes.Item(ni).TextFrame2.TextRange.Text = texts[ni - 1]; } catch { }
+                }
+                catch (Exception ex) { Console.Write($"(Cycle SmartArt: {ex.Message}) "); }
+            }
+
+            // ── Slide 4: List ──────────────────────────────────────────────────
+            {
+                dynamic slide = pres.Slides.Add(4, PpLayoutBlank);
+                dynamic tb = slide.Shapes.AddTextbox(1, 20f, 6f, 920f, 30f);
+                tb.TextFrame.TextRange.Text = "SmartArt Live — List";
+                tb.TextFrame.TextRange.Font.Size = 18; tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+                try
+                {
+                    dynamic layout = FindLayout("List");
+                    dynamic sa = slide.Shapes.AddSmartArt(layout, 50f, 50f, 860f, 380f);
+                    dynamic nodes = sa.SmartArt.AllNodes;
+                    string[] texts = ["Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4"];
+                    for (int ni = 1; ni <= Math.Min((int)nodes.Count, texts.Length); ni++)
+                        try { nodes.Item(ni).TextFrame2.TextRange.Text = texts[ni - 1]; } catch { }
+                }
+                catch (Exception ex) { Console.Write($"(List SmartArt: {ex.Message}) "); }
+            }
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
         }
     }
 
