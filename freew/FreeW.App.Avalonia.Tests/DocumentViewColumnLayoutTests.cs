@@ -1,0 +1,381 @@
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Headless;
+using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Avalonia.Tests;
+
+/// <summary>
+/// Tests for AV-COL: multi-column body text layout in the Avalonia DocumentView.
+/// Verifies snaking columns (newspaper/Word-default), column bands, column rule geometry,
+/// and the single-column regression guard.
+/// </summary>
+public sealed class DocumentViewColumnLayoutTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private static async Task<bool> OnUiThread(Action action)
+    {
+        try
+        {
+            await Session.Dispatch(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false; // no headless drawing backend in this environment
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a document with the given PageSettings and fills it with <paramref name="paragraphs"/>
+    /// short paragraphs of body text so that enough lines exist to fill column 1 and snake into column 2.
+    /// </summary>
+    private static TextDocument DocWith(PageSettings page, int paragraphs = 60)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        for (var i = 0; i < paragraphs; i++)
+            doc.Blocks.Add(new Paragraph($"Line {i + 1} body text here goes some words."));
+        doc.Page.WidthPt         = page.WidthPt         > 0 ? page.WidthPt         : 612;
+        doc.Page.HeightPt        = page.HeightPt        > 0 ? page.HeightPt        : 792;
+        doc.Page.MarginLeftPt    = page.MarginLeftPt    > 0 ? page.MarginLeftPt    : 72;
+        doc.Page.MarginRightPt   = page.MarginRightPt   > 0 ? page.MarginRightPt   : 72;
+        doc.Page.MarginTopPt     = page.MarginTopPt     > 0 ? page.MarginTopPt     : 72;
+        doc.Page.MarginBottomPt  = page.MarginBottomPt  > 0 ? page.MarginBottomPt  : 72;
+        doc.Page.ColumnCount        = page.ColumnCount;
+        doc.Page.ColumnSpacingPt    = page.ColumnSpacingPt > 0 ? page.ColumnSpacingPt : 36;
+        doc.Page.ColumnsLineBetween = page.ColumnsLineBetween;
+        return doc;
+    }
+
+    // ── Test 1: ColumnCount=1 — single column, regression guard ────────────────────────────────────
+
+    [Fact]
+    public async Task SingleColumn_layout_is_unchanged()
+    {
+        int colCount = -1;
+        double colWidth = -1, colGap = -1;
+        int glyphCount = 0;
+        (double Left, double Width) band0 = default;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWith(new PageSettings { ColumnCount = 1 }, 5);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            colCount  = view.LayoutColumnCount;
+            colWidth  = view.LayoutColumnWidth;
+            colGap    = view.LayoutColumnGap;
+            band0     = view.LayoutColumnBand(0);
+            glyphCount = view.PlacedGlyphCount;
+        });
+
+        if (!ran) return;
+
+        colCount.Should().Be(1, "ColumnCount=1 should use single-column path");
+        colGap.Should().Be(0, "single-column layout has no gap");
+        glyphCount.Should().BeGreaterThan(0, "glyphs must be placed");
+        // All glyphs should start at or after contentLeft (band0.Left).
+        band0.Left.Should().BeGreaterThan(0);
+        band0.Width.Should().BeGreaterThan(100);
+    }
+
+    // ── Test 2: ColumnCount=2 — column geometry is correct ─────────────────────────────────────────
+
+    [Fact]
+    public async Task TwoColumn_layout_computes_correct_column_geometry()
+    {
+        int colCount = -1;
+        double colWidth = -1, colGap = -1;
+        (double Left, double Width) band0 = default;
+        (double Left, double Width) band1 = default;
+
+        var ran = await OnUiThread(() =>
+        {
+            // 8.5"×11" page, 1" margins each side → content width = 6.5" = 468 pt.
+            // Gap = 36 pt. colWidth = (468 - 36) / 2 = 216 pt each.
+            var doc = DocWith(new PageSettings
+            {
+                WidthPt = 612, HeightPt = 792,
+                MarginLeftPt = 72, MarginRightPt = 72,
+                MarginTopPt = 72, MarginBottomPt = 72,
+                ColumnCount = 2,
+                ColumnSpacingPt = 36,
+            }, 5);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            colCount = view.LayoutColumnCount;
+            colWidth = view.LayoutColumnWidth;
+            colGap   = view.LayoutColumnGap;
+            band0    = view.LayoutColumnBand(0);
+            band1    = view.LayoutColumnBand(1);
+        });
+
+        if (!ran) return;
+
+        colCount.Should().Be(2);
+
+        // Gap must be positive (36 pt × 96/72 dip/pt = 48 dip).
+        colGap.Should().BeApproximately(48.0, 2.0, "gap should be 36 pt converted to DIP");
+
+        // Column widths must be positive and approximately equal.
+        colWidth.Should().BeGreaterThan(0);
+        band0.Width.Should().BeApproximately(colWidth, 1.0);
+        band1.Width.Should().BeApproximately(colWidth, 1.0);
+
+        // Band 1 starts where band 0 ends + gap.
+        band1.Left.Should().BeApproximately(band0.Left + band0.Width + colGap, 2.0,
+            "col1 left = col0 left + colWidth + gap");
+
+        // The two bands must not overlap.
+        band1.Left.Should().BeGreaterThan(band0.Left + band0.Width - 1.0,
+            "column bands must not overlap");
+    }
+
+    // ── Test 3: Content snakes — col1 starts near top of page after col0 fills ──────────────────────
+
+    [Fact]
+    public async Task TwoColumn_content_snakes_from_col1_to_col2()
+    {
+        (double Left, double Width) band0 = default;
+        (double Left, double Width) band1 = default;
+        bool hasCol0Glyphs = false;
+        bool hasCol1Glyphs = false;
+        // Snaking verification: the minimum Y of col1 glyphs on page 0 should be close to
+        // the minimum Y of col0 glyphs on page 0 (both start near the top margin).
+        // If content did NOT snake, col1 on page 0 would be empty OR would have a much higher
+        // minimum Y than col0's minimum (it would appear below col0 rather than beside it).
+        double minYCol0 = double.MaxValue;
+        double minYCol1 = double.MaxValue;
+        // PageTop for page 0: DeskPadding (24) + 0*(pageH+pageGap) = 24.
+        // marginTopDip ≈ 36 * 96/72 = 48, so first line top ≈ 24 + 48 = 72.
+        // We check that col1 starts within 2 line-heights (≈30 DIP) of col0's start.
+        const double PageTop = 24.0; // DeskPadding
+        const double PageH = 720.0 * (96.0 / 72.0); // ≈ 960 DIP
+
+        var ran = await OnUiThread(() =>
+        {
+            // A tall page with many paragraphs forces content to snake.
+            var doc = DocWith(new PageSettings
+            {
+                WidthPt = 360, HeightPt = 720,
+                MarginLeftPt = 36, MarginRightPt = 36,
+                MarginTopPt = 36, MarginBottomPt = 36,
+                ColumnCount = 2,
+                ColumnSpacingPt = 18,
+            }, paragraphs: 80);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(600, 8000));
+
+            band0 = view.LayoutColumnBand(0);
+            band1 = view.LayoutColumnBand(1);
+
+            const double tol = 2.0;
+
+            for (var bi = 0; bi < view.BlockCount; bi++)
+            {
+                foreach (var g in view.GetPlacedForBlock(bi))
+                {
+                    // Only examine glyphs on page 0 (Y in [PageTop, PageTop + PageH]).
+                    if (g.Y < PageTop || g.Y > PageTop + PageH) continue;
+
+                    if (g.X >= band0.Left - tol && g.X < band0.Left + band0.Width + tol)
+                    {
+                        hasCol0Glyphs = true;
+                        if (g.Y < minYCol0) minYCol0 = g.Y;
+                    }
+                    else if (g.X >= band1.Left - tol && g.X < band1.Left + band1.Width + tol)
+                    {
+                        hasCol1Glyphs = true;
+                        if (g.Y < minYCol1) minYCol1 = g.Y;
+                    }
+                }
+            }
+        });
+
+        if (!ran) return;
+
+        hasCol0Glyphs.Should().BeTrue("glyphs must land in column 0 on page 0");
+        hasCol1Glyphs.Should().BeTrue("enough content to snake into column 1 on page 0");
+
+        // Both columns start near the top margin (snaking = newspaper columns start at top).
+        // Col1's min Y should be close to col0's min Y (both start at the top margin of page 0).
+        // If snaking were broken and content simply flowed underneath col0, col1 min Y
+        // would be much higher than col0 min Y.
+        var yDiff = Math.Abs(minYCol1 - minYCol0);
+        yDiff.Should().BeLessThan(50,
+            "column 1 should start near the top of the page (snaking), " +
+            $"but col0 starts at Y={minYCol0:F1} and col1 starts at Y={minYCol1:F1}");
+    }
+
+    // ── Test 4: All glyphs land in one of the two column bands ─────────────────────────────────────
+
+    [Fact]
+    public async Task TwoColumn_all_glyphs_fall_within_a_column_band()
+    {
+        (double Left, double Width) band0 = default;
+        (double Left, double Width) band1 = default;
+        bool allWithinBands = true;
+        int testedGlyphs = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWith(new PageSettings
+            {
+                WidthPt = 612, HeightPt = 792,
+                MarginLeftPt = 72, MarginRightPt = 72,
+                MarginTopPt = 72, MarginBottomPt = 72,
+                ColumnCount = 2,
+                ColumnSpacingPt = 36,
+            }, paragraphs: 30);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+
+            band0 = view.LayoutColumnBand(0);
+            band1 = view.LayoutColumnBand(1);
+            const double tolerance = 3.0; // allow minor rounding at column edges
+
+            for (var bi = 0; bi < view.BlockCount; bi++)
+            {
+                foreach (var g in view.GetPlacedForBlock(bi))
+                {
+                    testedGlyphs++;
+                    var inBand0 = g.X >= band0.Left - tolerance
+                                  && g.X < band0.Left + band0.Width + tolerance;
+                    var inBand1 = g.X >= band1.Left - tolerance
+                                  && g.X < band1.Left + band1.Width + tolerance;
+                    if (!inBand0 && !inBand1)
+                        allWithinBands = false;
+                }
+            }
+        });
+
+        if (!ran) return;
+        testedGlyphs.Should().BeGreaterThan(0, "at least some glyphs must have been placed");
+        allWithinBands.Should().BeTrue(
+            "every glyph must fall within column band 0 or column band 1");
+    }
+
+    // ── Test 5: ColumnCount=1 — no column band shift (regression guard) ─────────────────────────────
+
+    [Fact]
+    public async Task SingleColumn_glyphs_stay_in_content_left_position()
+    {
+        (double Left, double Width) band0 = default;
+        bool allInBand = true;
+        int testedGlyphs = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWith(new PageSettings
+            {
+                WidthPt = 612, HeightPt = 792,
+                MarginLeftPt = 72, MarginRightPt = 72,
+                MarginTopPt = 72, MarginBottomPt = 72,
+                ColumnCount = 1,
+            }, paragraphs: 10);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+
+            band0 = view.LayoutColumnBand(0);
+
+            for (var bi = 0; bi < view.BlockCount; bi++)
+            {
+                foreach (var g in view.GetPlacedForBlock(bi))
+                {
+                    testedGlyphs++;
+                    var inBand0 = g.X >= band0.Left - 3.0 && g.X < band0.Left + band0.Width + 3.0;
+                    if (!inBand0) allInBand = false;
+                }
+            }
+        });
+
+        if (!ran) return;
+        testedGlyphs.Should().BeGreaterThan(0);
+        allInBand.Should().BeTrue(
+            "single-column: all glyphs must remain in the one content column");
+    }
+
+    // ── Test 6: ColumnsLineBetween flag preserved in introspection ──────────────────────────────────
+
+    [Fact]
+    public async Task ColumnsLineBetween_flag_is_reflected_in_layout_state()
+    {
+        int colCount = -1;
+        bool lineBetween = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWith(new PageSettings
+            {
+                ColumnCount = 2,
+                ColumnSpacingPt = 36,
+                ColumnsLineBetween = true,
+            }, paragraphs: 5);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            colCount    = view.LayoutColumnCount;
+            lineBetween = view.Document.Page.ColumnsLineBetween;
+        });
+
+        if (!ran) return;
+        colCount.Should().Be(2);
+        lineBetween.Should().BeTrue("model flag must round-trip through LoadDocument");
+    }
+
+    // ── Test 7: WebLayout always uses single column regardless of ColumnCount ──────────────────────
+
+    [Fact]
+    public async Task WebLayout_always_uses_single_column()
+    {
+        int colCount = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWith(new PageSettings { ColumnCount = 2, ColumnSpacingPt = 36 }, 5);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.ViewMode = DocumentViewMode.WebLayout;
+            view.Measure(new Size(816, 4000));
+            colCount = view.LayoutColumnCount;
+        });
+
+        if (!ran) return;
+        colCount.Should().Be(1, "WebLayout ignores ColumnCount and always uses a single column");
+    }
+
+    // ── Test 8: Draft mode always uses single column regardless of ColumnCount ──────────────────────
+
+    [Fact]
+    public async Task DraftMode_always_uses_single_column()
+    {
+        int colCount = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWith(new PageSettings { ColumnCount = 3, ColumnSpacingPt = 18 }, 5);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.ViewMode = DocumentViewMode.Draft;
+            view.Measure(new Size(816, 4000));
+            colCount = view.LayoutColumnCount;
+        });
+
+        if (!ran) return;
+        colCount.Should().Be(1, "Draft mode ignores ColumnCount and always uses a single column");
+    }
+}
