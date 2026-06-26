@@ -55,7 +55,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             removeUnsupportedConditionalFormatting,
             removeAllConditionalFormatting,
             hints);
-        if (!requirements.RequiresAny)
+        var hasRangeHyperlinks = HasRangeHyperlinkRefs(sourcePackage);
+        if (!requirements.RequiresAny && !hasRangeHyperlinks)
         {
             sourcePackage.Position = 0;
             return sourcePackage;
@@ -86,6 +87,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         sanitized.Position = 0;
         using (var archive = new ZipArchive(sanitized, ZipArchiveMode.Update, leaveOpen: true))
         {
+            if (hasRangeHyperlinks)
+                StripRangeHyperlinkRefs(archive);
             if (requirements.HasPivotPackageMetadata)
                 XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
             if (requirements.HasChartExChartParts)
@@ -563,6 +566,56 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             XlsxPackagePath.ResolveRelationshipTarget("", target),
             partName,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasRangeHyperlinkRefs(MemoryStream sourcePackage)
+    {
+        sourcePackage.Position = 0;
+        try
+        {
+            using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+            foreach (var entry in archive.Entries)
+            {
+                if (!XlsxPackagePath.IsWorksheetXmlEntry(entry))
+                    continue;
+
+                string text;
+                using (var stream = entry.Open())
+                using (var reader = new StreamReader(stream))
+                {
+                    text = reader.ReadToEnd();
+                }
+
+                // Cheap gate: only worksheets that actually declare hyperlinks are parsed.
+                // Prefix-agnostic ("<hyperlink" or "<x:hyperlink") and case-insensitive.
+                if (!text.Contains("hyperlink", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var root = XDocument.Parse(text).Root;
+                if (root is not null && XlsxWorksheetHyperlinkNormalizer.ContainsRangeHyperlinkRef(root))
+                    return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            sourcePackage.Position = 0;
+        }
+
+        return false;
+    }
+
+    private static void StripRangeHyperlinkRefs(ZipArchive archive)
+    {
+        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
+            if (worksheetXml.Root is { } root && XlsxWorksheetHyperlinkNormalizer.StripRangeHyperlinkRefs(root))
+                XlsxPackageXmlEditor.ReplaceXml(archive, entry.FullName, worksheetXml);
+        }
     }
 
     private readonly record struct SanitizationRequirements(

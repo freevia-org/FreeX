@@ -126,6 +126,57 @@ internal static class FreeWRibbon
                 new RibbonCommandId(FreeWAvaloniaRibbonCommands.StyleCommandId(d.Id))))
             .ToArray());
 
+    /// <summary>
+    /// AV-CHARTTAB: Chart Design &gt; Change Chart Type dropdown — one item per <see cref="ChartKind"/>.
+    /// Command ids are <c>freew.chart-type-&lt;kind&gt;</c> (lower-case), matching the WPF host.
+    /// </summary>
+    private static RibbonMenu BuildChartTypeMenu() =>
+        new(Enum.GetValues<ChartKind>()
+            .Select(k => new RibbonMenuItem(k.ToString(),
+                new RibbonCommandId($"freew.chart-type-{k.ToString().ToLowerInvariant()}")))
+            .ToArray());
+
+    /// <summary>
+    /// AV-CHARTTAB: Chart Design &gt; Chart Styles dropdown — one item per <see cref="ChartStyle.Catalog"/>
+    /// entry. Command ids are <c>freew.chart-style-&lt;id&gt;</c>, matching the WPF host.
+    /// </summary>
+    private static RibbonMenu BuildChartStyleMenu() =>
+        new(ChartStyle.Catalog
+            .Select(s => new RibbonMenuItem(s.Name, new RibbonCommandId($"freew.chart-style-{s.Id}")))
+            .ToArray());
+
+    /// <summary>
+    /// AV-CHARTTAB: Chart Design &gt; Change Colors dropdown — one item per <see cref="ChartColorScheme.Catalog"/>
+    /// entry. Command ids are <c>freew.chart-colors-&lt;id&gt;</c>.
+    /// </summary>
+    private static RibbonMenu BuildChartColorsMenu() =>
+        new(ChartColorScheme.Catalog
+            .Select(s => new RibbonMenuItem(s.Name, new RibbonCommandId($"freew.chart-colors-{s.Id}")))
+            .ToArray());
+
+    /// <summary>
+    /// AV-CHARTTAB: SmartArt Design &gt; Layouts dropdown. Maps the four Word layout families to the model's
+    /// <see cref="SmartArtKind"/> (Cycle reuses Process — the closest flat-sequence kind in the model).
+    /// Command ids are <c>freew.smartart-layout-&lt;name&gt;</c>.
+    /// </summary>
+    private static RibbonMenu BuildSmartArtLayoutMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("List",      new RibbonCommandId("freew.smartart-layout-list")),
+            new("Process",   new RibbonCommandId("freew.smartart-layout-process")),
+            new("Cycle",     new RibbonCommandId("freew.smartart-layout-cycle")),
+            new("Hierarchy", new RibbonCommandId("freew.smartart-layout-hierarchy")),
+        });
+
+    /// <summary>
+    /// AV-CHARTTAB: SmartArt Design &gt; Change Colors dropdown — reuses the chart colour-scheme catalog
+    /// (the same six-colour palettes). Command ids are <c>freew.smartart-colors-&lt;id&gt;</c>.
+    /// </summary>
+    private static RibbonMenu BuildSmartArtColorsMenu() =>
+        new(ChartColorScheme.Catalog
+            .Select(s => new RibbonMenuItem(s.Name, new RibbonCommandId($"freew.smartart-colors-{s.Id}")))
+            .ToArray());
+
     /// <summary>AV-INSERT: Insert &gt; Symbol palette — common special characters.</summary>
     private static RibbonMenu BuildSymbolMenu() =>
         new(FreeWAvaloniaRibbonCommands.Symbols
@@ -259,14 +310,27 @@ internal static class FreeWRibbon
                 });
                 tab.Group("show", "Show", null, 100, g =>
                 {
+                    // AV-VIEW: layout gridlines + ruler toggles (DocumentView render chrome).
+                    g.Toggle("freew.view-ruler",        "Ruler");
+                    g.Toggle("freew.view-gridlines",    "Gridlines");
                     g.Toggle("freew.navigationpane",    "Navigation Pane");
+                    // AV-VIEW: surface the Reviewing Pane toggle on View as well (also on Review tab).
+                    g.Toggle("freew.reviewingpane",     "Reviewing Pane");
                     g.Toggle("freew.reveal-formatting", "Reveal Formatting");
                 });
                 tab.Group("zoom", "Zoom", null, 90, g =>
                 {
+                    // AV-VIEW: full Zoom dialog (presets + custom %) alongside the quick controls.
+                    g.Button("freew.zoom-dialog", "Zoom");
                     g.Button("freew.zoom-in",  "Zoom In");
                     g.Button("freew.zoom-out", "Zoom Out");
                     g.Button("freew.zoom-100", "100%");
+                });
+                // AV-VIEW: Window group — new window (second view on the same doc) + split.
+                tab.Group("window", "Window", null, 80, g =>
+                {
+                    g.Button("freew.new-window", "New Window");
+                    g.Toggle("freew.split",      "Split");
                 });
             })
             .Tab("review", "Review", "R", tab =>
@@ -425,6 +489,65 @@ internal static class FreeWRibbon
                         g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
                     });
                 })
+            // ── AV-CHARTTAB: Chart Design contextual tab (shown when a floating CHART is selected) ──
+            .ContextualTab("chart-design", "Chart Design",
+                new RibbonTabContext(FloatingRibbonContextSource.ChartContextKey, "Chart Tools", RibbonContextColor.Green),
+                tab =>
+                {
+                    tab.Group("chart-type", "Type", null, 100, g =>
+                    {
+                        g.Dropdown("freew.chart-type", "Change Chart Type", BuildChartTypeMenu());
+                    });
+                    tab.Group("chart-styles", "Chart Styles", null, 90, g =>
+                    {
+                        g.Dropdown("freew.chart-style",  "Chart Styles",  BuildChartStyleMenu());
+                        g.Dropdown("freew.chart-colors", "Change Colors", BuildChartColorsMenu());
+                    });
+                })
+            // ── AV-CHARTTAB: Chart Format contextual tab — shared Arrange/Size (reuse shape commands) ──
+            .ContextualTab("chart-format", "Chart Format",
+                new RibbonTabContext(FloatingRibbonContextSource.ChartContextKey, "Chart Tools", RibbonContextColor.Green),
+                tab =>
+                {
+                    tab.Group("chart-arrange", "Arrange", null, 100, g =>
+                    {
+                        g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
+                        g.Button("freew.shape-bring-to-front", "Bring to Front");
+                        g.Button("freew.shape-send-to-back",   "Send to Back");
+                        g.Button("freew.shape-bring-forward",  "Bring Forward");
+                        g.Button("freew.shape-send-backward",  "Send Backward");
+                    });
+                    tab.Group("chart-size", "Size", null, 90, g =>
+                    {
+                        g.ComboBox("freew.shape-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
+                        g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
+                    });
+                })
+            // ── AV-CHARTTAB: SmartArt Design contextual tab (shown when a floating SMARTART is selected) ──
+            .ContextualTab("smartart-design", "SmartArt Design",
+                new RibbonTabContext(FloatingRibbonContextSource.SmartArtContextKey, "SmartArt Tools", RibbonContextColor.Blue),
+                tab =>
+                {
+                    tab.Group("smartart-layouts", "Layouts", null, 100, g =>
+                    {
+                        g.Dropdown("freew.smartart-layout", "Layouts", BuildSmartArtLayoutMenu());
+                    });
+                    tab.Group("smartart-styles", "SmartArt Styles", null, 90, g =>
+                    {
+                        g.Dropdown("freew.smartart-colors", "Change Colors", BuildSmartArtColorsMenu());
+                    });
+                    tab.Group("smartart-arrange", "Arrange", null, 80, g =>
+                    {
+                        g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
+                        g.Button("freew.shape-bring-to-front", "Bring to Front");
+                        g.Button("freew.shape-send-to-back",   "Send to Back");
+                    });
+                    tab.Group("smartart-size", "Size", null, 70, g =>
+                    {
+                        g.ComboBox("freew.shape-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
+                        g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
+                    });
+                })
             .Build();
 
     /// <summary>
@@ -474,7 +597,13 @@ internal sealed record RibbonHostCallbacks(
     /// Adjust zoom. Pass <paramref name="absolute"/> to set zoom to that scale; pass
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
     /// </summary>
-    Action<double?, double> ApplyZoom);
+    Action<double?, double> ApplyZoom,
+    /// <summary>AV-VIEW: Opens the Zoom dialog (modal); applies the chosen preset/custom zoom on OK.</summary>
+    Action? OpenZoomDialog = null,
+    /// <summary>AV-VIEW: Opens a second window on the same document (or status note if unsupported).</summary>
+    Action? NewWindow = null,
+    /// <summary>AV-VIEW: Toggle the split view (or status note if unsupported / deferred).</summary>
+    Action? ToggleSplit = null);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {

@@ -13,10 +13,12 @@ namespace FreeW.App.Avalonia.Ribbon;
 /// The selected float's <c>Kind</c> picks which context activates:
 /// <list type="bullet">
 ///   <item><c>"Image"</c> → <see cref="PictureContextKey"/> (Picture Format tab, orange).</item>
-///   <item>everything else (<c>Shape</c>, <c>Chart</c>, <c>WordArt</c>, <c>SmartArt</c>, <c>Group</c>)
+///   <item><c>"Chart"</c> → <see cref="ChartContextKey"/> (Chart Design + Chart Format tabs, green).</item>
+///   <item><c>"SmartArt"</c> → <see cref="SmartArtContextKey"/> (SmartArt Design tab, blue).</item>
+///   <item>everything else (<c>Shape</c>, <c>WordArt</c>, <c>Group</c>)
 ///         → <see cref="DrawingContextKey"/> (Drawing Format tab, purple).</item>
 /// </list>
-/// Exactly one of the two keys is active at a time (a single float is selected); both clear on
+/// Exactly one of the keys is active at a time (a single float is selected); all clear on
 /// deselect. This mirrors <see cref="TableRibbonContextSource"/> exactly.
 /// </para>
 /// </summary>
@@ -25,8 +27,14 @@ internal sealed class FloatingRibbonContextSource : IRibbonContextSource
     /// <summary>Context activation key for the Picture Format tab (selected float is an image).</summary>
     internal const string PictureContextKey = "picture";
 
-    /// <summary>Context activation key for the Drawing Format tab (selected float is a shape/chart/etc.).</summary>
+    /// <summary>Context activation key for the Drawing Format tab (selected float is a shape/WordArt/group).</summary>
     internal const string DrawingContextKey = "drawing";
+
+    /// <summary>AV-CHARTTAB: Context activation key for the Chart Design + Chart Format tabs (selected float is a chart).</summary>
+    internal const string ChartContextKey = "chart";
+
+    /// <summary>AV-CHARTTAB: Context activation key for the SmartArt Design tab (selected float is a SmartArt diagram).</summary>
+    internal const string SmartArtContextKey = "smartart";
 
     private readonly DocumentView _editor;
     private RibbonContextState _current = RibbonContextState.None;
@@ -64,13 +72,20 @@ internal sealed class FloatingRibbonContextSource : IRibbonContextSource
 
     /// <summary>
     /// Returns the activation key for the current selection: <see cref="PictureContextKey"/> for an
-    /// image, <see cref="DrawingContextKey"/> for any other floating kind, or <c>null</c> when nothing
-    /// is selected.
+    /// image, <see cref="ChartContextKey"/> for a chart, <see cref="SmartArtContextKey"/> for a SmartArt
+    /// diagram, <see cref="DrawingContextKey"/> for any other floating kind (shape/WordArt/group), or
+    /// <c>null</c> when nothing is selected.
     /// </summary>
     private string? KeyForSelection()
     {
         if (_editor.SelectedFloatingInfo is not { } sel)
             return null;
-        return sel.Kind == "Image" ? PictureContextKey : DrawingContextKey;
+        return sel.Kind switch
+        {
+            "Image"    => PictureContextKey,
+            "Chart"    => ChartContextKey,
+            "SmartArt" => SmartArtContextKey,
+            _          => DrawingContextKey,
+        };
     }
 }

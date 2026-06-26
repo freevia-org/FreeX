@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 using static FreeX.App.Presentation.Tests.Charts.ChartLayoutTestData;
+using System.Linq;
 
 namespace FreeX.App.Presentation.Tests.Charts;
 
@@ -230,5 +231,175 @@ public sealed class ColumnBarLayoutTests
             bar3d.Series[0].Bars[i].Rect.Top.Should().BeApproximately(bar2d.Series[0].Bars[i].Rect.Top, 1e-6);
             bar3d.Series[0].Bars[i].Rect.Bottom.Should().BeApproximately(bar2d.Series[0].Bars[i].Rect.Bottom, 1e-6);
         }
+    }
+
+    // ── Clustered multi-series offset tests (CD1) ─────────────────────────────
+
+    [Fact]
+    public void ThreeSeries_column_chart_produces_disjoint_x_ranges_per_category()
+    {
+        // CD1: 3-series clustered column chart must lay out 3 side-by-side bars per category.
+        // Each series' bars must occupy a disjoint x-range within the same category slot.
+        var request = Request(
+            Chart(ChartType.Column),
+            ["Cat1", "Cat2"],
+            [
+                Series(0, "S0", 10, 20),
+                Series(1, "S1", 30, 40),
+                Series(2, "S2", 50, 60),
+            ]);
+
+        var layout = ChartLayoutEngine.Layout(request);
+
+        layout.Series.Should().HaveCount(3);
+
+        // For category 0: collect the [left, right] x-ranges of the three bars.
+        var bar0 = layout.Series[0].Bars[0].Rect;
+        var bar1 = layout.Series[1].Bars[0].Rect;
+        var bar2 = layout.Series[2].Bars[0].Rect;
+
+        // All bars must have positive width.
+        bar0.Width.Should().BePositive("series 0 bar must have positive width");
+        bar1.Width.Should().BePositive("series 1 bar must have positive width");
+        bar2.Width.Should().BePositive("series 2 bar must have positive width");
+
+        // The three bars must be disjoint — each must end before the next begins
+        // (no overlap). Ordering: S0 < S1 < S2 (left to right within the category).
+        bar0.Right.Should().BeLessThanOrEqualTo(bar1.Left + 1e-9,
+            "series 0 bar must end before series 1 bar starts");
+        bar1.Right.Should().BeLessThanOrEqualTo(bar2.Left + 1e-9,
+            "series 1 bar must end before series 2 bar starts");
+
+        // Same assertions for category 1.
+        var b0c1 = layout.Series[0].Bars[1].Rect;
+        var b1c1 = layout.Series[1].Bars[1].Rect;
+        var b2c1 = layout.Series[2].Bars[1].Rect;
+        b0c1.Right.Should().BeLessThanOrEqualTo(b1c1.Left + 1e-9);
+        b1c1.Right.Should().BeLessThanOrEqualTo(b2c1.Left + 1e-9);
+    }
+
+    [Fact]
+    public void ThreeSeries_column_bars_fill_the_same_total_slot_width_as_single_series()
+    {
+        // The 3 clustered bars together must span the same total width as the single bar would,
+        // i.e. each sub-slot is exactly slot/3 wide and they tile perfectly.
+        var plot = new PlotRect(0, 0, 600, 300);
+        var singleRequest = Request(Chart(ChartType.Column), ["A"], [Series(0, "S0", 10)], plot);
+        var multiRequest = Request(Chart(ChartType.Column), ["A"],
+            [Series(0, "S0", 10), Series(1, "S1", 20), Series(2, "S2", 30)], plot);
+
+        var singleLayout = ChartLayoutEngine.Layout(singleRequest);
+        var multiLayout  = ChartLayoutEngine.Layout(multiRequest);
+
+        var singleBar = singleLayout.Series[0].Bars[0].Rect;
+        var multiLeft  = multiLayout.Series[0].Bars[0].Rect.Left;
+        var multiRight = multiLayout.Series[2].Bars[0].Rect.Right;
+
+        multiLeft.Should().BeApproximately(singleBar.Left, 1e-6,
+            "leftmost sub-slot must align with the full slot's left edge");
+        multiRight.Should().BeApproximately(singleBar.Right, 1e-6,
+            "rightmost sub-slot must align with the full slot's right edge");
+    }
+
+    [Fact]
+    public void SingleSeries_column_chart_fills_full_slot_no_regression()
+    {
+        // CD1 regression: a single-series chart must still use the full category slot
+        // (same geometry as before the fix). clusterCount=1 → ordinal=0 → (-half, +half).
+        var plot = new PlotRect(0, 0, 300, 200);
+        var request = Request(Chart(ChartType.Column), ["A", "B", "C"],
+            [Series(0, "S1", 1, 2, 3)], plot);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        var catScale = layout.CategoryAxis!.Scale;
+        var firstBar = layout.Series[0].Bars[0];
+        // Default halfWidth=0.4 → slot is [-0.4, 0.4] relative to category 0.
+        firstBar.Rect.Left.Should().BeApproximately(catScale.Transform(-0.4), 1e-6,
+            "single-series bar must span the full default slot");
+        firstBar.Rect.Right.Should().BeApproximately(catScale.Transform(0.4), 1e-6);
+    }
+
+    [Fact]
+    public void StackedColumn_still_stacks_not_clusters()
+    {
+        // CD1 regression: stacked charts must NOT apply cluster offsets — they keep the full
+        // slot and stack values on top of each other, not side by side.
+        var request = Request(Chart(ChartType.StackedColumn), ["A"],
+            [Series(0, "S1", 10), Series(1, "S2", 20)]);
+        var layout = ChartLayoutEngine.Layout(request);
+
+        // Both series bars must cover the same x-range (stacked, not side by side).
+        var bar0 = layout.Series[0].Bars[0].Rect;
+        var bar1 = layout.Series[1].Bars[0].Rect;
+        bar0.Left.Should().BeApproximately(bar1.Left, 1e-6,
+            "stacked bars must share the same x-slot left edge");
+        bar0.Right.Should().BeApproximately(bar1.Right, 1e-6,
+            "stacked bars must share the same x-slot right edge");
+
+        // And they must not overlap in Y (stacked vertically).
+        bar1.Bottom.Should().BeApproximately(bar0.Top, 1e-6,
+            "stacked S2 must sit on top of S1 (no gap, no overlap)");
+    }
+
+    [Fact]
+    public void ThreeSeries_bar_chart_produces_disjoint_y_ranges_per_category()
+    {
+        // CD1: 3-series clustered bar chart must lay out 3 side-by-side horizontal bars
+        // per category. Each series' bars must occupy a disjoint y-range.
+        var request = Request(
+            Chart(ChartType.Bar),
+            ["Cat1", "Cat2"],
+            [
+                Series(0, "S0", 10, 20),
+                Series(1, "S1", 30, 40),
+                Series(2, "S2", 50, 60),
+            ]);
+
+        var layout = ChartLayoutEngine.Layout(request);
+
+        layout.Series.Should().HaveCount(3);
+
+        // For category 0: y-ranges must be disjoint (bars are horizontal, so y is the category axis).
+        // CategoryAxis is on the Left (AxisSide.Left), so increasing y in pixel = lower category index.
+        // The layout uses y0=Transform(i+left), y1=Transform(i+right); FromCorners normalises so
+        // Top < Bottom. We just need that no two bars' y-ranges overlap.
+        var bar0 = layout.Series[0].Bars[0].Rect;
+        var bar1 = layout.Series[1].Bars[0].Rect;
+        var bar2 = layout.Series[2].Bars[0].Rect;
+
+        bar0.Width.Should().BePositive();
+        bar1.Width.Should().BePositive();
+        bar2.Width.Should().BePositive();
+
+        // Non-overlapping y-ranges: one must end before the other begins.
+        // We don't prescribe order here since axis direction depends on scale orientation.
+        var ranges = new[] { (bar0.Top, bar0.Bottom), (bar1.Top, bar1.Bottom), (bar2.Top, bar2.Bottom) }
+            .OrderBy(r => r.Item1).ToList();
+
+        for (var k = 1; k < ranges.Count; k++)
+            ranges[k - 1].Item2.Should().BeLessThanOrEqualTo(ranges[k].Item1 + 1e-9,
+                $"bar sub-slot {k - 1} must end before sub-slot {k} starts");
+    }
+
+    [Fact]
+    public void ThreeDColumn_three_series_produces_disjoint_x_ranges()
+    {
+        // 3-D column (multi-series, inherently clustered) must behave identically to 2D Column.
+        var request = Request(
+            Chart(ChartType.ThreeDColumn),
+            ["Q1", "Q2"],
+            [Series(0, "Revenue", 100, 120), Series(1, "Cost", 60, 80), Series(2, "Profit", 40, 40)]);
+
+        var layout = ChartLayoutEngine.Layout(request);
+
+        layout.Series.Should().HaveCount(3);
+        var bar0 = layout.Series[0].Bars[0].Rect;
+        var bar1 = layout.Series[1].Bars[0].Rect;
+        var bar2 = layout.Series[2].Bars[0].Rect;
+
+        bar0.Right.Should().BeLessThanOrEqualTo(bar1.Left + 1e-9,
+            "3-D column series 0 must end before series 1 starts");
+        bar1.Right.Should().BeLessThanOrEqualTo(bar2.Left + 1e-9,
+            "3-D column series 1 must end before series 2 starts");
     }
 }

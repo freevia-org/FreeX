@@ -170,6 +170,66 @@ internal static class XlsxWorksheetHyperlinkNormalizer
         return null;
     }
 
+    /// <summary>
+    /// True when any hyperlink under <paramref name="worksheetRoot"/> carries a whole-column (A:A)
+    /// or whole-row (3:3) range ref. ClosedXML materializes such refs across the entire column/row
+    /// when it loads the worksheet (~1M cells), so the load sanitizer must clamp them first.
+    /// </summary>
+    public static bool ContainsRangeHyperlinkRef(XElement worksheetRoot)
+    {
+        foreach (var hyperlinks in worksheetRoot.Elements(WorksheetNs + "hyperlinks"))
+        {
+            foreach (var hyperlink in hyperlinks.Elements(WorksheetNs + "hyperlink"))
+            {
+                if (IsRangeHyperlinkRef(hyperlink.Attribute("ref")?.Value))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Strips whole-column/row hyperlink elements from the ClosedXML-input copy of the worksheet so
+    /// ClosedXML never materializes them across the entire column/row (~1M cells). The model is
+    /// CellAddress-keyed and cannot represent a whole-column/row hyperlink anyway; the original refs
+    /// are retained verbatim via the source-package snapshot, so a load→save round-trip still emits
+    /// the unchanged whole-column/row ref. Returns true when anything changed.
+    /// </summary>
+    public static bool StripRangeHyperlinkRefs(XElement worksheetRoot)
+    {
+        var changed = false;
+        foreach (var hyperlinks in worksheetRoot.Elements(WorksheetNs + "hyperlinks").ToList())
+        {
+            foreach (var hyperlink in hyperlinks.Elements(WorksheetNs + "hyperlink").ToList())
+            {
+                if (IsRangeHyperlinkRef(hyperlink.Attribute("ref")?.Value))
+                {
+                    hyperlink.Remove();
+                    changed = true;
+                }
+            }
+
+            if (!hyperlinks.Elements(WorksheetNs + "hyperlink").Any())
+            {
+                hyperlinks.Remove();
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool IsRangeHyperlinkRef(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed.Contains(' ', StringComparison.Ordinal))
+            return false;
+
+        var parts = trimmed.Split(':');
+        return parts.Length == 2 && IsWholeColumnOrRowRef(parts[0], parts[1]);
+    }
+
     private static bool IsWholeColumnOrRowRef(string left, string right)
     {
         // Whole-column: both sides are a single column letter sequence with no digits (e.g. A, AA).

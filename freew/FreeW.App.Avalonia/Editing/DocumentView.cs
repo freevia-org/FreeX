@@ -45,6 +45,10 @@ public sealed class DocumentView : Control
     private const double PxPerPoint = 96.0 / 72.0;
     // Print-layout chrome: grey "desk" gap above (and below) the white page surface.
     private const double DeskPadding = 24;
+    // AV-VIEW: spacing (DIP) between layout-gridlines (Word draws a ~quarter-inch grid; 18pt ≈ 0.25in).
+    private const double GridlineStepDip = 18.0;
+    // AV-VIEW: height/width of the ruler strip drawn at the page top / left edge in Print Layout.
+    private const double RulerThicknessDip = 14.0;
     // Gap between consecutive page rectangles (grey desk visible between them).
     private const double PageGap = 20;
     // Minimum horizontal gap between the control edge and the page left/right edge.
@@ -73,6 +77,11 @@ public sealed class DocumentView : Control
 
     private DocumentViewMode _viewMode = DocumentViewMode.PrintLayout;
     private bool _showParagraphMarks;
+    // AV-VIEW: layout-gridlines overlay (faint grid behind text) + ruler strip (top horizontal +
+    // left vertical with tick marks and margin markers). Both are view-only chrome — they never
+    // affect layout, only the Render pass — so toggling them just invalidates the visual.
+    private bool _showGridlines;
+    private bool _showRuler;
 
     // Standard Word font-size ladder (pt).
     private static readonly double[] FontSizeLadder = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
@@ -134,6 +143,14 @@ public sealed class DocumentView : Control
     // under the pointer. Non-null only while a multi-cell selection is active.
     private (int TableBlock, int Row, int Col)? _cellBlockAnchor;
     private (int TableBlock, int Row, int Col)? _cellBlockFocus;
+
+    // ── AV-HFEDIT: in-region header/footer caret ──────────────────────────────────────────────────
+    // Non-null when the caret is inside a rendered header or footer region. Stores which section
+    // header/footer SLOT the caret is in (default/first/even header or footer), the paragraph index
+    // within that slot, and the character offset within that paragraph's literal model text.
+    // Mirrors the _cellCaret pattern but addresses the per-section HeaderFooter store instead of a
+    // table cell. When set, the body caret/selection state is suppressed (drawn separately).
+    private (HfTarget Target, int Offset)? _hfCaret;
 
     // ── AV-FLSEL: floating-object selection + placement edit ──────────────────────────────────────
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
@@ -235,6 +252,14 @@ public sealed class DocumentView : Control
     public event Action? ViewModeChanged;
 
     /// <summary>
+    /// AV-LINK: Raised when the user follows an <em>external</em> hyperlink (a web/file URL) — by Ctrl+Click
+    /// on the link, or via <see cref="FollowHyperlinkAtCaret"/>. The shell/MainWindow handles this to open the
+    /// URL with the OS shell (the control deliberately does not hard-code a browser). Internal links (to a
+    /// document bookmark) are not raised here — they are navigated in-place via <see cref="GoToBookmark"/>.
+    /// </summary>
+    public event Action<string>? HyperlinkActivated;
+
+    /// <summary>
     /// Gets or sets the view mode. Switching modes triggers a full re-layout and visual invalidation.
     /// <list type="bullet">
     ///   <item><see cref="DocumentViewMode.PrintLayout"/> — paginated, grey desk (default).</item>
@@ -302,6 +327,7 @@ public sealed class DocumentView : Control
         _selectionAnchor = null;
         _cellCaret = null; // AV-TBL: clear cell state on document load
         _cellAnchor = null;
+        _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _floatDragState   = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -460,6 +486,33 @@ public sealed class DocumentView : Control
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
     public string PlainText => _doc.PlainText;
 
+    /// <summary>
+    /// AV-LINK: Introspect the <em>resolved</em> render styling of the first laid-out glyph in the body
+    /// paragraph at <paramref name="block"/> whose paragraph-offset is <paramref name="offset"/> — the colour
+    /// + underline the render loop actually draws, after the hyperlink style is layered on. Returns null when
+    /// there is no such glyph. Exposed for tests so hyperlink styling can be verified without pixel capture.
+    /// </summary>
+    internal (string? ColorHex, bool Underline, bool IsHyperlink)? GetGlyphRenderStyle(int block, int offset)
+    {
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel || pc.Block != block || pc.Offset != offset || pc.IsCell)
+                continue;
+            var colorHex = pc.Fmt.ColorHex;
+            var underline = pc.Fmt.Underline;
+            if (pc.IsHyperlink)
+            {
+                colorHex = string.IsNullOrWhiteSpace(colorHex) ? HyperlinkColorHex : colorHex;
+                underline = true;
+            }
+            return (colorHex, underline, pc.IsHyperlink);
+        }
+        return null;
+    }
+
+    /// <summary>AV-LINK: the caret's current (Block, Offset) — exposed for navigation tests.</summary>
+    internal (int Block, int Offset) CaretPositionForTest => (_caret.Block, _caret.Offset);
+
     // ── AV-TBL: cell editing public surface ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -488,6 +541,468 @@ public sealed class DocumentView : Control
         _cellAnchor = _cellCaret;
         _caret = new DocPosition(tableBlockIndex, FindCellGlyphOffset(tableBlockIndex, row, col, paraIdx, offset));
         _selectionAnchor = _caret;
+        _hfCaret = null; // AV-HFEDIT: entering a cell exits any header/footer caret
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    // ── AV-HFEDIT: header/footer editing public surface ──────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the current header/footer caret address, or null when the caret is in body text / a cell.
+    /// Reports which section the caret is in, whether it is a footer (vs header), the slot, the paragraph
+    /// index within that slot, and the character offset within the paragraph's literal model text.
+    /// Used by tests and the ribbon to detect in-region header/footer editing and to drive an
+    /// "Edit Header"/"Edit Footer" command.
+    /// </summary>
+    public (int SectionIndex, bool IsFooter, string Slot, int ParaIdx, int Offset)? HeaderFooterCaretInfo =>
+        _hfCaret is { } hc
+            ? (hc.Target.SectionIndex, IsFooterSlot(hc.Target.Slot), hc.Target.Slot.ToString(), hc.Target.ParaIdx, hc.Offset)
+            : null;
+
+    /// <summary>True when the caret is currently inside an editable header or footer region.</summary>
+    public bool IsHeaderFooterCaretActive => _hfCaret is not null;
+
+    /// <summary>
+    /// Test entry point: hit-test a page-space point against the rendered header/footer regions and, when it
+    /// lands in one, place the H/F caret there. Returns true on a hit. Mirrors the pointer-press routing
+    /// without requiring a focused control or a real pointer event.
+    /// </summary>
+    internal bool HitTestHeaderFooterForTest(Point point)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        return TryHitTestHeaderFooter(point);
+    }
+
+    /// <summary>Test entry point: the current header/footer caret rectangle (page-space), or null when none/not laid out.</summary>
+    internal Rect? HfCaretRectForTest => TryGetHfCaretRect(out var r) ? r : null;
+
+    /// <summary>Test shim: invoke Backspace (routes into the H/F region when the H/F caret is active).</summary>
+    internal void BackspaceForTest() => Backspace();
+
+    /// <summary>Test shim: invoke forward-delete (routes into the H/F region when the H/F caret is active).</summary>
+    internal void DeleteForwardForTest() => DeleteForward();
+
+    /// <summary>Test shim: invoke a paragraph break / Enter (routes into the H/F region when the H/F caret is active).</summary>
+    internal void InsertParagraphBreakForTest() => InsertParagraphBreak();
+
+    /// <summary>Test shim: place the body caret at (block, offset), exiting any H/F caret (mirrors MoveCaretToBlock + H/F exit).</summary>
+    internal void MoveCaretToBlockForTest(int blockIdx, int offset)
+    {
+        _hfCaret = null;
+        MoveCaretToBlock(blockIdx, offset);
+    }
+
+    /// <summary>
+    /// Test shim: simulate a body click at the given page-space point — exits any H/F caret and routes the
+    /// caret to the body via the same hit-test the pointer handler uses.
+    /// </summary>
+    internal void HandleBodyClickForTest(Point point)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        // Mirror the pointer-press order: an H/F hit wins; otherwise a body hit exits the H/F caret.
+        if (_viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point))
+            return;
+        _hfCaret = null;
+        if (TryHitTest(point, out var pos))
+        {
+            _caret = pos;
+            _selectionAnchor = pos;
+        }
+        InvalidateVisual();
+    }
+
+    private static bool IsFooterSlot(HfSlot slot) =>
+        slot is HfSlot.Footer or HfSlot.FirstFooter or HfSlot.EvenFooter;
+
+    /// <summary>The literal-model text length (sum of run text lengths) of a header/footer paragraph.</summary>
+    private int HfParaLength(HfTarget target) => GetHfParagraph(target) is { } p ? HfModelPlainText(p).Length : 0;
+
+    /// <summary>Concatenates a header/footer paragraph's run text (literal model text, including field runs' cached text).</summary>
+    private static string HfModelPlainText(Paragraph para)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var run in para.Runs)
+            sb.Append(run.Text);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Programmatically place the caret inside the DEFAULT header or footer of the active (final) section
+    /// at <paramref name="paraIdx"/> + <paramref name="offset"/>. Triggers a layout pass if needed so the
+    /// header/footer region exists, ensures the targeted slot/paragraph exists (creating an empty paragraph
+    /// when the slot is currently null/empty), then sets <c>_hfCaret</c>. Exposed for tests and a future
+    /// "Edit Header"/"Edit Footer" ribbon command. First-page/odd-even variants are addressed via the
+    /// hit-test entry point (clicking the rendered region) rather than this default-slot helper.
+    /// </summary>
+    public void PlaceCaretInHeaderFooter(bool footer, int paraIdx = 0, int offset = 0)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        // Default slot on the document-level (final-section) store; create the slot + a paragraph if absent
+        // so the caret has a region to land in (mirrors Word's "click into empty header to start typing").
+        var store = _doc.FinalSectionHeadersFooters;
+        var slot = footer ? HfSlot.Footer : HfSlot.Header;
+        var hf = GetHfSlot(store, slot);
+        if (hf is null)
+        {
+            hf = new HeaderFooter();
+            if (footer) store.Footer = hf; else store.Header = hf;
+        }
+        if (hf.Paragraphs.Count == 0)
+            hf.Paragraphs.Add(new Paragraph());
+
+        var target = new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot,
+            Math.Clamp(paraIdx, 0, hf.Paragraphs.Count - 1));
+        // Set the caret first so HfCaretTargets returns true, THEN re-layout at the current width so the
+        // (possibly freshly-created/empty) band is built immediately and becomes hit-testable / drawable.
+        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        PlaceCaretInHeaderFooter(target, offset);
+        Relayout(width);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>
+    /// Core header/footer caret placement: clamps the offset to the paragraph's literal length, sets
+    /// <c>_hfCaret</c>, and clears body/cell caret state. Used by the public helper and the hit-test path.
+    /// </summary>
+    private void PlaceCaretInHeaderFooter(HfTarget target, int offset)
+    {
+        var len = HfParaLength(target);
+        offset = Math.Clamp(offset, 0, len);
+        _hfCaret = (target, offset);
+        // Suppress body + cell caret so only the H/F caret renders + receives edits.
+        _cellCaret = null;
+        _cellAnchor = null;
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        _selectionAnchor = null;
+        _selectedFloating = null;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>
+    /// Exit any header/footer caret and return the caret to the body. No-op when not in a header/footer.
+    /// Triggered by Esc or by clicking back into the document body.
+    /// </summary>
+    public void ExitHeaderFooterCaret()
+    {
+        if (_hfCaret is null)
+            return;
+        _hfCaret = null;
+        ClampCaret();
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>
+    /// Hit-test a page-space point against the rendered header/footer regions. When the point lands in an
+    /// editable header/footer line, places the H/F caret at the nearest character offset and returns true.
+    /// Mirrors the table-cell entry point: a click inside the region routes the caret into that region.
+    /// </summary>
+    private bool TryHitTestHeaderFooter(Point point)
+    {
+        // Find the closest editable region line whose vertical band contains the click, preferring an exact
+        // Y-band hit. Each item's band is [Y, Y + LineHeight); X must be within the content area.
+        HfRenderItem? best = null;
+        var bestDist = double.MaxValue;
+        foreach (var item in _headerFooterItems)
+        {
+            if (item.Target is null)
+                continue;
+            var top = item.Y;
+            var bottom = item.Y + (item.LineHeight > 0 ? item.LineHeight : DefaultFontSizePt * PxPerPoint * 1.3);
+            // Vertical band test with a small slop so clicks just above/below the text still land.
+            var withinY = point.Y >= top - 2 && point.Y <= bottom + 2;
+            if (!withinY)
+                continue;
+            // Horizontal acceptance: anywhere across the content width of the page that owns this line.
+            var left = _contentLeft - 4;
+            var right = _contentLeft + _contentWidth + 4;
+            if (point.X < left || point.X > right)
+                continue;
+            // Prefer the item whose drawn text X-range is closest to the click (handles tab-split segments
+            // sharing a line). Distance is 0 when inside the segment's own [X, X+width] range.
+            var dist = HfItemHorizontalDistance(item, point.X);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = item;
+            }
+        }
+
+        if (best?.Target is not { } target)
+            return false;
+
+        var modelOffset = HfOffsetFromPoint(best, point.X);
+        PlaceCaretInHeaderFooter(target, modelOffset);
+        return true;
+    }
+
+    /// <summary>Horizontal distance from <paramref name="x"/> to a rendered H/F item's drawn text range (0 when inside).</summary>
+    private double HfItemHorizontalDistance(HfRenderItem item, double x)
+    {
+        var ft = Build(item.Text.Length == 0 ? " " : item.Text, item.Fmt);
+        var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth, ft.WidthIncludingTrailingWhitespace, isLast: true);
+        var x0 = item.X + alignOffset;
+        var x1 = x0 + ft.WidthIncludingTrailingWhitespace;
+        if (x < x0) return x0 - x;
+        if (x > x1) return x - x1;
+        return 0;
+    }
+
+    /// <summary>
+    /// Maps a click X to a model-text offset inside a rendered H/F item, via per-prefix width measurement.
+    /// Returns ModelStartOffset + (chars before X). Field-resolved text is treated by displayed-char count,
+    /// which is exact for literal segments and a good approximation when a field's resolved length differs.
+    /// </summary>
+    private int HfOffsetFromPoint(HfRenderItem item, double x)
+    {
+        var ft = Build(item.Text.Length == 0 ? " " : item.Text, item.Fmt);
+        var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth, ft.WidthIncludingTrailingWhitespace, isLast: true);
+        var x0 = item.X + alignOffset;
+        var local = x - x0;
+        if (local <= 0 || item.Text.Length == 0)
+            return item.ModelStartOffset;
+        // Walk character prefixes; pick the boundary nearest the click (left-edge of the char it falls before).
+        var best = item.Text.Length;
+        for (var i = 1; i <= item.Text.Length; i++)
+        {
+            var prefixW = Build(item.Text[..i], item.Fmt).WidthIncludingTrailingWhitespace;
+            var prevW = Build(item.Text[..(i - 1)], item.Fmt).WidthIncludingTrailingWhitespace;
+            var mid = (prefixW + prevW) / 2;
+            if (local < mid)
+            {
+                best = i - 1;
+                break;
+            }
+        }
+        return item.ModelStartOffset + best;
+    }
+
+    // ── AV-HFEDIT: header/footer in-region edit operations ────────────────────────────────────────
+
+    /// <summary>
+    /// One editable atom of a header/footer paragraph: a single literal character carrying its run
+    /// formatting, OR a whole atomic field run (kept intact across edits so view-only fields like the
+    /// page number are never split or corrupted). Literal atoms occupy one model offset each; a field
+    /// atom occupies <see cref="FieldRun"/>.Text.Length model offsets (its cached resolved text length).
+    /// </summary>
+    private readonly record struct HfAtom(char Ch, RunFormatting Fmt, Run? FieldRun)
+    {
+        public bool IsField => FieldRun is not null;
+        public int ModelLength => FieldRun?.Text.Length ?? 1;
+    }
+
+    /// <summary>Decomposes a header/footer paragraph into editable atoms (literal chars + atomic field runs).</summary>
+    private static List<HfAtom> HfAtoms(Paragraph para)
+    {
+        var atoms = new List<HfAtom>();
+        foreach (var run in para.Runs)
+        {
+            if (run.FieldKind != RunFieldKind.None || run.ComplexField is not null)
+            {
+                // Atomic field run — keep whole.
+                atoms.Add(new HfAtom('\0', run.Formatting, run));
+            }
+            else
+            {
+                foreach (var ch in run.Text)
+                    atoms.Add(new HfAtom(ch, run.Formatting, null));
+            }
+        }
+        return atoms;
+    }
+
+    /// <summary>
+    /// Rebuilds a paragraph's runs from an edited atom list, coalescing consecutive literal atoms that
+    /// share formatting into a single run and re-emitting field atoms as their preserved runs.
+    /// </summary>
+    private static void HfSetAtoms(Paragraph para, List<HfAtom> atoms)
+    {
+        para.Runs.Clear();
+        var i = 0;
+        while (i < atoms.Count)
+        {
+            if (atoms[i].IsField)
+            {
+                para.Runs.Add(atoms[i].FieldRun!);
+                i++;
+                continue;
+            }
+            var fmt = atoms[i].Fmt;
+            var start = i;
+            while (i < atoms.Count && !atoms[i].IsField && atoms[i].Fmt.Equals(fmt))
+                i++;
+            var text = new string(atoms.Skip(start).Take(i - start).Select(a => a.Ch).ToArray());
+            para.Runs.Add(new Run(text, fmt));
+        }
+    }
+
+    /// <summary>
+    /// Maps a model-text offset to an atom-list index and reports whether that index lands inside a field
+    /// atom. Literal atoms advance the model offset by 1; field atoms by their cached text length. When the
+    /// offset falls strictly inside a field atom it is snapped to the field's leading edge (atomBefore) so
+    /// edits never split a field run.
+    /// </summary>
+    private static (int AtomIndex, bool InsideField) HfAtomIndexForOffset(List<HfAtom> atoms, int modelOffset)
+    {
+        var pos = 0;
+        for (var i = 0; i < atoms.Count; i++)
+        {
+            if (modelOffset <= pos)
+                return (i, false);
+            var next = pos + atoms[i].ModelLength;
+            if (modelOffset < next)
+                return (i, atoms[i].IsField); // inside this atom; for a field this is "inside the field"
+            pos = next;
+        }
+        return (atoms.Count, false);
+    }
+
+    /// <summary>The model-offset length of an atom list (sum of each atom's model length).</summary>
+    private static int HfAtomsModelLength(List<HfAtom> atoms) => atoms.Sum(a => a.ModelLength);
+
+    /// <summary>The active run formatting for a typed character at <paramref name="modelOffset"/> (inherits the char before, else after, else default).</summary>
+    private static RunFormatting HfActiveFormatting(List<HfAtom> atoms, int modelOffset)
+    {
+        var (idx, _) = HfAtomIndexForOffset(atoms, modelOffset);
+        if (idx > 0 && idx - 1 < atoms.Count && !atoms[idx - 1].IsField)
+            return atoms[idx - 1].Fmt;
+        if (idx < atoms.Count && !atoms[idx].IsField)
+            return atoms[idx].Fmt;
+        // Fall back to the first literal atom's formatting, else default.
+        var firstLiteral = atoms.FirstOrDefault(a => !a.IsField);
+        return atoms.Any(a => !a.IsField) ? firstLiteral.Fmt : RunFormatting.Default;
+    }
+
+    /// <summary>Runs an undoable edit on the H/F caret's paragraph, then refreshes layout + caret.</summary>
+    private void HfEditParagraph(HfTarget target, Action<List<HfAtom>> mutate, int newOffset)
+    {
+        var slot = (int)target.Slot;
+        _bus.Execute(new EditHeaderFooterParagraphCommand(
+            target.SectionIndex, target.UseFinalSectionStore, slot, target.ParaIdx, p =>
+            {
+                var atoms = HfAtoms(p);
+                mutate(atoms);
+                HfSetAtoms(p, atoms);
+            }));
+        var len = HfParaLength(target);
+        _hfCaret = (target, Math.Clamp(newOffset, 0, len));
+        // Re-layout at the current width so the H/F band + caret reflect the edit immediately.
+        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        Relayout(width);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>Insert literal text at the H/F caret (field runs are never split).</summary>
+    private void HfInsertText(string text)
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var target = hc.Target;
+        var offset = hc.Offset;
+        HfEditParagraph(target, atoms =>
+        {
+            var (idx, _) = HfAtomIndexForOffset(atoms, offset);
+            var fmt = HfActiveFormatting(atoms, offset);
+            var at = idx;
+            foreach (var ch in text)
+                atoms.Insert(at++, new HfAtom(ch, fmt, null));
+        }, offset + text.Length);
+    }
+
+    /// <summary>Backspace at the H/F caret: delete the literal atom before the caret (skips/removes a whole field atom).</summary>
+    private void HfBackspace()
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var target = hc.Target;
+        var offset = hc.Offset;
+        if (offset <= 0)
+            return; // at start of paragraph — H/F single-paragraph editing does not merge across slots
+        var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
+        var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
+        var removeIdx = idx - 1;
+        if (removeIdx < 0 || removeIdx >= atoms0.Count)
+            return;
+        var removedModelLen = atoms0[removeIdx].ModelLength;
+        HfEditParagraph(target, atoms =>
+        {
+            if (removeIdx >= 0 && removeIdx < atoms.Count)
+                atoms.RemoveAt(removeIdx);
+        }, offset - removedModelLen);
+    }
+
+    /// <summary>Forward-delete at the H/F caret: delete the atom at the caret (a whole field atom when on one).</summary>
+    private void HfDeleteForward()
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var target = hc.Target;
+        var offset = hc.Offset;
+        var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
+        var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
+        if (idx < 0 || idx >= atoms0.Count)
+            return;
+        HfEditParagraph(target, atoms =>
+        {
+            if (idx >= 0 && idx < atoms.Count)
+                atoms.RemoveAt(idx);
+        }, offset);
+    }
+
+    /// <summary>
+    /// Enter in a header/footer splits the current paragraph into two at the caret (a new H/F line),
+    /// targeting the H/F slot's paragraph list. Mirrors the cell paragraph-split behaviour.
+    /// </summary>
+    private void HfInsertParagraphBreak()
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var target = hc.Target;
+        var offset = hc.Offset;
+        var store = ResolveHfStore(target);
+        var hf = store is null ? null : GetHfSlot(store, target.Slot);
+        if (hf is null || target.ParaIdx < 0 || target.ParaIdx >= hf.Paragraphs.Count)
+            return;
+        var para = hf.Paragraphs[target.ParaIdx];
+        var atoms = HfAtoms(para);
+        var (idx, _) = HfAtomIndexForOffset(atoms, offset);
+
+        _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
+            target.SectionIndex, target.UseFinalSectionStore, (int)target.Slot, target.ParaIdx,
+            () =>
+            {
+                var src = hf.Paragraphs[target.ParaIdx];
+                var srcAtoms = HfAtoms(src);
+                var first = new Paragraph { Formatting = src.Formatting, StyleId = src.StyleId };
+                HfSetAtoms(first, srcAtoms.Take(idx).ToList());
+                var second = new Paragraph { Formatting = src.Formatting };
+                HfSetAtoms(second, srcAtoms.Skip(idx).ToList());
+                return [first, second];
+            }));
+
+        _hfCaret = (target with { ParaIdx = target.ParaIdx + 1 }, 0);
+        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        Relayout(width);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>Move the H/F caret left/right by one model offset within the current paragraph (clamped to its bounds).</summary>
+    private void HfMoveCaret(int delta)
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var len = HfParaLength(hc.Target);
+        _hfCaret = (hc.Target, Math.Clamp(hc.Offset + delta, 0, len));
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
@@ -1642,6 +2157,7 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _headerFooterItems
+                .Where(i => !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
                 .Select(i => (i.Text, i.Y, i.Alignment))
                 .ToList();
         }
@@ -1659,6 +2175,7 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _headerFooterItems
+                .Where(i => !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
                 .Select(i => (i.Text, i.X, i.Y, i.Alignment, i.AvailableWidth))
                 .ToList();
         }
@@ -2245,6 +2762,60 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-HFEDIT: companion to <see cref="ResolveHfSlotsAvalonia"/> that reports WHICH slot enums were
+    /// chosen for the page (so the editable render items can address the right model paragraph). Uses the
+    /// identical selection rules (first-page → odd/even → default).
+    /// </summary>
+    private static (HfSlot HeaderSlot, HfSlot FooterSlot) ResolveHfSlotEnums(
+        SectionHeadersFooters sectionHf,
+        int sectionRelativePageNumber,
+        PageSettings pageSettings,
+        bool diffOddEvenDoc)
+    {
+        var diffFirst = pageSettings.DifferentFirstPage;
+        if (diffFirst && sectionRelativePageNumber == 1)
+            return (HfSlot.FirstHeader, HfSlot.FirstFooter);
+        if (diffOddEvenDoc && sectionRelativePageNumber % 2 == 0)
+        {
+            // EvenHeader/EvenFooter fall back to the default slot when unset (matches ResolveHfSlotsAvalonia).
+            var hSlot = sectionHf.EvenHeader is not null ? HfSlot.EvenHeader : HfSlot.Header;
+            var fSlot = sectionHf.EvenFooter is not null ? HfSlot.EvenFooter : HfSlot.Footer;
+            return (hSlot, fSlot);
+        }
+        return (HfSlot.Header, HfSlot.Footer);
+    }
+
+    /// <summary>
+    /// AV-HFEDIT: builds a stable <see cref="HfTarget"/> for a resolved HF store + slot. Identifies the
+    /// store either as the document-level final-section store (which the document-level Header/Footer views
+    /// alias) or by reference-equality with a section's own store.
+    /// </summary>
+    private HfTarget MakeHfTarget(SectionHeadersFooters sectionHf, HfSlot slot, int paraIdx)
+    {
+        if (ReferenceEquals(sectionHf, _doc.FinalSectionHeadersFooters))
+            return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx);
+        for (var i = 0; i < _doc.Sections.Count; i++)
+        {
+            if (ReferenceEquals(_doc.Sections[i].HeadersFooters, sectionHf))
+                return new HfTarget(i, UseFinalSectionStore: false, slot, paraIdx);
+        }
+        // Defensive fallback: treat as the final-section store.
+        return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx);
+    }
+
+    /// <summary>
+    /// AV-HFEDIT: true when the active header/footer caret targets the given resolved store + slot. Used so
+    /// the layout still emits an (empty) editable band for a freshly-clicked or just-emptied slot.
+    /// </summary>
+    private bool HfCaretTargets(SectionHeadersFooters sectionHf, HfSlot slot)
+    {
+        if (_hfCaret is not { } hc || hc.Target.Slot != slot)
+            return false;
+        var caretStore = ResolveHfStore(hc.Target);
+        return ReferenceEquals(caretStore, sectionHf);
+    }
+
+    /// <summary>
     /// Pre-computes the header/footer render items for each page in PrintLayout mode.
     /// Called once per Relayout pass after _pageCount is known. Each item carries a
     /// field-resolved text string, run formatting, page-space position, and alignment so
@@ -2281,6 +2852,8 @@ public sealed class DocumentView : Control
             HeaderFooter? header;
             HeaderFooter? footer;
             (header, footer) = ResolveHfSlotsAvalonia(sectionHf, sectionRelPage, sectionPage, diffOddEven);
+            // AV-HFEDIT: which slot enums these resolved to, so emitted items can address the model.
+            var (headerSlot, footerSlot) = ResolveHfSlotEnums(sectionHf, sectionRelPage, sectionPage, diffOddEven);
 
             // Header distance from page top (in DIP).
             var headerDistPt = sectionPage.HeaderDistancePt > 0
@@ -2297,21 +2870,28 @@ public sealed class DocumentView : Control
             // Render-width = page content width (use same as body text area).
             var hfWidth = _contentWidth;
 
+            // AV-HFEDIT: emit an empty (but editable) band when the H/F caret is active in this slot even if
+            // the slot has no visible content yet — so a freshly-clicked/empty header still renders + edits.
+            var headerActive = header is not null && (!header.IsEmpty || HfCaretTargets(sectionHf, headerSlot));
+            var footerActive = footer is not null && (!footer.IsEmpty || HfCaretTargets(sectionHf, footerSlot));
+
             // Emit header.
-            if (header is not null && !header.IsEmpty)
+            if (headerActive)
             {
                 var hfY = pageTop + headerDistDip;
-                EmitHfParagraphs(header, hfY, hfWidth, pageNumber, _pageCount);
+                EmitHfParagraphs(header!, hfY, hfWidth, pageNumber, _pageCount,
+                    pi => MakeHfTarget(sectionHf, headerSlot, pi));
             }
 
             // Emit footer.
-            if (footer is not null && !footer.IsEmpty)
+            if (footerActive)
             {
                 // Footer distance is from the BOTTOM of the page upward; the footer text
                 // starts at: pageBottom - footerDistDip (+ a line-height offset per line).
                 var pageBottom = pageTop + _pageHeightPx;
                 var hfY = pageBottom - footerDistDip;
-                EmitHfParagraphs(footer, hfY, hfWidth, pageNumber, _pageCount);
+                EmitHfParagraphs(footer!, hfY, hfWidth, pageNumber, _pageCount,
+                    pi => MakeHfTarget(sectionHf, footerSlot, pi));
             }
         }
     }
@@ -2324,48 +2904,71 @@ public sealed class DocumentView : Control
     /// defaults when present. Each tab-separated segment is emitted as a separate HfRenderItem at the
     /// computed X position so the draw loop does not need tab-aware logic.
     /// </summary>
-    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, int pageNumber, int pageCount)
+    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, int pageNumber, int pageCount,
+        Func<int, HfTarget>? targetFactory = null)
     {
         var y = startY;
-        foreach (var para in hf.Paragraphs)
+        for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
         {
+            var para = hf.Paragraphs[paraIdx];
             var pf = ResolveParagraphFmt(para);
+            // AV-HFEDIT: the editing target for this paragraph (which section/slot/para), or null in
+            // legacy callers that do not pass a factory (kept for backward compatibility / tests).
+            HfTarget? paraTarget = targetFactory?.Invoke(paraIdx);
 
             // Build segments split on TAB characters.
-            // Each entry carries (tabStopIndex, Text, Fmt):
+            // Each entry carries (tabStopIndex, Text, Fmt, ModelStart):
             //   tabStopIndex 0 → segment before the first tab (left-aligned at X=_contentLeft)
             //   tabStopIndex 1 → segment after the first tab (centre stop)
             //   tabStopIndex 2 → segment after the second tab (right stop)
             // Multiple consecutive tabs advance the index so the ordinal is always correct even
             // if some slots carry empty text (e.g. "Left\t\tRight" puts "Right" at stop 2).
-            var segments = new List<(int StopIndex, string Text, RunFormatting Fmt)>();
+            // AV-HFEDIT: ModelStart is the literal-model-text offset where the segment's first char
+            // begins, so a click X maps to a model offset for the editing caret. Model offset advances
+            // by run.Text.Length for each run (field runs are atomic — their resolved text may differ in
+            // length, but the model span is run.Text.Length, including a single tab char per model tab).
+            var segments = new List<(int StopIndex, string Text, RunFormatting Fmt, int ModelStart)>();
             var sb = new System.Text.StringBuilder();
             RunFormatting segFmt = para.Runs.Count > 0 ? para.Runs[0].Formatting : RunFormatting.Default;
             var stopIndex = 0;
+            var modelOffset = 0;       // running literal-model offset across all runs
+            var segModelStart = 0;     // model offset at the start of the current (buffered) segment
 
             foreach (var run in para.Runs)
             {
                 var fieldText = ResolveHfField(run, pageNumber, pageCount);
+                var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
                 if (run.Formatting.FontSizePt.HasValue)
                     segFmt = run.Formatting;
 
-                // Split the resolved text on tab characters.
+                if (isField)
+                {
+                    // Atomic field run: append its resolved text whole (no tab-splitting inside a field).
+                    sb.Append(text);
+                    modelOffset += run.Text.Length;
+                    continue;
+                }
+
+                // Split the literal run text on tab characters; model offset advances per literal char.
                 var parts = text.Split('\t');
                 for (var pi = 0; pi < parts.Length; pi++)
                 {
                     sb.Append(parts[pi]);
+                    modelOffset += parts[pi].Length;
                     if (pi < parts.Length - 1)
                     {
                         // A TAB was consumed — flush the current buffer as a segment and advance the stop index.
-                        segments.Add((stopIndex, sb.ToString(), segFmt));
+                        segments.Add((stopIndex, sb.ToString(), segFmt, segModelStart));
                         sb.Clear();
                         stopIndex++;
+                        modelOffset += 1;            // the consumed tab is one model char
+                        segModelStart = modelOffset; // next segment starts after the tab
                     }
                 }
             }
             // Flush the final (or only) segment.
-            segments.Add((stopIndex, sb.ToString(), segFmt));
+            segments.Add((stopIndex, sb.ToString(), segFmt, segModelStart));
 
             // Whether the paragraph contains any tab characters at all.
             var hasAnyTab = segments.Count > 1 || (segments.Count == 1 && stopIndex > 0);
@@ -2390,20 +2993,21 @@ public sealed class DocumentView : Control
 
             if (!hasAnyTab)
             {
-                // No tabs — use paragraph alignment as before.
+                // No tabs — use paragraph alignment as before. Emit even an EMPTY paragraph so an empty
+                // header/footer line is still clickable for editing (the caret needs a region to land in).
                 var seg = segments[0];
-                if (!string.IsNullOrEmpty(seg.Text))
+                _headerFooterItems.Add(new HfRenderItem
                 {
-                    _headerFooterItems.Add(new HfRenderItem
-                    {
-                        Text           = seg.Text,
-                        Fmt            = seg.Fmt,
-                        X              = _contentLeft,
-                        Y              = y,
-                        AvailableWidth = availWidth,
-                        Alignment      = pf.Alignment,
-                    });
-                }
+                    Text             = seg.Text,
+                    Fmt              = seg.Fmt,
+                    X                = _contentLeft,
+                    Y                = y,
+                    AvailableWidth   = availWidth,
+                    Alignment        = pf.Alignment,
+                    Target           = paraTarget,
+                    LineHeight       = lineH,
+                    ModelStartOffset = seg.ModelStart,
+                });
             }
             else
             {
@@ -2411,7 +3015,7 @@ public sealed class DocumentView : Control
                 // StopIndex 0 → left (at _contentLeft, no stop lookup needed).
                 // StopIndex 1 → first tab stop  (default: centre).
                 // StopIndex 2 → second tab stop (default: right).
-                foreach (var (si, text, fmt) in segments)
+                foreach (var (si, text, fmt, modelStart) in segments)
                 {
                     if (string.IsNullOrEmpty(text)) continue;
 
@@ -2455,12 +3059,15 @@ public sealed class DocumentView : Control
 
                     _headerFooterItems.Add(new HfRenderItem
                     {
-                        Text           = text,
-                        Fmt            = fmt,
-                        X              = itemX,
-                        Y              = y,
-                        AvailableWidth = 0,                  // absolute X — skip alignment offset at draw time
-                        Alignment      = TextAlignment.Left, // draw loop uses X as-is (offset=0 for Left)
+                        Text             = text,
+                        Fmt              = fmt,
+                        X                = itemX,
+                        Y                = y,
+                        AvailableWidth   = 0,                  // absolute X — skip alignment offset at draw time
+                        Alignment        = TextAlignment.Left, // draw loop uses X as-is (offset=0 for Left)
+                        Target           = paraTarget,
+                        LineHeight       = lineH,
+                        ModelStartOffset = modelStart,
                     });
                 }
             }
@@ -3360,12 +3967,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision));
+                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -4359,6 +4966,38 @@ public sealed class DocumentView : Control
         context.DrawLine(pen, p1, p2);
     }
 
+    /// <summary>
+    /// AV-VIEW: Draw the ruler strips for the first page in Print Layout — a horizontal strip along the
+    /// page top and a vertical strip along the page left edge, each with the page margins tinted darker
+    /// (so the lighter span marks the editable body area) and inch tick marks. Pure render chrome.
+    /// </summary>
+    private void DrawRuler(DrawingContext context)
+    {
+        const double inchDip = 72.0;
+        var pageTop = DeskPadding; // first page only
+        // ── Horizontal ruler: sits just above the page's top edge. ──
+        var hRect = new Rect(_pageLeft, pageTop - RulerThicknessDip, _pageWidth, RulerThicknessDip);
+        context.FillRectangle(RulerFill, hRect);
+        // Margin tint: left margin + right margin spans (darker); body area stays light.
+        context.FillRectangle(RulerMarginFill, new Rect(_pageLeft, hRect.Y, _contentLeft - _pageLeft, RulerThicknessDip));
+        var bodyRight = _contentLeft + _contentWidth;
+        context.FillRectangle(RulerMarginFill, new Rect(bodyRight, hRect.Y, _pageLeft + _pageWidth - bodyRight, RulerThicknessDip));
+        context.DrawRectangle(null, RulerBorderPen, hRect);
+        for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)
+            context.DrawLine(RulerTickPen, new Point(x, hRect.Y + RulerThicknessDip - 4), new Point(x, hRect.Y + RulerThicknessDip));
+
+        // ── Vertical ruler: sits just left of the page's left edge. ──
+        var vRect = new Rect(_pageLeft - RulerThicknessDip, pageTop, RulerThicknessDip, _pageHeightPx);
+        context.FillRectangle(RulerFill, vRect);
+        var bodyTop    = pageTop + _marginTopDip;
+        var bodyBottom = pageTop + _pageHeightPx - _marginBottomDip;
+        context.FillRectangle(RulerMarginFill, new Rect(vRect.X, pageTop, RulerThicknessDip, _marginTopDip));
+        context.FillRectangle(RulerMarginFill, new Rect(vRect.X, bodyBottom, RulerThicknessDip, pageTop + _pageHeightPx - bodyBottom));
+        context.DrawRectangle(null, RulerBorderPen, vRect);
+        for (var y = pageTop; y <= pageTop + _pageHeightPx + 0.01; y += inchDip)
+            context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
+    }
+
     private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
@@ -4369,6 +5008,14 @@ public sealed class DocumentView : Control
     private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Gray), 1.0);
     // AV-NOTERENDER: thin separator rule above the footnote band / under the Endnotes heading.
     private static Pen    NoteSeparatorPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.75);
+    // AV-VIEW: faint layout-gridlines drawn behind body text when ShowGridlines is set.
+    private static Pen    GridlinePen      { get; } = new Pen(new SolidColorBrush(Color.FromArgb(0x30, 0x60, 0x90, 0xC0)), 0.5);
+    // AV-VIEW: ruler strip fill, border, and tick marks drawn at the page top/left when ShowRuler is set.
+    private static IBrush RulerFill        { get; } = new SolidColorBrush(Color.FromRgb(0xF4, 0xF6, 0xFA));
+    private static Pen    RulerBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD4)), 0.75);
+    private static Pen    RulerTickPen     { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x98)), 0.75);
+    // AV-VIEW: darker tint marking the page margins on the ruler (the body text area is the lighter span).
+    private static IBrush RulerMarginFill  { get; } = new SolidColorBrush(Color.FromRgb(0xD8, 0xDE, 0xE8));
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -4398,6 +5045,18 @@ public sealed class DocumentView : Control
             // Web Layout / Draft: plain white background — no desk, no page chrome.
             context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
         }
+
+        // AV-VIEW: faint layout-gridlines behind the body text (Print Layout only). Drawn after the
+        // white page fill so the grid shows through, before table fills / text so it sits underneath.
+        if (_showGridlines && _viewMode == DocumentViewMode.PrintLayout)
+        {
+            foreach (var (x1, y1, x2, y2) in ComputeGridlines())
+                context.DrawLine(GridlinePen, new Point(x1, y1), new Point(x2, y2));
+        }
+
+        // AV-VIEW: horizontal + vertical ruler strips on the first page (Print Layout only).
+        if (_showRuler && _viewMode == DocumentViewMode.PrintLayout)
+            DrawRuler(context);
 
         // Table fills + borders sit beneath the text.
         foreach (var (rect, fill, border, cellBorder) in _rects)
@@ -4543,9 +5202,22 @@ public sealed class DocumentView : Control
                 context.FillRectangle(tint, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
             }
 
+            // AV-LINK: a hyperlinked glyph renders in the hyperlink style — Word's default blue + underline —
+            // unless the run already carries an explicit colour / its own underline (e.g. a "Hyperlink"
+            // character style was applied), in which case those win. Layered before super/sub + revision.
+            var linkFmt = pc.Fmt;
+            if (pc.IsHyperlink)
+            {
+                linkFmt = linkFmt with
+                {
+                    ColorHex = string.IsNullOrWhiteSpace(linkFmt.ColorHex) ? HyperlinkColorHex : linkFmt.ColorHex,
+                    Underline = true,
+                };
+            }
+
             // Superscript/subscript: draw at a smaller size + vertical offset.
             // Word approximation: ~58% of the font size, raised/lowered by ~33% of line height.
-            var drawFmt = pc.Fmt;
+            var drawFmt = linkFmt;
             var drawY   = pc.Y;
             if (pc.Fmt.VerticalAlign == VerticalAlign.Superscript)
             {
@@ -4569,10 +5241,10 @@ public sealed class DocumentView : Control
             if (pc.Ch == '\t')
             {
                 // Still draw underline/strikethrough across the tab gap if the run has them.
-                if (pc.Fmt.Underline)
-                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
-                if (pc.Fmt.Strikethrough)
-                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+                if (drawFmt.Underline)
+                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
+                if (drawFmt.Strikethrough)
+                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
                 DrawRevisionDecoration(context, pc);
                 continue;
             }
@@ -4580,10 +5252,10 @@ public sealed class DocumentView : Control
             var ft = Build(pc.Ch.ToString(), drawFmt);
             context.DrawText(ft, new Point(pc.X, drawY));
 
-            if (pc.Fmt.Underline)
-                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
-            if (pc.Fmt.Strikethrough)
-                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+            if (drawFmt.Underline)
+                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
+            if (drawFmt.Strikethrough)
+                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
             DrawRevisionDecoration(context, pc);
         }
 
@@ -4679,14 +5351,111 @@ public sealed class DocumentView : Control
                 }
                 context.DrawText(Build(note.Text, drawFmt), new Point(note.X, drawY));
             }
+
+            // AV-HFEDIT: when the caret is inside a header/footer region, draw a subtle region
+            // outline + a small "Header"/"Footer" label so the active edit zone is obvious.
+            DrawHeaderFooterEditRegion(context);
         }
 
         // AV-FLSEL: draw selection outline + 8 resize handles over the selected floating object.
         if (_selectedFloating is { } selFl)
             DrawFloatingSelection(context, selFl.Rect);
 
-        if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
+        // AV-HFEDIT: the header/footer caret renders independently of the body caret.
+        if (IsFocused && _hfCaret is not null && TryGetHfCaretRect(out var hfRect))
+            context.FillRectangle(Brushes.Black, hfRect);
+        else if (IsFocused && NormalizedSelection() is null && _hfCaret is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
+    }
+
+    // ── AV-HFEDIT: render the active header/footer edit region outline + label + caret ──────────────
+
+    private static readonly IPen HfRegionPen =
+        new Pen(new SolidColorBrush(Color.FromArgb(160, 90, 120, 200)), 1, DashStyle.Dash);
+    private static readonly IBrush HfRegionLabelBrush = new SolidColorBrush(Color.FromArgb(200, 90, 120, 200));
+
+    /// <summary>
+    /// Draws a dashed outline around the line band of the currently-edited header/footer paragraph plus a
+    /// "Header"/"Footer" label at its left edge. No-op when no H/F caret is active.
+    /// </summary>
+    private void DrawHeaderFooterEditRegion(DrawingContext context)
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        // Find the rendered item(s) for this target's paragraph to derive the band.
+        double top = double.MaxValue, bottom = double.MinValue, lineH = 0;
+        var found = false;
+        foreach (var item in _headerFooterItems)
+        {
+            if (item.Target is not { } t || !t.Equals(hc.Target))
+                continue;
+            found = true;
+            top = Math.Min(top, item.Y);
+            var h = item.LineHeight > 0 ? item.LineHeight : DefaultFontSizePt * PxPerPoint * 1.3;
+            bottom = Math.Max(bottom, item.Y + h);
+            lineH = Math.Max(lineH, h);
+        }
+        if (!found)
+            return;
+
+        var pad = 3.0;
+        var rect = new Rect(_contentLeft - pad, top - pad,
+            _contentWidth + 2 * pad, (bottom - top) + 2 * pad);
+        context.DrawRectangle(null, HfRegionPen, rect);
+
+        // Label: "Header"/"Footer" above the band's top-left (clamped into the page).
+        var label = IsFooterSlot(hc.Target.Slot) ? "Footer" : "Header";
+        var labelFt = Build(label, RunFormatting.Default with { FontSizePt = 8 });
+        var labelY = Math.Max(0, top - pad - labelFt.Height);
+        context.DrawText(labelFt, new Point(_contentLeft - pad, labelY));
+    }
+
+    /// <summary>
+    /// Computes the caret rectangle for the active header/footer caret by measuring the prefix width up to
+    /// the caret offset within the target paragraph's first rendered line. Returns false when no item for
+    /// the target is laid out.
+    /// </summary>
+    private bool TryGetHfCaretRect(out Rect rect)
+    {
+        rect = default;
+        if (_hfCaret is not { } hc)
+            return false;
+
+        // Locate the rendered item whose model span contains the caret offset (or the line's last item).
+        HfRenderItem? hostItem = null;
+        HfRenderItem? firstForTarget = null;
+        foreach (var item in _headerFooterItems)
+        {
+            if (item.Target is not { } t || !t.Equals(hc.Target))
+                continue;
+            firstForTarget ??= item;
+            var start = item.ModelStartOffset;
+            var end = start + item.Text.Length;
+            if (hc.Offset >= start && hc.Offset <= end)
+            {
+                hostItem = item;
+                break;
+            }
+        }
+        hostItem ??= firstForTarget;
+        if (hostItem is null)
+        {
+            // Empty paragraph with no text segment: place caret at content-left on the band (use first item).
+            // firstForTarget is null here only when nothing was laid out → fail.
+            return false;
+        }
+
+        var ft = Build(hostItem.Text.Length == 0 ? " " : hostItem.Text, hostItem.Fmt);
+        var alignOffset = AlignmentOffset(hostItem.Alignment, hostItem.AvailableWidth,
+            ft.WidthIncludingTrailingWhitespace, isLast: true);
+        var localOffset = Math.Clamp(hc.Offset - hostItem.ModelStartOffset, 0, hostItem.Text.Length);
+        var prefixW = hostItem.Text.Length == 0 || localOffset == 0
+            ? 0
+            : Build(hostItem.Text[..localOffset], hostItem.Fmt).WidthIncludingTrailingWhitespace;
+        var caretX = hostItem.X + alignOffset + prefixW;
+        var caretH = hostItem.LineHeight > 0 ? hostItem.LineHeight : ft.Height;
+        rect = new Rect(caretX, hostItem.Y, 1.5, caretH);
+        return true;
     }
 
     /// <summary>
@@ -5320,6 +6089,94 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
+    // ── AV-CHARTTAB: Chart + SmartArt contextual-tab edit API ──────────────────────────────────────
+
+    /// <summary>
+    /// AV-CHARTTAB: Change the chart kind (column/bar/line/pie/scatter/area/doughnut) of the selected
+    /// floating chart. Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void SetChartType(ChartKind kind)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        _bus.Execute(new SetChartKindCommand(sel.BlockIndex, sel.RunIndex, kind));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Apply a chart style (1-based catalog id) to the selected floating chart.
+    /// Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void SetChartStyle(int styleId)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        _bus.Execute(new SetChartStyleCommand(sel.BlockIndex, sel.RunIndex, styleId));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Apply a chart colour scheme (catalog id, e.g. "colorful1") to the selected floating
+    /// chart. Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void SetChartColorScheme(string? colorSchemeId)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        _bus.Execute(new SetChartColorSchemeCommand(sel.BlockIndex, sel.RunIndex, colorSchemeId));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Change the SmartArt layout family (List/Process/Hierarchy — Cycle maps to Process)
+    /// of the selected floating SmartArt. Undoable + re-renders. No-op when the float is not SmartArt.
+    /// </summary>
+    public void SetSmartArtLayout(SmartArtKind kind)
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
+        _bus.Execute(new SetSmartArtLayoutCommand(sel.BlockIndex, sel.RunIndex, kind));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Apply a SmartArt colour scheme (catalog id) to the selected floating SmartArt.
+    /// Undoable + re-renders. No-op when the selected float is not SmartArt.
+    /// </summary>
+    public void SetSmartArtColor(string? colorSchemeId)
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
+        _bus.Execute(new SetSmartArtColorCommand(sel.BlockIndex, sel.RunIndex, colorSchemeId));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Read the selected chart's current kind/style/colour-scheme, or null when the
+    /// selected float is not a chart. Used by tests and the contextual-tab live-state.
+    /// </summary>
+    public (ChartKind Kind, int StyleId, string? ColorSchemeId)? GetSelectedChartInfo()
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        if (para.Runs[sel.RunIndex].Chart is not { } chart) return null;
+        return (chart.Kind, chart.StyleId, chart.ColorSchemeId);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Read the selected SmartArt's current kind/colour-scheme, or null when the selected
+    /// float is not SmartArt. Used by tests and the contextual-tab live-state.
+    /// </summary>
+    public (SmartArtKind Kind, string? ColorSchemeId)? GetSelectedSmartArtInfo()
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        if (para.Runs[sel.RunIndex].SmartArt is not { } sa) return null;
+        return (sa.Kind, sa.ColorSchemeId);
+    }
+
     /// <summary>
     /// Delete the currently selected floating object. Removes the run from its paragraph.
     /// Undoable via the command bus. No-op when nothing is selected.
@@ -5338,9 +6195,14 @@ public sealed class DocumentView : Control
         InvalidateLayoutAndVisual();
     }
 
-    private void DrawDecoration(DrawingContext context, PlacedChar pc, double yLine)
+    private void DrawDecoration(DrawingContext context, PlacedChar pc, double yLine) =>
+        DrawDecoration(context, pc, yLine, pc.Fmt);
+
+    // AV-LINK: overload that draws the decoration (under-/strike-line) in an explicit format's colour, so a
+    // hyperlink underline uses the resolved hyperlink colour rather than the run's raw (unstyled) colour.
+    private void DrawDecoration(DrawingContext context, PlacedChar pc, double yLine, RunFormatting fmt)
     {
-        var pen = new Pen(BrushFor(pc.Fmt.ColorHex), Math.Max(1, FontSizePx(pc.Fmt) / 14));
+        var pen = new Pen(BrushFor(fmt.ColorHex), Math.Max(1, FontSizePx(fmt) / 14));
         context.DrawLine(pen, new Point(pc.X, yLine), new Point(pc.X + pc.W, yLine));
     }
 
@@ -5461,6 +6323,17 @@ public sealed class DocumentView : Control
         Focus();
         var point = e.GetPosition(this);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+        var ctrlOrMeta = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+
+        // AV-LINK: Ctrl+Click follows a hyperlink (Word's convention) — open an external URL via the
+        // HyperlinkActivated event, or jump the caret to an internal bookmark target. Checked before the
+        // body hit-test so the click is consumed instead of just moving the caret.
+        if (ctrlOrMeta && !shift && TryHitTestHyperlink(point, out var clickedLink))
+        {
+            FollowHyperlink(clickedLink);
+            e.Handled = true;
+            return;
+        }
 
         // AV-FLSEL: check whether the click landed on a floating object BEFORE body text hit-test.
         // The topmost object (highest z-order, in-front preferred over behind) wins.
@@ -5494,8 +6367,21 @@ public sealed class DocumentView : Control
             InvalidateVisual();
         }
 
+        // AV-HFEDIT: a click inside a rendered header/footer region routes the caret into that region.
+        // Only in PrintLayout (the only mode that draws H/F bands). Checked before the body hit-test
+        // because H/F bands sit in the page margins, which the body hit-test does not own.
+        if (!shift && _viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point))
+        {
+            CaretMoved?.Invoke();
+            e.Handled = true;
+            return;
+        }
+
         if (TryHitTest(point, out var pos))
         {
+            // AV-HFEDIT: clicking back into the body exits any active header/footer caret.
+            _hfCaret = null;
+
             // AV-TBL2: clear any prior cross-cell block selection on a fresh (non-shift) press.
             if (!shift)
             {
@@ -5665,6 +6551,33 @@ public sealed class DocumentView : Control
             // Any other key: pass through (don't consume).
         }
 
+        // AV-HFEDIT: when the caret is in a header/footer region, intercept navigation/exit keys.
+        // Editing keys (Back/Delete/Enter) route through the shared methods which already check _hfCaret.
+        if (_hfCaret is not null)
+        {
+            switch (e.Key)
+            {
+                case Key.Escape:
+                    ExitHeaderFooterCaret();
+                    e.Handled = true;
+                    return;
+                case Key.Left:
+                    HfMoveCaret(-1); e.Handled = true; return;
+                case Key.Right:
+                    HfMoveCaret(+1); e.Handled = true; return;
+                case Key.Home:
+                    _hfCaret = (_hfCaret.Value.Target, 0); InvalidateVisual(); CaretMoved?.Invoke(); e.Handled = true; return;
+                case Key.End:
+                    _hfCaret = (_hfCaret.Value.Target, HfParaLength(_hfCaret.Value.Target)); InvalidateVisual(); CaretMoved?.Invoke(); e.Handled = true; return;
+                case Key.Back: Backspace(); e.Handled = true; return;
+                case Key.Delete: DeleteForward(); e.Handled = true; return;
+                case Key.Enter: InsertParagraphBreak(); e.Handled = true; return;
+                case Key.Z when ctrl: Undo(); e.Handled = true; return;
+                case Key.Y when ctrl: Redo(); e.Handled = true; return;
+            }
+            // Up/Down or other keys: fall through to default handling below (no-op for H/F).
+        }
+
         switch (e.Key)
         {
             case Key.Z when ctrl: Undo(); e.Handled = true; break;
@@ -5708,6 +6621,13 @@ public sealed class DocumentView : Control
 
     public void InsertText(string text)
     {
+        // AV-HFEDIT: route into a header/footer region when the caret is inside one.
+        if (_hfCaret is not null)
+        {
+            HfInsertText(text);
+            return;
+        }
+
         // AV-TBL: route into table cell when the caret is inside a cell.
         if (_cellCaret is { } cc)
         {
@@ -5757,6 +6677,9 @@ public sealed class DocumentView : Control
         var insRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
         var insAuthor = TrackChangesEnabled ? RevisionAuthor : null;
         var insDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
+        // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
+        // link's edge or outside a link inserts plain (un-linked) text.
+        var insLink = ActiveLink(paragraph, bodyOffset);
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var cells = ParaCells(p);
@@ -5765,7 +6688,7 @@ public sealed class DocumentView : Control
             // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
             var at = Math.Clamp(bodyOffset, 0, cells.Count);
             foreach (var ch in text)
-                cells.Insert(at++, new Cell(ch, bodyFmt, null, insRevision, insAuthor, insDate));
+                cells.Insert(at++, new Cell(ch, bodyFmt, null, insRevision, insAuthor, insDate, insLink));
             SetRuns(p, cells);
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
@@ -5774,6 +6697,13 @@ public sealed class DocumentView : Control
 
     private void Backspace()
     {
+        // AV-HFEDIT: route into a header/footer region.
+        if (_hfCaret is not null)
+        {
+            HfBackspace();
+            return;
+        }
+
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
@@ -5848,6 +6778,13 @@ public sealed class DocumentView : Control
 
     private void DeleteForward()
     {
+        // AV-HFEDIT: route into a header/footer region.
+        if (_hfCaret is not null)
+        {
+            HfDeleteForward();
+            return;
+        }
+
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
@@ -5956,6 +6893,13 @@ public sealed class DocumentView : Control
 
     private void InsertParagraphBreak()
     {
+        // AV-HFEDIT: route into a header/footer region.
+        if (_hfCaret is not null)
+        {
+            HfInsertParagraphBreak();
+            return;
+        }
+
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
@@ -6712,6 +7656,87 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// AV-VIEW: Toggle a faint layout-gridlines overlay drawn behind the body text on each page
+    /// (View → Show → Gridlines in Word). The grid is purely visual chrome; it does not affect layout.
+    /// Only meaningful in <see cref="DocumentViewMode.PrintLayout"/> (where discrete pages exist).
+    /// </summary>
+    public bool ShowGridlines
+    {
+        get => _showGridlines;
+        set
+        {
+            if (_showGridlines == value)
+                return;
+            _showGridlines = value;
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
+    /// AV-VIEW: Toggle a horizontal (top) + vertical (left) ruler strip with tick marks and margin
+    /// markers, drawn on the first page in <see cref="DocumentViewMode.PrintLayout"/> (View → Show →
+    /// Ruler in Word). View-only chrome; does not affect layout.
+    /// </summary>
+    public bool ShowRuler
+    {
+        get => _showRuler;
+        set
+        {
+            if (_showRuler == value)
+                return;
+            _showRuler = value;
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
+    /// AV-VIEW: Compute the layout-gridlines for the current layout — one horizontal line every
+    /// <see cref="GridlineStepDip"/> within each page's text area, plus one vertical line every
+    /// step across the text width. Returns page-space line segments (X1,Y1)-(X2,Y2). Exposed for the
+    /// Render pass and for tests; empty when gridlines are off or not in Print Layout.
+    /// </summary>
+    internal IReadOnlyList<(double X1, double Y1, double X2, double Y2)> ComputeGridlines()
+    {
+        var lines = new List<(double, double, double, double)>();
+        if (!_showGridlines || _viewMode != DocumentViewMode.PrintLayout)
+            return lines;
+
+        var areaLeft   = _contentLeft;
+        var areaRight  = _contentLeft + _contentWidth;
+        for (var pi = 0; pi < _pageCount; pi++)
+        {
+            var pageTop    = DeskPadding + pi * (_pageHeightPx + PageGap);
+            var areaTop    = pageTop + _marginTopDip;
+            var areaBottom = pageTop + _pageHeightPx - _marginBottomDip;
+
+            // Horizontal lines.
+            for (var y = areaTop; y <= areaBottom + 0.01; y += GridlineStepDip)
+                lines.Add((areaLeft, y, areaRight, y));
+            // Vertical lines.
+            for (var x = areaLeft; x <= areaRight + 0.01; x += GridlineStepDip)
+                lines.Add((x, areaTop, x, areaBottom));
+        }
+        return lines;
+    }
+
+    /// <summary>
+    /// AV-VIEW: Compute the ruler tick marks for the first page's horizontal ruler — one tick every
+    /// inch (72pt) across the page width, measured from the left page edge. Returns page-space tick X
+    /// positions. Exposed for the Render pass and for tests; empty when the ruler is off or not in
+    /// Print Layout.
+    /// </summary>
+    internal IReadOnlyList<double> ComputeRulerTicks()
+    {
+        var ticks = new List<double>();
+        if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
+            return ticks;
+        const double inchDip = 72.0; // 1in = 72pt = 72 DIP at 96 DPI base
+        for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)
+            ticks.Add(x);
+        return ticks;
+    }
+
     public void SetAlignment(TextAlignment alignment)
     {
         if (CurrentParagraph() is not { } paragraph)
@@ -7096,6 +8121,238 @@ public sealed class DocumentView : Control
 
         _bus.Execute(new SetBookmarkNameCommand(blockIndex, name));
         return name;
+    }
+
+    // ── AV-LINK: hyperlinks + bookmarks (render handled in the glyph loop; follow/navigate here) ─────
+
+    /// <summary>
+    /// AV-LINK: Insert (or convert the selection into) a hyperlink. <paramref name="target"/> is either an
+    /// absolute web/file URL (an external link, wrapped as <c>w:hyperlink</c> with a relationship on save) or
+    /// — when it starts with <c>'#'</c> — the name of a document bookmark (an internal link, wrapped as
+    /// <c>w:hyperlink w:anchor</c>). When there is a (single-paragraph) selection it is re-marked as the
+    /// hyperlink span (its text is preserved); otherwise <paramref name="displayText"/> (falling back to the
+    /// target) is inserted as a new hyperlinked run at the caret. Undoable as one step; re-renders so the link
+    /// styling shows immediately. Mirrors the WPF host's Insert &gt; Hyperlink.
+    /// </summary>
+    public void InsertHyperlink(string displayText, string target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+            return;
+
+        // A leading '#' denotes an internal bookmark anchor; everything else is an external URL.
+        var isInternal = target.StartsWith('#');
+        var url = isInternal ? null : target.Trim();
+        var anchor = isInternal ? target[1..].Trim() : null;
+        if (isInternal && string.IsNullOrEmpty(anchor))
+            return;
+        var link = new LinkInfo(url, anchor, null);
+
+        var sel = NormalizedSelection();
+        // Only a same-paragraph selection can be wrapped in place; a cross-paragraph (or no) selection
+        // inserts fresh hyperlinked text at the caret instead.
+        if (sel is { } s && s.Start.Block == s.End.Block
+            && _doc.Blocks[s.Start.Block] is Paragraph selPara && IsEditable(selPara)
+            && s.End.Offset > s.Start.Offset)
+        {
+            var block = s.Start.Block;
+            var from = s.Start.Offset;
+            var to = s.End.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var cells = ParaCells(p);
+                var lo = Math.Clamp(from, 0, cells.Count);
+                var hi = Math.Clamp(to, 0, cells.Count);
+                for (var i = lo; i < hi; i++)
+                    cells[i] = cells[i] with { Link = link };
+                SetRuns(p, cells);
+            }));
+            _caret = new DocPosition(block, to);
+            _selectionAnchor = _caret;
+            Focus();
+            return;
+        }
+
+        // No usable selection → insert the display text (or the target itself) as a new hyperlinked run.
+        var text = string.IsNullOrEmpty(displayText) ? (isInternal ? anchor! : url!) : displayText;
+        if (_hfCaret is not null || _cellCaret is not null)
+        {
+            // Header/footer and table-cell carets do not carry the body-paragraph hyperlink round-trip;
+            // fall back to inserting plain display text there (still better than dropping the call).
+            InsertText(text);
+            return;
+        }
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+
+        var atBlock = _caret.Block;
+        var atOffset = _caret.Offset;
+        var fmt = ActiveFormatting(paragraph, atOffset);
+        _bus.Execute(new ReplaceParagraphRunsCommand(atBlock, p =>
+        {
+            var cells = ParaCells(p);
+            var at = Math.Clamp(atOffset, 0, cells.Count);
+            foreach (var ch in text)
+                cells.Insert(at++, new Cell(ch, fmt, null, RevisionKind.None, null, null, link));
+            SetRuns(p, cells);
+        }));
+        _caret = new DocPosition(atBlock, atOffset + text.Length);
+        _selectionAnchor = _caret;
+        Focus();
+    }
+
+    /// <summary>
+    /// AV-LINK: Mark the caret's body paragraph as a bookmark named <paramref name="name"/> (Word's
+    /// Insert &gt; Bookmark). Reuses the AV-REF <see cref="SetBookmarkNameCommand"/> so it is undoable and
+    /// round-trips. When a selection spans multiple paragraphs the bookmark is placed on the selection's
+    /// first paragraph (Word anchors the bookmark at the range start). A no-op for a blank name or when the
+    /// caret is not in an editable body paragraph.
+    /// </summary>
+    public void InsertBookmark(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        var block = NormalizedSelection() is { } sel ? sel.Start.Block : _caret.Block;
+        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph)
+            return;
+
+        _bus.Execute(new SetBookmarkNameCommand(block, name.Trim()));
+        Focus();
+    }
+
+    /// <summary>
+    /// AV-LINK: Move the caret to the bookmark named <paramref name="name"/> and scroll it into view,
+    /// returning true when the bookmark was found. The bookmark target is the body paragraph carrying that
+    /// name in its <see cref="Paragraph.BookmarkNames"/> (matched ordinally, ignoring a leading <c>'#'</c>).
+    /// Word's Go To / internal-link navigation.
+    /// </summary>
+    public bool GoToBookmark(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+        var target = name.TrimStart('#').Trim();
+
+        foreach (var location in Bookmarks.List(_doc))
+        {
+            if (!string.Equals(location.Name, target, StringComparison.Ordinal))
+                continue;
+            var block = location.BlockIndex;
+            if (block < 0 || block >= _doc.Blocks.Count)
+                return false;
+            _cellCaret = null;
+            _hfCaret = null;
+            _caret = new DocPosition(block, 0);
+            _selectionAnchor = _caret;
+            Focus();
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            ScrollToCaretRequested?.Invoke();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// AV-LINK: The hyperlink targets covering the caret (or the current selection), for ribbon-state /
+    /// tests. Each entry is <c>(Url, Anchor, Tooltip)</c> with exactly one of Url/Anchor set. Empty when the
+    /// caret is not on a hyperlink. Reads the live model so it reflects the latest edit.
+    /// </summary>
+    public IReadOnlyList<(string? Url, string? Anchor, string? Tooltip)> HyperlinksAtCaret()
+    {
+        if (CurrentParagraph() is not { } paragraph)
+            return [];
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return [];
+
+        var sel = NormalizedSelection();
+        int lo, hi;
+        if (sel is { } s && s.Start.Block == _caret.Block && s.End.Block == _caret.Block)
+        {
+            lo = Math.Clamp(s.Start.Offset, 0, cells.Count - 1);
+            hi = Math.Clamp(s.End.Offset - 1, 0, cells.Count - 1);
+        }
+        else
+        {
+            // Collapsed caret: read the character just left of the caret (Word's "on the link" rule).
+            lo = hi = Math.Clamp(_caret.Offset - 1, 0, cells.Count - 1);
+        }
+
+        var found = new List<(string?, string?, string?)>();
+        var seen = new HashSet<LinkInfo>();
+        for (var i = lo; i <= hi; i++)
+            if (cells[i].Link is { HasTarget: true } link && seen.Add(link))
+                found.Add((link.Url, link.Anchor, link.Tooltip));
+        return found;
+    }
+
+    /// <summary>
+    /// AV-LINK: Follow the hyperlink at the caret, if any — opening an external URL via
+    /// <see cref="HyperlinkActivated"/> or jumping to an internal bookmark via <see cref="GoToBookmark"/>.
+    /// Returns true when a link was followed. The keyboard counterpart of Ctrl+Click (used by the ribbon's
+    /// Open Hyperlink command / tests).
+    /// </summary>
+    public bool FollowHyperlinkAtCaret()
+    {
+        if (HyperlinksAtCaret() is { Count: > 0 } links)
+        {
+            var (url, anchor, tooltip) = links[0];
+            return FollowHyperlink(new LinkInfo(url, anchor, tooltip));
+        }
+        return false;
+    }
+
+    // Follow a resolved link: raise HyperlinkActivated for an external URL, else GoToBookmark for an
+    // internal anchor. Returns true when something was followed.
+    private bool FollowHyperlink(LinkInfo link)
+    {
+        if (link.IsExternal)
+        {
+            HyperlinkActivated?.Invoke(link.Url!);
+            return true;
+        }
+        if (link.IsInternal)
+            return GoToBookmark(link.Anchor!);
+        return false;
+    }
+
+    // Hit-test a point against the placed glyphs and, when the nearest glyph carries a hyperlink, return it.
+    // Used by Ctrl+Click follow. Returns false when the point is not over a hyperlinked glyph.
+    private bool TryHitTestHyperlink(Point point, out LinkInfo link)
+    {
+        link = default;
+        if (_placed.Count == 0)
+            return false;
+
+        PlacedChar? best = null;
+        var bestScore = double.MaxValue;
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel || !pc.IsHyperlink)
+                continue;
+            // Only count glyphs the point actually falls within horizontally (a link is a tight target),
+            // and use the same vertical-band scoring as TryHitTest so the closest line wins.
+            if (point.X < pc.X || point.X > pc.X + pc.W)
+                continue;
+            var dy = point.Y < pc.Y ? pc.Y - point.Y
+                : point.Y > pc.Y + pc.LineHeight ? point.Y - (pc.Y + pc.LineHeight) : 0;
+            if (dy > 0)
+                continue; // require the point to be on the glyph's line
+            var dx = Math.Abs(point.X - (pc.X + pc.W / 2));
+            if (dx < bestScore)
+            {
+                bestScore = dx;
+                best = pc;
+            }
+        }
+
+        if (best is { Link: { HasTarget: true } found })
+        {
+            link = found;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -8303,12 +9560,19 @@ public sealed class DocumentView : Control
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
+        {
+            // AV-LINK: capture the run's hyperlink target so the link span survives the cell round-trip and
+            // SetRuns can re-segment runs on a hyperlink boundary. null when the run carries no link.
+            var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
+                ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
+                : (LinkInfo?)null;
             foreach (var ch in run.Text)
                 // AV-COMMENT: carry the run's CommentId so commented ranges survive the cell round-trip
                 // (layout + edit). Textless comment-reference runs contribute no cells, as before.
                 // AV-TRACKEDIT: also carry the run's tracked-change mark so recorded revisions survive the
                 // round-trip (and SetRuns can re-segment runs on a revision boundary).
-                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml));
+                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml, link));
+        }
         return cells;
     }
 
@@ -8345,13 +9609,17 @@ public sealed class DocumentView : Control
             var revision = cells[i].Revision;
             var revisionAuthor = cells[i].RevisionAuthor;
             var revisionDateXml = cells[i].RevisionDateXml;
+            // AV-LINK: a run is also one contiguous span of equal hyperlink target, so an inserted/edited
+            // hyperlink survives the cell round-trip and re-emits as a w:hyperlink-wrapped run on save.
+            var link = cells[i].Link;
             var start = i;
             while (i < cells.Count
                    && cells[i].Fmt.Equals(fmt)
                    && cells[i].CommentId == commentId
                    && cells[i].Revision == revision
                    && cells[i].RevisionAuthor == revisionAuthor
-                   && cells[i].RevisionDateXml == revisionDateXml)
+                   && cells[i].RevisionDateXml == revisionDateXml
+                   && cells[i].Link == link)
                 i++;
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
             paragraph.Runs.Add(new Run(text, fmt)
@@ -8360,6 +9628,9 @@ public sealed class DocumentView : Control
                 Revision = revision,
                 RevisionAuthor = revisionAuthor,
                 RevisionDateXml = revisionDateXml,
+                HyperlinkUrl = link?.Url,
+                HyperlinkAnchor = link?.Anchor,
+                HyperlinkTooltip = link?.Tooltip,
             });
             if (commentId is { } cid)
                 lastAnchorIndexFor[cid] = paragraph.Runs.Count - 1;
@@ -8478,6 +9749,20 @@ public sealed class DocumentView : Control
         return cells[index].Fmt;
     }
 
+    // AV-LINK: the hyperlink a character typed at <paramref name="offset"/> should inherit — i.e. the link
+    // only when the insertion point is strictly INSIDE a contiguous link span (the chars on both sides share
+    // it). This extends a hyperlink when typing within it (matching Word) without extending it when typing at
+    // its trailing edge. Returns null at a paragraph edge or outside any link.
+    private static LinkInfo? ActiveLink(Paragraph paragraph, int offset)
+    {
+        var cells = ParaCells(paragraph);
+        if (offset <= 0 || offset >= cells.Count)
+            return null;
+        var left = cells[offset - 1].Link;
+        var right = cells[offset].Link;
+        return left is { HasTarget: true } && left == right ? left : null;
+    }
+
     // ---- Text shaping helpers -------------------------------------------------------------------
 
     private FormattedText Build(string text, RunFormatting fmt)
@@ -8544,6 +9829,11 @@ public sealed class DocumentView : Control
     private static readonly Pen RevisionInsertUnderlinePen = new(RevisionBrush, 1.0);
     private static readonly Pen RevisionDeleteStrikePen = new(RevisionBrush, 1.0);
 
+    // ── AV-LINK: hyperlink render colour ──────────────────────────────────────────────────────────
+    // Word's default hyperlink character-style colour (a medium blue). A hyperlinked run with no explicit
+    // colour of its own renders in this colour + underlined.
+    private const string HyperlinkColorHex = "#0563C1";
+
     // AV-COMMENT: CommentId carries the anchoring review-comment id (null = not commented) so the
     // glyph layout can mark commented ranges. Defaulted so existing Cell(ch, fmt) construction is unchanged.
     // AV-TRACKEDIT: Revision/RevisionAuthor/RevisionDateXml carry a per-character tracked-change mark so
@@ -8555,7 +9845,23 @@ public sealed class DocumentView : Control
         int? CommentId = null,
         RevisionKind Revision = RevisionKind.None,
         string? RevisionAuthor = null,
-        string? RevisionDateXml = null);
+        string? RevisionDateXml = null,
+        // AV-LINK: the run's hyperlink target (external URL / internal bookmark anchor) + ScreenTip, carried
+        // per-character so a hyperlink span survives the cell round-trip (ParaCells → edit → SetRuns) and so
+        // SetRuns re-segments runs on a hyperlink boundary. null = this glyph is not inside a hyperlink.
+        LinkInfo? Link = null);
+
+    /// <summary>
+    /// AV-LINK: a hyperlink target carried alongside a glyph/run. Exactly one of <see cref="Url"/> (external)
+    /// or <see cref="Anchor"/> (internal bookmark) is meaningful; <see cref="Tooltip"/> is the optional
+    /// ScreenTip. Mirrors <see cref="Run.HyperlinkUrl"/>/<see cref="Run.HyperlinkAnchor"/>/<see cref="Run.HyperlinkTooltip"/>.
+    /// </summary>
+    internal readonly record struct LinkInfo(string? Url, string? Anchor, string? Tooltip)
+    {
+        public bool IsExternal => !string.IsNullOrEmpty(Url);
+        public bool IsInternal => !string.IsNullOrEmpty(Anchor);
+        public bool HasTarget => IsExternal || IsInternal;
+    }
 
     private readonly record struct DocPosition(int Block, int Offset);
 
@@ -8578,10 +9884,16 @@ public sealed class DocumentView : Control
         int? CommentId = null,
         // AV-TRACKEDIT: tracked-change mark on this glyph so the render can colour/underline insertions and
         // strike deletions. None for ordinary text.
-        RevisionKind Revision = RevisionKind.None)
+        RevisionKind Revision = RevisionKind.None,
+        // AV-LINK: the hyperlink target this glyph belongs to (null = not a hyperlink), so the render can
+        // style it (blue + underline) and the pointer hit-test can follow it on Ctrl+Click.
+        LinkInfo? Link = null)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;
+
+        /// <summary>True when this glyph is part of a hyperlink span.</summary>
+        public bool IsHyperlink => Link is { HasTarget: true };
 
         /// <summary>True when this glyph is covered by a review comment's anchored range.</summary>
         public bool IsCommented => CommentId is not null;
@@ -8596,6 +9908,67 @@ public sealed class DocumentView : Control
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
         public TextDocument Document => view._doc;
+    }
+
+    // ── AV-HFEDIT: header/footer slot identity + edit target ──────────────────────────────────────
+
+    /// <summary>
+    /// Identifies one of the six header/footer slots of a section's <see cref="SectionHeadersFooters"/>.
+    /// </summary>
+    internal enum HfSlot
+    {
+        Header,
+        Footer,
+        FirstHeader,
+        FirstFooter,
+        EvenHeader,
+        EvenFooter,
+    }
+
+    /// <summary>
+    /// Fully-qualifies an editable header/footer paragraph: which section's HF store, which slot, and the
+    /// paragraph index within that slot. <see cref="SectionIndex"/> is an index into <c>_doc.Sections</c>;
+    /// <see cref="UseFinalSectionStore"/> is true when the target is the document-level final-section store
+    /// (<see cref="TextDocument.FinalSectionHeadersFooters"/>), which the document-level Header/Footer views
+    /// alias. Mirrors the <c>_cellCaret</c> address tuple but for the HF store.
+    /// </summary>
+    internal readonly record struct HfTarget(int SectionIndex, bool UseFinalSectionStore, HfSlot Slot, int ParaIdx);
+
+    /// <summary>
+    /// Resolves an <see cref="HfTarget"/> to the live <see cref="SectionHeadersFooters"/> store it addresses,
+    /// or null when the section index is out of range.
+    /// </summary>
+    private SectionHeadersFooters? ResolveHfStore(HfTarget target)
+    {
+        if (target.UseFinalSectionStore)
+            return _doc.FinalSectionHeadersFooters;
+        if (target.SectionIndex < 0 || target.SectionIndex >= _doc.Sections.Count)
+            return _doc.FinalSectionHeadersFooters;
+        return _doc.Sections[target.SectionIndex].HeadersFooters;
+    }
+
+    /// <summary>Returns the <see cref="HeaderFooter"/> slot for a target, or null when the slot is empty/unset.</summary>
+    private static HeaderFooter? GetHfSlot(SectionHeadersFooters store, HfSlot slot) => slot switch
+    {
+        HfSlot.Header      => store.Header,
+        HfSlot.Footer      => store.Footer,
+        HfSlot.FirstHeader => store.FirstHeader,
+        HfSlot.FirstFooter => store.FirstFooter,
+        HfSlot.EvenHeader  => store.EvenHeader,
+        HfSlot.EvenFooter  => store.EvenFooter,
+        _                  => null,
+    };
+
+    /// <summary>Resolves a target's <see cref="Paragraph"/> model, or null when unavailable.</summary>
+    private Paragraph? GetHfParagraph(HfTarget target)
+    {
+        var store = ResolveHfStore(target);
+        if (store is null)
+            return null;
+        var hf = GetHfSlot(store, target.Slot);
+        if (hf is null || target.ParaIdx < 0 || target.ParaIdx >= hf.Paragraphs.Count)
+            return null;
+        return hf.Paragraphs[target.ParaIdx];
     }
 
     // ── HF: header/footer render item ─────────────────────────────────────────────────────────────
@@ -8615,6 +9988,20 @@ public sealed class DocumentView : Control
         public double AvailableWidth;
         /// <summary>Paragraph alignment for this line.</summary>
         public TextAlignment Alignment;
+
+        // ── AV-HFEDIT: editing back-reference + offset mapping ────────────────────────────────────
+        /// <summary>
+        /// The header/footer target this rendered line belongs to (which section slot + paragraph index),
+        /// or null when the line is not editable (defensive — every emitted line carries a target).
+        /// </summary>
+        public HfTarget? Target;
+        /// <summary>Line height (DIP) used for the editing region band + caret height.</summary>
+        public double LineHeight;
+        /// <summary>
+        /// Model-text offset (index into the paragraph's literal plain text) at which this segment's
+        /// displayed text begins. A click X inside the segment maps to ModelStartOffset + (chars before X).
+        /// </summary>
+        public int ModelStartOffset;
     }
 
     // ── AV-NOTERENDER: footnote / endnote render item ─────────────────────────────────────────────────

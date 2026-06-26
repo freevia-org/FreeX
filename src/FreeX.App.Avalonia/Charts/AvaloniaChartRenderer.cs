@@ -120,9 +120,11 @@ public sealed class AvaloniaChartRenderer
         RenderAxis(canvas, layout.CategoryAxis, isValueAxis: false);
 
         // Fix 3: Secondary axis — render right-side axis when present.
+        // CE1: Do NOT draw gridlines for the secondary value axis — only the primary value axis
+        // paints major gridlines, matching WPF (AddSecondaryAxisIfRequested sets MajorGridlineStyle=None)
+        // and Excel default. The secondary axis still draws its ticks, labels, and axis line.
         if (layout.SecondaryValueAxis is not null)
         {
-            RenderGridlines(canvas, layout.SecondaryValueAxis, layout.PlotArea, isValueAxis: true);
             RenderAxis(canvas, layout.SecondaryValueAxis, isValueAxis: true);
         }
 
@@ -295,13 +297,31 @@ public sealed class AvaloniaChartRenderer
 
         if (format?.NoLine == true)
         {
+            // CE3: Explicit NoLine — no outline at all (transparent spacer/helper series).
             stroke = null;
             strokeThickness = 0;
         }
-        else
+        else if (format is not null && (format.StrokeColor is not null || format.StrokeThemeColor is not null || format.StrokeThickness is not null))
         {
+            // CE3: Format has an explicit stroke color or thickness — honor both, mirroring
+            // WPF's ApplyRectangleBarFormat/ApplyBarFormat which only sets StrokeColor/StrokeThickness
+            // when explicitly present in the format. No explicit stroke color → no outline.
+            stroke = format.ResolveStrokeColor(_theme) is { } sc ? SolidBrush(sc) : SeriesStroke(series.SeriesIndex);
+            strokeThickness = format.StrokeThickness ?? 0.75;
+        }
+        else if (format is null)
+        {
+            // Default: no per-series format at all — use the theme palette stroke with default 0.75px
+            // outline (Excel/Avalonia default visual for a normal bar).
             stroke = SeriesStroke(series.SeriesIndex);
             strokeThickness = 0.75;
+        }
+        else
+        {
+            // CE3: Format exists but has no explicit stroke properties — no outline, matching WPF
+            // where RectangleBarSeries keeps its default StrokeThickness=0 when no stroke is set.
+            stroke = null;
+            strokeThickness = 0;
         }
 
         foreach (var bar in series.Bars)
@@ -1161,12 +1181,19 @@ public sealed class AvaloniaChartRenderer
         var isPie = _chart.Type is ModelChartType.Pie or ModelChartType.ThreeDPie or ModelChartType.Doughnut;
         foreach (var entry in legend.Entries)
         {
+            // CE2: When the series has NoFill, its legend swatch must also be transparent so the
+            // legend doesn't show a solid colored rectangle for an invisible helper/spacer series.
+            // Mirroring RenderBars which honors NoFill via Brushes.Transparent.
+            var entryFormat = isPie ? null : FindSeriesFormat(entry.SeriesIndex);
+            IBrush swatchFill = entryFormat?.NoFill == true
+                ? Brushes.Transparent
+                : isPie ? PaletteFill(entry.SeriesIndex) : SeriesFill(entry.SeriesIndex);
+
             var swatch = new AvaloniaRectangle
             {
                 Width = Math.Max(1, entry.SwatchRect.Width),
                 Height = Math.Max(1, entry.SwatchRect.Height),
-                // Pie legends key off the per-slice palette; cartesian legends key off the series.
-                Fill = isPie ? PaletteFill(entry.SeriesIndex) : SeriesFill(entry.SeriesIndex),
+                Fill = swatchFill,
             };
             Canvas.SetLeft(swatch, entry.SwatchRect.Left);
             Canvas.SetTop(swatch, entry.SwatchRect.Top);

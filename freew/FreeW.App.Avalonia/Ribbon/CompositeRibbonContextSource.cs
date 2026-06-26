@@ -45,6 +45,8 @@ internal sealed class CompositeRibbonContextSource : IRibbonContextSource
         TableRibbonContextSource.TableContextKey,
         FloatingRibbonContextSource.PictureContextKey,
         FloatingRibbonContextSource.DrawingContextKey,
+        FloatingRibbonContextSource.ChartContextKey,
+        FloatingRibbonContextSource.SmartArtContextKey,
     ];
 
     public CompositeRibbonContextSource(params IRibbonContextSource[] sources)

@@ -2950,3 +2950,163 @@ public sealed class SetTableFormattingCommand(int blockIndex, TableFormatting ne
     }
 }
 
+// ─── AV-CHARTTAB: Chart + SmartArt contextual-tab edit commands ──────────────────────────────────
+//
+// Each command mutates the Chart / SmartArt carried by the run at (paragraphIndex, runIndex), snapping
+// the prior value for undo. They mirror the WPF FreeW chart/smartart contextual-tab editors (a reasonable
+// subset: chart kind/style/colour-scheme + smartart layout/colour/style). All safely no-op when the run
+// at the address is not the expected kind.
+
+/// <summary>
+/// Helper to resolve the <see cref="Chart"/> carried by a run, or null.
+/// </summary>
+internal static class ChartSmartArtCommandHelpers
+{
+    public static Chart? ChartAt(IDocumentCommandContext context, int paragraphIndex, int runIndex)
+        => context.Document.Blocks.Count > paragraphIndex && paragraphIndex >= 0
+           && context.Document.Blocks[paragraphIndex] is Paragraph p
+           && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Chart : null;
+
+    public static SmartArt? SmartArtAt(IDocumentCommandContext context, int paragraphIndex, int runIndex)
+        => context.Document.Blocks.Count > paragraphIndex && paragraphIndex >= 0
+           && context.Document.Blocks[paragraphIndex] is Paragraph p
+           && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].SmartArt : null;
+}
+
+/// <summary>
+/// Change the <see cref="Chart.Kind"/> of the chart carried by the run at (paragraphIndex, runIndex).
+/// Snaps the prior kind for undo. No-op when the run carries no chart.
+/// </summary>
+public sealed class SetChartKindCommand(int paragraphIndex, int runIndex, ChartKind kind) : IDocumentCommand
+{
+    private ChartKind _previous;
+    private bool _applied;
+
+    public string Label => "Change Chart Type";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        _previous = chart.Kind;
+        chart.Kind = kind;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        chart.Kind = _previous;
+        _applied = false;
+    }
+}
+
+/// <summary>
+/// Set the <see cref="Chart.StyleId"/> of the chart carried by the run at (paragraphIndex, runIndex).
+/// Snaps the prior style id for undo. No-op when the run carries no chart.
+/// </summary>
+public sealed class SetChartStyleCommand(int paragraphIndex, int runIndex, int styleId) : IDocumentCommand
+{
+    private int _previous;
+    private bool _applied;
+
+    public string Label => "Change Chart Style";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        _previous = chart.StyleId;
+        chart.StyleId = styleId;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        chart.StyleId = _previous;
+        _applied = false;
+    }
+}
+
+/// <summary>
+/// Set the <see cref="Chart.ColorSchemeId"/> of the chart carried by the run at (paragraphIndex, runIndex).
+/// Snaps the prior scheme id for undo. No-op when the run carries no chart.
+/// </summary>
+public sealed class SetChartColorSchemeCommand(int paragraphIndex, int runIndex, string? colorSchemeId) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Change Chart Colors";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        _previous = chart.ColorSchemeId;
+        chart.ColorSchemeId = colorSchemeId;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.ChartAt(context, paragraphIndex, runIndex) is not { } chart) return;
+        chart.ColorSchemeId = _previous;
+        _applied = false;
+    }
+}
+
+/// <summary>
+/// Set the <see cref="SmartArt.Kind"/> (layout family) of the SmartArt carried by the run at
+/// (paragraphIndex, runIndex). Snaps the prior kind for undo. No-op when the run carries no SmartArt.
+/// </summary>
+public sealed class SetSmartArtLayoutCommand(int paragraphIndex, int runIndex, SmartArtKind kind) : IDocumentCommand
+{
+    private SmartArtKind _previous;
+    private bool _applied;
+
+    public string Label => "Change SmartArt Layout";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } sa) return;
+        _previous = sa.Kind;
+        sa.Kind = kind;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } sa) return;
+        sa.Kind = _previous;
+        _applied = false;
+    }
+}
+
+/// <summary>
+/// Set the <see cref="SmartArt.ColorSchemeId"/> of the SmartArt carried by the run at
+/// (paragraphIndex, runIndex). Snaps the prior scheme id for undo. No-op when the run carries no SmartArt.
+/// </summary>
+public sealed class SetSmartArtColorCommand(int paragraphIndex, int runIndex, string? colorSchemeId) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Change SmartArt Colors";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } sa) return;
+        _previous = sa.ColorSchemeId;
+        sa.ColorSchemeId = colorSchemeId;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } sa) return;
+        sa.ColorSchemeId = _previous;
+        _applied = false;
+    }
+}
+
