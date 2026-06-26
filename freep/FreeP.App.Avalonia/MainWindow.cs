@@ -1,0 +1,527 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Avalonia;
+using FreeP.App.Compositor;
+using FreeP.App.Rendering.Avalonia;
+using FreeP.Core.IO;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Avalonia;
+
+/// <summary>
+/// FreeP cross-platform main window. Viewer + navigator + file lifecycle (Wave 14B v1).
+///
+/// Layout:
+///   ┌──────────────────────────────────────────┐
+///   │  Ribbon (Home: File / Slides / Edit)     │
+///   ├──────────────────────────────────────────┤
+///   │  Body                                    │
+///   │  ┌──────────┬───────────────────────────┐│
+///   │  │ Slide    │  Stage (SlideCanvas)       ││
+///   │  │ Pane     │                           ││
+///   │  │ ~180 px  ├───────────────────────────┤│
+///   │  │          │  Notes pane (TextBox)      ││
+///   │  └──────────┴───────────────────────────┘│
+///   ├──────────────────────────────────────────┤
+///   │  Status bar ("Slide N / M")              │
+///   └──────────────────────────────────────────┘
+///
+/// Commands wired (v1):
+///   File:  New, Open, Save, Save As
+///   Slide: New Slide, Duplicate, Delete
+///   Edit:  Undo, Redo
+///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
+///
+/// Deferred to Wave 14C: shape editing, text in-canvas, transitions, animations,
+///   font/format ribbon, find/replace, clipboard (full), drag-reorder thumbnails.
+/// </summary>
+public sealed class MainWindow : Window
+{
+    private const string DefaultTitle = "FreeP";
+
+    private static readonly FilePickerFileType PptxFileType = new("PowerPoint Presentation")
+    {
+        Patterns = ["*.pptx"],
+        MimeTypes = ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+    };
+
+    // ── Presentation model ─────────────────────────────────────────────────────
+
+    private Presentation _presentation = Presentation.CreateEmpty();
+    private string? _currentPath;
+    private bool _isDirty;
+
+    // ── Editing session ────────────────────────────────────────────────────────
+
+    internal EditingSession Editor { get; private set; } = null!;
+
+    // ── UI elements ────────────────────────────────────────────────────────────
+
+    private readonly SlideCanvas _slideCanvas;
+    private readonly ListBox _slidePaneList;
+    private readonly TextBox _notesBox;
+    private readonly TextBlock _statusText;
+
+    private bool _notesRefreshing;
+    private bool _slidePaneRefreshing;
+
+    // ── Smoke surface ──────────────────────────────────────────────────────────
+
+    /// <summary>True once the ribbon has been built. Read by the launch-smoke coordinator.</summary>
+    internal bool HasToolbar { get; private set; }
+
+    /// <summary>Current slide count — read by the launch-smoke coordinator.</summary>
+    internal int SlideCount => _presentation.Slides.Count;
+
+    /// <summary>Current slide index (0-based) — read by the launch-smoke coordinator.</summary>
+    internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
+
+    // ── Constructors ───────────────────────────────────────────────────────────
+
+    public MainWindow()
+        : this(Array.Empty<string>())
+    {
+    }
+
+    public MainWindow(IReadOnlyList<string> startupArguments)
+    {
+        Title = DefaultTitle;
+        Width = 1280;
+        Height = 760;
+        MinWidth = 800;
+        MinHeight = 500;
+        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+
+        // Build editing session around the initial empty presentation.
+        RebuildEditor();
+
+        // ── Core UI elements ──────────────────────────────────────────────────
+
+        _slideCanvas = new SlideCanvas
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment   = VerticalAlignment.Stretch,
+            Margin              = new Thickness(24),
+        };
+
+        _slidePaneList = new ListBox
+        {
+            Width       = 180,
+            Padding     = new Thickness(4),
+            Background  = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+        };
+        _slidePaneList.SelectionChanged += OnSlidePaneSelectionChanged;
+
+        _notesBox = new TextBox
+        {
+            AcceptsReturn   = true,
+            TextWrapping    = TextWrapping.Wrap,
+            PlaceholderText = "Click to add notes",
+            MinHeight       = 64,
+            MaxHeight       = 120,
+            Padding         = new Thickness(8, 4),
+            FontSize        = 12,
+            Background      = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xF0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+        };
+        _notesBox.TextChanged += OnNotesTextChanged;
+
+        _statusText = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground        = Brushes.White,
+            Margin            = new Thickness(8, 0),
+        };
+
+        // ── Root layout ───────────────────────────────────────────────────────
+
+        var root = new DockPanel();
+
+        // Ribbon (top)
+        var ribbon = BuildRibbon();
+        DockPanel.SetDock(ribbon, Dock.Top);
+        root.Children.Add(ribbon);
+
+        // Status bar (bottom)
+        var statusBar = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Height     = 26,
+            Child      = _statusText,
+        };
+        DockPanel.SetDock(statusBar, Dock.Bottom);
+        root.Children.Add(statusBar);
+
+        // Body (fills remainder)
+        root.Children.Add(BuildBody());
+
+        // ── Keyboard shortcuts ────────────────────────────────────────────────
+
+        KeyDown += MainWindow_KeyDown;
+
+        // ── Initial content ───────────────────────────────────────────────────
+
+        var startupPptx = startupArguments
+            .FirstOrDefault(a => a.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase)
+                               && File.Exists(a));
+
+        if (startupPptx is not null)
+            TryLoadPptxFile(startupPptx);
+        else
+            LoadPresentation(_presentation, path: null);
+
+        Content = root;
+        UpdateStatus();
+    }
+
+    // ── Editor construction ────────────────────────────────────────────────────
+
+    private void RebuildEditor()
+    {
+        var bus = new PresentationCommandBus(_presentation);
+        Editor  = new EditingSession(_presentation, bus);
+
+        Editor.Changed             += OnEditorChanged;
+        Editor.CurrentSlideChanged += OnCurrentSlideChanged;
+    }
+
+    // ── Body layout ────────────────────────────────────────────────────────────
+
+    private Control BuildBody()
+    {
+        // Right: canvas (fills) + notes pane (auto height) stacked in a Grid.
+        var rightGrid = new Grid();
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var canvasHost = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
+            Child      = _slideCanvas,
+        };
+        Grid.SetRow(canvasHost, 0);
+        Grid.SetRow(_notesBox,  1);
+        rightGrid.Children.Add(canvasHost);
+        rightGrid.Children.Add(_notesBox);
+
+        // Left (slide pane) + right split.
+        var body = new Grid();
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(_slidePaneList, 0);
+        Grid.SetColumn(rightGrid,      1);
+        body.Children.Add(_slidePaneList);
+        body.Children.Add(rightGrid);
+
+        return body;
+    }
+
+    // ── Ribbon ─────────────────────────────────────────────────────────────────
+
+    private Control BuildRibbon()
+    {
+        var registry = BuildCommandRegistry();
+
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
+            FreePRibbonAvalonia.Build(),
+            registry,
+            afterExecute: null);
+
+        HasToolbar = true;
+        return new Border
+        {
+            Background      = Brushes.White,
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child           = ribbon,
+        };
+    }
+
+    private RibbonCommandRegistry BuildCommandRegistry()
+    {
+        var r = new RibbonCommandRegistry();
+
+        // File operations
+        r.Register("freep.file.new",     new RelayCommand(FileNew));
+        r.Register("freep.file.open",    new RelayCommand(() => _ = FileOpenAsync()));
+        r.Register("freep.file.save",    new RelayCommand(() => _ = FileSaveAsync()));
+        r.Register("freep.file.save-as", new RelayCommand(() => _ = FileSaveAsAsync()));
+
+        // Slide navigation/management
+        r.Register("freep.new-slide",       new RelayCommand(() => Editor.InsertSlide()));
+        r.Register("freep.duplicate-slide", new RelayCommand(() => Editor.DuplicateCurrentSlide()));
+        r.Register("freep.delete-slide",    new RelayCommand(() => Editor.DeleteCurrentSlide()));
+
+        // Undo / Redo
+        r.Register("freep.undo", new RelayCommand(() => Editor.Undo()));
+        r.Register("freep.redo", new RelayCommand(() => Editor.Redo()));
+
+        return r;
+    }
+
+    // ── File lifecycle ─────────────────────────────────────────────────────────
+
+    private void FileNew()
+    {
+        // v1: proceed without a save-changes dialog (dirty gate is tracked; modal dialog in 14C).
+        LoadPresentation(Presentation.CreateEmpty(), path: null);
+    }
+
+    private async Task FileOpenAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title         = "Open Presentation",
+            AllowMultiple = false,
+            FileTypeFilter = [PptxFileType],
+        });
+
+        if (files.Count == 0)
+            return;
+
+        var path = files[0].TryGetLocalPath();
+        if (path is not null)
+            TryLoadPptxFile(path);
+    }
+
+    private async Task FileSaveAsync()
+    {
+        if (_currentPath is not null)
+            TrySavePptxFile(_currentPath);
+        else
+            await FileSaveAsAsync();
+    }
+
+    private async Task FileSaveAsAsync()
+    {
+        var suggested = _currentPath is not null
+            ? Path.GetFileName(_currentPath)
+            : "Presentation.pptx";
+
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title             = "Save Presentation",
+            DefaultExtension  = "pptx",
+            SuggestedFileName = suggested,
+            FileTypeChoices   = [PptxFileType],
+        });
+
+        var path = file?.TryGetLocalPath();
+        if (path is not null)
+            TrySavePptxFile(path);
+    }
+
+    private void TryLoadPptxFile(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var presentation = PptxPackageReader.Read(stream);
+            LoadPresentation(presentation, path);
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = $"Open failed: {ex.Message}";
+        }
+    }
+
+    private void TrySavePptxFile(string path)
+    {
+        try
+        {
+            using var stream = File.Create(path);
+            PptxPackageWriter.Write(_presentation, stream);
+            _currentPath = path;
+            _isDirty     = false;
+            UpdateTitle();
+            _statusText.Text = $"Saved {Path.GetFileName(path)}";
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = $"Save failed: {ex.Message}";
+        }
+    }
+
+    // ── Presentation load ──────────────────────────────────────────────────────
+
+    private void LoadPresentation(Presentation presentation, string? path)
+    {
+        _presentation = presentation;
+        _currentPath  = path;
+        _isDirty      = false;
+
+        RebuildEditor();
+        RefreshSlidePane();
+        RefreshCanvas();
+        RefreshNotesPane();
+        UpdateTitle();
+        UpdateStatus();
+    }
+
+    // ── Canvas refresh ─────────────────────────────────────────────────────────
+
+    private void RefreshCanvas()
+    {
+        _slideCanvas.Presentation = _presentation;
+        _slideCanvas.Slide        = Editor.CurrentSlide;
+        _slideCanvas.SlideIndex   = Editor.CurrentSlideIndex;
+        _slideCanvas.Refresh();
+    }
+
+    // ── Slide pane ─────────────────────────────────────────────────────────────
+
+    private void RefreshSlidePane()
+    {
+        _slidePaneRefreshing = true;
+        try
+        {
+            _slidePaneList.Items.Clear();
+
+            for (int i = 0; i < _presentation.Slides.Count; i++)
+            {
+                var slideIdx = i;
+                var slide    = _presentation.Slides[i];
+
+                // Small SlideCanvas thumbnail (148 × 84 px letterboxed).
+                var thumb = new SlideCanvas
+                {
+                    Presentation = _presentation,
+                    Slide        = slide,
+                    SlideIndex   = slideIdx,
+                    Width        = 148,
+                    Height       = 84,
+                };
+
+                // Slide number label beneath thumbnail.
+                var label = new TextBlock
+                {
+                    Text                = $"{slideIdx + 1}",
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    FontSize            = 10,
+                    Margin              = new Thickness(0, 2, 0, 0),
+                };
+
+                var panel = new StackPanel
+                {
+                    Margin   = new Thickness(4),
+                    Children = { thumb, label },
+                };
+
+                _slidePaneList.Items.Add(new ListBoxItem { Content = panel, Padding = new Thickness(2) });
+            }
+
+            // Restore selection.
+            var current = Editor.CurrentSlideIndex;
+            if (current >= 0 && current < _slidePaneList.Items.Count)
+                _slidePaneList.SelectedIndex = current;
+        }
+        finally
+        {
+            _slidePaneRefreshing = false;
+        }
+    }
+
+    private void OnSlidePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_slidePaneRefreshing)
+            return;
+
+        var idx = _slidePaneList.SelectedIndex;
+        if (idx < 0 || idx >= _presentation.Slides.Count)
+            return;
+
+        Editor.SelectSlide(idx);
+    }
+
+    // ── Notes pane ─────────────────────────────────────────────────────────────
+
+    private void RefreshNotesPane()
+    {
+        _notesRefreshing = true;
+        try
+        {
+            var notes = Editor.CurrentSlideNotes;
+            _notesBox.Text = notes is null
+                ? string.Empty
+                : string.Join(
+                    Environment.NewLine,
+                    notes.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
+        }
+        finally
+        {
+            _notesRefreshing = false;
+        }
+    }
+
+    private void OnNotesTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_notesRefreshing)
+            return;
+        Editor.SetCurrentSlideNotesText(_notesBox.Text);
+    }
+
+    // ── Event handlers ─────────────────────────────────────────────────────────
+
+    private void OnEditorChanged()
+    {
+        _isDirty = true;
+        RefreshSlidePane();
+        UpdateTitle();
+        UpdateStatus();
+    }
+
+    private void OnCurrentSlideChanged(object? sender, EventArgs e)
+    {
+        // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
+        _slidePaneRefreshing = true;
+        try { _slidePaneList.SelectedIndex = Editor.CurrentSlideIndex; }
+        finally { _slidePaneRefreshing = false; }
+
+        RefreshCanvas();
+        RefreshNotesPane();
+        UpdateStatus();
+    }
+
+    // ── Status / title ─────────────────────────────────────────────────────────
+
+    private void UpdateTitle()
+    {
+        var filename = _currentPath is not null ? Path.GetFileName(_currentPath) : "Untitled";
+        var dirty    = _isDirty ? " *" : string.Empty;
+        Title = $"FreeP — {filename}{dirty}";
+    }
+
+    private void UpdateStatus()
+    {
+        var count   = _presentation.Slides.Count;
+        var current = Editor.CurrentSlideIndex;
+        _statusText.Text = count == 0
+            ? "No slides"
+            : $"Slide {current + 1} / {count}";
+    }
+
+    // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        if (!ctrl) return;
+
+        switch (e.Key)
+        {
+            case Key.N: FileNew(); e.Handled = true; break;
+            case Key.O: _ = FileOpenAsync(); e.Handled = true; break;
+            case Key.S when (e.KeyModifiers & KeyModifiers.Shift) != 0:
+                _ = FileSaveAsAsync(); e.Handled = true; break;
+            case Key.S: _ = FileSaveAsync(); e.Handled = true; break;
+            case Key.Z: Editor.Undo(); e.Handled = true; break;
+            case Key.Y: Editor.Redo(); e.Handled = true; break;
+        }
+    }
+}

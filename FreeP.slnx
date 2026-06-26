@@ -17,6 +17,8 @@
     <Project Path="freep/FreeP.App.Host/FreeP.App.Host.csproj" />
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
     <Project Path="freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj" />
+    <Project Path="freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj" />
+    <Project Path="freep/FreeP.App.Avalonia.Tests/FreeP.App.Avalonia.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/FreeP.RenderCompare/FreeP.RenderCompare.csproj" />
