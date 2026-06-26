@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -33,11 +34,12 @@ public sealed class InCanvasTableCellEditor
 
     // ── Cell-edit state ───────────────────────────────────────────────────────
 
-    private TextBox?  _cellTextBox;
-    private bool      _cellEditActive;
-    private int       _editRow;
-    private int       _editCol;
-    private uint      _editShapeId;
+    private RichTextBox? _cellTextBox;
+    private TextBody?    _cellOriginalBody;  // snapshot for change detection
+    private bool         _cellEditActive;
+    private int          _editRow;
+    private int          _editCol;
+    private uint         _editShapeId;
 
     // ── Cell-highlight overlay ────────────────────────────────────────────────
 
@@ -100,29 +102,38 @@ public sealed class InCanvasTableCellEditor
         double w = cellRect.Value.Width  * xf.Scale;
         double h = cellRect.Value.Height * xf.Scale;
 
-        // Flatten existing text to plain string for the textbox.
-        string existing = GetCellPlainText(cell);
+        // Keep a snapshot for change detection.
+        _cellOriginalBody = SetShapeTextBodyCommand.CloneTextBody(cell.TextBody);
 
-        _cellTextBox = new TextBox
+        // Determine a fallback font size from the cell's first run.
+        double fallbackPt = cell.TextBody?.Paragraphs
+            .SelectMany(p => p.Runs)
+            .FirstOrDefault(r => r.FontSizePt.HasValue)?.FontSizePt ?? 13.0;
+
+        var doc = TextBodyFlowDocumentConverter.ToFlowDocument(cell.TextBody, fallbackPt);
+
+        _cellTextBox = new RichTextBox(doc)
         {
-            AcceptsReturn   = true,
-            TextWrapping    = TextWrapping.Wrap,
-            Background      = new SolidColorBrush(Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF)),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
-            BorderThickness = new Thickness(1.5),
-            FontSize        = 13,
-            Text            = existing,
-            MinWidth        = Math.Max(30, w),
-            MinHeight       = Math.Max(18, h),
-            Width           = Math.Max(30, w),
-            Height          = Math.Max(18, h),
+            AcceptsReturn         = true,
+            Background            = new SolidColorBrush(Color.FromArgb(0xEE, 0xFF, 0xFF, 0xFF)),
+            BorderBrush           = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
+            BorderThickness       = new Thickness(1.5),
+            SpellCheck            = { IsEnabled = false },
+            IsUndoEnabled         = false,
+            MinWidth              = Math.Max(30, w),
+            MinHeight             = Math.Max(18, h),
+            Width                 = Math.Max(30, w),
+            Height                = Math.Max(18, h),
+            VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
         };
 
         Canvas.SetLeft(_cellTextBox, x);
         Canvas.SetTop (_cellTextBox, y);
 
-        _cellTextBox.LostFocus += (_, _) => CommitCellEdit();
-        _cellTextBox.KeyDown   += OnCellTextBoxKeyDown;
+        _cellTextBox.LostFocus    += (_, _) => CommitCellEdit();
+        _cellTextBox.KeyDown      += OnCellTextBoxKeyDown;
+        _cellTextBox.PreviewKeyDown += OnCellTextBoxPreviewKeyDown;
 
         _overlay.Children.Add(_cellTextBox);
         _cellTextBox.Focus();
@@ -137,9 +148,9 @@ public sealed class InCanvasTableCellEditor
     {
         if (!_cellEditActive || _cellTextBox is null) return;
 
-        string newText = _cellTextBox.Text ?? string.Empty;
+        var doc = _cellTextBox.Document;
         _overlay.Children.Remove(_cellTextBox);
-        _cellTextBox = null;
+        _cellTextBox    = null;
         _cellEditActive = false;
 
         var slide = _editor.CurrentSlide;
@@ -153,13 +164,15 @@ public sealed class InCanvasTableCellEditor
         var cell = shape.Table.Rows[row].Cells.ElementAtOrDefault(col);
         if (cell is null) return;
 
-        // Only issue a command if text changed.
-        if (GetCellPlainText(cell) == newText) return;
+        // Rebuild the full rich TextBody from the FlowDocument.
+        var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, cell.TextBody);
+
+        // Only issue a command if content actually changed.
+        if (CellBodiesEqual(_cellOriginalBody, newBody)) return;
 
         // Use the bus directly (the EditingSession API requires the shape to be selected).
         _editor.Bus.Execute(new SetTableCellTextCommand(
-            _editor.CurrentSlideIndex, _editShapeId, row, col,
-            TextBodyFromString(newText)));
+            _editor.CurrentSlideIndex, _editShapeId, row, col, newBody));
     }
 
     /// <summary>Cancels the current cell edit without writing back.</summary>
@@ -302,6 +315,42 @@ public sealed class InCanvasTableCellEditor
         return cm;
     }
 
+    // ── Ribbon format application (10A SEAM) ──────────────────────────────────
+    // Called by the ribbon routing in FreePRibbonCommands when IsCellEditActive is true.
+
+    /// <summary>True when a cell's RichTextBox is open and focused.</summary>
+    public bool IsCellRichEditActive => _cellEditActive && _cellTextBox is not null;
+
+    /// <summary>Toggles bold on the current cell RichTextBox selection.</summary>
+    public void ApplyBold()    { if (_cellTextBox is not null) EditingCommands.ToggleBold.Execute(null, _cellTextBox); }
+    /// <summary>Toggles italic on the current cell RichTextBox selection.</summary>
+    public void ApplyItalic()  { if (_cellTextBox is not null) EditingCommands.ToggleItalic.Execute(null, _cellTextBox); }
+    /// <summary>Toggles underline on the current cell RichTextBox selection.</summary>
+    public void ApplyUnderline() { if (_cellTextBox is not null) EditingCommands.ToggleUnderline.Execute(null, _cellTextBox); }
+
+    /// <summary>Sets font family on the current cell RichTextBox selection.</summary>
+    public void ApplyFont(string? fontFamily)
+    {
+        if (_cellTextBox is null || string.IsNullOrEmpty(fontFamily)) return;
+        _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(fontFamily));
+    }
+
+    /// <summary>Sets font size (pt) on the current cell RichTextBox selection.</summary>
+    public void ApplyFontSize(double? sizePt)
+    {
+        if (_cellTextBox is null || sizePt is null) return;
+        _cellTextBox.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, sizePt.Value * (96.0 / 72.0));
+    }
+
+    /// <summary>Sets text color on the current cell RichTextBox selection.</summary>
+    public void ApplyColor(ThemeAwareColor? color)
+    {
+        if (_cellTextBox is null || color is null) return;
+        var wpfColor = TextBodyFlowDocumentConverter.ResolveModelColor(color);
+        if (wpfColor is null) return;
+        _cellTextBox.Selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(wpfColor.Value));
+    }
+
     // ── Keyboard ──────────────────────────────────────────────────────────────
 
     private void OnCellTextBoxKeyDown(object sender, KeyEventArgs e)
@@ -311,6 +360,14 @@ public sealed class InCanvasTableCellEditor
             CancelCellEdit();
             e.Handled = true;
         }
+    }
+
+    private void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0) return;
+        if (e.Key == Key.B) { ApplyBold();      e.Handled = true; }
+        else if (e.Key == Key.I) { ApplyItalic();    e.Handled = true; }
+        else if (e.Key == Key.U) { ApplyUnderline(); e.Handled = true; }
     }
 
     // ── Cell highlight overlay ─────────────────────────────────────────────────
@@ -361,23 +418,26 @@ public sealed class InCanvasTableCellEditor
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static string GetCellPlainText(TableCell cell)
+    private static bool CellBodiesEqual(TextBody? a, TextBody? b)
     {
-        if (cell.TextBody is null) return string.Empty;
-        return string.Join("\n",
-            cell.TextBody.Paragraphs.SelectMany(p => p.Runs).Select(r => r.Text));
-    }
-
-    private static TextBody? TextBodyFromString(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return null;
-        var body = new TextBody { Wrap = true };
-        foreach (var line in text.Split('\n'))
+        if (a is null && b is null) return true;
+        if (a is null || b is null) return false;
+        if (a.Paragraphs.Count != b.Paragraphs.Count) return false;
+        for (int pi = 0; pi < a.Paragraphs.Count; pi++)
         {
-            var para = new Paragraph();
-            para.Runs.Add(new Run { Text = line });
-            body.Paragraphs.Add(para);
+            var pa = a.Paragraphs[pi];
+            var pb = b.Paragraphs[pi];
+            if (pa.Runs.Count != pb.Runs.Count) return false;
+            for (int ri = 0; ri < pa.Runs.Count; ri++)
+            {
+                var ra = pa.Runs[ri];
+                var rb = pb.Runs[ri];
+                if (ra.Text != rb.Text || ra.Bold != rb.Bold || ra.Italic != rb.Italic
+                    || ra.Underline != rb.Underline || ra.Strikethrough != rb.Strikethrough
+                    || ra.FontFamily != rb.FontFamily || ra.FontSizePt != rb.FontSizePt)
+                    return false;
+            }
         }
-        return body;
+        return true;
     }
 }

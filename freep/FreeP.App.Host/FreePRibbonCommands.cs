@@ -1,6 +1,7 @@
 using System.Windows;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
+using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
@@ -33,12 +34,19 @@ internal static class FreePRibbonCommands
     ///   Callback that opens the chart data editing dialog for the currently selected chart.
     ///   Provided by Wave 9B / MainWindow.  When null the button is a no-op.
     /// </param>
+    /// <param name="getSlideCanvas">
+    ///   Wave 10A: a late-binding getter for the live SlideCanvas. Used to route
+    ///   Bold/Italic/Underline/Font to the active RichTextBox editor when it is open, instead
+    ///   of applying the command to the whole-shape TextBody. May be null (e.g. in tests);
+    ///   routing is silently skipped when the getter returns null or no editor is active.
+    /// </param>
     public static RibbonCommandRegistry Build(
-        RibbonStateStore stateStore,
-        EditingSession   editor,
-        Action?          onStartFromStart   = null,
-        Action?          onStartFromCurrent = null,
-        Action?          onEditChartData    = null)
+        RibbonStateStore    stateStore,
+        EditingSession      editor,
+        Action?             onStartFromStart   = null,
+        Action?             onStartFromCurrent = null,
+        Action?             onEditChartData    = null,
+        Func<SlideCanvas?>? getSlideCanvas     = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -97,13 +105,29 @@ internal static class FreePRibbonCommands
         }));
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
+        //
+        // Wave 10A routing: when the in-canvas RichTextBox editor is active, format commands
+        // apply to the RichTextBox selection; otherwise they fall through to the whole-shape
+        // EditingSession toggles.  The routing helper is defined at the bottom of this class.
+        //
+        // 10B NOTE: this block is the only region that references slideCanvas in this file.
+        // Keep it isolated here to minimise merge churn with 10B.
 
-        registry.Register("freep.bold",      new EditorToggleCommand(stateStore, "freep.bold",
-            () => editor.ToggleBoldOnSelection()));
-        registry.Register("freep.italic",    new EditorToggleCommand(stateStore, "freep.italic",
-            () => editor.ToggleItalicOnSelection()));
-        registry.Register("freep.underline", new EditorToggleCommand(stateStore, "freep.underline",
-            () => editor.ToggleUnderlineOnSelection()));
+        registry.Register("freep.bold", new EditorToggleCommand(stateStore, "freep.bold", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyBold(), e => e.ApplyBold())) return;
+            editor.ToggleBoldOnSelection();
+        }));
+        registry.Register("freep.italic", new EditorToggleCommand(stateStore, "freep.italic", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyItalic(), e => e.ApplyItalic())) return;
+            editor.ToggleItalicOnSelection();
+        }));
+        registry.Register("freep.underline", new EditorToggleCommand(stateStore, "freep.underline", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyUnderline(), e => e.ApplyUnderline())) return;
+            editor.ToggleUnderlineOnSelection();
+        }));
 
         // ── Clipboard — Wave 5B ───────────────────────────────────────────────────
 
@@ -131,16 +155,20 @@ internal static class FreePRibbonCommands
         // ── Layout — STUBBED (no layout model yet) ────────────────────────────────
         registry.Register("freep.layout", new ActionCommand(() => { /* STUB: layout picker deferred */ }));
 
-        // ── Font family — Wave 5B ─────────────────────────────────────────────────
-        // The shared ComboBox fires Execute on every selection change; the chosen item is
-        // provided via RibbonCommandContext.SelectedValue (a string). When the context value
-        // is absent (e.g. tests that call Execute(Empty)), the command is a no-op.
+        // ── Font family — Wave 5B / 10A ───────────────────────────────────────────
+        // When the in-canvas editor is active, apply to the RichTextBox selection;
+        // otherwise apply to the whole-shape selection.
         registry.Register("freep.font-family",
             new ContextAwareCommand(ctx =>
             {
                 var family = ctx.SelectedValue;
-                if (!string.IsNullOrEmpty(family))
-                    editor.SetFontFamilyOnSelection(family);
+                if (string.IsNullOrEmpty(family)) return;
+                if (RouteToActiveRichEditor(
+                        getSlideCanvas?.Invoke(),
+                        e => e.ApplyFont(family),
+                        e => e.ApplyFont(family)))
+                    return;
+                editor.SetFontFamilyOnSelection(family);
             }));
 
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
@@ -432,6 +460,40 @@ internal static class FreePRibbonCommands
                 Trigger    = AnimationTrigger.OnClick,
                 DurationMs = 500,
             })));
+
+    // ── Wave 10A: active-editor routing ──────────────────────────────────────────
+    //
+    // This region is the ONLY place in this file that references SlideCanvas for 10A.
+    // 10B must not add slideCanvas references outside this region.
+
+    /// <summary>
+    /// Routes a format action to the active in-canvas RichTextBox editor (shape or table-cell),
+    /// if one is currently open.  Returns true if the action was routed (caller should skip the
+    /// whole-shape fallback); false if no editor is active.
+    /// </summary>
+    private static bool RouteToActiveRichEditor(
+        SlideCanvas?                     canvas,
+        Action<InCanvasTextEditor>       shapeAction,
+        Action<InCanvasTableCellEditor>  tableAction)
+    {
+        if (canvas is null) return false;
+
+        // Shape editor takes priority.
+        if (canvas.TextEditor?.IsActive == true)
+        {
+            shapeAction(canvas.TextEditor);
+            return true;
+        }
+
+        // Table cell editor.
+        if (canvas.TableCellEditor?.IsCellRichEditActive == true)
+        {
+            tableAction(canvas.TableCellEditor);
+            return true;
+        }
+
+        return false;
+    }
 
     /// <summary>Finds the last animation index targeting <paramref name="shapeId"/>; -1 if not found.</summary>
     private static int FindLastAnimationIndex(

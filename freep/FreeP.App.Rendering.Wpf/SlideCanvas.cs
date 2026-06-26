@@ -87,6 +87,20 @@ public sealed class SlideCanvas : FrameworkElement
         _tableCellEditor = new InCanvasTableCellEditor(this, editor, textOverlay); // Wave 9A
     }
 
+    // ── Wave 10A: active editor access for ribbon routing ──────────────────────
+
+    /// <summary>
+    /// The in-canvas shape text editor.  Null until <see cref="AttachEditing"/> is called.
+    /// The ribbon routing in MainWindow uses this to forward Bold/Italic/Underline/Font/Size/Color
+    /// to the active selection inside the RichTextBox while the editor is open.
+    /// </summary>
+    public InCanvasTextEditor? TextEditor => _textEditor;
+
+    /// <summary>
+    /// The in-canvas table cell editor.  Null until <see cref="AttachEditing"/> is called.
+    /// </summary>
+    public InCanvasTableCellEditor? TableCellEditor => _tableCellEditor;
+
     // ── Cached draw ops (invalidated on model change) ─────────────────────────
 
     private IReadOnlyList<DrawOp>? _cachedOps;

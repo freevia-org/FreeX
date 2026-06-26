@@ -141,12 +141,17 @@ public sealed class MainWindow : Window
         // Ribbon. Wave 4C passes the slideshow launch Actions into the command registry;
         // StartSlideShow (Wave 4B) opens the fullscreen SlideShowWindow.
         var stateStore = new RibbonStateStore();
+        // Wave 10A: pass a lazy canvas getter so the ribbon format commands can route to the
+        // active RichTextBox editor when it is open.  SlideCanvas is created inside BuildBody
+        // (called below) and stored in the SlideCanvas field; the lambda captures the field
+        // reference via `this`, so it always resolves at call-time after body construction.
         var commands = FreePRibbonCommands.Build(
             stateStore,
             Editor,
             onStartFromStart:   () => StartSlideShow(true),
             onStartFromCurrent: () => StartSlideShow(false),
-            onEditChartData:    () => OpenChartDataDialog());
+            onEditChartData:    () => OpenChartDataDialog(),
+            getSlideCanvas:     () => SlideCanvas);
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
