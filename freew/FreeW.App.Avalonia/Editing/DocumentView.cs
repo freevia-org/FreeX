@@ -972,6 +972,76 @@ public sealed class DocumentView : Control
     /// </summary>
     internal (int Block, int Offset) CaretPosition => (_caret.Block, _caret.Offset);
 
+    // ── AV-LIST: test helpers ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Place the body caret at the given block and character offset.
+    /// Exposed for AV-LIST unit tests (simulates cursor positioning without pointer events).
+    /// </summary>
+    internal void MoveCaretToBlock(int blockIdx, int offset)
+    {
+        _cellCaret = null;
+        _cellAnchor = null;
+        _caret = new DocPosition(blockIdx, offset);
+        _selectionAnchor = _caret;
+    }
+
+    /// <summary>
+    /// Trigger an Enter key (InsertParagraphBreak) programmatically.
+    /// Exposed for AV-LIST unit tests.
+    /// </summary>
+    internal void InsertParagraphBreakPublic() => InsertParagraphBreak();
+
+    /// <summary>
+    /// Invoke the list Tab/Shift-Tab handler and return whether it consumed the key.
+    /// Exposed for AV-LIST unit tests.
+    /// </summary>
+    internal bool ListTabAtItemStartPublic(bool shift) => ListTabAtItemStart(shift);
+
+    /// <summary>
+    /// Invoke the Backspace-outdent list handler and return whether it consumed the key.
+    /// Exposed for AV-LIST unit tests.
+    /// </summary>
+    internal bool BackspaceOutdentListItemPublic() => BackspaceOutdentListItem();
+
+    /// <summary>
+    /// Return the sequential list number that would be rendered for block <paramref name="blockIdx"/>,
+    /// by walking the document model the same way the layout loop does (render-time numbering).
+    /// Returns 0 for bullet or non-list paragraphs.
+    /// Exposed for AV-LIST unit tests.
+    /// </summary>
+    internal int GetListNumberForBlockPublic(int blockIdx)
+    {
+        // Re-layout so _markers are fresh.
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        int number = 0;
+        var prevKind = ListKind.None;
+        for (int i = 0; i < _doc.Blocks.Count; i++)
+        {
+            if (_doc.Blocks[i] is not Paragraph p)
+            {
+                number = 0;
+                prevKind = ListKind.None;
+                continue;
+            }
+            var kind = p.Formatting.ListKind;
+            if (kind is ListKind.Number or ListKind.MultiLevel)
+            {
+                number = prevKind is ListKind.Number or ListKind.MultiLevel ? number + 1 : 1;
+                if (i == blockIdx)
+                    return number;
+            }
+            else
+            {
+                number = 0;
+            }
+            prevKind = kind;
+        }
+        return 0;
+    }
+
     /// <summary>
     /// Simulates pressing Down (+1) or Up (-1) arrow from the current caret position.
     /// Exposed internally so regression tests can assert that vertical navigation reaches
@@ -4341,11 +4411,17 @@ public sealed class DocumentView : Control
             case Key.Up: MoveCaretVertical(-1, shift); e.Handled = true; break;
             case Key.Down: MoveCaretVertical(+1, shift); e.Handled = true; break;
             // AV-TBL3: Tab navigates between cells when the caret is in a table; outside a table
-            // it inserts a literal tab character (body-paragraph behaviour, same as before).
+            // it handles list demote/promote at item start, or inserts a literal tab character
+            // (body-paragraph behaviour, same as before).
             case Key.Tab:
                 if (_cellCaret is not null)
                 {
                     TabNavigateCell(forward: !shift);
+                    e.Handled = true;
+                }
+                else if (ListTabAtItemStart(shift))
+                {
+                    // AV-LIST: Tab/Shift+Tab at the start of a list item demotes/promotes.
                     e.Handled = true;
                 }
                 else if (!shift)
@@ -4441,6 +4517,8 @@ public sealed class DocumentView : Control
         }
 
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
+        // AV-LIST: Backspace at start of a list item outdents / removes list formatting.
+        if (BackspaceOutdentListItem()) return;
         if (_caret.Offset > 0)
         {
             var block = _caret.Block;
@@ -4556,11 +4634,37 @@ public sealed class DocumentView : Control
         var block = _caret.Block;
         var bodyOffset = _caret.Offset;
         var bodyCells = ParaCells(paragraph);
-        var firstPara = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
-        SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
-        var secondPara = new Paragraph { Formatting = paragraph.Formatting };
-        SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
+
+        // AV-LIST: list continuation / exit-list logic.
+        var listFmt = paragraph.Formatting;
+        if (listFmt.ListKind != ListKind.None)
+        {
+            if (bodyCells.Count == 0)
+            {
+                // Enter on an EMPTY list item → exit the list: turn the paragraph into a normal one.
+                var exitFmt = listFmt with { ListKind = ListKind.None, ListLevel = 0 };
+                _bus.Execute(new SetParagraphFormattingCommand(block, exitFmt));
+                // Caret stays at block 0 (now a normal paragraph). No split.
+                return;
+            }
+            // Enter on a NON-EMPTY list item → split and continue the list on the new paragraph.
+            // The new paragraph inherits ListKind + ListLevel (not StyleId, same as Word).
+            var firstPara = new Paragraph { Formatting = listFmt, StyleId = paragraph.StyleId };
+            SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
+            var contFmt = listFmt with { };   // same list kind + level; renumbering is render-time
+            var secondPara = new Paragraph { Formatting = contFmt };
+            SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
+            _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
+            _caret = new DocPosition(block + 1, 0);
+            _selectionAnchor = _caret;
+            return;
+        }
+
+        var firstParaNL = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
+        SetRuns(firstParaNL, bodyCells.Take(bodyOffset).ToList());
+        var secondParaNL = new Paragraph { Formatting = paragraph.Formatting };
+        SetRuns(secondParaNL, bodyCells.Skip(bodyOffset).ToList());
+        _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstParaNL, secondParaNL }));
         _caret = new DocPosition(block + 1, 0);
         _selectionAnchor = _caret;
     }
@@ -4893,6 +4997,67 @@ public sealed class DocumentView : Control
             return;
         var newKind = paragraph.Formatting.ListKind == kind ? ListKind.None : kind;
         _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, paragraph.Formatting with { ListKind = newKind }));
+    }
+
+    // AV-LIST: Tab at the start of a list item (caret offset == 0) demotes (Tab) or promotes
+    // (Shift+Tab) the list level. Returns true when the key was consumed; false when the caller
+    // should fall through to normal Tab behavior.
+    private bool ListTabAtItemStart(bool shift)
+    {
+        if (_caret.Offset != 0)
+            return false;
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return false;
+        var fmt = paragraph.Formatting;
+        if (fmt.ListKind == ListKind.None)
+            return false;
+
+        if (shift)
+        {
+            // Shift+Tab → promote (decrease level).
+            if (fmt.ListLevel == 0)
+            {
+                // Already at level 0: leave the list entirely (Word behavior).
+                _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListKind = ListKind.None, ListLevel = 0 }));
+            }
+            else
+            {
+                _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = fmt.ListLevel - 1 }));
+            }
+        }
+        else
+        {
+            // Tab → demote (increase level, cap at 8).
+            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = Math.Min(fmt.ListLevel + 1, 8) }));
+        }
+        return true;
+    }
+
+    // AV-LIST: Backspace at the very start of a list item (offset == 0, no selection) →
+    // outdent: decrease ListLevel, or remove list formatting entirely when already at level 0.
+    // Returns true when the key was consumed; caller should skip normal Backspace.
+    private bool BackspaceOutdentListItem()
+    {
+        if (NormalizedSelection() is not null)
+            return false;           // let normal DeleteSelection handle it
+        if (_caret.Offset != 0)
+            return false;
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return false;
+        var fmt = paragraph.Formatting;
+        if (fmt.ListKind == ListKind.None)
+            return false;
+
+        if (fmt.ListLevel == 0)
+        {
+            // At top level: remove list formatting entirely.
+            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListKind = ListKind.None, ListLevel = 0 }));
+        }
+        else
+        {
+            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = fmt.ListLevel - 1 }));
+        }
+        return true;
     }
 
     /// <summary>Apply a quick paragraph style (font size + weight) to the whole current paragraph.</summary>
