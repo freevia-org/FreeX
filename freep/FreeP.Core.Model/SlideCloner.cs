@@ -298,6 +298,17 @@ public static class SlideCloner
         DurationMs      = t.DurationMs,
         AdvanceOnClick  = t.AdvanceOnClick,
         AdvanceAfterMs  = t.AdvanceAfterMs,
+        RawXml          = t.RawXml,
+        MorphOption     = t.MorphOption,
+        Sound           = t.Sound is null ? null : new TransitionSound
+        {
+            AudioBytes  = t.Sound.AudioBytes is not null ? (byte[])t.Sound.AudioBytes.Clone() : null,
+            ContentType = t.Sound.ContentType,
+            RelId       = t.Sound.RelId,
+            PartPath    = t.Sound.PartPath,
+            Loop        = t.Sound.Loop,
+            IsBuiltIn   = t.Sound.IsBuiltIn,
+        },
     };
 
     private static ShapeAnimation CloneAnimation(ShapeAnimation a)

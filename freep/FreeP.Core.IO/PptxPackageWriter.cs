@@ -114,6 +114,14 @@ public static class PptxPackageWriter
         var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in presentation.Slides)
         {
+            // Register transition sound audio extension (if any).
+            if (slide.Transition?.Sound?.AudioBytes is { Length: > 0 })
+            {
+                var sndCt  = slide.Transition.Sound.ContentType ?? "audio/mpeg";
+                var sndExt = MediaContentTypeToExtension(sndCt);
+                mediaExtensions.Add(sndExt);
+            }
+
             foreach (var shape in AllShapes(slide.Shapes))
             {
                 if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
@@ -323,8 +331,21 @@ public static class PptxPackageWriter
             var hlinkRelEntries = new List<(string relId, string relType, string target, bool external)>();
             CollectHyperlinkRels(slide, presentation.Slides, si + 1, hlinkRelIds, hlinkRelEntries);
 
+            // Transition sound: write audio part (if present) and get relId for XML wiring.
+            string? transSoundRelId = null;
+            (string relId, string contentType, string partPath)? transSoundPart = null;
+            if (slide.Transition?.Sound?.AudioBytes is { Length: > 0 })
+            {
+                transSoundPart = WriteTransitionSoundPart(archive, slide.Transition, si + 1, usedRelIds);
+                if (transSoundPart.HasValue)
+                {
+                    transSoundRelId = transSoundPart.Value.relId;
+                    usedRelIds.Add(transSoundRelId);
+                }
+            }
+
             // Slide xml — use the owning master's theme color scheme for scheme-color pre-resolution.
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById, transSoundRelId));
 
             // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
             var slideRels = new RelsDoc();
@@ -351,6 +372,10 @@ public static class PptxPackageWriter
             // Hyperlink rels (external with TargetMode=External; internal slide rels without)
             foreach (var (hlRelId, hlRelType, hlTarget, isExternal) in hlinkRelEntries)
                 slideRels.Add(hlRelId, hlRelType, hlTarget, isExternal);
+            // Transition sound audio part rel
+            if (transSoundPart.HasValue)
+                slideRels.Add(transSoundPart.Value.relId, AudioRelType,
+                    $"../media/{transSoundPart.Value.partPath.Split('/').Last()}");
 
             // Write notes slide and add rel when the slide has speaker notes
             if (slide.Notes is not null)
@@ -710,7 +735,8 @@ public static class PptxPackageWriter
         Dictionary<uint, Dictionary<string, string>> smartArtRelIdRemap,
         Dictionary<string, string>? hlinkRelIds = null,
         List<Slide>? allSlides = null,
-        Dictionary<uint, string>? fillBlipById = null)
+        Dictionary<uint, string>? fillBlipById = null,
+        string? transSoundRelId = null)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -734,7 +760,7 @@ public static class PptxPackageWriter
                 // HfVisibility is preserved on the model for read-back from real .pptx files
                 // that carry it on the master/layout (which the reader already handles).
                 BuildSlideClrMapOvrEl(slide.ColorMapOverride),
-                BuildTransitionEl(slide.Transition),
+                BuildTransitionEl(slide.Transition, transSoundRelId),
                 BuildTimingEl(slide.Animations)));
     }
 
@@ -941,30 +967,71 @@ public static class PptxPackageWriter
 
     // ── p:transition ─────────────────────────────────────────────────────────────
 
-    private static XElement? BuildTransitionEl(SlideTransition? transition)
+    /// <summary>
+    /// Builds the mc:AlternateContent wrapping a p:transition element, or re-emits
+    /// the verbatim RawXml for unrecognized (Other) transitions.
+    /// <paramref name="soundRelId"/> is the r:embed relationship id of the audio part, if any.
+    /// </summary>
+    private static XElement? BuildTransitionEl(SlideTransition? transition, string? soundRelId = null)
     {
         if (transition is null || transition.Kind == TransitionKind.None)
             return null;
+
+        // ── Other / unrecognized: re-emit the verbatim raw XML ────────────────────
+        // This guarantees NO transition is silently dropped on round-trip, even for
+        // future or proprietary transition kinds we don't enumerate.
+        if (transition.Kind == TransitionKind.Other && transition.RawXml is not null)
+        {
+            try
+            {
+                var rawEl = XElement.Parse(transition.RawXml, LoadOptions.PreserveWhitespace);
+
+                // If there's a sound to re-attach and the raw XML doesn't already contain
+                // a sndAc element, inject it.
+                if (soundRelId is not null && rawEl.Element(P + "sndAc") is null)
+                    rawEl.Add(BuildSndAcEl(soundRelId, transition.Sound));
+
+                // Wrap in mc:AlternateContent so modern readers benefit from p14:dur (if present).
+                // If the raw XML already has p14:dur we just re-emit as-is inside a wrapper.
+                return rawEl;
+            }
+            catch
+            {
+                // Malformed raw XML — fall through to synthesize a fade fallback so we don't crash.
+                return BuildFadeTransitionEl(transition.DurationMs, transition.AdvanceOnClick,
+                    transition.AdvanceAfterMs, soundRelId, transition.Sound);
+            }
+        }
 
         var spd = PptxAnimationMap.DurationToSpd(transition.DurationMs);
 
         // Effect child element (shared between Choice and Fallback)
         var effectName = PptxAnimationMap.TransitionKindToElementName(transition.Kind);
-        var dirAttr = PptxAnimationMap.TransitionDirectionToAttr(transition.Direction);
+        var dirAttr    = PptxAnimationMap.TransitionDirectionToAttr(transition.Direction);
 
-        XElement BuildEffectEl() =>
-            effectName is not null
-                ? new XElement(P + effectName,
-                    dirAttr is not null ? new XAttribute("dir", dirAttr) : null!)
-                : null!;
+        XElement? BuildEffectEl()
+        {
+            if (effectName is null) return null;
+            var attrs = new List<object?>();
+            if (dirAttr is not null)
+                attrs.Add(new XAttribute("dir", dirAttr));
+            // Morph option
+            if (transition.Kind == TransitionKind.Morph && transition.MorphOption is not null)
+                attrs.Add(new XAttribute("option", transition.MorphOption));
+            return new XElement(P + effectName,
+                attrs.Where(x => x is not null).Cast<object>().ToArray());
+        }
 
-        // Build a p:transition element with the given attrs + effect child.
+        // Build a p:transition element with the given attrs + effect child + optional sound.
         XElement BuildTransEl(IEnumerable<object?> extraAttrs)
         {
             var ch = new List<object?>();
             ch.AddRange(extraAttrs);
             var eff = BuildEffectEl();
             if (eff is not null) ch.Add(eff);
+            // Sound: re-emit p:sndAc if we have a sound rel.
+            if (soundRelId is not null)
+                ch.Add(BuildSndAcEl(soundRelId, transition.Sound));
             return new XElement(P + "transition",
                 ch.Where(x => x is not null).Cast<object>().ToArray());
         }
@@ -995,6 +1062,93 @@ public static class PptxPackageWriter
                 BuildTransEl(choiceAttrs)),
             new XElement(MC + "Fallback",
                 BuildTransEl(commonAttrs)));
+    }
+
+    /// <summary>Builds a Fade mc:AlternateContent — used as last-resort fallback.</summary>
+    private static XElement BuildFadeTransitionEl(
+        int durationMs, bool advanceOnClick, int? advanceAfterMs,
+        string? soundRelId, TransitionSound? sound)
+    {
+        var spd = PptxAnimationMap.DurationToSpd(durationMs);
+        var common = new List<object?> { new XAttribute("spd", spd) };
+        if (!advanceOnClick) common.Add(new XAttribute("advClick", "0"));
+        if (advanceAfterMs.HasValue) common.Add(new XAttribute("advTm", advanceAfterMs.Value));
+
+        XElement BuildFadeEl(IEnumerable<object?> attrs)
+        {
+            var ch = new List<object?>(attrs);
+            ch.Add(new XElement(P + "fade"));
+            if (soundRelId is not null) ch.Add(BuildSndAcEl(soundRelId, sound));
+            return new XElement(P + "transition", ch.Where(x => x is not null).Cast<object>().ToArray());
+        }
+
+        var choice = new List<object?>(common) { new XAttribute(P14 + "dur", durationMs) };
+        return new XElement(MC + "AlternateContent",
+            new XAttribute(XNamespace.Xmlns + "mc", MC.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+            new XElement(MC + "Choice", new XAttribute("Requires", "p14"), BuildFadeEl(choice)),
+            new XElement(MC + "Fallback", BuildFadeEl(common)));
+    }
+
+    /// <summary>
+    /// Builds the <c>p:sndAc</c> element that carries the transition sound reference.
+    /// </summary>
+    private static XElement BuildSndAcEl(string soundRelId, TransitionSound? sound)
+    {
+        var sndEl = new XElement(P + "snd",
+            new XAttribute(R + "embed", soundRelId));
+
+        var stSndAttrs = new List<object?> { sndEl };
+        if (sound?.Loop == true)
+            stSndAttrs.Insert(0, new XAttribute("loop", "1"));
+
+        return new XElement(P + "sndAc",
+            new XElement(P + "stSnd", stSndAttrs.Cast<object>().ToArray()));
+    }
+
+    /// <summary>
+    /// Writes the transition sound audio bytes as an embedded part in the archive,
+    /// returning the assigned relId and content-type. Returns null if no sound bytes are available.
+    /// </summary>
+    private static (string relId, string contentType, string partPath)? WriteTransitionSoundPart(
+        ZipArchive archive, SlideTransition transition, int slideIndex, HashSet<string> usedRelIds)
+    {
+        var sound = transition.Sound;
+        if (sound is null || sound.AudioBytes is null || sound.AudioBytes.Length == 0)
+            return null;
+
+        // Determine extension from content-type.
+        var ct = sound.ContentType ?? "audio/mpeg";
+        var ext = ct switch
+        {
+            "audio/mpeg" or "audio/mp3"  => "mp3",
+            "audio/wav"                  => "wav",
+            "audio/ogg"                  => "ogg",
+            "audio/aac"                  => "aac",
+            "audio/x-ms-wma"             => "wma",
+            _                            => "mp3"
+        };
+
+        var partPath = $"ppt/media/transitionSnd{slideIndex}.{ext}";
+        var relId    = $"rIdSnd{slideIndex}";
+
+        // Avoid relId collision.
+        int suffix = 1;
+        while (usedRelIds.Contains(relId))
+            relId = $"rIdSnd{slideIndex}x{suffix++}";
+
+        try
+        {
+            var entry = archive.CreateEntry(partPath, System.IO.Compression.CompressionLevel.Optimal);
+            using var s = entry.Open();
+            s.Write(sound.AudioBytes, 0, sound.AudioBytes.Length);
+        }
+        catch
+        {
+            return null;
+        }
+
+        return (relId, ct, partPath);
     }
 
     // ── p:timing ─────────────────────────────────────────────────────────────────

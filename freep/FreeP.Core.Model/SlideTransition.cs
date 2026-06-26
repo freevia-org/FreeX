@@ -33,11 +33,58 @@ public sealed class SlideTransition
     /// Corresponds to <c>advTm</c> on p:transition.
     /// </summary>
     public int? AdvanceAfterMs { get; set; }
+
+    /// <summary>
+    /// Verbatim XML of the entire <c>p:transition</c> element (without the
+    /// mc:AlternateContent wrapper, if any).  Populated for <see cref="TransitionKind.Other"/>
+    /// transitions (unrecognized child element) and optionally for known kinds when the
+    /// original file contained extra attributes/children we don't model.
+    /// When non-null the writer re-emits this XML verbatim so PowerPoint re-opens the
+    /// exact transition without loss — this is the guarantee that NO transition is silently dropped.
+    /// For known kinds RawXml is null; the writer synthesizes the element from the structured fields.
+    /// </summary>
+    public string? RawXml { get; set; }
+
+    /// <summary>
+    /// Option for <see cref="TransitionKind.Morph"/>: "byWord", "byChar", or "byObject" (default null).
+    /// Maps to the <c>option</c> attribute on the <c>p:morph</c> child element.
+    /// </summary>
+    public string? MorphOption { get; set; }
+
+    /// <summary>
+    /// Transition sound (p:sndAc / p:stSnd). Null if no sound is attached.
+    /// </summary>
+    public TransitionSound? Sound { get; set; }
+}
+
+/// <summary>
+/// Transition sound descriptor, corresponding to <c>p:sndAc &gt; p:stSnd</c>.
+/// </summary>
+public sealed class TransitionSound
+{
+    /// <summary>Raw embedded audio bytes (from the referenced audio part). Null if the part could not be resolved.</summary>
+    public byte[]? AudioBytes { get; set; }
+
+    /// <summary>Content-type of the embedded audio (e.g. "audio/mpeg"). Null if unknown.</summary>
+    public string? ContentType { get; set; }
+
+    /// <summary>Relationship ID used when the sound references an audio part in the slide package.</summary>
+    public string? RelId { get; set; }
+
+    /// <summary>Original audio part path inside the ZIP (for re-embedding on write). Null if resolved from bytes.</summary>
+    public string? PartPath { get; set; }
+
+    /// <summary>Whether the sound loops (snd loop="1" attribute).</summary>
+    public bool Loop { get; set; }
+
+    /// <summary>Whether the sound should be played on entering the slide (default) or something else.</summary>
+    public bool IsBuiltIn { get; set; }
 }
 
 /// <summary>Identifies the transition effect element name in PresentationML.</summary>
 public enum TransitionKind
 {
+    // ── Legacy / widely-supported ────────────────────────────────────────────────
     None,
     Fade,
     Cut,
@@ -54,6 +101,89 @@ public enum TransitionKind
     Strips,
     Fly,
     Random,
+
+    // ── Modern / "Subtle" set ────────────────────────────────────────────────────
+    /// <summary>p:morph — morph transition (PowerPoint 2016+)</summary>
+    Morph,
+    /// <summary>p:flash — flash white</summary>
+    Flash,
+    /// <summary>p:reveal — reveal from edge</summary>
+    Reveal,
+
+    // ── "Exciting" 3-D set ───────────────────────────────────────────────────────
+    /// <summary>p:cube — 3-D cube rotation</summary>
+    Cube,
+    /// <summary>p:box — box in/out</summary>
+    Box,
+    /// <summary>p:rotate — rotate</summary>
+    Rotate,
+    /// <summary>p:flip — flip card</summary>
+    Flip,
+    /// <summary>p:gallery — gallery</summary>
+    Gallery,
+    /// <summary>p:conveyor — conveyor belt</summary>
+    Conveyor,
+    /// <summary>p:ferris — ferris wheel</summary>
+    Ferris,
+    /// <summary>p:flythrough — fly through</summary>
+    Flythrough,
+    /// <summary>p:switch — light switch</summary>
+    Switch,
+    /// <summary>p:orbit — orbit</summary>
+    Orbit,
+    /// <summary>p:doors — doors</summary>
+    Doors,
+    /// <summary>p:window — window</summary>
+    Window,
+    /// <summary>p:pan — pan</summary>
+    Pan,
+    /// <summary>p:honeycomb — honeycomb</summary>
+    Honeycomb,
+    /// <summary>p:comb — comb wipe</summary>
+    Comb,
+    /// <summary>p:glitter — glitter</summary>
+    Glitter,
+    /// <summary>p:vortex — vortex swirl</summary>
+    Vortex,
+    /// <summary>p:shred — shred</summary>
+    Shred,
+    /// <summary>p:wind — wind</summary>
+    Wind,
+    /// <summary>p:ripple — ripple</summary>
+    Ripple,
+    /// <summary>p:warp — warp</summary>
+    Warp,
+    /// <summary>p:fracture — fracture</summary>
+    Fracture,
+    /// <summary>p:crush — crush</summary>
+    Crush,
+    /// <summary>p:peelOff — peel off</summary>
+    PeelOff,
+    /// <summary>p:pageCurlDouble — page curl (double)</summary>
+    PageCurlDouble,
+    /// <summary>p:pageCurlSingle — page curl (single)</summary>
+    PageCurlSingle,
+    /// <summary>p:airplane — airplane</summary>
+    Airplane,
+    /// <summary>p:origami — origami</summary>
+    Origami,
+    /// <summary>p:prism — prism</summary>
+    Prism,
+    /// <summary>p:curtains — curtains</summary>
+    Curtains,
+    /// <summary>p:drape — drape</summary>
+    Drape,
+    /// <summary>p:prestige — prestige</summary>
+    Prestige,
+    /// <summary>p:wheelReverse — reverse wheel</summary>
+    WheelReverse,
+
+    // ── Catch-all ────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// An unrecognized or extension transition element. RawXml carries the verbatim XML
+    /// to guarantee lossless round-trip; slideshow falls back to Fade.
+    /// </summary>
+    Other,
 }
 
 /// <summary>
