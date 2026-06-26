@@ -153,4 +153,249 @@ public class RtfRoundTripTests
         text.Should().NotContain("{");
         text.Should().NotContain("}");
     }
+
+    // ---- CC1: list round-trip -----------------------------------------------------------------------
+
+    // CC1 — bullet list: ListKind.Bullet + ListLevel survive RTF save→load; no "•" marker in paragraph text.
+    [Fact]
+    public void RoundTrip_BulletList_RestoresListKindAndLevel_NoMarkerTextLeaked()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        // Three-item bullet list, two at level 0 and one at level 1.
+        var items = new[]
+        {
+            (Text: "Alpha",   Kind: ListKind.Bullet, Level: 0),
+            (Text: "Beta",    Kind: ListKind.Bullet, Level: 1),
+            (Text: "Gamma",   Kind: ListKind.Bullet, Level: 0),
+        };
+        foreach (var (text, kind, level) in items)
+            document.Blocks.Add(new Paragraph(text)
+            {
+                Formatting = new ParagraphFormatting { ListKind = kind, ListLevel = level }
+            });
+
+        var reloaded = Load(Save(document));
+
+        var paragraphs = reloaded.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().HaveCount(3, "all three list items must survive the round-trip");
+
+        for (var i = 0; i < items.Length; i++)
+        {
+            var p = paragraphs[i];
+            p.Formatting.ListKind.Should().Be(items[i].Kind,
+                $"paragraph {i} must have ListKind.Bullet after round-trip");
+            p.Formatting.ListLevel.Should().Be(items[i].Level,
+                $"paragraph {i} must have ListLevel {items[i].Level} after round-trip");
+
+            // Ensure no bullet marker text (•, ·, or literal "bullet") leaked into paragraph text.
+            var plain = p.PlainText;
+            plain.Should().Contain(items[i].Text,
+                $"paragraph {i} plain text must contain original content");
+            plain.Should().NotContain("•",
+                $"bullet marker must not leak into paragraph {i} text");
+            plain.Should().NotContain("·",
+                $"middle dot must not leak into paragraph {i} text");
+        }
+    }
+
+    // CC1 — number list: ListKind.Number + ListLevel survive RTF save→load; no "1." marker in text.
+    [Fact]
+    public void RoundTrip_NumberList_RestoresListKindAndLevel_NoMarkerTextLeaked()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var items = new[]
+        {
+            (Text: "First",   Kind: ListKind.Number, Level: 0),
+            (Text: "Second",  Kind: ListKind.Number, Level: 1),
+            (Text: "Third",   Kind: ListKind.Number, Level: 0),
+        };
+        foreach (var (text, kind, level) in items)
+            document.Blocks.Add(new Paragraph(text)
+            {
+                Formatting = new ParagraphFormatting { ListKind = kind, ListLevel = level }
+            });
+
+        var reloaded = Load(Save(document));
+
+        var paragraphs = reloaded.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().HaveCount(3);
+
+        for (var i = 0; i < items.Length; i++)
+        {
+            var p = paragraphs[i];
+            p.Formatting.ListKind.Should().Be(ListKind.Number,
+                $"paragraph {i} must have ListKind.Number after round-trip");
+            p.Formatting.ListLevel.Should().Be(items[i].Level,
+                $"paragraph {i} must have ListLevel {items[i].Level} after round-trip");
+
+            var plain = p.PlainText;
+            plain.Should().Contain(items[i].Text);
+            // Verify no "1." / "2." numeric markers leaked as literal text.
+            plain.Should().NotMatchRegex(@"^\d+\.",
+                $"numeric list marker must not prefix paragraph {i} text");
+        }
+    }
+
+    // CC1 — multi-level list: ListKind.MultiLevel survives RTF round-trip.
+    [Fact]
+    public void RoundTrip_MultiLevelList_RestoresListKind()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        document.Blocks.Add(new Paragraph("Level0")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0 }
+        });
+        document.Blocks.Add(new Paragraph("Level1")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 1 }
+        });
+        document.Blocks.Add(new Paragraph("Level2")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 2 }
+        });
+
+        var reloaded = Load(Save(document));
+        var paragraphs = reloaded.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().HaveCount(3);
+
+        paragraphs[0].Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraphs[0].Formatting.ListLevel.Should().Be(0);
+        paragraphs[1].Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraphs[1].Formatting.ListLevel.Should().Be(1);
+        paragraphs[2].Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+        paragraphs[2].Formatting.ListLevel.Should().Be(2);
+    }
+
+    // CC1 — mixed document: bullet + number lists + plain paragraphs interleaved; list identity is correct.
+    [Fact]
+    public void RoundTrip_MixedListAndPlain_ListIdentityCorrect()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Intro") { Formatting = ParagraphFormatting.Default });
+        document.Blocks.Add(new Paragraph("BulletA")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.Bullet, ListLevel = 0 }
+        });
+        document.Blocks.Add(new Paragraph("NumberA")
+        {
+            Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 }
+        });
+        document.Blocks.Add(new Paragraph("Outro") { Formatting = ParagraphFormatting.Default });
+
+        var reloaded = Load(Save(document));
+        var paragraphs = reloaded.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().HaveCount(4);
+
+        paragraphs[0].Formatting.ListKind.Should().Be(ListKind.None, "plain paragraph must not be a list");
+        paragraphs[1].Formatting.ListKind.Should().Be(ListKind.Bullet, "bullet paragraph must round-trip as Bullet");
+        paragraphs[2].Formatting.ListKind.Should().Be(ListKind.Number, "number paragraph must round-trip as Number");
+        paragraphs[3].Formatting.ListKind.Should().Be(ListKind.None, "trailing plain paragraph must not be a list");
+    }
+
+    // ---- CC2: highlight + caps + rtl round-trip -----------------------------------------------------
+
+    // CC2 — yellow highlight survives RTF round-trip.
+    [Fact]
+    public void RoundTrip_YellowHighlight_Preserved()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("hello", new RunFormatting { HighlightColorHex = "#FFFF00" }));
+        document.Blocks.Add(para);
+
+        var reloaded = Load(Save(document));
+        var run = reloaded.Blocks.OfType<Paragraph>().First().Runs.First();
+        run.Formatting.HighlightColorHex.Should().Be("#FFFF00",
+            "yellow highlight must survive RTF round-trip");
+    }
+
+    // CC2 — SmallCaps survives RTF round-trip.
+    [Fact]
+    public void RoundTrip_SmallCaps_Preserved()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("hello", new RunFormatting { SmallCaps = true }));
+        document.Blocks.Add(para);
+
+        var reloaded = Load(Save(document));
+        var run = reloaded.Blocks.OfType<Paragraph>().First().Runs.First();
+        run.Formatting.SmallCaps.Should().BeTrue("SmallCaps must survive RTF round-trip");
+        run.Formatting.AllCaps.Should().BeFalse("AllCaps must remain false");
+    }
+
+    // CC2 — AllCaps survives RTF round-trip.
+    [Fact]
+    public void RoundTrip_AllCaps_Preserved()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("hello", new RunFormatting { AllCaps = true }));
+        document.Blocks.Add(para);
+
+        var reloaded = Load(Save(document));
+        var run = reloaded.Blocks.OfType<Paragraph>().First().Runs.First();
+        run.Formatting.AllCaps.Should().BeTrue("AllCaps must survive RTF round-trip");
+        run.Formatting.SmallCaps.Should().BeFalse("SmallCaps must remain false");
+    }
+
+    // CC2 — RTL run survives RTF round-trip.
+    [Fact]
+    public void RoundTrip_RunRtl_Preserved()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("مرحبا", new RunFormatting { Rtl = true }));
+        document.Blocks.Add(para);
+
+        var reloaded = Load(Save(document));
+        var run = reloaded.Blocks.OfType<Paragraph>().First().Runs.First();
+        run.Formatting.Rtl.Should().BeTrue("Rtl must survive RTF round-trip");
+    }
+
+    // CC2 — yellow highlight + small caps together survive round-trip.
+    [Fact]
+    public void RoundTrip_HighlightAndSmallCaps_BothPreserved()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("world", new RunFormatting
+        {
+            HighlightColorHex = "#FFFF00",
+            SmallCaps = true
+        }));
+        document.Blocks.Add(para);
+
+        var reloaded = Load(Save(document));
+        var run = reloaded.Blocks.OfType<Paragraph>().First().Runs.First();
+        run.Formatting.HighlightColorHex.Should().Be("#FFFF00",
+            "highlight must survive round-trip alongside SmallCaps");
+        run.Formatting.SmallCaps.Should().BeTrue(
+            "SmallCaps must survive round-trip alongside highlight");
+    }
+
+    // CC2 — run with no highlight/caps must not have those flags set after round-trip (no false positives).
+    [Fact]
+    public void RoundTrip_PlainRun_NoHighlightOrCaps()
+    {
+        var reloaded = Load(Save(DocOf("plain text")));
+        var run = reloaded.Blocks.OfType<Paragraph>().First().Runs.FirstOrDefault();
+        if (run is null) return; // empty paragraph is fine
+        run.Formatting.HighlightColorHex.Should().BeNull("plain run must have no highlight");
+        run.Formatting.SmallCaps.Should().BeFalse("plain run must have SmallCaps=false");
+        run.Formatting.AllCaps.Should().BeFalse("plain run must have AllCaps=false");
+        run.Formatting.Rtl.Should().BeFalse("plain run must have Rtl=false");
+    }
 }

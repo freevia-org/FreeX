@@ -10,11 +10,15 @@ namespace FreeW.Core.Model;
 public static class TrackChanges
 {
     /// <summary>
-    /// True when any run anywhere in the document body carries a tracked-change mark — an insertion or
-    /// deletion (<see cref="Run.Revision"/>) or a tracked formatting change (<see cref="Run.FormatRevision"/>).
+    /// True when any run or paragraph anywhere in the document body carries a tracked-change mark — an
+    /// insertion or deletion (<see cref="Run.Revision"/>), a tracked run-formatting change
+    /// (<see cref="Run.FormatRevision"/>), or a tracked paragraph-formatting change
+    /// (<see cref="Paragraph.ParagraphFormatRevision"/>).
     /// </summary>
     public static bool HasRevisions(TextDocument document) =>
-        EnumerateParagraphs(document).Any(p => p.Runs.Any(r => r.Revision != RevisionKind.None || r.FormatRevision is not null));
+        EnumerateParagraphs(document).Any(p =>
+            p.ParagraphFormatRevision is not null ||
+            p.Runs.Any(r => r.Revision != RevisionKind.None || r.FormatRevision is not null));
 
     /// <summary>
     /// Accept every tracked change: inserted runs become ordinary text (their revision mark cleared) and
@@ -37,11 +41,21 @@ public static class TrackChanges
     }
 
     // Resolve all revision marks in one paragraph. On accept, deletions are dropped and insertions kept;
-    // on reject, insertions are dropped and deletions kept. A tracked formatting change (FormatRevision)
-    // is resolved independently of any insert/delete mark: accept keeps the current formatting and clears
-    // the mark; reject restores the previous formatting. Kept runs have their revision metadata cleared.
+    // on reject, insertions are dropped and deletions kept. A tracked formatting change (FormatRevision
+    // on runs, ParagraphFormatRevision on the paragraph) is resolved independently of any insert/delete
+    // mark: accept keeps the current formatting and clears the mark; reject restores the previous
+    // formatting. Kept runs have their revision metadata cleared.
     private static void Resolve(Paragraph paragraph, bool accept)
     {
+        // Paragraph-level tracked formatting change (w:pPrChange): accept keeps current formatting,
+        // reject restores the previous paragraph formatting captured in ParagraphFormatRevision.
+        if (paragraph.ParagraphFormatRevision is { } pFormatRevision)
+        {
+            if (!accept)
+                paragraph.Formatting = pFormatRevision.PreviousParagraphFormatting;
+            paragraph.ParagraphFormatRevision = null;
+        }
+
         var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
         for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
         {

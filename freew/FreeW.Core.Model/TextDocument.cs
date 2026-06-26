@@ -1465,6 +1465,15 @@ public enum RevisionKind
 public sealed record FormatRevision(RunFormatting PreviousFormatting, string? Author, string? DateXml);
 
 /// <summary>
+/// A tracked paragraph-formatting change on a paragraph (Word's <c>w:pPrChange</c>).
+/// <see cref="PreviousParagraphFormatting"/> is the paragraph's formatting <em>before</em> the change
+/// (what reject restores); the paragraph's current <see cref="Paragraph.Formatting"/> is the new
+/// formatting. <see cref="Author"/>/<see cref="DateXml"/> record who made the change and when
+/// (the w:author/w:date on w:pPrChange). Mirrors <see cref="FormatRevision"/> for runs.
+/// </summary>
+public sealed record ParagraphFormatRevision(ParagraphFormatting PreviousParagraphFormatting, string? Author, string? DateXml);
+
+/// <summary>
 /// A top-level document block. The document body is an ordered sequence of blocks; today that is
 /// paragraphs and tables, mirroring how WordprocessingML interleaves w:p and w:tbl inside w:body.
 /// </summary>
@@ -1540,6 +1549,17 @@ public sealed class Paragraph : Block
     /// </para>
     /// </summary>
     public PreservedNumbering? PreservedNumbering { get; set; }
+
+    /// <summary>
+    /// A tracked paragraph-<em>formatting</em> change on this paragraph (Word's w:pPrChange), or null
+    /// when the paragraph's formatting was not changed under Track Changes. When set,
+    /// <see cref="Formatting"/> is the new (current) paragraph formatting and
+    /// <see cref="ParagraphFormatRevision"/> carries the <em>previous</em> formatting plus the
+    /// author/date who made the change. Accepting keeps the new formatting and clears the mark;
+    /// rejecting restores the previous paragraph formatting. Mirrors <see cref="Run.FormatRevision"/>
+    /// at the paragraph level.
+    /// </summary>
+    public ParagraphFormatRevision? ParagraphFormatRevision { get; set; }
 
     public Paragraph() { }
 
