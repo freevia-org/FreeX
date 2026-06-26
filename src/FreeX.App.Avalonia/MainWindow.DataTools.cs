@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -247,7 +248,7 @@ public sealed partial class MainWindow
 
     private sealed class ValidationCircleControl : Control
     {
-        private static readonly IPen CirclePen = new Pen(new SolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x00)), 2);
+        private static readonly IPen CirclePen = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0xC0, 0x00, 0x00)), 2);
         private const double Inset = 1.0;
 
         private readonly IReadOnlyList<Rect> _cellBounds;

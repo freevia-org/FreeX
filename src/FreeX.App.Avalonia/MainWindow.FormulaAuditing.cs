@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -122,8 +123,8 @@ public sealed partial class MainWindow
 
     private sealed class FormulaTraceArrowControl : Control
     {
-        private static readonly IBrush PrecedentBrush = new SolidColorBrush(Color.FromRgb(0, 102, 51));
-        private static readonly IBrush DependentBrush = new SolidColorBrush(Color.FromRgb(0, 86, 179));
+        private static readonly IBrush PrecedentBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 102, 51));
+        private static readonly IBrush DependentBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 86, 179));
         private const double ArrowHeadLength = 10;
         private const double ArrowHeadHalfWidth = 5;
         private const double DotRadius = 3;

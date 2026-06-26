@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.SlicerTimeline;
@@ -16,14 +17,14 @@ public sealed partial class MainWindow
 {
     private const double EmusPerPixel = 9525.0;
 
-    private static readonly IBrush SlicerBodyBrush = new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF5));
-    private static readonly IBrush SlicerBorderBrush = new SolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF));
-    private static readonly IBrush SlicerHeaderBrush = new SolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
-    private static readonly IBrush SlicerTileBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
-    private static readonly IBrush SlicerSelectedTileBrush = new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3));
-    private static readonly IBrush SlicerMutedTextBrush = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40));
-    private static readonly IBrush SlicerTrackBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0));
-    private static readonly IBrush SlicerSelectionBrush = new SolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
+    private static readonly IBrush SlicerBodyBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF5));
+    private static readonly IBrush SlicerBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF));
+    private static readonly IBrush SlicerHeaderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
+    private static readonly IBrush SlicerTileBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
+    private static readonly IBrush SlicerSelectedTileBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3));
+    private static readonly IBrush SlicerMutedTextBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40));
+    private static readonly IBrush SlicerTrackBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0));
+    private static readonly IBrush SlicerSelectionBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
 
     /// <summary>
     /// Adds slicer and timeline overlay visuals for the active sheet's connected

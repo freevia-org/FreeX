@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Drawing;
 using FreeX.Core.Commands;
@@ -176,10 +177,10 @@ internal sealed class FormControlVisual : Control
 {
     private static readonly IBrush GlyphBrush = Brushes.Black;
     private static readonly IBrush BoxFill = Brushes.White;
-    private static readonly IBrush ChromeFill = new SolidColorBrush(Color.FromRgb(240, 240, 240));
-    private static readonly IBrush ShadowBrush = new SolidColorBrush(Color.FromRgb(128, 128, 128));
+    private static readonly IBrush ChromeFill = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240));
+    private static readonly IBrush ShadowBrush = new ImmutableSolidColorBrush(Color.FromRgb(128, 128, 128));
     private static readonly IBrush HighlightBrush = Brushes.White;
-    private static readonly IBrush DarkShadowBrush = new SolidColorBrush(Color.FromRgb(105, 105, 105));
+    private static readonly IBrush DarkShadowBrush = new ImmutableSolidColorBrush(Color.FromRgb(105, 105, 105));
 
     private readonly FormControlModel _control;
     private readonly double _zoom;

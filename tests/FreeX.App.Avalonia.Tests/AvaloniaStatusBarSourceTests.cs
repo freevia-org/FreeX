@@ -13,6 +13,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// (built by the shared <see cref="StatusBarDisplayModelBuilder"/>) and that the "Customize Status Bar"
 /// right-click menu is built from the neutral <see cref="StatusBarCustomizeContextMenuPlanner"/>.
 /// </summary>
+[Collection("AvaloniaHeadless")]
 public sealed class AvaloniaStatusBarSourceTests
 {
     private static readonly HeadlessUnitTestSession Session =

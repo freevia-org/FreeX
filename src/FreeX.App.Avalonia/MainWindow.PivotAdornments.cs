@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
@@ -19,10 +20,10 @@ public sealed partial class MainWindow
 {
     // Pivot header dropdown visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
     // Background and border mirror WPF's PivotHeaderDropdownButtonBrush (228,233,240) / BorderPen (132,141,154).
-    private static readonly IBrush PivotDropdownButtonBg = new SolidColorBrush(Color.FromRgb(228, 233, 240));
-    private static readonly IBrush PivotDropdownButtonBorder = new SolidColorBrush(Color.FromRgb(132, 141, 154));
-    private static readonly IBrush PivotDropdownGlyphBrush = new SolidColorBrush(Color.FromRgb(45, 55, 65));
-    private static readonly IBrush PivotActiveDropdownGlyphBrush = new SolidColorBrush(Color.FromRgb(15, 109, 140));
+    private static readonly IBrush PivotDropdownButtonBg = new ImmutableSolidColorBrush(Color.FromRgb(228, 233, 240));
+    private static readonly IBrush PivotDropdownButtonBorder = new ImmutableSolidColorBrush(Color.FromRgb(132, 141, 154));
+    private static readonly IBrush PivotDropdownGlyphBrush = new ImmutableSolidColorBrush(Color.FromRgb(45, 55, 65));
+    private static readonly IBrush PivotActiveDropdownGlyphBrush = new ImmutableSolidColorBrush(Color.FromRgb(15, 109, 140));
 
     // Padding reserved in the cell text for expand/collapse buttons (matches WPF PivotExpandCollapseButtonReserve).
     internal const double PivotExpandCollapseButtonSize = 8;

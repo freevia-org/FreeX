@@ -14,6 +14,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Media.Immutable;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -358,7 +359,7 @@ public sealed partial class MainWindow : Window
     internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
         ResolveTokenColor("FreeXChromeSurfaceColor", global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
     private static readonly IBrush ChromeSurface =
-        ResolveTokenBrush("FreeXChromeSurfaceBrush") ?? new SolidColorBrush(global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
+        ResolveTokenBrush("FreeXChromeSurfaceBrush") ?? new ImmutableSolidColorBrush(global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
     private static readonly IBrush StatusBarSurface = Brush(23, 50, 77);
     // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal.
     private static readonly IBrush SheetTabContourBrush =
@@ -21775,11 +21776,13 @@ public sealed partial class MainWindow : Window
         grid.Children.Add(control);
     }
 
+    // ImmutableSolidColorBrush has no AvaloniaObject dispatcher affinity, so it is safe to store
+    // in static readonly fields that outlive a single HeadlessUnitTestSession dispatch cycle.
     private static IBrush Brush(byte red, byte green, byte blue) =>
-        new SolidColorBrush(Color.FromRgb(red, green, blue));
+        new ImmutableSolidColorBrush(Color.FromRgb(red, green, blue));
 
     private static IBrush Brush(byte alpha, byte red, byte green, byte blue) =>
-        new SolidColorBrush(Color.FromArgb(alpha, red, green, blue));
+        new ImmutableSolidColorBrush(Color.FromArgb(alpha, red, green, blue));
 
     private static IBrush Brush(CellColor color) =>
         Brush(color.R, color.G, color.B);

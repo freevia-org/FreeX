@@ -21,6 +21,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// but the palette values and that the styles are wired are pinned here so a regression is caught. Control-
 /// building tests run on the headless UI thread (icon geometry needs the render interface).
 /// </summary>
+[Collection("AvaloniaHeadless")]
 public sealed class AvaloniaRibbonThemeTests
 {
     private static readonly HeadlessUnitTestSession Session =
