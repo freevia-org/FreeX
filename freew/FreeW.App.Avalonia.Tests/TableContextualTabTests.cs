@@ -43,6 +43,10 @@ public sealed class TableContextualTabTests
             SetDraftView: () => { },
             OpenFontDialog: () => { },
             OpenParagraphDialog: () => { },
+            OpenPageSetupDialog: () => { },
+            ToggleOrientation:   () => { },
+            ApplyMarginPreset:   _ => { },
+            ApplyPaperSize:      _ => { },
             ApplyZoom: (_, _) => { });
 
     // ── Registry completeness ─────────────────────────────────────────────────

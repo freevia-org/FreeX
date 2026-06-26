@@ -59,6 +59,10 @@ public sealed class CellAlignmentTests
             SetDraftView: () => { },
             OpenFontDialog: () => { },
             OpenParagraphDialog: () => { },
+            OpenPageSetupDialog: () => { },
+            ToggleOrientation:   () => { },
+            ApplyMarginPreset:   _ => { },
+            ApplyPaperSize:      _ => { },
             ApplyZoom: (_, _) => { });
 
     // ── helpers ───────────────────────────────────────────────────────────────────────────────────
