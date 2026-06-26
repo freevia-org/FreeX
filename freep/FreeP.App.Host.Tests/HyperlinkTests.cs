@@ -312,4 +312,253 @@ public sealed class HyperlinkTests : IDisposable
         var result = win.HitTestHyperlink(slide, canvasX: 50, canvasY: 50);
         result.Should().BeNull("a click outside all shapes should return null");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // BB1: internal slide-jump resolves by part path, not filename digit
+    //      Construct a raw PPTX zip where slideN.xml filenames don't match
+    //      presentation order: sldIdLst lists slide3.xml first (rId2), slide1.xml second (rId3).
+    //      A hyperlink on slide 1 (slide3.xml) targets slide 2 (slide1.xml).
+    //      The correct TargetSlideId must be the rId of slide1.xml (rId3), NOT allSlides[0].Id.
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void InternalHyperlink_ReorderedDeck_ResolvesTargetByPartPath_NotFilenameDigit()
+    {
+        // Build a minimal .pptx in a MemoryStream where the slide part filename order
+        // differs from the presentation sldIdLst order.
+        //
+        // Presentation order: sldIdLst = [ rId2 → slide3.xml, rId3 → slide1.xml ]
+        //   allSlides[0] = rId2 (slide3.xml)  — the "first" slide in deck order
+        //   allSlides[1] = rId3 (slide1.xml)  — the "second" slide in deck order
+        //
+        // Hyperlink on slide3.xml (allSlides[0]): r:id="rH1" → rel target="../slides/slide1.xml"
+        //   Correct resolution: TargetSlideId = "rId3" (the rId of slide1.xml in the presentation)
+        //   Buggy resolution:   TargetSlideId = allSlides[1-1].Id = allSlides[0].Id = "rId2" (wrong!)
+        //     (the bug reads "1" from "slide1.xml" and does allSlides[1-1])
+
+        using var ms = BuildReorderedPptx();
+        var pres = PptxPackageReader.Read(ms);
+
+        pres.Slides.Should().HaveCount(2, "two slides in the deck");
+
+        // First slide in presentation order came from part slide3.xml (rId2).
+        var firstSlide = pres.Slides[0];
+        firstSlide.Id.Should().Be("rId2", "first in sldIdLst is rId2 → slide3.xml");
+
+        // Second slide in presentation order came from part slide1.xml (rId3).
+        var secondSlide = pres.Slides[1];
+        secondSlide.Id.Should().Be("rId3", "second in sldIdLst is rId3 → slide1.xml");
+
+        // The hyperlink on the first slide targets slide1.xml → should resolve to rId3 (second slide).
+        var hlink = firstSlide.Shapes.FirstOrDefault()?.Hyperlink;
+        hlink.Should().NotBeNull("the hyperlink on the first slide must be preserved");
+        hlink!.IsExternal.Should().BeFalse("this is an internal slide-jump link");
+        hlink.TargetSlideId.Should().Be(secondSlide.Id,
+            "hyperlink target must resolve to the slide whose PART is slide1.xml (rId3), " +
+            "not to the slide at filename-digit index 1 (rId2)");
+    }
+
+    /// <summary>
+    /// Builds a minimal well-formed .pptx zip in memory where:
+    ///   Presentation order: slide3.xml (rId2) first, slide1.xml (rId3) second.
+    ///   Hyperlink on slide3.xml (first slide) targets slide1.xml (second slide) via rH1.
+    /// </summary>
+    private static MemoryStream BuildReorderedPptx()
+    {
+        var ms = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            // _rels/.rels
+            WriteEntry(zip, "_rels/.rels", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+                </Relationships>
+                """);
+
+            // ppt/_rels/presentation.xml.rels
+            // rId2 → slide3.xml (first in deck), rId3 → slide1.xml (second in deck)
+            WriteEntry(zip, "ppt/_rels/presentation.xml.rels", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide3.xml"/>
+                  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+                </Relationships>
+                """);
+
+            // ppt/presentation.xml — sldIdLst: id 256 → rId2, id 257 → rId3
+            WriteEntry(zip, "ppt/presentation.xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <p:sldSz cx="9144000" cy="6858000"/>
+                  <p:sldIdLst>
+                    <p:sldId id="256" r:id="rId2"/>
+                    <p:sldId id="257" r:id="rId3"/>
+                  </p:sldIdLst>
+                </p:presentation>
+                """);
+
+            // slide3.xml — first slide (deck order 0); has an internal hyperlink targeting slide1.xml
+            WriteEntry(zip, "ppt/slides/_rels/slide3.xml.rels", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rH1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide1.xml"/>
+                </Relationships>
+                """);
+
+            WriteEntry(zip, "ppt/slides/slide3.xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <p:cSld>
+                    <p:spTree>
+                      <p:sp>
+                        <p:nvSpPr>
+                          <p:cNvPr id="2" name="LinkedShape">
+                            <a:hlinkClick r:id="rH1" action="ppaction://hlinksldjump"/>
+                          </p:cNvPr>
+                          <p:cNvSpPr/><p:nvPr/>
+                        </p:nvSpPr>
+                        <p:spPr>
+                          <a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm>
+                          <a:prstGeom prst="rect"/>
+                        </p:spPr>
+                      </p:sp>
+                    </p:spTree>
+                  </p:cSld>
+                </p:sld>
+                """);
+
+            // slide1.xml — second slide (deck order 1); the hyperlink target
+            WriteEntry(zip, "ppt/slides/_rels/slide1.xml.rels", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                </Relationships>
+                """);
+
+            WriteEntry(zip, "ppt/slides/slide1.xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:cSld><p:spTree/></p:cSld>
+                </p:sld>
+                """);
+
+            // [Content_Types].xml — minimal
+            WriteEntry(zip, "[Content_Types].xml", """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+                  <Override PartName="/ppt/slides/slide3.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+                  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+                </Types>
+                """);
+        }
+
+        ms.Position = 0;
+        return ms;
+    }
+
+    private static void WriteEntry(System.IO.Compression.ZipArchive zip, string path, string content)
+    {
+        var entry = zip.CreateEntry(path);
+        using var writer = new System.IO.StreamWriter(entry.Open(), System.Text.Encoding.UTF8);
+        writer.Write(content.Trim());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // BB2: grouped-shape hyperlink is hit-tested
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void HitTestHyperlink_GroupedShapeWithHyperlink_IsFound()
+    {
+        // Group occupies (50..250 dip, 50..250 dip) — matched by HitTestShape on the group.
+        // Child inside group at (100..200 dip, 100..200 dip) — matched on child hit-test.
+        var hlink = new Hyperlink { Url = "https://grouped.example.com" };
+
+        var child = new SlideShape
+        {
+            Id          = 2,
+            Name        = "GroupedChild",
+            Kind        = SlideShapeKind.AutoShape,
+            OffsetXEmu  = (long)(100 * 9525.0),
+            OffsetYEmu  = (long)(100 * 9525.0),
+            ExtentCxEmu = (long)(100 * 9525.0),
+            ExtentCyEmu = (long)(100 * 9525.0),
+            Hyperlink   = hlink,
+        };
+
+        var group = new SlideShape
+        {
+            Id          = 1,
+            Name        = "Group1",
+            Kind        = SlideShapeKind.Group,
+            OffsetXEmu  = (long)(50 * 9525.0),
+            OffsetYEmu  = (long)(50 * 9525.0),
+            ExtentCxEmu = (long)(200 * 9525.0),
+            ExtentCyEmu = (long)(200 * 9525.0),
+        };
+        group.Children.Add(child);
+
+        var slide = new Slide();
+        slide.Shapes.Add(group);
+
+        var p = new Presentation { SlideSizeCxEmu = 12_192_000, SlideSizeCyEmu = 6_858_000 };
+        p.Slides.Add(slide);
+
+        var win = new SlideShowWindow(p);
+
+        // Click at (150, 150) dip — inside both the group bounds and the child bounds.
+        var result = win.HitTestHyperlink(slide, canvasX: 150, canvasY: 150);
+        result.Should().BeSameAs(hlink,
+            "clicking inside a grouped shape's bounds should return its hyperlink (BB2 fix)");
+    }
+
+    [StaFact]
+    public void HitTestHyperlink_GroupedShapeOutsideChildBounds_ReturnsNull()
+    {
+        // Group occupies (50..250 dip). Child is at (200..300 dip) — outside the test point.
+        var hlink = new Hyperlink { Url = "https://grouped.example.com" };
+
+        var child = new SlideShape
+        {
+            Id          = 2,
+            Name        = "GroupedChild",
+            Kind        = SlideShapeKind.AutoShape,
+            OffsetXEmu  = (long)(200 * 9525.0),
+            OffsetYEmu  = (long)(200 * 9525.0),
+            ExtentCxEmu = (long)(100 * 9525.0),
+            ExtentCyEmu = (long)(100 * 9525.0),
+            Hyperlink   = hlink,
+        };
+
+        var group = new SlideShape
+        {
+            Id          = 1,
+            Name        = "Group1",
+            Kind        = SlideShapeKind.Group,
+            OffsetXEmu  = (long)(50 * 9525.0),
+            OffsetYEmu  = (long)(50 * 9525.0),
+            ExtentCxEmu = (long)(300 * 9525.0),
+            ExtentCyEmu = (long)(300 * 9525.0),
+        };
+        group.Children.Add(child);
+
+        var slide = new Slide();
+        slide.Shapes.Add(group);
+
+        var p = new Presentation { SlideSizeCxEmu = 12_192_000, SlideSizeCyEmu = 6_858_000 };
+        p.Slides.Add(slide);
+
+        var win = new SlideShowWindow(p);
+
+        // Click at (100, 100) dip — inside the group, but NOT inside the child (200..300).
+        var result = win.HitTestHyperlink(slide, canvasX: 100, canvasY: 100);
+        result.Should().BeNull("click is inside group but not inside the child with the hyperlink");
+    }
 }

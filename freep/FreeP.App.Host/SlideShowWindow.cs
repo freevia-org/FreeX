@@ -279,18 +279,39 @@ public sealed class SlideShowWindow : Window
     /// Hit-tests the click point against shapes that carry a hyperlink.
     /// Returns the first matching hyperlink, or null.
     /// Run-precise hit-testing for run-level links is approximated to the containing shape (v1).
+    /// Recurses into group children (BB2 fix) so hyperlinks on grouped shapes are reachable.
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
     {
         double slideX = CanvasToSlideX(canvasX);
         double slideY = CanvasToSlideY(canvasY);
 
-        foreach (var shape in slide.Shapes)
+        return HitTestHyperlinkInShapes(slide.Shapes, slideX, slideY);
+    }
+
+    /// <summary>
+    /// Recursively searches <paramref name="shapes"/> (and their group children) for a shape
+    /// that contains (<paramref name="slideX"/>, <paramref name="slideY"/>) and carries a
+    /// hyperlink.  Group bounds are checked first so we only recurse when inside the group.
+    /// </summary>
+    private static Hyperlink? HitTestHyperlinkInShapes(
+        IReadOnlyList<SlideShape> shapes, double slideX, double slideY)
+    {
+        foreach (var shape in shapes)
         {
             if (!HitTestShape(shape, slideX, slideY)) continue;
 
             // Shape-level hyperlink takes priority.
             if (shape.Hyperlink is not null) return shape.Hyperlink;
+
+            // Recurse into group children — they share the same coordinate space as the
+            // parent slide (group children use absolute EMU offsets, not relative to the group),
+            // so no coordinate transform is needed; the same slideX/slideY is correct.
+            if (shape.Children.Count > 0)
+            {
+                var groupResult = HitTestHyperlinkInShapes(shape.Children, slideX, slideY);
+                if (groupResult is not null) return groupResult;
+            }
 
             // Run-level: return the first hyperlink found in any run (shape-level approximation).
             if (shape.TextBody is not null)

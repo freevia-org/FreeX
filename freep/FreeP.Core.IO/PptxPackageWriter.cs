@@ -196,6 +196,12 @@ public static class PptxPackageWriter
         var sldIdElements = new List<XElement>();
         uint sldIdCounter = 256;
 
+        // Build the GLOBAL author map once before the slide loop so that every per-slide
+        // BuildCommentsXml call uses consistent (globally-assigned) author ids.
+        // Keys are (author-name, initials); ids are 0-based in first-encounter order across
+        // all slides (same order BuildCommentAuthorsXml would produce).
+        var globalAuthorMap = BuildGlobalAuthorMap(presentation.Slides);
+
         // Emit a single minimal notesMaster if any slide has notes.
         bool hasSomeNotes = presentation.Slides.Any(s => s.Notes is not null);
         if (hasSomeNotes)
@@ -284,7 +290,7 @@ public static class PptxPackageWriter
             {
                 var cmPath  = $"ppt/comments/comment{si + 1}.xml";
                 var cmRelId = $"rIdCm{si + 1}";
-                WriteEntry(archive, cmPath, BuildCommentsXml(slide.Comments));
+                WriteEntry(archive, cmPath, BuildCommentsXml(slide.Comments, globalAuthorMap));
                 slideRels.Add(cmRelId, CommentsRelType, $"../comments/comment{si + 1}.xml");
             }
 
@@ -529,10 +535,17 @@ public static class PptxPackageWriter
 
             var sectionElements = p.Sections.Select(sec =>
             {
+                // Translate each section member's Slide.Id to the freshly-assigned
+                // write-time numeric sldId via slideIdToNumericSldId.
+                // Members that no longer exist in the presentation are skipped so we
+                // never emit a dangling p14:sldId reference.
+                var translatedSldIds = sec.SlideIds
+                    .Where(slideIdToNumericSldId.ContainsKey)
+                    .Select(slideId => slideIdToNumericSldId[slideId]);
+
                 var sldIdLstEl = new XElement(P14 + "sldIdLst",
-                    sec.SlideIds
-                        .Select(numId => new XElement(P14 + "sldId",
-                            new XAttribute("id", numId))));
+                    translatedSldIds.Select(assignedId => new XElement(P14 + "sldId",
+                        new XAttribute("id", assignedId))));
 
                 return (XElement)new XElement(P14 + "section",
                     new XAttribute("name", sec.Name),
@@ -664,31 +677,46 @@ public static class PptxPackageWriter
     // ── commentAuthors.xml ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Builds a ppt/commentAuthors.xml that de-duplicates authors across all slides.
-    /// Authors are keyed by (name, initials); they get assigned a stable numeric id
-    /// 0, 1, 2, … in first-encounter order.
+    /// Builds a globally-consistent map from (author-name, initials) → numeric id.
+    /// Authors are assigned ids 0, 1, 2 … in first-encounter order across ALL slides.
+    /// This single source of truth is shared by both BuildCommentAuthorsXml and
+    /// BuildCommentsXml so the two parts always agree on author ids.
+    /// </summary>
+    private static Dictionary<(string name, string initials), int> BuildGlobalAuthorMap(List<Slide> slides)
+    {
+        var map    = new Dictionary<(string name, string initials), int>();
+        int nextId = 0;
+        foreach (var slide in slides)
+        {
+            foreach (var cm in slide.Comments)
+            {
+                var key = (cm.Author, cm.Initials);
+                if (!map.ContainsKey(key))
+                    map[key] = nextId++;
+            }
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// Builds a ppt/commentAuthors.xml using the pre-built global author map.
+    /// Authors are keyed by (name, initials) with ids 0, 1, 2, … in first-encounter order.
     /// </summary>
     private static XDocument BuildCommentAuthorsXml(List<Slide> slides)
     {
-        // De-duplicate: key = (name, initials) → id
-        var authorMap  = new Dictionary<(string name, string initials), int>();
-        int nextId = 0;
+        var authorMap = BuildGlobalAuthorMap(slides);
 
+        // Track the highest comment idx seen per author (for the lastIdx attribute).
         var authorLastIdx = new Dictionary<int, int>();
+        foreach (var kv in authorMap)
+            authorLastIdx[kv.Value] = 0;
 
         foreach (var slide in slides)
         {
             foreach (var cm in slide.Comments)
             {
                 var key = (cm.Author, cm.Initials);
-                if (!authorMap.TryGetValue(key, out var authorId))
-                {
-                    authorId = nextId++;
-                    authorMap[key] = authorId;
-                    authorLastIdx[authorId] = 0;
-                }
-                // Track the highest idx seen per author (for lastIdx attribute).
-                if (cm.Idx > authorLastIdx[authorId])
+                if (authorMap.TryGetValue(key, out var authorId) && cm.Idx > authorLastIdx[authorId])
                     authorLastIdx[authorId] = cm.Idx;
             }
         }
@@ -712,32 +740,28 @@ public static class PptxPackageWriter
 
     /// <summary>
     /// Builds a ppt/comments/commentN.xml for a single slide's comments.
-    /// Author ids are derived by matching author name+initials against the global author list;
-    /// since this method is called after BuildCommentAuthorsXml we replicate the same lookup.
-    /// Indices are recalculated from list position (1-based).
+    /// Uses the GLOBAL author map so authorId values are consistent with commentAuthors.xml.
+    /// Comment indices (idx) are always renumbered sequentially (1-based) per slide on write
+    /// to prevent duplicate-idx collisions when the model has stale/cloned Idx values.
     /// </summary>
-    private static XDocument BuildCommentsXml(List<SlideComment> comments)
+    private static XDocument BuildCommentsXml(
+        List<SlideComment> comments,
+        Dictionary<(string name, string initials), int> globalAuthorMap)
     {
-        // Re-derive author id by name+initials so the file is self-consistent.
-        var authorIdMap = new Dictionary<(string, string), int>();
-        int nextId = 0;
-        foreach (var cm in comments)
-        {
-            var key = (cm.Author, cm.Initials);
-            if (!authorIdMap.ContainsKey(key))
-                authorIdMap[key] = nextId++;
-        }
-
         var cmElements = comments.Select((cm, i) =>
         {
-            authorIdMap.TryGetValue((cm.Author, cm.Initials), out var authorId);
+            // Look up author id in the GLOBAL map (not locally re-derived).
+            globalAuthorMap.TryGetValue((cm.Author, cm.Initials), out var authorId);
+
             var dtStr = cm.DateTime?.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)
                         ?? System.DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
 
+            // Always renumber idx sequentially (1-based) per slide to avoid duplicate-idx
+            // collisions when the model contains stale/cloned Idx values (BB5 fix).
             return (XElement)new XElement(P + "cm",
                 new XAttribute("authorId", authorId),
                 new XAttribute("dt",       dtStr),
-                new XAttribute("idx",      cm.Idx > 0 ? cm.Idx : (i + 1)),
+                new XAttribute("idx",      i + 1),
                 new XElement(P + "pos",
                     new XAttribute("x", cm.Xemu),
                     new XAttribute("y", cm.Yemu)),
