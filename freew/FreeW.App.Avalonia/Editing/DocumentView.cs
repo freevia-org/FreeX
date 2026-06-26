@@ -93,6 +93,10 @@ public sealed class DocumentView : Control
     private readonly List<FloatingWordArtData>  _floatingWordArts  = new();
     private readonly List<FloatingSmartArtData> _floatingSmartArts = new();
     private readonly List<FloatingGroupData>    _floatingGroups    = new();
+    // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
+    private readonly List<FloatingChartData>    _inlineCharts    = new();
+    private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
+    private readonly List<FloatingSmartArtData> _inlineSmartArts = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
 
@@ -479,6 +483,56 @@ public sealed class DocumentView : Control
         }
     }
 
+    // ── FO4 introspection properties (inline objects) ────────────────────────────────────────────────
+
+    /// <summary>Number of inline (non-floating) charts laid out in the last layout pass.</summary>
+    public int InlineChartCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _inlineCharts.Count; }
+    }
+
+    /// <summary>Snapshot of inline chart rects for tests (rect, kind, title).</summary>
+    public IReadOnlyList<(Rect Rect, ChartKind Kind, string? Title)> InlineChartRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineCharts.Select(c => (c.Rect, c.Kind, c.Title)).ToList();
+        }
+    }
+
+    /// <summary>Number of inline (non-floating) WordArt objects laid out in the last layout pass.</summary>
+    public int InlineWordArtCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _inlineWordArts.Count; }
+    }
+
+    /// <summary>Snapshot of inline WordArt rects for tests (rect, text, style).</summary>
+    public IReadOnlyList<(Rect Rect, string Text, WordArtStyle Style)> InlineWordArtRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineWordArts.Select(w => (w.Rect, w.Text, w.Style)).ToList();
+        }
+    }
+
+    /// <summary>Number of inline (non-floating) SmartArt diagrams laid out in the last layout pass.</summary>
+    public int InlineSmartArtCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _inlineSmartArts.Count; }
+    }
+
+    /// <summary>Snapshot of inline SmartArt rects for tests (rect, kind, node count).</summary>
+    public IReadOnlyList<(Rect Rect, SmartArtKind Kind, int NodeCount)> InlineSmartArtRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineSmartArts.Select(s => (s.Rect, s.Kind, s.NodeTexts.Count)).ToList();
+        }
+    }
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -638,6 +692,9 @@ public sealed class DocumentView : Control
         _floatingWordArts.Clear();
         _floatingSmartArts.Clear();
         _floatingGroups.Clear();
+        _inlineCharts.Clear();
+        _inlineWordArts.Clear();
+        _inlineSmartArts.Clear();
         _cellHits.Clear();
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -704,7 +761,10 @@ public sealed class DocumentView : Control
                 // Paragraphs whose images are ALL floating (anchored) are laid out as normal text
                 // paragraphs so that the anchor content-Y is tracked; their images are collected
                 // into _floatingImages by CollectFloatingImages() called from within each layout method.
-                var hasInlineImage = paragraph.Runs.Any(r => r.Image is { IsFloating: false });
+                var hasInlineImage   = paragraph.Runs.Any(r => r.Image    is { IsFloating: false });
+                var hasInlineChart   = paragraph.Runs.Any(r => r.Chart    is { IsFloating: false });
+                var hasInlineWordArt = paragraph.Runs.Any(r => r.WordArt  is { IsFloating: false });
+                var hasInlineSmArt   = paragraph.Runs.Any(r => r.SmartArt is { IsFloating: false });
                 var hasAnyImage    = paragraph.Runs.Any(r => r.Image is not null);
                 if (hasAnyImage)
                 {
@@ -720,6 +780,15 @@ public sealed class DocumentView : Control
                     }
                     // Floating-only: fall through to normal paragraph layout below,
                     // which calls CollectFloatingImages at the start of EmitLinePaged.
+                }
+
+                // FO4: route paragraphs with inline charts / SmartArt / WordArt to the dedicated path.
+                if (hasInlineChart || hasInlineWordArt || hasInlineSmArt)
+                {
+                    listNumber = 0;
+                    prevList = ListKind.None;
+                    LayoutInlineObjectParagraphPaged(blockIndex, paragraph, textWidth);
+                    continue;
                 }
 
                 var kind = paragraph.Formatting.ListKind;
@@ -1248,6 +1317,166 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// FO4: lays out a paragraph that contains inline (non-floating) charts, WordArt, or SmartArt.
+    /// Each inline object reserves a line-box in the flow (like an inline image) and is stored in
+    /// <c>_inlineCharts</c> / <c>_inlineWordArts</c> / <c>_inlineSmartArts</c> for rendering.
+    /// A zero-width sentinel <see cref="PlacedChar"/> is emitted so that caret navigation steps over
+    /// each object as a single atomic position.  Floating objects anchored to this paragraph are also
+    /// collected via the normal FO1-FO3 helpers.
+    /// </summary>
+    private void LayoutInlineObjectParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth)
+    {
+        const double gap = 6;
+        var alignment = paragraph.Formatting.Alignment;
+
+        // Collect floating objects anchored to this paragraph (mirrors LayoutImageParagraphPaged).
+        var anchorContentY = PeekFirstLineContentY();
+        CollectFloatingImages(paragraph, anchorContentY);
+        CollectFloatingShapes(paragraph, anchorContentY);
+        CollectFloatingCharts(paragraph, anchorContentY);
+        CollectFloatingWordArts(paragraph, anchorContentY);
+        CollectFloatingSmartArts(paragraph, anchorContentY);
+        CollectFloatingGroups(paragraph, anchorContentY);
+
+        // Track a virtual glyph offset so the caret can step over inline objects.
+        var glyphOffset = _placed.Count > 0
+            ? _placed.Max(p => p.Block == blockIndex ? p.Offset : -1) + 1
+            : 0;
+
+        foreach (var run in paragraph.Runs)
+        {
+            // ── Inline chart ─────────────────────────────────────────────────────────
+            if (run.Chart is { IsFloating: false } chart)
+            {
+                var width  = chart.WidthPt  > 0 ? chart.WidthPt  * PxPerPoint : 360 * PxPerPoint;
+                var height = chart.HeightPt > 0 ? chart.HeightPt * PxPerPoint : 216 * PxPerPoint;
+                if (width > textWidth) { var s = textWidth / width; width = textWidth; height *= s; }
+
+                var contentY   = ReserveContentY(height);
+                var pageSpaceY = ContentYToPageSpaceY(contentY);
+                var x          = _contentLeft + AlignmentOffset(alignment, textWidth, width);
+                var rect       = new Rect(x, pageSpaceY, width, height);
+
+                // Build inline chart data (reuses the same struct as floating charts).
+                var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
+                _inlineCharts.Add(new FloatingChartData
+                {
+                    Rect       = rect,
+                    BehindText = false,
+                    ZOrder     = 0,
+                    Kind       = chart.Kind,
+                    Title      = chart.Title,
+                    Categories = new List<string>(chart.Categories),
+                    Series     = series,
+                });
+
+                // Emit atomic sentinel so caret navigates over the object.
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                    RunFormatting.Default, '\0', Sentinel: false));
+
+                _layoutContentY = contentY + height + gap;
+                continue;
+            }
+
+            // ── Inline WordArt ───────────────────────────────────────────────────────
+            if (run.WordArt is { IsFloating: false } wa)
+            {
+                // Size: estimate from text + font size (same formula as floating WordArt collector).
+                var width  = Math.Max(72, wa.FontSizePt * Math.Max(1, wa.Text.Length) * 0.62) * PxPerPoint;
+                var height = Math.Max(40, wa.FontSizePt * 1.6) * PxPerPoint;
+                if (width > textWidth) { var s = textWidth / width; width = textWidth; height *= s; }
+
+                var contentY   = ReserveContentY(height);
+                var pageSpaceY = ContentYToPageSpaceY(contentY);
+                var x          = _contentLeft + AlignmentOffset(alignment, textWidth, width);
+                var rect       = new Rect(x, pageSpaceY, width, height);
+
+                _inlineWordArts.Add(new FloatingWordArtData
+                {
+                    Rect       = rect,
+                    BehindText = false,
+                    ZOrder     = 0,
+                    Text       = wa.Text,
+                    Style      = wa.Style,
+                    FontSizePt = wa.FontSizePt,
+                    Warp       = wa.Warp,
+                });
+
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                    RunFormatting.Default, '\0', Sentinel: false));
+
+                _layoutContentY = contentY + height + gap;
+                continue;
+            }
+
+            // ── Inline SmartArt ──────────────────────────────────────────────────────
+            if (run.SmartArt is { IsFloating: false } sa)
+            {
+                var width  = sa.WidthPt  > 0 ? sa.WidthPt  * PxPerPoint : 468 * PxPerPoint;
+                var height = sa.HeightPt > 0 ? sa.HeightPt * PxPerPoint : 216 * PxPerPoint;
+                if (width > textWidth) { var s = textWidth / width; width = textWidth; height *= s; }
+
+                var contentY   = ReserveContentY(height);
+                var pageSpaceY = ContentYToPageSpaceY(contentY);
+                var x          = _contentLeft + AlignmentOffset(alignment, textWidth, width);
+                var rect       = new Rect(x, pageSpaceY, width, height);
+
+                // Flatten nodes depth-first (mirrors CollectFloatingSmartArts).
+                var texts = new List<string>();
+                static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
+                {
+                    foreach (var n in nodes) { into.Add(n.Text); FlattenNodes(n.Children, into); }
+                }
+                FlattenNodes(sa.Nodes, texts);
+
+                _inlineSmartArts.Add(new FloatingSmartArtData
+                {
+                    Rect      = rect,
+                    BehindText = false,
+                    ZOrder     = 0,
+                    Kind       = sa.Kind,
+                    NodeTexts  = texts,
+                });
+
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                    RunFormatting.Default, '\0', Sentinel: false));
+
+                _layoutContentY = contentY + height + gap;
+                continue;
+            }
+
+            // ── Inline text runs in the same paragraph ───────────────────────────────
+            // (Treat any plain text runs as a single-line text block so mixed paragraphs
+            //  with text + inline objects still show the text.)
+            if (!string.IsNullOrEmpty(run.Text))
+            {
+                var fmt = run.Formatting;
+                var lineH = Build("Ag", fmt).Height;
+                var contentY   = ReserveContentY(lineH);
+                var pageSpaceY = ContentYToPageSpaceY(contentY);
+                var tx = _contentLeft;
+                foreach (var ch in run.Text)
+                {
+                    var ft = Build(ch.ToString(), fmt);
+                    _placed.Add(new PlacedChar(blockIndex, glyphOffset++, tx, pageSpaceY,
+                        ft.WidthIncludingTrailingWhitespace, lineH, fmt, ch, Sentinel: false));
+                    tx += ft.WidthIncludingTrailingWhitespace;
+                }
+                _layoutContentY = contentY + lineH;
+            }
+        }
+
+        // End-of-paragraph sentinel so the caret can rest after the last inline object.
+        var sentinelY = _placed.Count > 0
+            ? _placed.Last(p => p.Block == blockIndex).Y
+            : ContentYToPageSpaceY(_layoutContentY);
+        _placed.Add(new PlacedChar(blockIndex, glyphOffset, _contentLeft, sentinelY,
+            0, DefaultFontSizePt * PxPerPoint * 1.3, RunFormatting.Default, '\0', Sentinel: true));
+
+        _layoutContentY += gap;
+    }
+
     private Bitmap? DecodeBitmap(InlineImage image)
     {
         if (_bitmapCache.TryGetValue(image, out var cached))
@@ -1732,6 +1961,14 @@ public sealed class DocumentView : Control
                 context.DrawRectangle(null, TableBorderPen, rect);
             }
         }
+
+        // FO4: inline charts, WordArt, SmartArt — rendered in the text flow using the same FO3 helpers.
+        foreach (var cd in _inlineCharts)
+            DrawFloatingChart(context, cd);
+        foreach (var wd in _inlineWordArts)
+            DrawFloatingWordArt(context, wd);
+        foreach (var sd in _inlineSmartArts)
+            DrawFloatingSmartArt(context, sd);
 
         var selection = NormalizedSelection();
         foreach (var pc in _placed)
