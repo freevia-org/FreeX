@@ -148,6 +148,57 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
     }
 }
 
+/// <summary>
+/// Cycles the timeline's display granularity level (Years → Quarters → Months → Days → Years) by
+/// updating the OOXML <c>level</c> attribute on the <see cref="TimelineModel"/>. The pivot table
+/// filter is NOT changed — only the display bucket changes (matching Excel's behaviour when you
+/// click the granularity dropdown and pick a level). Undoable via <see cref="Revert"/>.
+/// </summary>
+public sealed class SetTimelineGranularityCommand : IWorkbookCommand
+{
+    // OOXML level: 0=Years 1=Quarters 2=Months 3=Days (matches TimelineLayoutBuilder.LevelToGranularity).
+    private const int MaxLevel = 3;
+    private readonly string _timelineName;
+    private readonly int _newLevel;
+    private int _previousLevel;
+
+    public SetTimelineGranularityCommand(string timelineName, int newLevel)
+    {
+        _timelineName = timelineName;
+        _newLevel = Math.Clamp(newLevel, 0, MaxLevel);
+    }
+
+    public string Label => "Set Timeline Granularity";
+
+    /// <summary>Cycles a current OOXML level (0–3, or null→2 for Month) to the next level in the ring.</summary>
+    public static int CycleLevel(int? currentLevel)
+    {
+        var current = Math.Clamp(currentLevel ?? 2, 0, MaxLevel);
+        return (current + 1) % (MaxLevel + 1);
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var timeline = PivotTableTimelineCommandLookups.FindTimeline(ctx.Workbook, _timelineName);
+        if (timeline is null)
+            return new CommandOutcome(false, "Timeline was not found.");
+
+        _previousLevel = timeline.Level ?? 2; // default to Month (2) when absent
+        timeline.Level = _newLevel;
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var timeline = PivotTableTimelineCommandLookups.FindTimeline(ctx.Workbook, _timelineName);
+        if (timeline is null)
+            return;
+
+        timeline.Level = _previousLevel;
+    }
+}
+
 public sealed class AddTimelineCommand : IWorkbookCommand
 {
     private readonly string _timelineName;
