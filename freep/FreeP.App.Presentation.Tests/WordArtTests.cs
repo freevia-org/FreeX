@@ -193,9 +193,9 @@ public sealed class WordArtTests : IDisposable
 
         var ops = SlideCompositor.Compose(p, p.Slides[0]);
         var textOp = ops.OfType<DrawOp.Shape>()
-                        .Single(s => s.TextLayout is not null);
+                        .Single(s => s.Text is not null);
 
-        var resolvedRun = textOp.TextLayout!.Paragraphs[0].Runs[0];
+        var resolvedRun = textOp.Text!.Paragraphs[0].Runs[0];
         resolvedRun.TextShadow.Should().NotBeNull("shadow must be resolved");
         resolvedRun.TextShadow!.Alpha.Should().Be(200);
         resolvedRun.TextShadow.Color.R.Should().Be(0x10);
@@ -228,8 +228,8 @@ public sealed class WordArtTests : IDisposable
         });
 
         var ops  = SlideCompositor.Compose(p, p.Slides[0]);
-        var textOp = ops.OfType<DrawOp.Shape>().Single(s => s.TextLayout is not null);
-        var resolvedRun = textOp.TextLayout!.Paragraphs[0].Runs[0];
+        var textOp = ops.OfType<DrawOp.Shape>().Single(s => s.Text is not null);
+        var resolvedRun = textOp.Text!.Paragraphs[0].Runs[0];
 
         resolvedRun.TextFill.Should().BeOfType<ResolvedFill.Gradient>();
         var grad = (ResolvedFill.Gradient)resolvedRun.TextFill!;
@@ -256,9 +256,9 @@ public sealed class WordArtTests : IDisposable
         });
 
         var ops = SlideCompositor.Compose(p, p.Slides[0]);
-        var textOp = ops.OfType<DrawOp.Shape>().Single(s => s.TextLayout is not null);
+        var textOp = ops.OfType<DrawOp.Shape>().Single(s => s.Text is not null);
 
-        textOp.TextLayout!.WarpPreset.Should().Be("textWave1");
+        textOp.Text!.WarpPreset.Should().Be("textWave1");
     }
 
     // ─── SlideCloner ─────────────────────────────────────────────────────────
