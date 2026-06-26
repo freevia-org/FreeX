@@ -18,6 +18,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
+    private Dictionary<Guid, string?>? _cfFormulaSnapshot;
+    private Dictionary<(Guid Id, int Slot), string?>? _dvFormulaSnapshot;
+    private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
 
     public string Label => "Move Cells";
 
@@ -95,11 +98,14 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         TranslateFullyContainedRules(sheet, _sourceRange, _destination);
 
+        var moveOp = CreateMoveRangeOp(sheet, _sourceRange, _destination);
         _formulaSnapshot = [];
-        RowColumnShiftHelpers.RewriteAllFormulas(
-            ctx.Workbook,
-            CreateMoveRangeOp(sheet, _sourceRange, _destination),
-            _formulaSnapshot);
+        RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, moveOp, _formulaSnapshot);
+        _cfFormulaSnapshot = [];
+        _dvFormulaSnapshot = [];
+        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, moveOp, _cfFormulaSnapshot, _dvFormulaSnapshot);
+        _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
+        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, moveOp, sheet.Name);
 
         var payloads = CaptureSourcePayloads(sheet, _sourceRange, _destination);
 
@@ -121,6 +127,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (_formulaSnapshot is not null)
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        if (_cfFormulaSnapshot is not null || _dvFormulaSnapshot is not null)
+            RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot ?? [], _dvFormulaSnapshot ?? []);
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);
 
         foreach (var snapshot in _snapshot)
             RestoreCellSnapshot(sheet, snapshot);

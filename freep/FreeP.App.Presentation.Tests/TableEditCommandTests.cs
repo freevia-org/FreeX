@@ -1032,4 +1032,220 @@ public sealed class TableEditCommandTests
         table.Rows[0].Cells[0].RowSpan.Should().Be(2);
         table.Rows[1].Cells[0].VMerge.Should().BeTrue();
     }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // X1 regression tests — DeleteTableRowCommand + 2-D merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds a 3×3 table with a 2×2 anchor merge at (0,0)-(1,1).
+    ///
+    /// Row 0: [anchor GridSpan=2 RowSpan=2] [HMerge] [C00]
+    /// Row 1: [VMerge]                       [VMerge] [C10]
+    /// Row 2: [C20]                           [C21]   [C22]
+    /// </summary>
+    private static (Presentation p, PresentationCommandBus bus, SlideShape shape) Make2DMergedTable()
+    {
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L); // col 0
+        table.ColumnWidthsEmu.Add(914400L); // col 1
+        table.ColumnWidthsEmu.Add(914400L); // col 2
+
+        // Row 0: anchor (GridSpan=2, RowSpan=2), HMerge continuation, independent cell
+        var row0 = new TableRow { HeightEmu = 457200L };
+        row0.Cells.Add(new TableCell { GridSpan = 2, RowSpan = 2, TextBody = MakeBody("ANCHOR") });
+        row0.Cells.Add(new TableCell { HMerge = true });
+        row0.Cells.Add(new TableCell { TextBody = MakeBody("C00") });
+        table.Rows.Add(row0);
+
+        // Row 1: VMerge, VMerge (both covered by the 2×2 anchor), independent cell
+        var row1 = new TableRow { HeightEmu = 457200L };
+        row1.Cells.Add(new TableCell { VMerge = true });
+        row1.Cells.Add(new TableCell { VMerge = true });
+        row1.Cells.Add(new TableCell { TextBody = MakeBody("C10") });
+        table.Rows.Add(row1);
+
+        // Row 2: three independent cells
+        var row2 = new TableRow { HeightEmu = 457200L };
+        row2.Cells.Add(new TableCell { TextBody = MakeBody("C20") });
+        row2.Cells.Add(new TableCell { TextBody = MakeBody("C21") });
+        row2.Cells.Add(new TableCell { TextBody = MakeBody("C22") });
+        table.Rows.Add(row2);
+
+        var shape = new SlideShape
+        {
+            Id          = 4,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = 0, OffsetYEmu  = 0,
+            ExtentCxEmu = 914400L * 3, ExtentCyEmu = 457200L * 3,
+            Table       = table,
+        };
+        p.Slides[0].Shapes.Add(shape);
+        return (p, bus, shape);
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeAnchorRow_PromotedRowIsValidHorizontalMerge()
+    {
+        // Delete row 0 (the 2×2 anchor row).
+        // Expected: row 1 becomes the new anchor row.
+        //   - cell[0]: VMerge cleared, GridSpan=2, RowSpan=1 (new anchor)
+        //   - cell[1]: VMerge cleared, HMerge=true (continuation of promoted anchor)
+        //   - cell[2]: unchanged (independent)
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 0));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(2);
+
+        // Promoted anchor
+        var promoted = table.Rows[0].Cells[0];
+        promoted.VMerge.Should().BeFalse("promoted cell must not be VMerge");
+        promoted.HMerge.Should().BeFalse("promoted cell is an anchor, not an HMerge");
+        promoted.GridSpan.Should().Be(2, "promoted anchor inherits GridSpan from original anchor");
+        promoted.RowSpan.Should().Be(1, "RowSpan decremented from 2 to 1");
+
+        // Horizontal continuation of promoted anchor — must be HMerge, NOT VMerge
+        var continuation = table.Rows[0].Cells[1];
+        continuation.VMerge.Should().BeFalse("must not remain VMerge after promotion");
+        continuation.HMerge.Should().BeTrue("must become HMerge as horizontal continuation");
+
+        // Independent cell in promoted row unchanged
+        table.Rows[0].Cells[2].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[2].VMerge.Should().BeFalse();
+
+        // Row 2 (now row 1) unchanged
+        CellText(shape, 1, 0).Should().Be("C20");
+        CellText(shape, 1, 1).Should().Be("C21");
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeAnchorRow_NoOrphanVMergeAnywhere()
+    {
+        // After deleting the anchor row the surviving rows must not contain
+        // any VMerge cell that lacks a RowSpan>1 anchor above it.
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 0));
+
+        var table = shape.Table!;
+
+        // Row 0 (was row 1) — no VMerge anywhere
+        foreach (var cell in table.Rows[0].Cells)
+            cell.VMerge.Should().BeFalse("no orphan VMerge in the promoted row");
+
+        // Row 1 (was row 2) — fully independent, no merge flags
+        foreach (var cell in table.Rows[1].Cells)
+        {
+            cell.VMerge.Should().BeFalse();
+            cell.HMerge.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeAnchorRow_GridColumnCountConsistent()
+    {
+        // Every row must have exactly ColumnWidthsEmu.Count cells.
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 0));
+
+        var table = shape.Table!;
+        int gridWidth = table.ColumnWidthsEmu.Count;
+        foreach (var row in table.Rows)
+            row.Cells.Should().HaveCount(gridWidth, "grid column count must be consistent after delete");
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeAnchorRow_Undo_RestoresExactState()
+    {
+        // Undo must fully restore the original 2×2 merge state (full snapshot).
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 0));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(3);
+
+        // Original anchor
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[0].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[0].VMerge.Should().BeFalse();
+
+        // Original HMerge continuation
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        table.Rows[0].Cells[1].VMerge.Should().BeFalse();
+
+        // Original VMerge cells in row 1
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+        table.Rows[1].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[1].Cells[1].VMerge.Should().BeTrue();
+        table.Rows[1].Cells[1].HMerge.Should().BeFalse();
+    }
+
+    [Fact]
+    public void X1_DeleteRow_2DMergeBottomRow_AnchorKeepsGridSpan()
+    {
+        // Delete row 1 (the VMerge row of the 2×2 merge).
+        // Expected: the anchor at (0,0) keeps GridSpan=2 and its RowSpan decrements to 1;
+        //           the HMerge continuation at (0,1) is unchanged.
+        var (p, bus, shape) = Make2DMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 4, 1));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(2);
+
+        // Anchor row — RowSpan reduced to 1, GridSpan preserved
+        var anchor = table.Rows[0].Cells[0];
+        anchor.RowSpan.Should().Be(1, "RowSpan decremented from 2 to 1");
+        anchor.GridSpan.Should().Be(2, "horizontal span must be preserved");
+        anchor.VMerge.Should().BeFalse();
+
+        // HMerge continuation in the anchor row must remain HMerge
+        var hcont = table.Rows[0].Cells[1];
+        hcont.HMerge.Should().BeTrue("horizontal continuation must remain HMerge");
+        hcont.VMerge.Should().BeFalse();
+
+        // Row 1 (was row 2) is unchanged
+        table.Rows[1].Cells.Should().HaveCount(3);
+        foreach (var cell in table.Rows[1].Cells)
+        {
+            cell.VMerge.Should().BeFalse();
+            cell.HMerge.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public void X1_ExistingW3_SingleColumnVerticalMerge_StillPasses()
+    {
+        // Regression: the W3 1-column vertical merge scenario must still work after X1 fix.
+        // Row 0 = anchor(RowSpan=2), Row 1 = VMerge. Delete row 0 → row 1 promoted.
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L);
+        var r0 = new TableRow { HeightEmu = 457200L };
+        r0.Cells.Add(new TableCell { RowSpan = 2, TextBody = MakeBody("ANCHOR") });
+        var r1 = new TableRow { HeightEmu = 457200L };
+        r1.Cells.Add(new TableCell { VMerge = true });
+        var r2 = new TableRow { HeightEmu = 457200L };
+        r2.Cells.Add(new TableCell { TextBody = MakeBody("IND") });
+        table.Rows.Add(r0); table.Rows.Add(r1); table.Rows.Add(r2);
+        var shape = new SlideShape { Id = 5, Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 914400L, ExtentCyEmu = 457200L * 3,
+            Table = table };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new DeleteTableRowCommand(0, 5, 0));
+
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].VMerge.Should().BeFalse();
+        table.Rows[0].Cells[0].RowSpan.Should().Be(1);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        CellText(shape, 1, 0).Should().Be("IND");
+    }
 }

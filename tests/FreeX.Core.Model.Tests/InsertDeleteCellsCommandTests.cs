@@ -1262,4 +1262,125 @@ public sealed class InsertDeleteCellsCommandTests
         dvRule.AdditionalRanges[0].Start.Col.Should().Be(5, "additional range start col restored after undo");
         dvRule.AdditionalRanges[0].End.Col.Should().Be(6, "additional range end col restored after undo");
     }
+
+    // ── X2 regression: CF/DV formula-text rewrites on band-scoped Insert/Delete ──
+
+    [Fact]
+    public void InsertCellsShiftDown_RewritesCfFormulaTextAndUndoRestores()
+    {
+        // CF rule with FormulaText '=A1>0' over A1:A1; insert one cell at A1 shift-down.
+        // After insert, A1>0 ref that was at row 1 is now pushed to row 2 → FormulaText should become '=A2>0'.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            RuleType = CfRuleType.Formula,
+            FormulaText = "A1>0"
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            Type = DvType.Custom,
+            Formula1 = "A1<>\"\"",
+            AlertStyle = DvAlertStyle.Stop
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        // Insert one cell at A1 shifting down (col band A:A, insert before row 1).
+        var insertRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, insertRange, InsertCellsShiftDirection.Down);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // CF FormulaText should have shifted from A1 to A2.
+        cfRule.FormulaText.Should().Be("A2>0", "insert-down shifts the row-1 ref to row 2");
+        // DV Formula1 should also have shifted.
+        dvRule.Formula1.Should().Be("A2<>\"\"", "insert-down shifts the row-1 ref to row 2");
+
+        // Undo must restore originals.
+        cmd.Revert(ctx);
+        cfRule.FormulaText.Should().Be("A1>0", "undo restores CF formula");
+        dvRule.Formula1.Should().Be("A1<>\"\"", "undo restores DV formula");
+    }
+
+    [Fact]
+    public void InsertCellsShiftRight_RewritesCfFormulaTextAndUndoRestores()
+    {
+        // CF rule with FormulaText 'A1>0' over A1:A1; insert one cell at A1 shift-right.
+        // After insert, the col-1 ref should shift to col-2 → FormulaText becomes 'B1>0'.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            RuleType = CfRuleType.Formula,
+            FormulaText = "A1>0"
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            Type = DvType.Custom,
+            Formula1 = "A1<>\"\"",
+            AlertStyle = DvAlertStyle.Stop
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var insertRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var cmd = new InsertCellsCommand(sheet.Id, insertRange, InsertCellsShiftDirection.Right);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        cfRule.FormulaText.Should().Be("B1>0", "insert-right shifts the col-1 ref to col 2");
+        dvRule.Formula1.Should().Be("B1<>\"\"", "insert-right shifts the col-1 ref to col 2");
+
+        cmd.Revert(ctx);
+        cfRule.FormulaText.Should().Be("A1>0", "undo restores CF formula after insert-right");
+        dvRule.Formula1.Should().Be("A1<>\"\"", "undo restores DV formula after insert-right");
+    }
+
+    [Fact]
+    public void DeleteCellsShiftUp_RewritesCfFormulaTextAndUndoRestores()
+    {
+        // CF rule with FormulaText 'A2>0'; delete row 1 in col-A band (shift-up).
+        // After delete, A2>0 should shift to A1>0.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1)),
+            RuleType = CfRuleType.Formula,
+            FormulaText = "A2>0"
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1)),
+            Type = DvType.Custom,
+            Formula1 = "A2<>\"\"",
+            AlertStyle = DvAlertStyle.Stop
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        // Delete cell A1, shift up → cells below move up.
+        var deleteRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Up);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        cfRule.FormulaText.Should().Be("A1>0", "delete-up shifts A2 ref to A1");
+        dvRule.Formula1.Should().Be("A1<>\"\"", "delete-up shifts A2 ref to A1");
+
+        cmd.Revert(ctx);
+        cfRule.FormulaText.Should().Be("A2>0", "undo restores CF formula after delete-up");
+        dvRule.Formula1.Should().Be("A2<>\"\"", "undo restores DV formula after delete-up");
+    }
 }

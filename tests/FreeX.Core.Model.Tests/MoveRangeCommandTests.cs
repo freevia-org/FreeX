@@ -361,4 +361,48 @@ public sealed class MoveRangeCommandTests
         cfRule.AppliesTo.Start.Col.Should().Be(2, "partially-overlapping CF rule must not move");
         cfRule.AppliesTo.End.Col.Should().Be(3);
     }
+
+    // ── X2 regression: CF/DV FormulaText rewrite on MoveRange ────────────────
+
+    [Fact]
+    public void MoveRange_RewritesCfAndDvFormulaTextAndUndoRestores()
+    {
+        // Move A1:A1 to C3 — any formula ref to A1 inside a CF/DV rule on the same sheet
+        // should follow the moved cell (MoveRangeOp retargets refs inside the source range).
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(source, new NumberValue(42));
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 5)),
+            RuleType = CfRuleType.Formula,
+            FormulaText = "A1>0"
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 5)),
+            Type = DvType.Custom,
+            Formula1 = "A1<>\"\"",
+            AlertStyle = DvAlertStyle.Stop
+        };
+        sheet.DataValidations.Add(dvRule);
+
+        var destination = new CellAddress(sheet.Id, 3, 3);
+        var cmd = new MoveRangeCommand(sheet.Id, new GridRange(source, source), destination);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // After moving A1 → C3 the ref inside CF/DV that was A1 should become C3.
+        cfRule.FormulaText.Should().Be("C3>0", "CF formula ref to A1 retargeted to C3 after move");
+        dvRule.Formula1.Should().Be("C3<>\"\"", "DV formula ref to A1 retargeted to C3 after move");
+
+        cmd.Revert(ctx);
+        cfRule.FormulaText.Should().Be("A1>0", "undo restores CF formula after move");
+        dvRule.Formula1.Should().Be("A1<>\"\"", "undo restores DV formula after move");
+    }
 }

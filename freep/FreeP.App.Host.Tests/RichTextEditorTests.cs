@@ -270,6 +270,395 @@ public sealed class RichTextEditorTests
             "no command should be issued when the text body is unchanged");
     }
 
+    // ─── Y1: inherited FontFamily/FontSizePt null must NOT be baked ─────────────
+
+    [StaFact]
+    public void Converter_InheritedFontFamilyAndSize_RoundTrip_StillNull()
+    {
+        // Arrange: run with FontFamily=null and FontSizePt=null (inherit from placeholder).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun
+        {
+            Text       = "Inherited",
+            FontFamily = null,    // must stay null after round-trip
+            FontSizePt = null,    // must stay null after round-trip
+        });
+        body.Paragraphs.Add(para);
+
+        // Act: round-trip via ToFlowDocument → FromFlowDocument.
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 14);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        // Assert: inherited values must NOT have been baked in.
+        var r = restored.Paragraphs[0].Runs[0];
+        r.Text.Should().Be("Inherited");
+        r.FontFamily.Should().BeNull("FontFamily=null must survive round-trip (not baked to 'Calibri')");
+        r.FontSizePt.Should().BeNull("FontSizePt=null must survive round-trip (not baked to 14pt)");
+    }
+
+    // ─── Y2: inherited/scheme Color null must NOT be baked; SchemeColor ref must survive ──
+
+    [StaFact]
+    public void Converter_InheritedColor_RoundTrip_StillNull()
+    {
+        // Arrange: run with Color=null (inherit).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph();
+        para.Runs.Add(new ModelRun { Text = "NoColor", Color = null });
+        body.Paragraphs.Add(para);
+
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 14);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var r = restored.Paragraphs[0].Runs[0];
+        r.Color.Should().BeNull("Color=null (inherit) must survive round-trip, not be baked to sRGB");
+    }
+
+    [StaFact]
+    public void Converter_SchemeColor_RoundTrip_PreservesRef()
+    {
+        // Arrange: run with a SchemeColor (accent1) — the "theme slot" case.
+        var schemeRef = new SchemeColorRef { Slot = ThemeColorSlot.Accent1, LumMod = 0.8, LumOff = 0.0 };
+        var themeColor = new ThemeAwareColor(new SrgbColor(0x44, 0x72, 0xC4), schemeRef);
+
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph();
+        para.Runs.Add(new ModelRun { Text = "Themed", Color = themeColor });
+        body.Paragraphs.Add(para);
+
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 14);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var r = restored.Paragraphs[0].Runs[0];
+        r.Color.Should().NotBeNull();
+        r.Color!.SchemeColor.Should().NotBeNull(
+            "SchemeColor ref must survive the round-trip (not be replaced by a plain sRGB)");
+        r.Color.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent1);
+        r.Color.SchemeColor.LumMod.Should().BeApproximately(0.8, 1e-9);
+    }
+
+    // ─── Y1+Y2: no-op edit (convert and convert back) leaves TextBodiesEqual true ──
+
+    [StaFact]
+    public void Converter_NoOpEdit_InheritedRun_BodyUnchanged()
+    {
+        // Arrange: a body with a run that has all-null formatting (fully inherited).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun
+        {
+            Text       = "Placeholder text",
+            FontFamily = null,
+            FontSizePt = null,
+            Color      = null,
+        });
+        body.Paragraphs.Add(para);
+
+        // Act: simulate a no-op edit (convert to doc, convert back with original body as reference).
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 18);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        // Assert: both runs have the same (null) inherited fields — bodies are "equal".
+        // We verify the fields directly (TextBodiesEqual is private).
+        var orig = body.Paragraphs[0].Runs[0];
+        var rest = restored.Paragraphs[0].Runs[0];
+        rest.Text.Should().Be(orig.Text);
+        rest.FontFamily.Should().BeNull("FontFamily must stay null after no-op edit");
+        rest.FontSizePt.Should().BeNull("FontSizePt must stay null after no-op edit");
+        rest.Color.Should().BeNull("Color must stay null after no-op edit");
+        rest.Bold.Should().Be(orig.Bold);
+        rest.Italic.Should().Be(orig.Italic);
+    }
+
+    // ─── Y3: color-only change IS detected by TextBodiesEqual (via Commit path) ─
+
+    [StaFact]
+    public void InCanvasTextEditor_Commit_ColorOnlyChange_IssuesCommand()
+    {
+        // Arrange: shape with one red run.
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var redColor  = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00));
+        var blueColor = new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF));
+
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun
+        {
+            Text       = "Red",
+            FontFamily = "Calibri",
+            FontSizePt = 14,
+            Color      = redColor,
+        });
+        body.Paragraphs.Add(para);
+
+        var shape = new SlideShape
+        {
+            Id          = 1,
+            OffsetXEmu  = 0,
+            OffsetYEmu  = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody    = body,
+        };
+        slide.Shapes.Add(shape);
+
+        var bus     = new PresentationCommandBus(p);
+        var editor  = new EditingSession(p, bus);
+        var canvas  = new SlideCanvas();
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+        canvas.Presentation = p;
+        canvas.Slide        = slide;
+
+        // Activate the editor so we can call ApplyColor on the selection.
+        canvas.TextEditor!.Activate(shape.Id);
+        canvas.TextEditor.IsActive.Should().BeTrue();
+
+        // Apply a blue color to the selection (changes the run's color).
+        canvas.TextEditor.ApplyColor(blueColor);
+
+        // Commit — this should issue a command because color changed.
+        canvas.TextEditor.Commit();
+
+        editor.CanUndo.Should().BeTrue(
+            "a color-only change must be detected and issue an undo-able command");
+    }
+
+    // ─── Y4: SemiBold weight NOT coerced to Bold ───────────────────────────────
+
+    [StaFact]
+    public void Converter_SemiBoldRun_NotCoercedToBold()
+    {
+        // Build a FlowDocument with a SemiBold run manually (simulating WPF producing it).
+        var doc = new FlowDocument();
+        var wp  = new System.Windows.Documents.Paragraph();
+        var wr  = new System.Windows.Documents.Run("SemiBold text")
+        {
+            FontWeight = FontWeights.SemiBold
+        };
+        wp.Inlines.Add(wr);
+        doc.Blocks.Add(wp);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc);
+
+        var r = restored.Paragraphs[0].Runs[0];
+        r.Bold.Should().BeFalse("SemiBold must NOT be coerced to Bold=true");
+    }
+
+    // ─── Y5: soft-break "\n" runs survive round-trip as LineBreak ─────────────
+
+    [StaFact]
+    public void Converter_SoftBreakRun_RoundTrips_AsLineBreak()
+    {
+        // Arrange: a body with a soft line-break run (Text=="\n").
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph();
+        para.Runs.Add(new ModelRun { Text = "Line 1" });
+        para.Runs.Add(new ModelRun { Text = "\n" });    // soft break
+        para.Runs.Add(new ModelRun { Text = "Line 2" });
+        body.Paragraphs.Add(para);
+
+        // Act: to FlowDocument and back.
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(3, "three model runs (text + soft-break + text)");
+        runs[0].Text.Should().Be("Line 1");
+        runs[1].Text.Should().Be("\n", "soft break must survive as '\\n' text in the model");
+        runs[2].Text.Should().Be("Line 2");
+    }
+
+    // ─── Z2: offset-based original-run matching (no cross-contamination after edits) ─
+
+    /// <summary>
+    /// Z2 (a): original [A(scheme accent1), B(scheme accent2)], NO edit.
+    /// Both scheme colors must be preserved (existing Y2 behavior verified with offset matching).
+    /// </summary>
+    [StaFact]
+    public void Z2_UnEditedTwoSchemeColorRuns_BothSchemeColorsPreserved()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+        var accent2Color = new ThemeAwareColor(
+            new SrgbColor(0xED, 0x7D, 0x31),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent2 });
+
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "AAA", Color = accent1Color, FontFamily = "Calibri", FontSizePt = 12 });
+        para.Runs.Add(new ModelRun { Text = "BBB", Color = accent2Color, FontFamily = "Calibri", FontSizePt = 12 });
+        body.Paragraphs.Add(para);
+
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2, "no edit → same run count");
+
+        runs[0].Color.Should().NotBeNull("A still has a color");
+        var colorA = runs[0].Color!;
+        colorA.SchemeColor.Should().NotBeNull("A's scheme color must be preserved");
+        colorA.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent1,
+            "Z2 (a): run A must retain accent1, not contaminate with accent2");
+
+        runs[1].Color.Should().NotBeNull("B still has a color");
+        var colorB = runs[1].Color!;
+        colorB.SchemeColor.Should().NotBeNull("B's scheme color must be preserved");
+        colorB.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent2,
+            "Z2 (a): run B must retain accent2");
+    }
+
+    /// <summary>
+    /// Z2 (b): a character typed in the MIDDLE of run A splits it into two inlines (A1, A2).
+    /// Run B follows.  Offset matching must give A1 and A2 both accent1, and B accent2.
+    /// No cross-contamination (old ordinal bug: A2 would get accent2, B would lose its color).
+    /// </summary>
+    [StaFact]
+    public void Z2_TypingMidRunA_HalvesKeepAccent1_BKeepsAccent2()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+        var accent2Color = new ThemeAwareColor(
+            new SrgbColor(0xED, 0x7D, 0x31),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent2 });
+
+        // Original: A(3 chars, accent1) + B(3 chars, accent2).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "AAA", Color = accent1Color, FontFamily = "Calibri", FontSizePt = 12 });
+        para.Runs.Add(new ModelRun { Text = "BBB", Color = accent2Color, FontFamily = "Calibri", FontSizePt = 12 });
+        body.Paragraphs.Add(para);
+
+        // Simulate user typed one char in the middle of A: FlowDocument has [A1, A2, B].
+        // A1 = "AA" (offset 0..1), A2 = "xA" (offset 2..3 in original = still within A), B = "BBB".
+        // We build a FlowDocument manually (no RichTextBox required — the converter is pure).
+        var doc = new System.Windows.Documents.FlowDocument();
+        var wp  = new System.Windows.Documents.Paragraph();
+
+        // Brush colour matching accent1 (so WpfInlineToModelRun recognises it as unchanged).
+        var accent1Brush = new SolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
+        var accent2Brush = new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31));
+
+        var wrA1 = new WpfRun("AA") { Foreground = accent1Brush, FontFamily = new FontFamily("Calibri"), FontSize = 12 * (96.0/72.0) };
+        var wrA2 = new WpfRun("xA") { Foreground = accent1Brush, FontFamily = new FontFamily("Calibri"), FontSize = 12 * (96.0/72.0) };
+        var wrB  = new WpfRun("BBB") { Foreground = accent2Brush, FontFamily = new FontFamily("Calibri"), FontSize = 12 * (96.0/72.0) };
+        wp.Inlines.Add(wrA1);
+        wp.Inlines.Add(wrA2);
+        wp.Inlines.Add(wrB);
+        doc.Blocks.Add(wp);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(3, "A split into two inlines + B");
+
+        // A1 (offset 0) is inside original A [0,3) → accent1.
+        runs[0].Color.Should().NotBeNull();
+        runs[0].Color!.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent1,
+            "Z2 (b): A1 starts at offset 0, inside original A → accent1");
+
+        // A2 (offset 2) is still inside original A [0,3) → accent1 (NOT accent2).
+        runs[1].Color.Should().NotBeNull();
+        runs[1].Color!.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent1,
+            "Z2 (b): A2 starts at offset 2, still inside original A → accent1, not accent2");
+
+        // B (offset 4, which is within original B [3,6)) → accent2.
+        runs[2].Color.Should().NotBeNull();
+        runs[2].Color!.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent2,
+            "Z2 (b): B starts at offset 4, inside original B → accent2");
+    }
+
+    /// <summary>
+    /// Z2 (c): a soft break (LineBreak = "\n") inserted between A and B.
+    /// LineBreak counts as 1 char in offset accounting.
+    /// B's scheme color must not shift due to the break consuming one offset slot.
+    /// </summary>
+    [StaFact]
+    public void Z2_SoftBreakBetweenRuns_DoesNotShiftBColor()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+        var accent2Color = new ThemeAwareColor(
+            new SrgbColor(0xED, 0x7D, 0x31),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent2 });
+
+        // Original: A(3 chars, accent1) + softbreak(1 char, no color) + B(3 chars, accent2).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "AAA", Color = accent1Color, FontFamily = "Calibri", FontSizePt = 12 });
+        para.Runs.Add(new ModelRun { Text = "\n" }); // soft break, no color
+        para.Runs.Add(new ModelRun { Text = "BBB", Color = accent2Color, FontFamily = "Calibri", FontSizePt = 12 });
+        body.Paragraphs.Add(para);
+
+        // Simulate round-trip through FlowDocument (no edit).
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(3, "A + softbreak + B");
+
+        runs[0].Text.Should().Be("AAA");
+        runs[0].Color?.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent1,
+            "Z2 (c): A's color must be accent1 even when a soft-break follows");
+
+        runs[1].Text.Should().Be("\n", "soft break preserved");
+        runs[1].Color.Should().BeNull("soft break run has no color (null)");
+
+        runs[2].Text.Should().Be("BBB");
+        runs[2].Color?.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent2,
+            "Z2 (c): B's color must be accent2 — soft-break offset shift must not misalign it");
+    }
+
+    /// <summary>
+    /// Z2 (d): brand-new text appended beyond the original text length.
+    /// The new run has no corresponding original run → must inherit (Color=null), not carry a wrong color.
+    /// </summary>
+    [StaFact]
+    public void Z2_NewTextBeyondOriginalLength_InheritsNull_NotWrongColor()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+
+        // Original: single run A(3 chars, accent1).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "AAA", Color = accent1Color, FontFamily = "Calibri", FontSizePt = 12 });
+        body.Paragraphs.Add(para);
+
+        // Simulate user appended "NEW" after A: FlowDocument has [A, NEW].
+        // NEW has no foreground set (inherited) — it's new text beyond original length.
+        var doc = new System.Windows.Documents.FlowDocument();
+        var wp  = new System.Windows.Documents.Paragraph();
+        var accent1Brush = new SolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
+        var wrA   = new WpfRun("AAA") { Foreground = accent1Brush, FontFamily = new FontFamily("Calibri"), FontSize = 12 * (96.0/72.0) };
+        var wrNew = new WpfRun("NEW"); // no foreground set — inherits
+        wp.Inlines.Add(wrA);
+        wp.Inlines.Add(wrNew);
+        doc.Blocks.Add(wp);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+
+        // A: offset 0, inside original A [0,3) → should preserve accent1.
+        runs[0].Color?.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent1,
+            "Z2 (d): original A run still gets accent1");
+
+        // NEW: offset 3, beyond original length (3..3) → no matching original run → null (inherit).
+        runs[1].Color.Should().BeNull(
+            "Z2 (d): new text beyond original length must inherit (null), not carry accent1 or any color");
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     /// <summary>

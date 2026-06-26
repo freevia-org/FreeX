@@ -242,6 +242,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private Dictionary<string, string>? _namedFormulaSnapshot;
     private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulaSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    // X3: CF/DV formula rewrites across surviving sheets for the deleted-sheet #REF! pass
+    private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaDeleteSnapshot;
+    private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -278,6 +281,49 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         // Defined names whose refers-to is a formula expression are not covered by the named-range
         // pass above; rewrite their sheet-qualified references to the deleted sheet to #REF! too.
         _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName);
+
+        // X3: rewrite CF FormulaText and DV Formula1/Formula2 on all surviving sheets
+        // that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand T7.
+        var deleteOp = new DeleteSheetOp(deletedSheetName);
+        _cfFormulaDeleteSnapshot = [];
+        _dvFormulaDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var cf in s.ConditionalFormats)
+            {
+                if (cf.FormulaText is { } ft)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(ft, deleteOp, s.Name);
+                    if (rewritten is not null && rewritten != ft)
+                    {
+                        _cfFormulaDeleteSnapshot.Add((cf.Id, ft, s.Id));
+                        cf.FormulaText = rewritten;
+                    }
+                }
+            }
+            foreach (var dv in s.DataValidations)
+            {
+                if (dv.Formula1 is { } f1)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(f1, deleteOp, s.Name);
+                    if (rewritten is not null && rewritten != f1)
+                    {
+                        _dvFormulaDeleteSnapshot.Add((dv.Id, 1, f1, s.Id));
+                        dv.Formula1 = rewritten;
+                    }
+                }
+                if (dv.Formula2 is { } f2)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(f2, deleteOp, s.Name);
+                    if (rewritten is not null && rewritten != f2)
+                    {
+                        _dvFormulaDeleteSnapshot.Add((dv.Id, 2, f2, s.Id));
+                        dv.Formula2 = rewritten;
+                    }
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -291,6 +337,33 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
             RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
             RestoreScopedNamedFormulas(ctx.Workbook, _scopedNamedFormulaSnapshot);
+
+            // X3 restore: CF/DV formula text rewritten to #REF! must be restored
+            if (_cfFormulaDeleteSnapshot is not null)
+            {
+                foreach (var (ruleId, oldValue, sheetId) in _cfFormulaDeleteSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    foreach (var cf in sh.ConditionalFormats)
+                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; break; }
+                }
+            }
+            if (_dvFormulaDeleteSnapshot is not null)
+            {
+                foreach (var (ruleId, slot, oldValue, sheetId) in _dvFormulaDeleteSnapshot)
+                {
+                    var sh = ctx.Workbook.GetSheet(sheetId);
+                    if (sh is null) continue;
+                    foreach (var dv in sh.DataValidations)
+                    {
+                        if (dv.Id != ruleId) continue;
+                        if (slot == 1) dv.Formula1 = oldValue;
+                        else           dv.Formula2 = oldValue;
+                        break;
+                    }
+                }
+            }
         }
     }
 

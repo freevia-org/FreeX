@@ -4447,9 +4447,9 @@ public static class DocxReader
         if (highlightNamedToken is not null && highlightNamedToken != "none")
             highlightHex = HighlightTokenToHex(highlightNamedToken);
 
-        // w:rBdr (character border) — same edge encoding as w:pBdr. ReadParagraphBorder reuses the same
+        // w:bdr (character border) — same edge encoding as w:pBdr. ReadParagraphBorder reuses the same
         // structure so we delegate to it directly.
-        var charBorder = ReadParagraphBorder(rPr.Element(W + "rBdr"));
+        var charBorder = ReadParagraphBorder(rPr.Element(W + "bdr"));
 
         // w:lang (proofing language) — recover the val attribute (BCP-47 tag). @w:eastAsia and @w:bidi are
         // also written but the main @w:val is authoritative for spell-check; we use it as the canonical tag.

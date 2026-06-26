@@ -376,6 +376,25 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
                         nextCell.GridSpan = cell.GridSpan;
                         if (nextCell.TextBody is null && cell.TextBody is not null)
                             nextCell.TextBody = TableCommandHelper.CloneTextBody(cell.TextBody);
+
+                        // X1 (2D merge fix): if the promoted anchor has a horizontal span
+                        // (GridSpan > 1), the cells at columns c+1..c+GridSpan-1 in the next
+                        // row are still VMerge=true from the original 2D merge.  They must be
+                        // relabeled to HMerge=true so the promoted row's horizontal span is
+                        // consistent and PowerPoint does not see an orphan vMerge.
+                        // We only touch cells that are VMerge at those exact grid positions
+                        // (cells belonging to a different independent anchor would not have
+                        // VMerge set here, so the guard is sufficient).
+                        int promotedGridSpan = nextCell.GridSpan;
+                        for (int k = 1; k < promotedGridSpan; k++)
+                        {
+                            int kc = c + k;
+                            if (kc < nextRow.Cells.Count && nextRow.Cells[kc].VMerge)
+                            {
+                                nextRow.Cells[kc].VMerge = false;
+                                nextRow.Cells[kc].HMerge = true;
+                            }
+                        }
                     }
                 }
             }

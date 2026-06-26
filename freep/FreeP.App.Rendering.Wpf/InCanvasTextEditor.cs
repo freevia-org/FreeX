@@ -288,11 +288,33 @@ public sealed class InCanvasTextEditor
                     || ra.Underline != rb.Underline
                     || ra.Strikethrough != rb.Strikethrough
                     || ra.FontFamily != rb.FontFamily
-                    || ra.FontSizePt != rb.FontSizePt)
+                    || ra.FontSizePt != rb.FontSizePt
+                    || !ColorsEqual(ra.Color, rb.Color))   // Y3: include Color in change detection
                     return false;
             }
         }
         return true;
+    }
+
+    /// <summary>
+    /// Compares two <see cref="ThemeAwareColor"/> values for equality.
+    /// Both the resolved sRGB AND the scheme-color ref (slot + modifiers) must match.
+    /// Two null colors are equal; a null and a non-null are not.
+    /// </summary>
+    private static bool ColorsEqual(ThemeAwareColor? a, ThemeAwareColor? b)
+    {
+        if (a is null && b is null) return true;
+        if (a is null || b is null) return false;
+        if (a.Resolved != b.Resolved) return false;
+
+        // Compare scheme refs: if both null → equal; otherwise both must carry the same slot + mods.
+        if (a.SchemeColor is null && b.SchemeColor is null) return true;
+        if (a.SchemeColor is null || b.SchemeColor is null) return false;
+        return a.SchemeColor.Slot    == b.SchemeColor.Slot
+            && a.SchemeColor.LumMod  == b.SchemeColor.LumMod
+            && a.SchemeColor.LumOff  == b.SchemeColor.LumOff
+            && a.SchemeColor.Tint    == b.SchemeColor.Tint
+            && a.SchemeColor.Shade   == b.SchemeColor.Shade;
     }
 
     private static TextBody? CloneTextBody(TextBody? src) =>
