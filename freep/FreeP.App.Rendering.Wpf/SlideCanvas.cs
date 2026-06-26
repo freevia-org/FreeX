@@ -2445,8 +2445,85 @@ public sealed class SlideCanvas : FrameworkElement
         RenderTextCore(dc, text, bounds);
     }
 
+    // Wave 22B: multi-column text layout helper.
+    // Greedy paragraph-level assignment: fill column 1 top-to-bottom, then column 2, etc.
+    // Column width = (textAreaW - (N-1)*spacing) / N. Default spacing = 457200 EMU ≈ 48.5 DIP.
+    private static void RenderTextCoreColumns(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    {
+        int n = Math.Max(1, text.ColumnCount);
+        double insetLeft   = text.InsetLeftDip;
+        double insetTop    = text.InsetTopDip;
+        double insetRight  = text.InsetRightDip;
+        double insetBottom = text.InsetBottomDip;
+        double textAreaW   = Math.Max(0, bounds.Width  - insetLeft - insetRight);
+        double textAreaH   = Math.Max(0, bounds.Height - insetTop  - insetBottom);
+        const double DefaultSpacingDip = 48.5;  // 457200 EMU / 9525
+        double spacingDip = text.ColumnSpacingDip > 0 ? text.ColumnSpacingDip : DefaultSpacingDip;
+        double colWidth   = Math.Max(1, (textAreaW - (n - 1) * spacingDip) / n);
+
+        // Measure all paragraphs
+        double lnSpcScale = 1.0 - text.LnSpcReduction;
+        var measured = new List<(ResolvedParagraph para, FormattedText ft, double spaceBefore, double spaceAfter)>();
+        foreach (var para in text.Paragraphs)
+        {
+            if (para.Runs.Count == 0)
+            {
+                measured.Add((para, null!, 0, 0));
+                continue;
+            }
+            var ft = BuildFormattedText(para, colWidth, text.Wrap);
+            double sb = para.SpaceBeforePt * (96.0 / 72.0) * lnSpcScale;
+            double sa = para.SpaceAfterPt  * (96.0 / 72.0) * lnSpcScale;
+            measured.Add((para, ft, sb, sa));
+        }
+
+        // Distribute paragraphs across columns (greedy: fill column until height exceeded, then next)
+        double colHeight = textAreaH;
+        int col = 0;
+        double curY = bounds.Y + insetTop;
+        double colX = bounds.X + insetLeft;
+
+        foreach (var (para, ft, sb, sa) in measured)
+        {
+            if (para.Runs.Count == 0) continue;
+            double paraH = sb + ft.Height * lnSpcScale + sa;
+            // If this paragraph doesn't fit and we can advance to the next column
+            if (curY + paraH > bounds.Y + insetTop + colHeight && col < n - 1)
+            {
+                col++;
+                colX = bounds.X + insetLeft + col * (colWidth + spacingDip);
+                curY = bounds.Y + insetTop;
+            }
+            curY += sb;
+            double paraTextX = colX + para.IndentDip;
+            if (!string.IsNullOrEmpty(para.BulletText))
+                DrawBulletWpf(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
+                    para.BulletColor, paraTextX - para.HangingDip, curY);
+            bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
+            bool hasTabs    = para.Runs.Any(r => r.Text.Contains('\t'));
+            if (hasEffects)
+                RenderParaWithEffects(dc, para, paraTextX, curY, colWidth - para.IndentDip, text.Wrap, text.WarpPreset, bounds);
+            else if (hasTabs)
+                RenderParaWithTabs(dc, para, paraTextX, curY, para.TabStops);
+            else
+            {
+                if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
+                    ft.MaxTextWidth = Math.Max(1, colWidth - para.IndentDip);
+                dc.DrawText(ft, new Point(paraTextX, curY));
+            }
+            curY += ft.Height * lnSpcScale + sa;
+        }
+    }
+
     private static void RenderTextCore(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
+        // Wave 22B: multi-column layout
+        if (text.ColumnCount > 1)
+        {
+            RenderTextCoreColumns(dc, text, bounds);
+            return;
+        }
+
         double insetLeft = text.InsetLeftDip;
         double insetTop = text.InsetTopDip;
         double insetRight = text.InsetRightDip;
@@ -3328,31 +3405,45 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static Pen? MakePen(ResolvedOutline outline)
     {
-        if (outline is not ResolvedOutline.Visible vis) return null;
-
-        var brush = new SolidColorBrush(Color.FromRgb(vis.Color.R, vis.Color.G, vis.Color.B));
-        if (brush.CanFreeze) brush.Freeze();
-
-        var pen = new Pen(brush, vis.WidthDip);
-
-        var dashStyle = vis.Dash switch
+        if (outline is ResolvedOutline.Visible vis)
         {
-            OutlineDash.Dash => DashStyles.Dash,
-            OutlineDash.Dot => DashStyles.Dot,
-            OutlineDash.DashDot => DashStyles.DashDot,
-            OutlineDash.LongDash => new DashStyle(new[] { 8.0, 3.0 }, 0),
-            OutlineDash.LongDashDot => new DashStyle(new[] { 8.0, 3.0, 1.0, 3.0 }, 0),
-            OutlineDash.LongDashDotDot => new DashStyle(new[] { 8.0, 3.0, 1.0, 3.0, 1.0, 3.0 }, 0),
-            OutlineDash.SystemDash => DashStyles.Dash,
-            OutlineDash.SystemDot => DashStyles.Dot,
-            OutlineDash.SystemDashDot => DashStyles.DashDot,
-            _ => DashStyles.Solid
-        };
+            var brush = new SolidColorBrush(Color.FromRgb(vis.Color.R, vis.Color.G, vis.Color.B));
+            if (brush.CanFreeze) brush.Freeze();
+            var pen = new Pen(brush, vis.WidthDip);
+            pen.DashStyle = MapDashStyleWpf(vis.Dash);
+            if (pen.CanFreeze) pen.Freeze();
+            return pen;
+        }
 
-        pen.DashStyle = dashStyle;
-        if (pen.CanFreeze) pen.Freeze();
-        return pen;
+        // Wave 22B: gradient outline — build a LinearGradientBrush for the stroke.
+        if (outline is ResolvedOutline.Gradient grad)
+        {
+            Brush gradBrush = grad.Fill.Kind == GradientKind.Radial
+                ? MakeRadialGradientBrush(grad.Fill)
+                : MakeLinearGradientBrush(grad.Fill);
+            if (gradBrush.CanFreeze) gradBrush.Freeze();
+            var pen = new Pen(gradBrush, grad.WidthDip);
+            pen.DashStyle = MapDashStyleWpf(grad.Dash);
+            if (pen.CanFreeze) pen.Freeze();
+            return pen;
+        }
+
+        return null;
     }
+
+    private static DashStyle MapDashStyleWpf(OutlineDash dash) => dash switch
+    {
+        OutlineDash.Dash           => DashStyles.Dash,
+        OutlineDash.Dot            => DashStyles.Dot,
+        OutlineDash.DashDot        => DashStyles.DashDot,
+        OutlineDash.LongDash       => new DashStyle(new[] { 8.0, 3.0 }, 0),
+        OutlineDash.LongDashDot    => new DashStyle(new[] { 8.0, 3.0, 1.0, 3.0 }, 0),
+        OutlineDash.LongDashDotDot => new DashStyle(new[] { 8.0, 3.0, 1.0, 3.0, 1.0, 3.0 }, 0),
+        OutlineDash.SystemDash     => DashStyles.Dash,
+        OutlineDash.SystemDot      => DashStyles.Dot,
+        OutlineDash.SystemDashDot  => DashStyles.DashDot,
+        _                          => DashStyles.Solid
+    };
 
     private static T FreezeBrush<T>(T brush) where T : Brush
     {
