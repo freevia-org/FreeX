@@ -139,6 +139,20 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.insert-table", "Table");
                 }))
+            .Tab("layout", "Layout", "L", tab =>
+            {
+                // AV-PAGE: page-setup group — dialog launcher + quick orientation/margins/size.
+                tab.Group("page-setup", "Page Setup", null, 100, g =>
+                {
+                    g.Button("freew.page-setup-dialog",   "Page Setup…");
+                    g.Button("freew.page-orientation",    "Orientation");
+                    g.Button("freew.page-margins-normal", "Normal Margins");
+                    g.Button("freew.page-margins-narrow", "Narrow Margins");
+                    g.Button("freew.page-margins-wide",   "Wide Margins");
+                    g.Button("freew.page-size-letter",    "Letter");
+                    g.Button("freew.page-size-a4",        "A4");
+                });
+            })
             .Tab("view", "View", "V", tab =>
             {
                 tab.Group("views", "Views", null, 110, g =>
@@ -254,6 +268,14 @@ internal sealed record RibbonHostCallbacks(
     Action OpenFontDialog,
     /// <summary>Opens the Paragraph dialog (modal); reads current paragraph formatting and applies on OK.</summary>
     Action OpenParagraphDialog,
+    /// <summary>Opens the Page Setup dialog (modal); reads current page geometry and applies on OK.</summary>
+    Action OpenPageSetupDialog,
+    /// <summary>Toggle the document orientation between Portrait and Landscape.</summary>
+    Action ToggleOrientation,
+    /// <summary>Apply a margin preset: "normal" (1 in), "narrow" (0.5 in), or "wide" (1.5 in / 1 in).</summary>
+    Action<string> ApplyMarginPreset,
+    /// <summary>Quick paper-size switch: "letter" (US Letter 8.5×11) or "a4" (210×297 mm).</summary>
+    Action<string> ApplyPaperSize,
     /// <summary>
     /// Adjust zoom. Pass <paramref name="absolute"/> to set zoom to that scale; pass
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.

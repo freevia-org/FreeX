@@ -6,8 +6,8 @@ using static FreeX.App.Presentation.Tests.Charts.ChartLayoutTestData;
 namespace FreeX.App.Presentation.Tests.Charts;
 
 /// <summary>
-/// Unit tests for the four chartEx types newly ported to the portable layout engine:
-/// Funnel, Waterfall, Histogram, and Pareto.
+/// Unit tests for the chartEx types ported to the portable layout engine:
+/// Funnel, Waterfall, Histogram, Pareto (Wave 4) and BoxAndWhisker, Treemap, Sunburst (Wave 5).
 /// </summary>
 public sealed class ChartExLayoutTests
 {
@@ -24,12 +24,20 @@ public sealed class ChartExLayoutTests
     }
 
     [Theory]
+    [InlineData(ChartType.BoxAndWhisker)]
     [InlineData(ChartType.Treemap)]
     [InlineData(ChartType.Sunburst)]
-    [InlineData(ChartType.BoxAndWhisker)]
-    public void IsSupported_ReturnsFalseForUnportedTypes(ChartType type)
+    public void IsSupported_ReturnsTrueForWaveFiveChartExTypes(ChartType type)
     {
-        ChartLayoutEngine.IsSupported(type).Should().BeFalse();
+        ChartLayoutEngine.IsSupported(type).Should().BeTrue($"{type} was ported in Wave 5");
+    }
+
+    [Theory]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.ThreeDSurface)]
+    public void IsSupported_ReturnsTrueForSurfaceHeatmapTypes(ChartType type)
+    {
+        ChartLayoutEngine.IsSupported(type).Should().BeTrue($"{type} is now laid out as a 2D heatmap grid");
     }
 
     // ── Existing types still supported ────────────────────────────────────────

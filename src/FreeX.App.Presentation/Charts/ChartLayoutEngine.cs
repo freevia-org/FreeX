@@ -11,11 +11,11 @@ namespace FreeX.App.Presentation.Charts;
 /// desktop hosts can draw identical charts from one engine.
 ///
 /// Covered chart families: column (incl. stacked / percent-stacked), bar (incl. stacked /
-/// percent-stacked), line, area, scatter, pie, doughnut, bubble, radar, and stock
-/// (high-low-close / open-high-low-close). Column/line/area/scatter charts additionally support a
-/// trendline overlay and a secondary value axis (combo charts). Remaining advanced families
-/// (surface, waterfall, histogram, pareto, box-and-whisker, treemap, sunburst, funnel) are not laid
-/// out here yet — see the project notes for follow-ups.
+/// percent-stacked), line, area, scatter, pie, doughnut, bubble, radar, stock
+/// (high-low-close / open-high-low-close), waterfall, histogram, pareto, box-and-whisker,
+/// treemap, sunburst, funnel, and surface (rendered as a 2D heatmap grid by the shell renderers).
+/// Column/line/area/scatter charts additionally support a trendline overlay and a secondary value
+/// axis (combo charts).
 /// </summary>
 public static class ChartLayoutEngine
 {
@@ -48,7 +48,12 @@ public static class ChartLayoutEngine
             or ChartType.Funnel
             or ChartType.Waterfall
             or ChartType.Histogram
-            or ChartType.Pareto;
+            or ChartType.Pareto
+            or ChartType.BoxAndWhisker
+            or ChartType.Treemap
+            or ChartType.Sunburst
+            or ChartType.Surface
+            or ChartType.ThreeDSurface;
 
     /// <summary>
     /// Lays out <paramref name="request"/> into a <see cref="ChartLayout"/>. Throws
@@ -75,6 +80,10 @@ public static class ChartLayoutEngine
             ChartType.Waterfall => LayoutWaterfall(request),
             ChartType.Histogram => LayoutHistogram(request),
             ChartType.Pareto => LayoutPareto(request),
+            ChartType.BoxAndWhisker => LayoutBoxAndWhisker(request),
+            ChartType.Treemap => LayoutTreemap(request),
+            ChartType.Sunburst => LayoutSunburst(request),
+            ChartType.Surface or ChartType.ThreeDSurface => LayoutSurface(request),
             _ => LayoutColumnLineArea(request),
         };
     }
@@ -1658,6 +1667,500 @@ public static class ChartLayoutEngine
             SecondaryValueAxis = pctAxis,
             Series = [barSeries, lineSeries],
             Legend = legend,
+        };
+    }
+
+    // ---- Box-and-Whisker -----------------------------------------------------------------
+
+    // Box-and-Whisker: one box per series column. Each column of values is sorted; Q1/median/Q3
+    // are computed via linear interpolation (mirrors WPF BoxPercentile). IQR-based fences
+    // (1.5×IQR) determine whisker extents. Box: Q1→Q3 rect. Median: horizontal line.
+    // Whiskers: vertical lines from box edges to fence extremes. Outliers: small circles.
+    // Uses Columns geometry kind (box rect as SeriesBar) + SeriesPoints for median/whiskers.
+    private static ChartLayout LayoutBoxAndWhisker(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+
+        // Collect one set of values per series — each series is one box.
+        var boxes = new List<BoxWhiskerStat>(request.Series.Count);
+        for (var si = 0; si < request.Series.Count; si++)
+        {
+            var series = request.Series[si];
+            var vals = new List<double>();
+            foreach (var v in series.Values)
+                if (v is { } val)
+                    vals.Add(val);
+            if (vals.Count == 0)
+                continue;
+            vals.Sort();
+            var q1     = BoxPercentile(vals, 25);
+            var median = BoxPercentile(vals, 50);
+            var q3     = BoxPercentile(vals, 75);
+            var iqr    = q3 - q1;
+            var lowerFence = q1 - 1.5 * iqr;
+            var upperFence = q3 + 1.5 * iqr;
+            // Lower whisker: smallest value >= lowerFence.
+            var lowerWhisker = vals[0];
+            foreach (var val in vals)
+            {
+                if (val >= lowerFence) { lowerWhisker = val; break; }
+            }
+            // Upper whisker: largest value <= upperFence.
+            var upperWhisker = vals[^1];
+            for (var j = vals.Count - 1; j >= 0; j--)
+            {
+                if (vals[j] <= upperFence) { upperWhisker = vals[j]; break; }
+            }
+            // Outliers: values outside the fences.
+            var outliers = new List<double>();
+            foreach (var val in vals)
+                if (val < lowerFence || val > upperFence)
+                    outliers.Add(val);
+
+            var label = si < request.Categories.Count ? request.Categories[si]
+                      : (series.Name ?? $"S{si + 1}");
+            boxes.Add(new BoxWhiskerStat(si, label, lowerWhisker, q1, median, q3, upperWhisker, outliers));
+        }
+
+        if (boxes.Count == 0)
+        {
+            return new ChartLayout
+            {
+                Type = chart.Type,
+                PlotArea = plot.ToRect(),
+                Series = [],
+                Legend = legend,
+            };
+        }
+
+        // Value range from all box extents.
+        var yMin = double.PositiveInfinity;
+        var yMax = double.NegativeInfinity;
+        foreach (var b in boxes)
+        {
+            yMin = Math.Min(yMin, b.LowerWhisker);
+            yMax = Math.Max(yMax, b.UpperWhisker);
+            foreach (var o in b.Outliers) { yMin = Math.Min(yMin, o); yMax = Math.Max(yMax, o); }
+        }
+        if (double.IsInfinity(yMin) || double.IsInfinity(yMax)) { yMin = 0; yMax = 1; }
+
+        var n = boxes.Count;
+        var categoryScale = AxisScale.CreateIndexAxis(-0.5, Math.Max(0.5, n - 0.5), plot, AxisSide.Bottom);
+        var valueScale    = AxisScale.CreateValueAxis(yMin, yMax, plot, AxisSide.Left,
+            chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
+
+        const double BoxHalfWidth = 0.30;
+        // We emit multiple SeriesLayout: index 0 = boxes (Columns), index 1 = whisker/median lines (Line).
+        var barsList   = new List<SeriesBar>();
+        var linePoints = new List<SeriesPoint>(); // pairs: (lowerWhisker,top) then (UpperWhisker,bottom) then median
+        var outlierPts = new List<SeriesPoint>();
+
+        for (var i = 0; i < n; i++)
+        {
+            var b = boxes[i];
+            // Box rect: Q1 → Q3.
+            var cx   = categoryScale.Transform(i);
+            var x0   = categoryScale.Transform(i - BoxHalfWidth);
+            var x1   = categoryScale.Transform(i + BoxHalfWidth);
+            var yQ1  = valueScale.Transform(b.Q1);
+            var yQ3  = valueScale.Transform(b.Q3);
+            barsList.Add(new SeriesBar(i, b.Q3 - b.Q1, LayoutRect.FromCorners(x0, yQ3, x1, yQ1)));
+
+            // Median line: two sentinel points with same Y but different X used as a horizontal segment.
+            var yMed = valueScale.Transform(b.Median);
+            linePoints.Add(new SeriesPoint(i * 6 + 0, i - BoxHalfWidth, b.Median, new LayoutPoint(x0, yMed)));
+            linePoints.Add(new SeriesPoint(i * 6 + 1, i + BoxHalfWidth, b.Median, new LayoutPoint(x1, yMed)));
+
+            // Whisker lines: vertical center line from lowerWhisker to Q1, and Q3 to upperWhisker.
+            // Encode as two-point line segments interleaved (renderer draws them as separate strokes).
+            var yLow = valueScale.Transform(b.LowerWhisker);
+            var yHigh = valueScale.Transform(b.UpperWhisker);
+            // Lower whisker vertical: lowerWhisker → Q1
+            linePoints.Add(new SeriesPoint(i * 6 + 2, i, b.LowerWhisker, new LayoutPoint(cx, yLow)));
+            linePoints.Add(new SeriesPoint(i * 6 + 3, i, b.Q1,           new LayoutPoint(cx, yQ1)));
+            // Upper whisker vertical: Q3 → upperWhisker
+            linePoints.Add(new SeriesPoint(i * 6 + 4, i, b.Q3,           new LayoutPoint(cx, yQ3)));
+            linePoints.Add(new SeriesPoint(i * 6 + 5, i, b.UpperWhisker, new LayoutPoint(cx, yHigh)));
+
+            // Outlier points.
+            foreach (var o in b.Outliers)
+                outlierPts.Add(new SeriesPoint(i, i, o, new LayoutPoint(cx, valueScale.Transform(o))));
+        }
+
+        // Category ticks.
+        var catTicks = new List<AxisTick>(n);
+        for (var i = 0; i < n; i++)
+            catTicks.Add(new AxisTick(i, categoryScale.Transform(i), boxes[i].Label));
+
+        var catAxis = new AxisLayout
+        {
+            Side = AxisSide.Bottom,
+            Title = chart.XAxisTitle,
+            LinePosition = valueScale.Transform(Math.Max(0, yMin)),
+            Ticks = catTicks,
+            Scale = categoryScale,
+        };
+        var valAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat);
+
+        // Boxes as Columns series (filled Q1-Q3 rect), whiskers/median as Line, outliers as ScatterPoints.
+        var boxSeries = new SeriesLayout
+        {
+            SeriesIndex = 0,
+            Name = "Box",
+            Kind = SeriesGeometryKind.Columns,
+            Bars = barsList,
+        };
+        // Whisker/median lines stored as SeriesPoints — the renderer handles BoxAndWhisker specially.
+        var whiskerSeries = new SeriesLayout
+        {
+            SeriesIndex = -2, // sentinel: box whisker overlay
+            Name = "Whiskers",
+            Kind = SeriesGeometryKind.BoxWhiskers,
+            Points = linePoints,
+        };
+        var outlierSeries = new SeriesLayout
+        {
+            SeriesIndex = -3,
+            Name = "Outliers",
+            Kind = SeriesGeometryKind.ScatterPoints,
+            Points = outlierPts,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plot.ToRect(),
+            CategoryAxis = catAxis,
+            ValueAxis = valAxis,
+            Series = outlierPts.Count > 0
+                ? [boxSeries, whiskerSeries, outlierSeries]
+                : [boxSeries, whiskerSeries],
+            Legend = legend,
+        };
+    }
+
+    // Mirrors WPF BoxPercentile: linear interpolation between sorted values at position pct/100.
+    private static double BoxPercentile(List<double> sorted, double pct)
+    {
+        if (sorted.Count == 1) return sorted[0];
+        var pos = pct / 100.0 * (sorted.Count - 1);
+        var lo = (int)pos;
+        var hi = lo + 1;
+        if (hi >= sorted.Count) return sorted[^1];
+        return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
+    }
+
+    private readonly record struct BoxWhiskerStat(
+        int SeriesIndex,
+        string Label,
+        double LowerWhisker,
+        double Q1,
+        double Median,
+        double Q3,
+        double UpperWhisker,
+        List<double> Outliers);
+
+    // ---- Treemap -------------------------------------------------------------------------
+
+    // Treemap: tiles the plot rect into horizontal strips, each strip width proportional to its
+    // value's share of the total. Single-row tiling (slice/dice) mirrors WPF BuildTreemapModel
+    // which uses a single horizontal pass (width = value/total across the full plot height).
+    // Each tile is a SeriesBar (rect) with a per-bar palette color.
+    private static ChartLayout LayoutTreemap(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+
+        // Collect positive values from the first series (treemap is single-series, per-category tiles).
+        var series = request.Series.Count > 0 ? request.Series[0] : null;
+        var items = new List<(int Index, double Value, string Label)>();
+        var total = 0.0;
+        if (series is not null)
+        {
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                if (series.Values[i] is not { } v || v <= 0)
+                    continue;
+                var label = i < request.Categories.Count ? request.Categories[i] : $"Item {i + 1}";
+                items.Add((i, v, label));
+                total += v;
+            }
+        }
+
+        if (items.Count == 0 || total <= 0)
+        {
+            return new ChartLayout
+            {
+                Type = chart.Type,
+                PlotArea = plot.ToRect(),
+                Series = [],
+                Legend = legend,
+            };
+        }
+
+        var palette = BuildTreemapPalette();
+        var bars = new List<SeriesBar>(items.Count);
+        var plotLeft = plot.Left;
+        var plotTop  = plot.Top;
+        var plotW    = plot.Width;
+        var plotH    = plot.Height;
+        var curX     = plotLeft;
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var (index, value, _) = items[i];
+            // Last tile gets remainder to avoid floating-point gap.
+            double tileW;
+            if (i == items.Count - 1)
+                tileW = plotLeft + plotW - curX;
+            else
+                tileW = value / total * plotW;
+
+            var rect = new LayoutRect(curX, plotTop, Math.Max(1, tileW), plotH);
+            var color = palette[i % palette.Length];
+            bars.Add(new SeriesBar(index, value, rect, color));
+            curX += tileW;
+        }
+
+        // Category labels become data labels centered in each tile.
+        var dataLabels = new List<DataLabelBox>(items.Count);
+        for (var i = 0; i < items.Count; i++)
+        {
+            var (_, _, label) = items[i];
+            var bar = bars[i];
+            var anchor = bar.Rect.Center;
+            var size = request.TextMeasurer.Measure(label, null, 10, false, false);
+            dataLabels.Add(new DataLabelBox(0, bars[i].PointIndex, label, anchor, CenteredRect(anchor, size)));
+        }
+
+        var seriesLayout = new SeriesLayout
+        {
+            SeriesIndex = series?.SeriesIndex ?? 0,
+            Name = series?.Name,
+            Kind = SeriesGeometryKind.TreemapTiles,
+            Bars = bars,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plot.ToRect(),
+            Series = [seriesLayout],
+            Legend = legend,
+            DataLabels = dataLabels,
+        };
+    }
+
+    private static readonly CellColor[] TreemapPaletteColors =
+    [
+        new CellColor(0x44, 0x72, 0xC4), // blue
+        new CellColor(0xED, 0x7D, 0x31), // orange
+        new CellColor(0xA9, 0xD1, 0x8E), // green
+        new CellColor(0xFF, 0xC0, 0x00), // yellow
+        new CellColor(0x5B, 0x9B, 0xD5), // light blue
+        new CellColor(0x70, 0xAD, 0x47), // dark green
+    ];
+
+    private static CellColor[] BuildTreemapPalette() => TreemapPaletteColors;
+
+    // ---- Surface / heatmap ---------------------------------------------------------------
+
+    // Surface: 2D heatmap grid. Rows = series, columns = categories. Each cell is a rect
+    // colored by its z-value mapped through a blue (min) → yellow (max) gradient, matching
+    // the shell renderer GetSurfaceCellColor logic (ChartRenderer.Surface.cs R:68→255 G:114→192 B:196→0).
+    private static ChartLayout LayoutSurface(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+
+        var seriesCount   = request.Series.Count;
+        var categoryCount = request.Categories.Count;
+        if (seriesCount == 0 || categoryCount == 0)
+        {
+            return new ChartLayout
+            {
+                Type = chart.Type,
+                PlotArea = plot.ToRect(),
+                Series = [],
+                Legend = legend,
+            };
+        }
+
+        // Collect all values to find min/max for the gradient.
+        var rawCells = new List<(int SeriesIdx, int CatIdx, double Value)>(seriesCount * categoryCount);
+        var minValue = 0.0;
+        var maxValue = 0.0;
+
+        for (var si = 0; si < seriesCount; si++)
+        {
+            var s = request.Series[si];
+            for (var ci = 0; ci < s.Values.Count; ci++)
+            {
+                if (s.Values[ci] is not { } v)
+                    continue;
+                if (rawCells.Count == 0)
+                {
+                    minValue = v;
+                    maxValue = v;
+                }
+                else
+                {
+                    if (v < minValue) minValue = v;
+                    if (v > maxValue) maxValue = v;
+                }
+                rawCells.Add((si, ci, v));
+            }
+        }
+
+        // Build pixel-space grid: columns = categories, rows = series.
+        var plotRect = plot.ToRect();
+        var cellW = plotRect.Width  / categoryCount;
+        var cellH = plotRect.Height / seriesCount;
+
+        var surfaceCells = new List<SurfaceCell>(rawCells.Count);
+        foreach (var (si, ci, value) in rawCells)
+        {
+            var left = plotRect.Left + ci * cellW;
+            var top  = plotRect.Top  + si * cellH;
+            var rect = new LayoutRect(left, top, cellW, cellH);
+            var fill = GetSurfaceCellColor(value, minValue, maxValue);
+            surfaceCells.Add(new SurfaceCell(si, ci, value, rect, fill));
+        }
+
+        // Axis ticks: category axis (X) and series/y axis.
+        var catTicks = new List<AxisTick>(categoryCount);
+        for (var ci = 0; ci < categoryCount; ci++)
+        {
+            var label = ci < request.Categories.Count ? request.Categories[ci] : $"{ci + 1}";
+            var x = plotRect.Left + (ci + 0.5) * cellW;
+            catTicks.Add(new AxisTick(ci, x, label));
+        }
+
+        var serTicks = new List<AxisTick>(seriesCount);
+        for (var si = 0; si < seriesCount; si++)
+        {
+            var label = request.Series[si].Name ?? $"S{si + 1}";
+            var y = plotRect.Top + (si + 0.5) * cellH;
+            serTicks.Add(new AxisTick(si, y, label));
+        }
+
+        var categoryAxis = new AxisLayout
+        {
+            Side = AxisSide.Bottom,
+            LinePosition = plotRect.Bottom,
+            Ticks = catTicks,
+            Scale = AxisScale.CreateIndexAxis(0, categoryCount, plot, AxisSide.Bottom),
+        };
+        var seriesAxis = new AxisLayout
+        {
+            Side = AxisSide.Left,
+            LinePosition = plotRect.Left,
+            Ticks = serTicks,
+            Scale = AxisScale.CreateIndexAxis(0, seriesCount, plot, AxisSide.Left),
+        };
+
+        var seriesLayout = new SeriesLayout
+        {
+            SeriesIndex = 0,
+            Kind = SeriesGeometryKind.SurfaceCells,
+            SurfaceCells = surfaceCells,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plotRect,
+            CategoryAxis = categoryAxis,
+            ValueAxis = seriesAxis,
+            Series = [seriesLayout],
+            Legend = legend,
+        };
+    }
+
+    /// <summary>
+    /// Maps a z-value to a cell fill color using a blue→yellow gradient that mirrors the desktop
+    /// shell renderer's heatmap color scale (R: 68→255, G: 114→192, B: 196→0).
+    /// </summary>
+    public static CellColor GetSurfaceCellColor(double value, double minValue, double maxValue)
+    {
+        var t = maxValue <= minValue
+            ? 0.5
+            : Math.Clamp((value - minValue) / (maxValue - minValue), 0.0, 1.0);
+        var r = (byte)Math.Round(68  + (255 - 68)  * t);
+        var g = (byte)Math.Round(114 + (192 - 114) * t);
+        var b = (byte)Math.Round(196 + (0   - 196) * t);
+        return new CellColor(r, g, b);
+    }
+
+    // ---- Sunburst ------------------------------------------------------------------------
+
+    // Sunburst: doughnut-ring approximation (matching WPF BuildSunburstModel: PieSeries with
+    // InnerDiameter=0.35). Slices are proportional to value; each slice is a LayoutArc with
+    // inner radius set to 35% of the outer radius. Uses PieSlices geometry kind.
+    private static ChartLayout LayoutSunburst(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+
+        var series = request.Series.Count > 0 ? request.Series[0] : null;
+        var values = new List<(int Index, double Value, string Label)>();
+        var total  = 0.0;
+        if (series is not null)
+        {
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                if (series.Values[i] is not { } v || v <= 0)
+                    continue;
+                var label = i < request.Categories.Count ? request.Categories[i] : $"Item {i + 1}";
+                values.Add((i, v, label));
+                total += v;
+            }
+        }
+
+        var center      = plot.ToRect().Center;
+        var outerRadius = Math.Max(0, Math.Min(plot.Width, plot.Height) / 2.0);
+        // WPF uses InnerDiameter=0.35, so innerRadius = outerRadius * 0.35.
+        var innerRadius = outerRadius * 0.35;
+
+        var slices     = new List<SeriesSlice>(values.Count);
+        var dataLabels = new List<DataLabelBox>();
+        var angle      = 0.0; // start at 12 o'clock, clockwise
+
+        for (var s = 0; s < values.Count; s++)
+        {
+            var (index, value, label) = values[s];
+            var fraction = total > 0 ? value / total : 0;
+            var sweep    = fraction * 360.0;
+            var arc      = new LayoutArc(center, outerRadius, innerRadius, angle, sweep);
+            slices.Add(new SeriesSlice(index, value, fraction, label, arc));
+
+            if (chart.ShowDataLabels && !string.IsNullOrEmpty(label))
+            {
+                var labelRadius = (outerRadius + innerRadius) / 2.0;
+                var anchor = PolarToPixel(center, angle + sweep / 2, labelRadius);
+                var size   = request.TextMeasurer.Measure(label, null, chart.DataLabelFontSize, false, false);
+                dataLabels.Add(new DataLabelBox(0, index, label, anchor, CenteredRect(anchor, size)));
+            }
+
+            angle += sweep;
+        }
+
+        var seriesLayout = new SeriesLayout
+        {
+            SeriesIndex = series?.SeriesIndex ?? 0,
+            Name = series?.Name,
+            Kind = SeriesGeometryKind.PieSlices,
+            Slices = slices,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plot.ToRect(),
+            Series = [seriesLayout],
+            Legend = legend,
+            DataLabels = dataLabels,
         };
     }
 }

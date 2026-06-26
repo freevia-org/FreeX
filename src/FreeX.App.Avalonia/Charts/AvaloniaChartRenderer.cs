@@ -132,11 +132,14 @@ public sealed class AvaloniaChartRenderer
         if (layout.SecondaryValueAxis is not null)
             RenderAxisTitle(canvas, layout.SecondaryValueAxis, layout.PlotArea);
 
+        var isTreemap = layout.Type == ModelChartType.Treemap;
         foreach (var series in layout.Series)
-            RenderSeries(canvas, series);
+            RenderSeries(canvas, series, isTreemap ? layout.DataLabels : []);
 
         RenderLegend(canvas, layout.Legend);
-        RenderDataLabels(canvas, layout.DataLabels);
+        // Treemap labels are rendered inline with white text inside RenderTreemapTiles.
+        if (!isTreemap)
+            RenderDataLabels(canvas, layout.DataLabels);
 
         return canvas;
     }
@@ -228,7 +231,7 @@ public sealed class AvaloniaChartRenderer
 
     // ── Series ──────────────────────────────────────────────────────────────
 
-    private void RenderSeries(Canvas canvas, SeriesLayout series)
+    private void RenderSeries(Canvas canvas, SeriesLayout series, IReadOnlyList<DataLabelBox> extraLabels)
     {
         switch (series.Kind)
         {
@@ -256,6 +259,15 @@ public sealed class AvaloniaChartRenderer
                 break;
             case SeriesGeometryKind.StockBars:
                 RenderStock(canvas, series);
+                break;
+            case SeriesGeometryKind.BoxWhiskers:
+                RenderBoxWhiskers(canvas, series);
+                break;
+            case SeriesGeometryKind.TreemapTiles:
+                RenderTreemapTiles(canvas, series, extraLabels);
+                break;
+            case SeriesGeometryKind.SurfaceCells:
+                RenderSurfaceCells(canvas, series);
                 break;
         }
 
@@ -502,6 +514,123 @@ public sealed class AvaloniaChartRenderer
                     StrokeThickness = 1,
                 });
             }
+        }
+    }
+
+    // Box-and-whisker overlay — paired SeriesPoints encode whisker/median segments.
+    // Layout: groups of 6 points per box: [medianL, medianR, lowerW, Q1, Q3, upperW].
+    // medianL/medianR → horizontal median line; lowerW/Q1 → lower whisker; Q3/upperW → upper whisker.
+    private void RenderBoxWhiskers(Canvas canvas, SeriesLayout series)
+    {
+        var pts = series.Points;
+        if (pts.Count == 0)
+            return;
+
+        IBrush stroke = SolidBrush(0x1F, 0x49, 0x7D); // dark blue, matches WPF Stroke
+        const double thickness = 1.5;
+
+        // Points arrive in groups of 6 per box: [0]=medL, [1]=medR, [2]=lowW, [3]=Q1, [4]=Q3, [5]=upW
+        var i = 0;
+        while (i + 5 < pts.Count)
+        {
+            var medL  = pts[i + 0].Position;
+            var medR  = pts[i + 1].Position;
+            var lowW  = pts[i + 2].Position;
+            var q1Pt  = pts[i + 3].Position;
+            var q3Pt  = pts[i + 4].Position;
+            var upW   = pts[i + 5].Position;
+
+            // Median line (horizontal).
+            canvas.Children.Add(new Line
+            {
+                StartPoint = new AvaloniaPoint(medL.X, medL.Y),
+                EndPoint   = new AvaloniaPoint(medR.X, medR.Y),
+                Stroke = stroke,
+                StrokeThickness = thickness + 0.5,
+            });
+
+            // Lower whisker: vertical center line down from Q1 to lowerWhisker.
+            canvas.Children.Add(new Line
+            {
+                StartPoint = new AvaloniaPoint(lowW.X, lowW.Y),
+                EndPoint   = new AvaloniaPoint(q1Pt.X, q1Pt.Y),
+                Stroke = stroke,
+                StrokeThickness = thickness,
+            });
+
+            // Upper whisker: vertical center line up from Q3 to upperWhisker.
+            canvas.Children.Add(new Line
+            {
+                StartPoint = new AvaloniaPoint(q3Pt.X, q3Pt.Y),
+                EndPoint   = new AvaloniaPoint(upW.X,  upW.Y),
+                Stroke = stroke,
+                StrokeThickness = thickness,
+            });
+
+            // Whisker caps (short horizontal ticks at the ends).
+            var cx      = (medL.X + medR.X) / 2.0;
+            var capHalf = (medR.X - medL.X) * 0.25;
+            canvas.Children.Add(new Line
+            {
+                StartPoint = new AvaloniaPoint(cx - capHalf, lowW.Y),
+                EndPoint   = new AvaloniaPoint(cx + capHalf, lowW.Y),
+                Stroke = stroke,
+                StrokeThickness = thickness,
+            });
+            canvas.Children.Add(new Line
+            {
+                StartPoint = new AvaloniaPoint(cx - capHalf, upW.Y),
+                EndPoint   = new AvaloniaPoint(cx + capHalf, upW.Y),
+                Stroke = stroke,
+                StrokeThickness = thickness,
+            });
+
+            i += 6;
+        }
+    }
+
+    // Treemap tiles — SeriesBars carry per-bar FillColorOverride (palette color). White stroke between tiles.
+    // Labels are drawn inline with white text centered in each tile (WPF uses white TextAnnotations).
+    private void RenderTreemapTiles(Canvas canvas, SeriesLayout series, IReadOnlyList<DataLabelBox> dataLabels)
+    {
+        foreach (var bar in series.Bars)
+        {
+            if (bar.Rect.Width <= 0 || bar.Rect.Height <= 0)
+                continue;
+
+            var fillColor = bar.FillColorOverride ?? ThemePaletteColor(bar.PointIndex);
+            var fill      = SolidBrush(fillColor.R, fillColor.G, fillColor.B, 0xDC);
+
+            var rect = new AvaloniaRectangle
+            {
+                Width  = bar.Rect.Width,
+                Height = bar.Rect.Height,
+                Fill   = fill,
+                Stroke = Brushes.White,
+                StrokeThickness = 2,
+            };
+            Canvas.SetLeft(rect, bar.Rect.Left);
+            Canvas.SetTop(rect,  bar.Rect.Top);
+            canvas.Children.Add(rect);
+        }
+
+        // Draw tile labels in white, centered in each tile (always shown, regardless of ShowDataLabels).
+        foreach (var box in dataLabels)
+        {
+            if (string.IsNullOrEmpty(box.Text))
+                continue;
+
+            var label = new TextBlock
+            {
+                Text      = box.Text,
+                FontSize  = 10,
+                Foreground = Brushes.White,
+                TextAlignment = TextAlignment.Center,
+            };
+            // Center the label in the tile's bounds.
+            Canvas.SetLeft(label, box.Bounds.Left);
+            Canvas.SetTop(label,  box.Bounds.Top);
+            canvas.Children.Add(label);
         }
     }
 
@@ -1018,6 +1147,28 @@ public sealed class AvaloniaChartRenderer
             Canvas.SetLeft(label, entry.LabelRect.Left);
             Canvas.SetTop(label, entry.LabelRect.Top);
             canvas.Children.Add(label);
+        }
+    }
+
+    // ── Surface / heatmap cells ──────────────────────────────────────────────
+
+    private static void RenderSurfaceCells(Canvas canvas, SeriesLayout series)
+    {
+        foreach (var cell in series.SurfaceCells)
+        {
+            if (cell.Rect.Width <= 0 || cell.Rect.Height <= 0)
+                continue;
+
+            var rect = new AvaloniaRectangle
+            {
+                Width  = cell.Rect.Width,
+                Height = cell.Rect.Height,
+                Fill   = SolidBrush(cell.FillColor),
+                Stroke = null,
+            };
+            Canvas.SetLeft(rect, cell.Rect.Left);
+            Canvas.SetTop(rect, cell.Rect.Top);
+            canvas.Children.Add(rect);
         }
     }
 

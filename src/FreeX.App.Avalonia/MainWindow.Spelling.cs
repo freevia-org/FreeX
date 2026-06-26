@@ -292,11 +292,16 @@ public sealed partial class MainWindow
                 replacementBox.Text = picked;
         };
 
-        var ignoreButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnore"), Width = 96 };
-        var ignoreAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnoreAll"), Width = 96 };
-        var changeButton = new Button { Content = UiText.Get("ShellLoc_SpellingChange"), Width = 96 };
-        var changeAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingChangeAll"), Width = 96 };
-        var closeButton = new Button { Content = UiText.Get("Common_Close"), Width = 96 };
+        var ignoreButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnore") };
+        var ignoreAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingIgnoreAll") };
+        var changeButton = new Button { Content = UiText.Get("ShellLoc_SpellingChange"), IsDefault = true };
+        var changeAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingChangeAll") };
+        var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true };
+        ApplyDialogButtonChrome(ignoreButton, 96);
+        ApplyDialogButtonChrome(ignoreAllButton, 96);
+        ApplyDialogButtonChrome(changeButton, 96, isDefault: true);
+        ApplyDialogButtonChrome(changeAllButton, 96);
+        ApplyDialogButtonChrome(closeButton, 96);
 
         ignoreButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Ignore, null); dialog.Close(); };
         ignoreAllButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.IgnoreAll, null); dialog.Close(); };

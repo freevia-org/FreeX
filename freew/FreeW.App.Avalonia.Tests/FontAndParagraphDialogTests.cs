@@ -45,6 +45,10 @@ public sealed class FontAndParagraphDialogTests
             SetDraftView: () => { },
             OpenFontDialog: () => { },
             OpenParagraphDialog: () => { },
+            OpenPageSetupDialog: () => { },
+            ToggleOrientation:   () => { },
+            ApplyMarginPreset:   _ => { },
+            ApplyPaperSize:      _ => { },
             ApplyZoom: (_, _) => { });
 
     // ── Launcher command ids resolve in the registry ──────────────────────────

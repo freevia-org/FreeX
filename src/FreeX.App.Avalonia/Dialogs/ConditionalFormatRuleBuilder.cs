@@ -29,7 +29,8 @@ public static class ConditionalFormatRuleBuilder
         CfRuleInput input,
         GridRange range,
         ConditionalFormatHighlightPreset? highlight = null,
-        Guid? id = null)
+        Guid? id = null,
+        CellStyle? customFormat = null)
     {
         ArgumentNullException.ThrowIfNull(input);
 
@@ -101,11 +102,12 @@ public static class ConditionalFormatRuleBuilder
                 break;
         }
 
-        // The visual families render their own appearance; the highlight families take a fill/font style.
+        // The visual families render their own appearance; the highlight families take a fill/font
+        // style — either an explicit custom format (from the "Format…" picker) or a named preset.
         if (input.RuleType is CfRuleType.IconSet or CfRuleType.DataBar or CfRuleType.ColorScale)
             cf.FormatIfTrue = null;
         else
-            cf.FormatIfTrue = (highlight ?? ConditionalFormatHighlightPreset.Default).ToCellStyle();
+            cf.FormatIfTrue = customFormat ?? (highlight ?? ConditionalFormatHighlightPreset.Default).ToCellStyle();
 
         return cf;
     }
@@ -126,7 +128,8 @@ public static class ConditionalFormatRuleBuilder
         SheetId sheetId,
         GridRange range,
         ConditionalFormatHighlightPreset? highlight = null,
-        Guid? id = null)
+        Guid? id = null,
+        CellStyle? customFormat = null)
     {
         ArgumentNullException.ThrowIfNull(input);
 
@@ -135,7 +138,7 @@ public static class ConditionalFormatRuleBuilder
         if (!validation.IsValid)
             return CfRuleCommandResult.Invalid(validation);
 
-        var rule = Build(input, range, highlight, id);
+        var rule = Build(input, range, highlight, id, customFormat);
         return CfRuleCommandResult.Ok(rule, ToApplyCommand(sheetId, rule));
     }
 }

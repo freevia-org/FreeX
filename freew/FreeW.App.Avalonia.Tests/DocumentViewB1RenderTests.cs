@@ -67,7 +67,7 @@ public sealed class DocumentViewB1RenderTests
             () => { }, () => { }, () => { }, () => { }, () => { },
             () => { }, () => { }, () => { }, () => { }, () => { },
             () => { }, () => { }, () => { }, () => { }, () => { },
-            () => { }, (_, _) => { });
+            () => { }, () => { }, () => { }, _ => { }, _ => { }, (_, _) => { });
         var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
 
         var expected = new[]

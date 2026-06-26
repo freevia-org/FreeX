@@ -248,6 +248,85 @@ public sealed class MainWindow : Window
     private Task OpenParagraphDialogAsync() =>
         ParagraphDialog.ShowAndApplyAsync(this, _editor);
 
+    /// <summary>
+    /// Opens the Page Setup dialog (modal). Pre-populates from the document's current page
+    /// geometry; on OK applies the changes as a single undoable step.
+    /// Wired to <c>freew.page-setup-dialog</c> ribbon command (Layout → Page Setup group).
+    /// </summary>
+    private Task OpenPageSetupDialogAsync() =>
+        PageSetupDialog.ShowAndApplyAsync(this, _editor);
+
+    /// <summary>
+    /// Toggle the document orientation between Portrait and Landscape (AV-PAGE).
+    /// Wired to <c>freew.page-orientation</c>.
+    /// </summary>
+    private void ToggleOrientation()
+    {
+        var page = _editor.Document.Page;
+        var settings = page.Clone();
+        settings.Landscape = !page.Landscape;
+        // Swap width/height so the model always reflects the actual render dimensions.
+        (settings.WidthPt, settings.HeightPt) = (page.HeightPt, page.WidthPt);
+        _editor.SetPageSettings(settings);
+    }
+
+    /// <summary>
+    /// Apply a named margin preset (AV-PAGE).  Recognised names: "normal" (72pt / 1in all
+    /// sides), "narrow" (36pt / 0.5in all sides), "wide" (108pt / 1.5in left+right, 72pt top+bottom).
+    /// Wired to <c>freew.page-margins-*</c> ribbon commands.
+    /// </summary>
+    private void ApplyMarginPreset(string preset)
+    {
+        var settings = _editor.Document.Page.Clone();
+        switch (preset.ToLowerInvariant())
+        {
+            case "normal":
+                settings.MarginTopPt = settings.MarginBottomPt =
+                settings.MarginLeftPt = settings.MarginRightPt = 72;
+                break;
+            case "narrow":
+                settings.MarginTopPt = settings.MarginBottomPt =
+                settings.MarginLeftPt = settings.MarginRightPt = 36;
+                break;
+            case "wide":
+                settings.MarginTopPt    = 72;
+                settings.MarginBottomPt = 72;
+                settings.MarginLeftPt   = 108;
+                settings.MarginRightPt  = 108;
+                break;
+            default:
+                return; // unknown preset — no-op
+        }
+        _editor.SetPageSettings(settings);
+    }
+
+    /// <summary>
+    /// Apply a quick paper size (AV-PAGE).  Recognised names: "letter" (612 × 792 pt),
+    /// "a4" (595.3 × 841.9 pt). Preserves the current orientation.
+    /// Wired to <c>freew.page-size-*</c> ribbon commands.
+    /// </summary>
+    private void ApplyPaperSize(string name)
+    {
+        var page = _editor.Document.Page;
+        var settings = page.Clone();
+        var landscape = page.Landscape || page.WidthPt > page.HeightPt;
+
+        (double portraitW, double portraitH) = name.ToLowerInvariant() switch
+        {
+            "letter" => (612.0, 792.0),
+            "a4"     => (595.3, 841.9),
+            _        => (page.WidthPt, page.HeightPt), // unknown — no-op
+        };
+
+        if (name.ToLowerInvariant() is not ("letter" or "a4"))
+            return;
+
+        // Apply in portrait order then swap if landscape.
+        settings.WidthPt  = landscape ? portraitH : portraitW;
+        settings.HeightPt = landscape ? portraitW : portraitH;
+        _editor.SetPageSettings(settings);
+    }
+
     private static TextDocument LoadStartupDocument(IReadOnlyList<string> startupArguments)
     {
         var path = startupArguments.FirstOrDefault(a => a.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) && File.Exists(a));
@@ -282,6 +361,10 @@ public sealed class MainWindow : Window
             SetDraftView:   () => SetViewMode(DocumentViewMode.Draft),
             OpenFontDialog:      () => _ = OpenFontDialogAsync(),
             OpenParagraphDialog: () => _ = OpenParagraphDialogAsync(),
+            OpenPageSetupDialog: () => _ = OpenPageSetupDialogAsync(),
+            ToggleOrientation:   ToggleOrientation,
+            ApplyMarginPreset:   ApplyMarginPreset,
+            ApplyPaperSize:      ApplyPaperSize,
             ApplyZoom: (absolute, delta) =>
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
