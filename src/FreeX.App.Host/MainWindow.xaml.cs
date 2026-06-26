@@ -352,6 +352,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.NoteInlineEditSubmitted += SheetGrid_NoteInlineEditSubmitted;
         SheetGrid.ThreadedCommentInlineEditSubmitted += SheetGrid_ThreadedCommentInlineEditSubmitted;
         SheetGrid.TextBoxEditRequested += OnTextBoxEditRequested;
+        WireFormControlEvents();
         DependencyPropertyDescriptor.FromProperty(
             FreeX.App.UI.GridView.SelectedObjectIdProperty,
             typeof(FreeX.App.UI.GridView))?.AddValueChanged(SheetGrid, OnSelectedObjectContextChanged);

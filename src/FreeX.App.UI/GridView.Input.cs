@@ -514,6 +514,14 @@ public partial class GridView
             return;
         }
 
+        // Form-control hit test runs before the drawing-object drag path so that clicking a
+        // checkbox / spinner / etc. fires the interaction event rather than starting a drag.
+        if (TryHandleFormControlClick(pos))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // Check if clicking on an already-selected object's handles
         if (SelectedObjectId != Guid.Empty &&
             SelectedObjectKind != ObjectKind.None)
