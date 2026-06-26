@@ -186,6 +186,35 @@ public sealed class DocumentView : Control
     public event Action? CaretMoved;
 
     /// <summary>
+    /// AV-PICTAB: Raised when the floating-object selection IDENTITY changes — i.e. a different
+    /// float (block+run) is selected, or the selection is cleared. Does NOT fire on pure
+    /// rect/geometry refreshes of the same object (drag-move, size update). The ribbon's
+    /// <c>FloatingRibbonContextSource</c> subscribes to this to show/hide the Picture / Drawing
+    /// Format contextual tabs.
+    /// </summary>
+    public event Action? FloatingSelectionChanged;
+
+    /// <summary>
+    /// AV-PICTAB: Last (block,run) identity for which <see cref="FloatingSelectionChanged"/> was raised.
+    /// Used to suppress duplicate notifications when only the selection rect changes.
+    /// </summary>
+    private (int BlockIndex, int RunIndex)? _lastSignaledFloating;
+
+    /// <summary>
+    /// AV-PICTAB: Fire <see cref="FloatingSelectionChanged"/> iff the selected float's identity
+    /// (block+run) differs from the last signalled value. Call after every assignment to
+    /// <see cref="_selectedFloating"/>.
+    /// </summary>
+    private void RaiseFloatingSelectionChangedIfIdentityChanged()
+    {
+        var identity = _selectedFloating is { } sel ? (sel.BlockIndex, sel.RunIndex) : ((int, int)?)null;
+        if (identity == _lastSignaledFloating)
+            return;
+        _lastSignaledFloating = identity;
+        FloatingSelectionChanged?.Invoke();
+    }
+
+    /// <summary>
     /// Raised when a table cell double-click is received and no in-place caret placement is possible
     /// (e.g., the cell has no placed glyphs yet). Kept for shell compatibility; normal editing now
     /// routes the caret directly into the cell via <see cref="PlaceCaretInCell"/>.
@@ -266,6 +295,9 @@ public sealed class DocumentView : Control
         _selectionAnchor = null;
         _cellCaret = null; // AV-TBL: clear cell state on document load
         _cellAnchor = null;
+        _selectedFloating = null; // AV-PICTAB: clear float selection on document load
+        _floatDragState   = null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
     }
@@ -4708,6 +4740,7 @@ public sealed class DocumentView : Control
             _selectedFloating = (blockIndex, runIndex, kind, found.Value);
         else
             _selectedFloating = null; // object was deleted / moved out of view
+        RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
     }
 
@@ -4727,6 +4760,7 @@ public sealed class DocumentView : Control
         if (_selectedFloating is null) return;
         _selectedFloating = null;
         _floatDragState   = null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
     }
 
@@ -4818,6 +4852,44 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-PICTAB: Returns the selected floating object's model size in points (width, height),
+    /// or null when nothing is selected (or the kind carries no editable size).
+    /// </summary>
+    public (double WidthPt, double HeightPt)? GetSelectedFloatingSize()
+    {
+        if (_selectedFloating is not { } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        var run = para.Runs[sel.RunIndex];
+        if (run.Image is { IsFloating: true } img) return (img.WidthPt, img.HeightPt);
+        if (run.Shape is { } shape)    return (shape.WidthPt, shape.HeightPt);
+        if (run.Chart is { } chart)    return (chart.WidthPt, chart.HeightPt);
+        if (run.SmartArt is { } sa)    return (sa.WidthPt, sa.HeightPt);
+        if (run.DrawingGroup is { } g) return (g.WidthPt, g.HeightPt);
+        return null;
+    }
+
+    /// <summary>
+    /// AV-PICTAB: Set just the width of the selected floating object, preserving its current height.
+    /// No-op when nothing is selected. Undoable.
+    /// </summary>
+    public void SetFloatingWidth(double widthPt)
+    {
+        if (GetSelectedFloatingSize() is not { } size || widthPt <= 0) return;
+        SetFloatingSize(widthPt, size.HeightPt);
+    }
+
+    /// <summary>
+    /// AV-PICTAB: Set just the height of the selected floating object, preserving its current width.
+    /// No-op when nothing is selected. Undoable.
+    /// </summary>
+    public void SetFloatingHeight(double heightPt)
+    {
+        if (GetSelectedFloatingSize() is not { } size || heightPt <= 0) return;
+        SetFloatingSize(size.WidthPt, heightPt);
+    }
+
+    /// <summary>
     /// Rotate/flip the selected floating object (Images and Shapes only; other kinds are no-ops).
     /// Undoable. No-op when nothing is selected.
     /// </summary>
@@ -4878,6 +4950,7 @@ public sealed class DocumentView : Control
         _bus.Execute(new RemoveFloatingRunCommand(sel.BlockIndex, sel.RunIndex));
         _selectedFloating = null;
         _floatDragState   = null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
     }
 
@@ -5000,6 +5073,7 @@ public sealed class DocumentView : Control
                 // New selection.
                 _selectedFloating = floatHit;
                 _floatDragState   = (point, floatHit.Rect);
+                RaiseFloatingSelectionChangedIfIdentityChanged();
             }
             InvalidateVisual();
             e.Handled = true;
@@ -5011,6 +5085,7 @@ public sealed class DocumentView : Control
         {
             _selectedFloating = null;
             _floatDragState   = null;
+            RaiseFloatingSelectionChangedIfIdentityChanged();
             InvalidateVisual();
         }
 
@@ -5152,6 +5227,7 @@ public sealed class DocumentView : Control
                 case Key.Escape:
                     _selectedFloating = null;
                     _floatDragState   = null;
+                    RaiseFloatingSelectionChangedIfIdentityChanged();
                     InvalidateVisual();
                     e.Handled = true;
                     return;

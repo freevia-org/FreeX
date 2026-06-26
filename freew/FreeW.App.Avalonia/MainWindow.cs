@@ -372,11 +372,15 @@ public sealed class MainWindow : Window
             });
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
-        var tableContext = new TableRibbonContextSource(_editor);
+        // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
+        // contextual triggers so both sets of contextual tabs can surface from one source.
+        var contextSource = new CompositeRibbonContextSource(
+            new TableRibbonContextSource(_editor),
+            new FloatingRibbonContextSource(_editor));
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
             FreeWRibbon.BuildDefinition(),
             registry,
-            contextSource: tableContext,
+            contextSource: contextSource,
             afterExecute: () => _editor.Focus());
         HasToolbar = true;
         return new Border
