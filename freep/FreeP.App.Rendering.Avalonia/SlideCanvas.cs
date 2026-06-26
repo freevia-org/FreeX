@@ -375,10 +375,12 @@ public sealed class SlideCanvas : Control
 
         var dest = new Rect(pic.DestDip.X, pic.DestDip.Y, pic.DestDip.Width, pic.DestDip.Height);
 
-        // 18A: colour effects — produce a modified bitmap via pixel manipulation
+        // 18A: colour effects — produce a modified bitmap via pixel manipulation.
+        // BN1: ApplyColorEffectsAvalonia returns null when GDI+/libgdiplus is unavailable;
+        //      in that case we keep the original uneffected bitmap so the picture isn't blank.
         IImage renderBitmap = bitmap;
         if (pic.Grayscale || pic.BiLevelThreshold.HasValue || pic.Brightness.HasValue || pic.Contrast.HasValue)
-            renderBitmap = ApplyColorEffectsAvalonia(bitmap, pic);
+            renderBitmap = ApplyColorEffectsAvalonia(bitmap, pic) ?? (IImage)bitmap;
 
         IDisposable? rotScope   = null;
         IDisposable? alphaScope = null;
@@ -446,7 +448,7 @@ public sealed class SlideCanvas : Control
     /// Falls back to returning a blank WriteableBitmap when GDI+ is unavailable so crop still works.
     /// Alpha opacity is handled via dc.PushOpacity upstream and is NOT applied here.
     /// </summary>
-    private static WriteableBitmap ApplyColorEffectsAvalonia(Bitmap src, DrawOp.Picture pic)
+    private static WriteableBitmap? ApplyColorEffectsAvalonia(Bitmap src, DrawOp.Picture pic)
     {
         int pw = src.PixelSize.Width;
         int ph = src.PixelSize.Height;
@@ -456,7 +458,7 @@ public sealed class SlideCanvas : Control
             new PixelSize(pw, ph),
             new Vector(96, 96),
             PixelFormat.Bgra8888,
-            AlphaFormat.Premul);
+            AlphaFormat.Unpremul); // BN2: pixels from System.Drawing Format32bppArgb are straight (non-premultiplied)
 
         // ── Decode source pixels via System.Drawing ──────────────────────────────────
         var pixels = new byte[ph * stride];
@@ -493,11 +495,13 @@ public sealed class SlideCanvas : Control
         }
         catch
         {
-            // GDI+ unavailable — colour effects skipped; crop still works in RenderPicture.
-            return wb;
+            // BN1: GDI+ unavailable (e.g. Linux without libgdiplus) — return the original uneffected
+            // source bitmap so the picture still renders rather than a blank/transparent rectangle.
+            // Crop continues to work in RenderPicture because it uses the returned bitmap's bounds.
+            return null; // null signals RenderPicture to draw src directly
         }
 
-        if (!pixelsLoaded) return wb;
+        if (!pixelsLoaded) return null; // BN1: same fallback — draw src uneffected
 
         // ── Apply effects ────────────────────────────────────────────────────────────
         bool doGray    = pic.Grayscale;
@@ -1221,8 +1225,10 @@ public sealed class SlideCanvas : Control
             // twice (flat ghost from DrawText + warped/overlaid copy from RenderParaWithEffects).
             bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
 
-            // Wave 18B: when the paragraph has explicit tab stops, render run-by-run.
-            bool hasTabs = para.TabStops.Count > 0 && para.Runs.Any(r => r.Text.Contains('\t'));
+            // Wave 18B: render run-by-run whenever any run contains a tab character so that
+            // BO2 fix: paragraphs with NO explicit tab stops (relying on default ~96 DIP interval)
+            // also go through RenderParaWithTabs instead of plain DrawText (which ignores \t).
+            bool hasTabs = para.Runs.Any(r => r.Text.Contains('\t'));
 
             if (hasEffects)
             {
@@ -1254,36 +1260,75 @@ public sealed class SlideCanvas : Control
         IReadOnlyList<ResolvedTabStop> tabStops)
     {
         const double DefaultTabDip = 96.0;
-        double curX = startX;
 
+        // BO1: Flatten all runs into a sequence of (text, run, isTab) tokens.
+        // Each entry is a text segment + the run it belongs to; isTab=true means a tab
+        // character precedes this segment (alignment must be applied before drawing).
+        var tokens = new System.Collections.Generic.List<(string text, ResolvedRun run, bool isTab)>();
         foreach (var run in para.Runs)
         {
             if (run.Text.Length == 0) continue;
+            var segs = run.Text.Split('\t');
+            for (int si = 0; si < segs.Length; si++)
+                tokens.Add((segs[si], run, si > 0));
+        }
 
-            var segments = run.Text.Split('\t');
-            for (int si = 0; si < segments.Length; si++)
+        double curX = startX;
+
+        for (int ti = 0; ti < tokens.Count; ti++)
+        {
+            var (seg, run, isTab) = tokens[ti];
+
+            // Advance to the next tab stop before drawing this segment.
+            if (isTab)
             {
-                var seg = segments[si];
-                if (seg.Length > 0)
+                double relX = curX - startX;
+
+                // Find the matching tab stop.
+                double stopDip = DefaultTabDip;
+                ResolvedTabStop? matchedStop = null;
+                bool found = false;
+                foreach (var ts in tabStops)
                 {
-                    var segFt = BuildSingleRunFormattedTextAt(run, seg);
-                    dc.DrawText(segFt, new Point(curX, startY));
-                    curX += segFt.Width;
+                    if (ts.PositionDip > relX + 0.5)
+                    {
+                        stopDip     = ts.PositionDip;
+                        matchedStop = ts;
+                        found       = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    stopDip = Math.Floor(relX / DefaultTabDip + 1.0) * DefaultTabDip;
+
+                // BO1: compute alignment offset based on the NEXT segment's width.
+                double alignOffset = 0;
+                TabStopAlignment align = matchedStop?.Alignment ?? TabStopAlignment.Left;
+                if (align != TabStopAlignment.Left && seg.Length > 0)
+                {
+                    var nextFt = BuildSingleRunFormattedTextAt(run, seg);
+                    double segW = nextFt.Width;
+                    alignOffset = align switch
+                    {
+                        TabStopAlignment.Right   => -segW,                // segment ends at stop
+                        TabStopAlignment.Center  => -segW / 2.0,          // segment centred on stop
+                        TabStopAlignment.Decimal =>                        // decimal pt at stop
+                            -(seg.Contains('.')
+                                ? BuildSingleRunFormattedTextAt(run, seg[..(seg.IndexOf('.') + 1)]).Width
+                                : segW),
+                        _ => 0
+                    };
                 }
 
-                if (si < segments.Length - 1)
-                {
-                    double relX = curX - startX;
-                    double nextStop = DefaultTabDip;
-                    bool found = false;
-                    foreach (var ts in tabStops)
-                    {
-                        if (ts.PositionDip > relX + 0.5) { nextStop = ts.PositionDip; found = true; break; }
-                    }
-                    if (!found)
-                        nextStop = Math.Floor(relX / DefaultTabDip + 1.0) * DefaultTabDip;
-                    curX = startX + nextStop;
-                }
+                curX = startX + stopDip + alignOffset;
+            }
+
+            // Draw the segment.
+            if (seg.Length > 0)
+            {
+                var segFt = BuildSingleRunFormattedTextAt(run, seg);
+                dc.DrawText(segFt, new Point(curX, startY));
+                curX += segFt.Width;
             }
         }
     }

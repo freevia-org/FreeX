@@ -422,4 +422,154 @@ public sealed class DocumentViewTabStopTests
         bGlyph.X.Should().BeApproximately(expectedBX, Tol,
             "'B' aligns to the 72pt custom default tab interval");
     }
+
+    // ── BP1 regression tests: tab stops are MARGIN-relative, not indent-relative ─────────────────
+
+    // Helper: one-paragraph doc with an explicit tab stop and a paragraph indent.
+    private static TextDocument DocWithTabStopAndIndent(
+        string text,
+        double indentLeftPt,
+        double stopPositionPt,
+        TabStopAlignment alignment = TabStopAlignment.Left)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var pf = new ParagraphFormatting
+        {
+            IndentLeftPt = indentLeftPt,
+            TabStops = new[] { new TabStop(stopPositionPt, alignment) },
+        };
+        var para = new Paragraph { Formatting = pf };
+        para.Runs.Add(new Run(text, RunFormatting.Default));
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    // ── TAB-13 (BP1): indented paragraph — tab stop is MARGIN-relative ───────────────────────────
+    // Paragraph with IndentLeftPt=36 (0.5") and a Left tab stop at 144pt (2").
+    // Text = "a\tb".  After the fix:
+    //   'b' must land at ContentLeft + 144pt*PxPerPoint  (margin-relative, 2" from margin)
+    // NOT at ContentLeft + 36pt*PxPerPoint + 144pt*PxPerPoint (which would be 2.5" from margin).
+    // This matches Word/OOXML semantics and the WPF Ruler (Ruler.cs:609).
+
+    [Fact]
+    public async Task TAB_13_BP1_indented_paragraph_tab_stop_is_margin_relative()
+    {
+        IReadOnlyList<(char Ch, double X, double W)>? placed = null;
+        const double indentPt   = 36.0;  // 0.5"
+        const double stopPt     = 144.0; // 2.0"
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithTabStopAndIndent("a\tb", indentPt, stopPt);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            placed = view.GetBodyTabPlaced(0);
+        });
+        if (!ran) return;
+        placed.Should().NotBeNull();
+
+        // 3 placed items: 'a', '\t', 'b'.
+        placed!.Should().HaveCount(3, "'a\\tb' has 3 chars");
+        placed[0].Ch.Should().Be('a');
+        placed[1].Ch.Should().Be('\t');
+        placed[2].Ch.Should().Be('b');
+
+        // 'a' starts at the INDENTED text origin: ContentLeft + indent.
+        var indentPx = indentPt * PxPerPoint;
+        placed[0].X.Should().BeApproximately(ContentLeft + indentPx, Tol,
+            "'a' starts at the indented text origin (margin + 0.5in)");
+
+        // 'b' must land at the tab stop measured from the MARGIN (not from the indent).
+        // Expected: ContentLeft + 144pt*PxPerPoint  (2" from margin).
+        // Wrong (pre-fix): ContentLeft + 36pt*PxPerPoint + 144pt*PxPerPoint (2.5" from margin).
+        var expectedBX     = ContentLeft + stopPt * PxPerPoint;
+        var wrongPreFixBX  = ContentLeft + indentPx + stopPt * PxPerPoint;
+        placed[2].X.Should().BeApproximately(expectedBX, Tol,
+            "'b' must land at 2\" from the margin (OOXML/Word/Ruler semantics), not 2.5\"");
+        placed[2].X.Should().BeLessThan(wrongPreFixBX - 1,
+            "if 'b' is at wrongPreFixBX the indent was incorrectly added to the tab position");
+    }
+
+    // ── TAB-14 (BP1 no-regression): non-indented paragraph still places tab at margin-relative pos ─
+    // IndentLeftPt=0 and a Left tab stop at 144pt — same as TAB-3 but with the explicit assertion
+    // that the indent=0 case is unaffected by the BP1 fix.
+
+    [Fact]
+    public async Task TAB_14_BP1_no_indent_tab_stop_unaffected()
+    {
+        IReadOnlyList<(char Ch, double X, double W)>? placed = null;
+        const double stopPt = 144.0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithTabStopAndIndent("Name\tValue", indentLeftPt: 0, stopPositionPt: stopPt);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            placed = view.GetBodyTabPlaced(0);
+        });
+        if (!ran) return;
+        placed.Should().NotBeNull();
+
+        // "Name\tValue" → 10 chars.
+        placed!.Should().HaveCount(10, "'Name\\tValue' has 10 chars");
+
+        // 'V' (the first char of "Value") must start at ContentLeft + 144pt*PxPerPoint.
+        var vGlyph = placed.FirstOrDefault(p => p.Ch == 'V');
+        vGlyph.Ch.Should().Be('V');
+        vGlyph.X.Should().BeApproximately(ContentLeft + stopPt * PxPerPoint, Tol,
+            "non-indented paragraph: tab stop at 144pt still lands at 2\" from margin");
+    }
+
+    // ── TAB-15 (BP1): default tab interval is margin-relative for indented paragraphs ─────────────
+    // Paragraph with IndentLeftPt=36 and no explicit tab stops (default 36pt interval).
+    // The pen after 'a' is at ~(ContentLeft + 36pt + ~8px).
+    // Margin-relative pen = indent + glyph width ≈ 36pt*PxPerPt + ~8px.
+    // The next 36pt multiple from that pen (margin-relative) determines the stop.
+    // Before the fix, the default tab would double-count the indent.
+
+    [Fact]
+    public async Task TAB_15_BP1_indented_paragraph_default_tab_is_margin_relative()
+    {
+        IReadOnlyList<(char Ch, double X, double W)>? placed = null;
+        const double indentPt   = 36.0;   // 0.5" indent
+        const double defaultPt  = 36.0;   // default tab = 0.5"
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.DefaultTabStopPt = defaultPt;
+            var pf = ParagraphFormatting.Default with { IndentLeftPt = indentPt };
+            var para = new Paragraph { Formatting = pf };
+            para.Runs.Add(new Run("a\tb", RunFormatting.Default));
+            doc.Blocks.Add(para);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            placed = view.GetBodyTabPlaced(0);
+        });
+        if (!ran) return;
+        placed.Should().NotBeNull();
+
+        placed!.Should().HaveCount(3, "'a\\tb' has 3 chars");
+        placed[0].Ch.Should().Be('a');
+        placed[2].Ch.Should().Be('b');
+
+        // 'a' starts at ContentLeft + indent.
+        var indentPx    = indentPt * PxPerPoint;
+        var intervalPx  = defaultPt * PxPerPoint;
+        placed[0].X.Should().BeApproximately(ContentLeft + indentPx, Tol,
+            "'a' starts at the indented origin");
+
+        // Margin-relative pen after 'a': indentPx + aWidth.
+        var aWidth           = placed[0].W;
+        var penFromMargin    = indentPx + aWidth;
+
+        // Next default tab stop (multiple of intervalPx strictly past penFromMargin).
+        var expectedStop = (Math.Floor(penFromMargin / intervalPx) + 1) * intervalPx;
+        var expectedBX   = ContentLeft + expectedStop;
+
+        placed[2].X.Should().BeApproximately(expectedBX, Tol,
+            "'b' lands at the next default-tab multiple from the MARGIN (not from the text start)");
+    }
 }
