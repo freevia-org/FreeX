@@ -105,7 +105,7 @@ public sealed partial class MainWindow
 
         var selectAll = new CheckBox
         {
-            Content = UiText.Get("PivotFieldFilter_SelectAll"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_SelectAll")),
             IsChecked = checkBoxes.All(box => box.IsChecked == true),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -287,9 +287,9 @@ public sealed partial class MainWindow
             Padding = new Thickness(0),
             Items =
             {
-                new TabItem { Header = UiText.Get("PivotFieldFilter_SelectItems"), Content = selectItemsPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotFieldFilter_LabelFilters"), Content = labelFiltersPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotFieldFilter_ValueFilters"), Content = valueFiltersPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_SelectItems")), Content = selectItemsPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_LabelFilters")), Content = labelFiltersPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_ValueFilters")), Content = valueFiltersPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
         AutomationProperties.SetAutomationId(tabs, "PivotItemFilterTabs");

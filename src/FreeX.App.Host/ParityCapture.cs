@@ -246,6 +246,11 @@ internal static class ParityCapture
             SetBackstageContent(window, replacementContent);
         if (!string.IsNullOrWhiteSpace(focusEntryId))
             FocusBackstageEntry(window, focusEntryId);
+        // The start-screen Home view carries a "More templates (Excluded)" rail link that points at an
+        // unavailable online-template service; it is excluded from the product, so collapse it for the
+        // parity capture so the Home/Export surface matches the Linux backstage (which omits it). The
+        // live control stays in the XAML — this only affects the offscreen capture pass.
+        HideBackstageMoreTemplatesLink(window);
         window.UpdateLayout();
         PumpDispatcher();
 
@@ -257,6 +262,37 @@ internal static class ParityCapture
         }
 
         return RenderElement(window, SurfaceWidth, SurfaceHeight);
+    }
+
+    private static void HideBackstageMoreTemplatesLink(MainWindow window)
+    {
+        if (window.FindName("StartScreenOverlay") is not DependencyObject overlay)
+            return;
+
+        foreach (var button in FindVisualChildren<Button>(overlay))
+        {
+            if (string.Equals(
+                    AutomationProperties.GetAutomationId(button),
+                    "MoreTemplatesExcludedButton",
+                    StringComparison.Ordinal))
+            {
+                button.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
     }
 
     private static void SetBackstageContent(MainWindow window, UIElement content)

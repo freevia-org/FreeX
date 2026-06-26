@@ -404,7 +404,7 @@ public sealed partial class MainWindow
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label, FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
                 control,
             },
         };

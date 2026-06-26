@@ -319,6 +319,9 @@ public sealed partial class MainWindow : Window
     private const double SheetHorizontalScrollbarMaximumWidth = 420;
     private const double SheetHorizontalScrollbarWindowRatio = 0.34;
     private const double SheetTabContourClipTolerance = 0.5;
+    // Left inset of the sheet-tab strip from the row-header edge so the active tab's left vertical
+    // border / rounded corner is fully visible (Windows leaves this gap; Linux was flush, clipping it).
+    private const double SheetTabStripLeadingInset = 4;
     private const uint PortablePdfColumnsPerPage = 8;
     private const uint PortablePdfRowsPerPage = 28;
     private const double ZoomToSelectionDefaultColumnWidth = 80;
@@ -391,6 +394,12 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush PrimaryInk = Brush(25, 31, 40);
     private static readonly IBrush SecondaryInk = Brush(94, 103, 116);
     private static readonly IBrush SelectionBorder = Brush(33, 115, 70);
+    // Shared selection-fill token — byte-identical to the WPF grid's SelectionBrush
+    // (GridView.cs: MakeBrushAlpha(32, 33, 115, 70)). A light translucent green laid over the
+    // selected range so multi-cell selections read like Windows (a faint green wash that keeps the
+    // black cell text legible) instead of an opaque tint. Centralised here as the single Avalonia
+    // grid selection-fill token, deriving its RGB from the SelectionBorder accent.
+    private static readonly IBrush SelectionFill = Brush(32, 33, 115, 70);
     private static readonly IBrush SelectionHeaderBackground = Brush(218, 232, 218);
     private static readonly IBrush SelectionHeaderForeground = Brush(31, 31, 31);
     private static readonly IBrush DrawingObjectBoundsFill = Brush(42, 11, 112, 116);
@@ -4005,7 +4014,11 @@ public sealed partial class MainWindow : Window
         {
             Orientation = Orientation.Horizontal,
             Spacing = 0,
-            Margin = new Thickness(0),
+            // Nudge the whole strip a few px right of the row-header edge so the first (active) tab's
+            // left vertical border clears the header column and is fully visible, matching Windows
+            // (the tab strip starts just right of the header edge rather than flush against it, which
+            // was clipping the active tab's rounded left corner on Linux).
+            Margin = new Thickness(SheetTabStripLeadingInset, 0, 0, 0),
         };
 
         foreach (var tab in _session.SheetTabs)
@@ -6447,13 +6460,20 @@ public sealed partial class MainWindow : Window
     private static void AddAutofillHandleAdorner(Border border, double zoomFactor)
     {
         var existing = border.Child;
-        var handleSize = Math.Max(4, 6 * zoomFactor);
+        var handleSize = Math.Max(6, 7 * zoomFactor);
         // Detach 'existing' from 'border' before re-parenting it into the new layer Grid.
         // Avalonia (unlike WPF) throws InvalidOperationException if a control still has a
         // visual parent when it is added to a second parent's Children collection.
         border.Child = null;
+        // Fill handle (autofill grip): a full solid-green square straddling the cell's bottom-right
+        // corner so it covers the edge and is easy to grab — matching the WPF grid handle, which is
+        // centred on the corner (DrawSelectionHandle: hx = right - size/2, hy = bottom - size/2, so
+        // half the square overhangs each edge). The negative right/bottom margin pushes it out by half
+        // its size; ClipToBounds is disabled on the layer so the overhang is not cropped.
+        var overhang = handleSize / 2;
         var layer = new AvaloniaGrid
         {
+            ClipToBounds = false,
             Children =
             {
                 existing!,
@@ -6465,7 +6485,7 @@ public sealed partial class MainWindow : Window
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
                     VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
                     IsHitTestVisible = false,
-                    Margin = new Thickness(0, 0, -1, -1),
+                    Margin = new Thickness(0, 0, -overhang, -overhang),
                 }
             }
         };
@@ -6963,6 +6983,22 @@ public sealed partial class MainWindow : Window
                 style)
             : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer, patternBrush);
 
+        // Selected cells get a faint translucent-green wash over their content (matching the WPF grid's
+        // SelectionBrush), so a multi-cell selection reads as a light highlight rather than bare green
+        // gridlines — the wash is drawn ON TOP of any cell fill so styled fills still show through.
+        Control cellContent = content;
+        if (selected)
+        {
+            var overlayHost = new AvaloniaGrid { ClipToBounds = true };
+            overlayHost.Children.Add(content);
+            overlayHost.Children.Add(new AvaloniaRectangle
+            {
+                Fill = SelectionFill,
+                IsHitTestVisible = false,
+            });
+            cellContent = overlayHost;
+        }
+
         return new Border
         {
             Background = background,
@@ -6973,7 +7009,7 @@ public sealed partial class MainWindow : Window
                     ? new Thickness(1)
                     : new Thickness(0),
             ClipToBounds = true,
-            Child = content,
+            Child = cellContent,
         };
     }
 
@@ -10251,6 +10287,16 @@ public sealed partial class MainWindow : Window
     private static string StripDisplayMnemonic(string text) =>
         (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);
 
+    // CheckBox/RadioButton in this Avalonia shell render their string Content literally
+    // (no AccessText, see MainWindow.ParityCapture access-key note), so WPF mnemonic
+    // markers ("_Show legend") would show the underscore. Strip it for string content;
+    // leave non-string content (panels, etc.) untouched. Safe no-op without underscores.
+    private static void StripContentMnemonic(ContentControl control)
+    {
+        if (control.Content is string text)
+            control.Content = StripDisplayMnemonic(text);
+    }
+
     private static string GetHyperlinkTargetLabel(HyperlinkTargetKind linkType) =>
         StripDisplayMnemonic(linkType switch
         {
@@ -10577,7 +10623,7 @@ public sealed partial class MainWindow : Window
             {
                 new TextBlock
                 {
-                    Text = header,
+                    Text = StripDisplayMnemonic(header),
                     FontWeight = FontWeight.SemiBold,
                 },
                 list,
@@ -11704,7 +11750,7 @@ public sealed partial class MainWindow : Window
     {
         var tab = new TabItem
         {
-            Header = header,
+            Header = StripDisplayMnemonic(header),
             Content = new ScrollViewer
             {
                 Content = content,
@@ -11721,7 +11767,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = StripDisplayMnemonic(label) },
                 control,
             },
         };
@@ -12188,7 +12234,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = StripDisplayMnemonic(label) },
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -13232,6 +13278,7 @@ public sealed partial class MainWindow : Window
 
     private static void ApplySortOptionsCheckBoxChrome(CheckBox checkBox)
     {
+        StripContentMnemonic(checkBox);
         checkBox.FontSize = 12;
         checkBox.MinHeight = 18;
         checkBox.Height = 18;
@@ -13241,6 +13288,7 @@ public sealed partial class MainWindow : Window
 
     private static void ApplySortOptionsRadioButtonChrome(RadioButton radioButton)
     {
+        StripContentMnemonic(radioButton);
         radioButton.FontSize = 12;
         radioButton.MinHeight = 18;
         radioButton.Height = 18;
@@ -13327,12 +13375,14 @@ public sealed partial class MainWindow : Window
 
     private static void ApplyDialogCheckBoxChrome(CheckBox cb)
     {
+        StripContentMnemonic(cb);
         cb.MinHeight = 20; cb.MaxHeight = 20;
         cb.FontSize = 12; cb.FontFamily = FormulaBarFontFamily;
     }
 
     private static void ApplyDialogRadioButtonChrome(RadioButton rb)
     {
+        StripContentMnemonic(rb);
         rb.MinHeight = 20; rb.MaxHeight = 20;
         rb.FontSize = 12; rb.FontFamily = FormulaBarFontFamily;
     }
@@ -13915,7 +13965,7 @@ public sealed partial class MainWindow : Window
     {
         var labelBlock = new TextBlock
         {
-            Text = label,
+            Text = StripDisplayMnemonic(label),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 4),
             FontSize = 12,
@@ -14106,7 +14156,7 @@ public sealed partial class MainWindow : Window
         {
             var labelBlock = new TextBlock
             {
-                Text = label,
+                Text = StripDisplayMnemonic(label),
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
                 FontSize = 12,
@@ -14687,7 +14737,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = StripDisplayMnemonic(label) },
                 control,
             },
         };
@@ -15533,7 +15583,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label, FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
                 control,
             },
         };
@@ -15771,7 +15821,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label, FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
                 control,
             },
         };
@@ -15973,7 +16023,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label, FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(label), FontSize = 12 },
                 control,
             },
         };
@@ -16286,13 +16336,13 @@ public sealed partial class MainWindow : Window
             var isCustom = type == DvType.Custom;
             var isAny = type == DvType.Any;
 
-            formula1Label.Text = isList
+            formula1Label.Text = StripDisplayMnemonic(isList
                 ? UiText.Get("DataValidation_Source")
                 : isCustom
                     ? UiText.Get("DataValidation_Formula")
                     : showSecondFormula
                         ? UiText.Get("DataValidation_Minimum")
-                        : UiText.Get("DataValidation_Value");
+                        : UiText.Get("DataValidation_Value"));
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
             AutomationProperties.SetHelpText(
                 formula1Box,
@@ -16754,7 +16804,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static StackPanel CreateDataValidationField(string label, Control control) =>
-        CreateDataValidationField(new TextBlock { Text = label }, control);
+        CreateDataValidationField(new TextBlock { Text = StripDisplayMnemonic(label) }, control);
 
     private static StackPanel CreateDataValidationField(TextBlock label, Control control) =>
         new()

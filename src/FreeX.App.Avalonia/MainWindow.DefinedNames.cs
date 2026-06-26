@@ -622,7 +622,7 @@ public sealed partial class MainWindow
     {
         var labelBlock = new TextBlock
         {
-            Text = label,
+            Text = StripDisplayMnemonic(label),
             FontSize = 12,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8),

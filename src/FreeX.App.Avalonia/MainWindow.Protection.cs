@@ -437,7 +437,7 @@ public sealed partial class MainWindow
                 {
                     new TextBlock
                     {
-                        Text = header,
+                        Text = StripDisplayMnemonic(header),
                         Foreground = HeaderForeground,
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
@@ -457,7 +457,7 @@ public sealed partial class MainWindow
             Spacing = 2,
             Children =
             {
-                new TextBlock { Text = label, Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = StripDisplayMnemonic(label), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 field,
             },
         };
@@ -532,6 +532,7 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplyProtectCheckBoxChrome(CheckBox checkBox)
     {
+        StripContentMnemonic(checkBox);
         checkBox.FontSize = 12;
         checkBox.FontFamily = FormulaBarFontFamily;
         checkBox.MinHeight = 20;

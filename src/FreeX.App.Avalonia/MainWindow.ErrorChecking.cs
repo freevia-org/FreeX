@@ -107,7 +107,7 @@ public sealed partial class MainWindow
 
         var actionPanel = new GroupBox
         {
-            Header = UiText.Get(ErrorCheckingDialogPlanner.HelpGroupHeaderKey),
+            Header = StripDisplayMnemonic(UiText.Get(ErrorCheckingDialogPlanner.HelpGroupHeaderKey)),
             Width = ErrorCheckingDialogPlanner.ActionPanelWidth,
             Margin = new Thickness(10, 0, 0, 0),
             Padding = new Thickness(8),

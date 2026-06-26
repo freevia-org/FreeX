@@ -71,6 +71,7 @@ public sealed partial class MainWindow
 
     private static void ApplyDrawingCheckBoxChrome(CheckBox cb)
     {
+        StripContentMnemonic(cb);
         cb.MinHeight = 20;
         cb.MaxHeight = 20;
         cb.FontSize = 12;
@@ -661,7 +662,7 @@ public sealed partial class MainWindow
 
         var gradientGroup = new GroupBox
         {
-            Header = UiText.Get("ShapeGradient_GradientStopsGroup"),
+            Header = StripDisplayMnemonic(UiText.Get("ShapeGradient_GradientStopsGroup")),
             Content = stopGrid,
             Width = 446,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
@@ -716,7 +717,7 @@ public sealed partial class MainWindow
     {
         var labelBlock = new TextBlock
         {
-            Text = label,
+            Text = StripDisplayMnemonic(label),
             Foreground = HeaderForeground,
             FontSize = 12,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
@@ -842,7 +843,7 @@ public sealed partial class MainWindow
         VerticalAlignment = AvaloniaVerticalAlignment.Center,
         Children =
         {
-            new TextBlock { Text = label, Width = 96, VerticalAlignment = AvaloniaVerticalAlignment.Center, Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
+            new TextBlock { Text = StripDisplayMnemonic(label), Width = 96, VerticalAlignment = AvaloniaVerticalAlignment.Center, Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
             control,
         },
     };

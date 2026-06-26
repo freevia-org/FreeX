@@ -31,6 +31,12 @@ public static class AvaloniaRibbonRenderer
     private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
     private const double SmallRowHeight = 26;
     private const double TabHeaderHeight = 28;
+    // Selected-tab accent underline thickness — matches the WPF TabItem template's
+    // BorderThickness="0,0,0,3" (MainWindowResources.xaml). Kept as a single shared token so the Linux
+    // underline renders at the same solid 3px weight as Windows (it was rendering hairline-thin
+    // because the underline row reserved exactly its own height, leaving no slack for the bottom-
+    // aligned bar). The grid row reserves a touch more than the bar so the full bar is always drawn.
+    private const double SelectedTabUnderlineThickness = 3;
     private const double RibbonCheckBoxHeight = 16;
     private const double RibbonCheckGlyphSize = 11;
     private const double LargeIconSize = 32;
@@ -283,7 +289,9 @@ public static class AvaloniaRibbonRenderer
             RowDefinitions =
             {
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
-                new RowDefinition { Height = new GridLength(3) },
+                // Reserve exactly the underline thickness as an Auto row pinned to the bottom so the
+                // accent bar always gets its full height instead of being squeezed to a hairline.
+                new RowDefinition { Height = GridLength.Auto },
             },
             Height = TabHeaderHeight,
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -302,7 +310,8 @@ public static class AvaloniaRibbonRenderer
         AddHeaderChild(grid, new Border
         {
             Tag = SelectedTabUnderlineTag,
-            Height = 3,
+            Height = SelectedTabUnderlineThickness,
+            MinHeight = SelectedTabUnderlineThickness,
             Background = AccentBrush,
             IsVisible = false,
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -975,7 +984,14 @@ public static class AvaloniaRibbonRenderer
     // affordance) rather than running "▾" into the caption text.
     private static Control BuildLargeControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute)
     {
-        var stack = new StackPanel { Orientation = Orientation.Vertical };
+        // Center the icon+label cluster vertically in the hero button so large icons sit in the middle
+        // of the row like Windows, instead of pinned to the top (StackPanel defaults to top alignment).
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
         stack.Children.Add(NewIcon(control, LargeIconSize, HorizontalAlignment.Center));
 
         // The hero button is Width 70 / Padding 3 (≈64 content). WPF's caption wraps on WORD boundaries
@@ -1009,6 +1025,8 @@ public static class AvaloniaRibbonRenderer
         button.Width = 80;
         button.Height = 76;
         button.Padding = new Thickness(4, 2);
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
         ((ContentControl)button).Content = stack;
         WireControl(button, control, registry, afterExecute);
         return button;
@@ -1495,6 +1513,10 @@ public static class AvaloniaRibbonRenderer
                 Width = 58,
                 Height = 76,
                 Padding = new Thickness(2),
+                // Center the collapsed-group icon/label cluster within the button so the icon sits in
+                // the middle of the row (Windows parity) rather than top-pinned.
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
                 Content = stack,
                 Flyout = BuildCollapsedGroupFlyout(_group, _registry, _afterExecute),
                 Tag = $"collapsed:{_group.Id}",
