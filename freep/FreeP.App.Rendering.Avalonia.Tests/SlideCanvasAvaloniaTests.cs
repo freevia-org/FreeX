@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using FluentAssertions;
@@ -318,5 +319,221 @@ public sealed class SlideCanvasAvaloniaTests
         mu.Should().BePositive("major unit must be positive");
         ((max - min) / mu).Should().BeApproximately(Math.Round((max - min) / mu), 1e-6,
             "major unit must divide the range evenly");
+    }
+}
+
+// ── Theme 15: Avalonia interaction layer tests ─────────────────────────────────────────────────
+
+/// <summary>
+/// Pure-logic (no UI thread) tests for the interaction helpers introduced in Theme 15:
+/// <see cref="SlideTransformCore"/>, <see cref="ShapeHitTester"/> (in FreeP.App.Compositor),
+/// and <see cref="SelectionAdornerLayer"/> geometry helpers.
+/// </summary>
+public sealed class AvaloniaInteractionTests
+{
+    // ── SlideTransformCore ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void SlideTransformCore_Identity_RoundTrip()
+    {
+        var xf = SlideTransformCore.Identity;
+        var (sx, sy) = xf.SlideToScreen(100, 200);
+        var (rx, ry) = xf.ScreenToSlide(sx, sy);
+        rx.Should().BeApproximately(100, 1e-9);
+        ry.Should().BeApproximately(200, 1e-9);
+    }
+
+    [Fact]
+    public void SlideTransformCore_Compute_CorrectScale_Square()
+    {
+        // 1000x500 DIP slide in a 500x250 render area → scale 0.5, no offset
+        var xf = SlideTransformCore.Compute(500, 250, 1000, 500);
+        xf.Scale.Should().BeApproximately(0.5, 1e-9);
+        xf.OffsetX.Should().BeApproximately(0.0, 1e-9);
+        xf.OffsetY.Should().BeApproximately(0.0, 1e-9);
+    }
+
+    [Fact]
+    public void SlideTransformCore_Compute_CenteredLetterbox_WideSlide()
+    {
+        // 1000x500 slide in 1000x1000 area → scale 1.0, vertical offset 250
+        var xf = SlideTransformCore.Compute(1000, 1000, 1000, 500);
+        xf.Scale.Should().BeApproximately(1.0, 1e-9);
+        xf.OffsetX.Should().BeApproximately(0.0, 1e-9);
+        xf.OffsetY.Should().BeApproximately(250.0, 1e-9);
+    }
+
+    [Fact]
+    public void SlideTransformCore_SlideToScreen_ScalesAndOffsets()
+    {
+        var xf = SlideTransformCore.Compute(800, 600, 960, 720);
+        // scale = min(800/960, 600/720) = 0.8333; offset = ((800 - 960*scale)/2, (600-720*scale)/2)
+        double scale   = 800.0 / 960.0;
+        double offsetX = (800 - 960 * scale) / 2;
+        double offsetY = (600 - 720 * scale) / 2;
+        var (sx, sy) = xf.SlideToScreen(0, 0);
+        sx.Should().BeApproximately(offsetX, 1e-6);
+        sy.Should().BeApproximately(offsetY, 1e-6);
+    }
+
+    [Fact]
+    public void SlideTransformCore_DipToEmu_RoundTrip()
+    {
+        double dip = 96.0;
+        long   emu = SlideTransformCore.DipToEmu(dip);
+        double back = SlideTransformCore.EmuToDip(emu);
+        back.Should().BeApproximately(dip, 1e-9);
+    }
+
+    // ── ShapeHitTester (FreeP.App.Compositor) ──────────────────────────────────
+
+    private static (Presentation pres, Slide slide, SlideShape s1, SlideShape s2) MakeHitTestSlide()
+    {
+        var pres  = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Clear();
+
+        // shape1: 0..100 DIP × 0..100 DIP
+        var s1 = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu  = 0,
+            OffsetYEmu  = 0,
+            ExtentCxEmu = (long)(100 * 9525),
+            ExtentCyEmu = (long)(100 * 9525),
+        };
+        // shape2: 50..150 DIP × 50..150 DIP (overlaps s1; added after → topmost)
+        var s2 = new SlideShape
+        {
+            Id = 2,
+            OffsetXEmu  = (long)(50 * 9525),
+            OffsetYEmu  = (long)(50 * 9525),
+            ExtentCxEmu = (long)(100 * 9525),
+            ExtentCyEmu = (long)(100 * 9525),
+        };
+        slide.Shapes.Add(s1);
+        slide.Shapes.Add(s2);
+        return (pres, slide, s1, s2);
+    }
+
+    [Fact]
+    public void CompositorHitTester_HitOverlapReturnsTopmost()
+    {
+        var (pres, slide, _, s2) = MakeHitTestSlide();
+        var hit = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, pres, 75, 75);
+        hit.Should().Be(s2.Id, "topmost shape (last in list) wins in overlapping region");
+    }
+
+    [Fact]
+    public void CompositorHitTester_HitBottomOnly_ReturnsBottom()
+    {
+        var (pres, slide, s1, _) = MakeHitTestSlide();
+        var hit = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, pres, 25, 25);
+        hit.Should().Be(s1.Id);
+    }
+
+    [Fact]
+    public void CompositorHitTester_MissReturnsNull()
+    {
+        var (pres, slide, _, _) = MakeHitTestSlide();
+        var hit = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, pres, 300, 300);
+        hit.Should().BeNull();
+    }
+
+    [Fact]
+    public void CompositorHitTester_MarqueeCoversAll_ReturnsBoth()
+    {
+        var (pres, slide, s1, s2) = MakeHitTestSlide();
+        var hits = FreeP.App.Compositor.ShapeHitTester.MarqueeHitTest(slide, pres, 0, 0, 300, 300);
+        hits.Should().Contain(s1.Id).And.Contain(s2.Id);
+    }
+
+    [Fact]
+    public void CompositorHitTester_GetShapeBoundsDip_MatchesShape()
+    {
+        var (pres, slide, s1, _) = MakeHitTestSlide();
+        var b = FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip(s1, pres);
+        b.Left.Should().BeApproximately(0, 1e-6);
+        b.Top.Should().BeApproximately(0, 1e-6);
+        b.Width.Should().BeApproximately(100, 1e-6);
+        b.Height.Should().BeApproximately(100, 1e-6);
+    }
+
+    // ── SelectionAdornerLayer geometry ─────────────────────────────────────────
+
+    [Fact]
+    public void AdornerLayer_GetHandleCenters_Count8()
+    {
+        var rect = new Rect(10, 20, 100, 50);
+        var centers = SelectionAdornerLayer.GetHandleCenters(rect);
+        centers.Should().HaveCount(8);
+    }
+
+    [Fact]
+    public void AdornerLayer_GetHandleCenters_CornersAndMidpoints()
+    {
+        var rect = new Rect(0, 0, 100, 50);
+        var centers = SelectionAdornerLayer.GetHandleCenters(rect);
+        // N  = (50, 0)
+        centers[0].Should().Be(new Point(50, 0), "N handle");
+        // NE = (100, 0)
+        centers[1].Should().Be(new Point(100, 0), "NE handle");
+        // E  = (100, 25)
+        centers[2].Should().Be(new Point(100, 25), "E handle");
+        // S  = (50, 50)
+        centers[4].Should().Be(new Point(50, 50), "S handle");
+    }
+
+    [Fact]
+    public void AdornerLayer_HitTestHandle_Body_HitsBody()
+    {
+        var adorner = new SelectionAdornerLayer();
+        var rect    = new Rect(0, 0, 200, 100);
+        var kind    = adorner.HitTestHandle(rect, new Point(100, 50));
+        kind.Should().Be(SelectionAdornerLayer.HandleKind.Body);
+    }
+
+    [Fact]
+    public void AdornerLayer_HitTestHandle_RotateHandle()
+    {
+        var adorner = new SelectionAdornerLayer();
+        var rect    = new Rect(0, 100, 200, 100);
+        // Rotate handle is above top-middle: (100, 100 - 18) = (100, 82)
+        var kind = adorner.HitTestHandle(rect, new Point(100, 82));
+        kind.Should().Be(SelectionAdornerLayer.HandleKind.Rotate);
+    }
+
+    [Fact]
+    public void AdornerLayer_HitTestHandle_ResizeHandles()
+    {
+        var adorner = new SelectionAdornerLayer();
+        var rect    = new Rect(0, 0, 200, 100);
+        adorner.HitTestHandle(rect, new Point(0,    0))
+               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeNW);
+        adorner.HitTestHandle(rect, new Point(200,  0))
+               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeNE);
+        adorner.HitTestHandle(rect, new Point(200, 100))
+               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeSE);
+        adorner.HitTestHandle(rect, new Point(0,  100))
+               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeSW);
+    }
+
+    [Fact]
+    public void AdornerLayer_HitTestHandle_None_WhenOutside()
+    {
+        var adorner = new SelectionAdornerLayer();
+        var rect    = new Rect(100, 100, 100, 50);
+        var kind    = adorner.HitTestHandle(rect, new Point(0, 0));
+        kind.Should().Be(SelectionAdornerLayer.HandleKind.None);
+    }
+
+    [Fact]
+    public void AdornerLayer_UpdateSelection_ClearsPreviousRects()
+    {
+        var adorner = new SelectionAdornerLayer();
+        adorner.UpdateSelection([(1u, new Rect(0, 0, 100, 50))]);
+        adorner.UpdateSelection([(2u, new Rect(10, 10, 20, 20))]);
+        adorner.SelectionRects.Should().HaveCount(1)
+               .And.Contain(r => r.id == 2u);
     }
 }

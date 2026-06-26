@@ -10,6 +10,7 @@ using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
+using System.Linq;
 
 namespace FreeP.App.Avalonia;
 
@@ -66,6 +67,12 @@ public sealed class MainWindow : Window
     private readonly ListBox _slidePaneList;
     private readonly TextBox _notesBox;
     private readonly TextBlock _statusText;
+
+    // ── Interaction layer (Theme 15) ────────────────────────────────────────────
+
+    private SelectionAdornerLayer?       _adorner;
+    private AvaloniaCanvasGestureHandler? _gestureHandler;
+    private AvaloniaInCanvasTextEditor?  _textEditor;
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
@@ -191,6 +198,14 @@ public sealed class MainWindow : Window
         Editor.CurrentSlideChanged += OnCurrentSlideChanged;
     }
 
+    private void RebuildEditorAndRewireInteraction()
+    {
+        RebuildEditor();
+        // Only re-wire if the interaction layer has already been built (BuildBody sets it up).
+        if (_adorner is not null)
+            RewireInteractionToEditor();
+    }
+
     // ── Body layout ────────────────────────────────────────────────────────────
 
     private Control BuildBody()
@@ -200,15 +215,45 @@ public sealed class MainWindow : Window
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
+        // ── Interaction overlay stack ───────────────────────────────────────────
+        // A Panel stack: SlideCanvas at the bottom, SelectionAdornerLayer on top (transparent to
+        // pointer events), and a Canvas for the text-edit TextBox overlay on the very top.
+        _adorner = new SelectionAdornerLayer
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment   = VerticalAlignment.Stretch,
+            IsHitTestVisible    = false,
+        };
+
+        // Text-overlay: a Canvas that hosts TextBox children during text editing.
+        var textOverlay = new Canvas
+        {
+            IsVisible        = false,
+            IsHitTestVisible = false,
+        };
+
+        // Stack all three in a Panel (Grid with single cell).
+        var canvasStack = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment   = VerticalAlignment.Stretch,
+        };
+        canvasStack.Children.Add(_slideCanvas);
+        canvasStack.Children.Add(_adorner);
+        canvasStack.Children.Add(textOverlay);
+
         var canvasHost = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
-            Child      = _slideCanvas,
+            Child      = canvasStack,
         };
         Grid.SetRow(canvasHost, 0);
         Grid.SetRow(_notesBox,  1);
         rightGrid.Children.Add(canvasHost);
         rightGrid.Children.Add(_notesBox);
+
+        // Wire interaction after the overlay panel is built.
+        WireInteraction(textOverlay);
 
         // Left (slide pane) + right split.
         var body = new Grid();
@@ -220,6 +265,57 @@ public sealed class MainWindow : Window
         body.Children.Add(rightGrid);
 
         return body;
+    }
+
+    // ── Interaction wiring (Theme 15) ───────────────────────────────────────────
+
+    private void WireInteraction(Canvas textOverlay)
+    {
+        if (_adorner is null) return;
+
+        // Allow the canvas to receive keyboard focus for arrow/delete keys.
+        _slideCanvas.Focusable = true;
+
+        // Gesture handler drives selection, move, resize, rotate.
+        _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+
+        // Text editor: double-click a shape to edit its text.
+        _textEditor = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
+    }
+
+    /// <summary>
+    /// Re-wires the interaction layer to the new <see cref="Editor"/> instance after a
+    /// file open / new operation.
+    /// </summary>
+    private void RewireInteractionToEditor()
+    {
+        if (_adorner is null) return;
+        // The gesture handler and text editor subscribe to the canvas's pointer events,
+        // so we must create new instances to bind to the new EditingSession.
+        // Find the textOverlay in the visual tree (it's the 3rd child of the canvasStack).
+        // We can retrieve it from the existing text editor's overlay or re-find it:
+        Canvas? textOverlay = null;
+        if (_textEditor is not null)
+        {
+            // Cancel any active edit before we destroy the old editor.
+            _textEditor.Cancel();
+        }
+
+        // Detach old gesture handler's pointer event subscriptions by creating a new instance.
+        // The old handlers go out of scope and GC naturally; Avalonia weak event subscriptions
+        // allow this. New instances re-subscribe.
+        // Re-find the overlay canvas from the canvasStack structure.
+        if (_slideCanvas.Parent is Grid canvasStack && canvasStack.Children.Count >= 3
+            && canvasStack.Children[2] is Canvas ov)
+        {
+            textOverlay = ov;
+        }
+
+        if (textOverlay is not null)
+        {
+            _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+            _textEditor     = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
+        }
     }
 
     // ── Ribbon ─────────────────────────────────────────────────────────────────
@@ -356,7 +452,7 @@ public sealed class MainWindow : Window
         _currentPath  = path;
         _isDirty      = false;
 
-        RebuildEditor();
+        RebuildEditorAndRewireInteraction();
         RefreshSlidePane();
         RefreshCanvas();
         RefreshNotesPane();
@@ -472,6 +568,7 @@ public sealed class MainWindow : Window
     {
         _isDirty = true;
         RefreshSlidePane();
+        RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
         UpdateTitle();
         UpdateStatus();
     }
@@ -511,17 +608,35 @@ public sealed class MainWindow : Window
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-        if (!ctrl) return;
 
-        switch (e.Key)
+        // ── Ctrl shortcuts ──────────────────────────────────────────────────────
+        if (ctrl)
         {
-            case Key.N: FileNew(); e.Handled = true; break;
-            case Key.O: _ = FileOpenAsync(); e.Handled = true; break;
-            case Key.S when (e.KeyModifiers & KeyModifiers.Shift) != 0:
-                _ = FileSaveAsAsync(); e.Handled = true; break;
-            case Key.S: _ = FileSaveAsync(); e.Handled = true; break;
-            case Key.Z: Editor.Undo(); e.Handled = true; break;
-            case Key.Y: Editor.Redo(); e.Handled = true; break;
+            switch (e.Key)
+            {
+                case Key.N: FileNew(); e.Handled = true; return;
+                case Key.O: _ = FileOpenAsync(); e.Handled = true; return;
+                case Key.S when (e.KeyModifiers & KeyModifiers.Shift) != 0:
+                    _ = FileSaveAsAsync(); e.Handled = true; return;
+                case Key.S: _ = FileSaveAsync(); e.Handled = true; return;
+                case Key.Z: Editor.Undo(); e.Handled = true; return;
+                case Key.Y: Editor.Redo(); e.Handled = true; return;
+                case Key.A: Editor.SelectAll(); e.Handled = true; return;
+            }
+        }
+
+        // ── Arrow / Delete keys — delegate to gesture handler (Theme 15) ────────
+        if (_gestureHandler is not null)
+        {
+            // Skip if text editor is active (keys go into the TextBox).
+            if (_textEditor is { IsActive: true }) return;
+
+            if (_gestureHandler.HandleKeyDown(e.Key, e.KeyModifiers))
+            {
+                e.Handled = true;
+                // Refresh canvas + adorner after model change.
+                _slideCanvas.Refresh();
+            }
         }
     }
 }

@@ -3,6 +3,10 @@ using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
 using Free.Shared.Drawing;
+// Disambiguate: this test file exercises the WPF-project ShapeHitTester.
+// The shared one lives in FreeP.App.Compositor (added by Theme 15).
+using ShapeHitTester = FreeP.App.Rendering.Wpf.ShapeHitTester;
+using ShapeBoundsDip = FreeP.App.Rendering.Wpf.ShapeBoundsDip;
 
 namespace FreeP.App.Host.Tests;
 
