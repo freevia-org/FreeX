@@ -713,9 +713,10 @@ public sealed partial class GridViewDrawingObjectThemeTests
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
 
         source.Should().Contain("var fillBrush = textBox.HasFill ? GetDrawingObjectBrush(242, colors.Fill) : null;");
-        source.Should().Contain("var fill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;");
+        // WordArt shapes suppress the body fill; the condition now also excludes IsWordArt.
+        source.Should().Contain("var bodyFill = (shape.HasFill && !shape.IsWordArt) ? CreateDrawingShapeFill(shape, colors.Fill) : null;");
         source.Should().Contain("dc.DrawRectangle(fillBrush, borderPen, rect);");
-        source.Should().Contain("DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : fill, pen);");
+        source.Should().Contain("DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : bodyFill, pen);");
     }
 
     [Fact]

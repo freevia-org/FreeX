@@ -315,6 +315,111 @@ public sealed class DrawingObjectRenderPlannerTests
         bounds.ShapeText.Should().BeNull();
     }
 
+    // ── WordArt projection (ViewportService → DrawingObjectBounds) ─────────
+
+    [Fact]
+    public void GetViewport_WordArtShape_IsWordArtAndNoBodyFillAppliedInBounds()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            HasFill = false,   // WordArt typically has no body fill
+            IsWordArt = true,
+            WarpPreset = "textWave1",
+            ShapeText = "FreeX",
+            ShapeTextFontSizePoints = 36,
+            ShapeTextBold = true,
+            ShapeTextColor = new CellColor(0xFF, 0x45, 0x00),
+            ShapeTextGradientEndColor = new CellColor(0x00, 0x00, 0xFF),
+            ShapeTextOutlineColor = new CellColor(0x8B, 0x00, 0x00),
+            ShapeTextOutlineWidthPoints = 1.5,
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook, sheet.Id, new ViewportRequest(1, 1, 120, 120));
+
+        var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
+        bounds.IsWordArt.Should().BeTrue();
+        bounds.ShapeText.Should().Be("FreeX");
+        bounds.ShapeTextColor.Should().Be(new CellColor(0xFF, 0x45, 0x00));
+        bounds.ShapeTextGradientEndColor.Should().Be(new CellColor(0x00, 0x00, 0xFF));
+        bounds.ShapeTextOutlineColor.Should().Be(new CellColor(0x8B, 0x00, 0x00));
+        bounds.ShapeTextOutlineWidthPoints.Should().Be(1.5);
+        // FillColor should be null (no body fill)
+        bounds.FillColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetViewport_WordArtShape_ThemeColorResolvedToConcreteColor()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var theme = WorkbookTheme.Office;
+        workbook.Theme = theme;
+
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            IsWordArt = true,
+            ShapeText = "Theme",
+            // Use a theme color reference — it should resolve to a concrete color in bounds.
+            ShapeTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0),
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook, sheet.Id, new ViewportRequest(1, 1, 120, 120));
+
+        var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
+        bounds.IsWordArt.Should().BeTrue();
+        // ShapeTextColor should be the resolved theme color, not null.
+        bounds.ShapeTextColor.Should().NotBeNull("theme color must be resolved to concrete color");
+    }
+
+    [Fact]
+    public void GetViewport_NonWordArtShape_IsWordArtFalse_GradAndOutlineNull()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            IsWordArt = false,
+            ShapeText = "Normal",
+            ShapeTextColor = new CellColor(0xFF, 0xFF, 0xFF),
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook, sheet.Id, new ViewportRequest(1, 1, 120, 120));
+
+        var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
+        bounds.IsWordArt.Should().BeFalse();
+        bounds.ShapeTextGradientEndColor.Should().BeNull();
+        bounds.ShapeTextOutlineColor.Should().BeNull();
+        bounds.ShapeTextOutlineWidthPoints.Should().Be(0);
+    }
+
+    [Fact]
+    public void DrawingObjectBounds_WordArtDefaults_AreFalseAndNull()
+    {
+        // Ensure legacy DrawingObjectBounds construction without WordArt fields
+        // defaults safely (no breaking change for existing callers).
+        var bounds = new DrawingObjectBounds(
+            SelectionPaneObjectKind.Shape,
+            Guid.NewGuid(), "S", 1, 1, 0, 0, 80, 40,
+            ShapeKind: DrawingShapeKind.Rectangle);
+
+        bounds.IsWordArt.Should().BeFalse();
+        bounds.ShapeTextGradientEndColor.Should().BeNull();
+        bounds.ShapeTextOutlineColor.Should().BeNull();
+        bounds.ShapeTextOutlineWidthPoints.Should().Be(0);
+    }
+
     private static DrawingObjectBounds PictureBounds(
         PictureKind pictureKind = PictureKind.Image,
         byte[]? imageBytes = null,
