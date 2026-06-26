@@ -446,4 +446,45 @@ public class SheetTabCommandTests
         sheet.TabColor.Should().Be(new CellColor(255, 0, 0));
     }
 
+    // ── X3 regression: Delete Sheet rewrites cross-sheet CF/DV formulas to #REF! ──
+
+    [Fact]
+    public void RemoveSheetCommand_RewritesCrossSeetCfAndDvFormulasToRefErrorAndUndoRestores()
+    {
+        // Sheet2 has a CF with FormulaText referencing Sheet1, and a DV Formula1/Formula2
+        // referencing Sheet1.  Deleting Sheet1 should rewrite those to #REF!.
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet2.Id, 1, 1), new CellAddress(sheet2.Id, 5, 5)),
+            RuleType = CfRuleType.Formula,
+            FormulaText = "Sheet1!A1>0"
+        };
+        sheet2.ConditionalFormats.Add(cfRule);
+
+        var dvRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet2.Id, 1, 1), new CellAddress(sheet2.Id, 5, 5)),
+            Type = DvType.Custom,
+            Formula1 = "Sheet1!A1<>\"\"",
+            AlertStyle = DvAlertStyle.Stop
+        };
+        sheet2.DataValidations.Add(dvRule);
+
+        var cmd = new RemoveSheetCommand(sheet1.Id);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // Deleted sheet refs must become #REF!.
+        cfRule.FormulaText.Should().Contain("#REF!", "CF FormulaText referencing deleted sheet becomes #REF!");
+        dvRule.Formula1.Should().Contain("#REF!", "DV Formula1 referencing deleted sheet becomes #REF!");
+
+        // Undo must restore the original formula strings.
+        cmd.Revert(ctx);
+        cfRule.FormulaText.Should().Be("Sheet1!A1>0", "undo restores CF formula after sheet delete");
+        dvRule.Formula1.Should().Be("Sheet1!A1<>\"\"", "undo restores DV formula after sheet delete");
+    }
 }

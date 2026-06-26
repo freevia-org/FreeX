@@ -30,6 +30,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _cfRuleSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
+    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
+    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
+    private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
 
     public string Label => "Insert Cells";
 
@@ -86,14 +91,21 @@ public sealed class InsertCellsCommand : IWorkbookCommand
 
             InsertShiftRight(sheet, capture.Cells);
 
+            var insertRightOp = new InsertCellsShiftRightOp(
+                sheet.Name,
+                _range.Start.Row, _range.End.Row,
+                _range.Start.Col, CellAddress.MaxCol,
+                _range.Start.Col, width);
             _formulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook,
-                new InsertCellsShiftRightOp(
-                    sheet.Name,
-                    _range.Start.Row, _range.End.Row,
-                    _range.Start.Col, CellAddress.MaxCol,
-                    _range.Start.Col, width),
-                _formulaSnapshot);
+            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, insertRightOp, _formulaSnapshot);
+            _namedFormulaSnapshot.Clear();
+            _scopedNamedFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, insertRightOp, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+            _cfFormulaSnapshot.Clear();
+            _dvFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.RewriteRuleFormulas(sheet, insertRightOp, _cfFormulaSnapshot, _dvFormulaSnapshot);
+            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, insertRightOp, sheet.Name);
         }
         else
         {
@@ -130,14 +142,21 @@ public sealed class InsertCellsCommand : IWorkbookCommand
 
             InsertShiftDown(sheet, capture.Cells);
 
+            var insertDownOp = new InsertCellsShiftDownOp(
+                sheet.Name,
+                _range.Start.Row, CellAddress.MaxRow,
+                _range.Start.Col, _range.End.Col,
+                _range.Start.Row, height);
             _formulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook,
-                new InsertCellsShiftDownOp(
-                    sheet.Name,
-                    _range.Start.Row, CellAddress.MaxRow,
-                    _range.Start.Col, _range.End.Col,
-                    _range.Start.Row, height),
-                _formulaSnapshot);
+            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, insertDownOp, _formulaSnapshot);
+            _namedFormulaSnapshot.Clear();
+            _scopedNamedFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, insertDownOp, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+            _cfFormulaSnapshot.Clear();
+            _dvFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.RewriteRuleFormulas(sheet, insertDownOp, _cfFormulaSnapshot, _dvFormulaSnapshot);
+            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, insertDownOp, sheet.Name);
         }
 
         return new CommandOutcome(
@@ -163,6 +182,9 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         // Do NOT reorder. The undo-redo-undo convergence test in InsertDeleteCellsCommandTests
         // verifies that this sequence leaves the model identical to its initial state.
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));
         _snapshot = null;
@@ -486,6 +508,11 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _cfRuleSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
+    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
+    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
+    private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
 
     public string Label => "Delete Cells";
 
@@ -540,14 +567,21 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
 
             DeleteShiftLeft(sheet, capture.Cells);
 
+            var deleteLeftOp = new DeleteCellsShiftLeftOp(
+                sheet.Name,
+                _range.Start.Row, _range.End.Row,
+                _range.Start.Col, _range.End.Col,
+                CellAddress.MaxCol, width);
             _formulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook,
-                new DeleteCellsShiftLeftOp(
-                    sheet.Name,
-                    _range.Start.Row, _range.End.Row,
-                    _range.Start.Col, _range.End.Col,
-                    CellAddress.MaxCol, width),
-                _formulaSnapshot);
+            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, deleteLeftOp, _formulaSnapshot);
+            _namedFormulaSnapshot.Clear();
+            _scopedNamedFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, deleteLeftOp, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+            _cfFormulaSnapshot.Clear();
+            _dvFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.RewriteRuleFormulas(sheet, deleteLeftOp, _cfFormulaSnapshot, _dvFormulaSnapshot);
+            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, deleteLeftOp, sheet.Name);
         }
         else
         {
@@ -582,14 +616,21 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
 
             DeleteShiftUp(sheet, capture.Cells);
 
+            var deleteUpOp = new DeleteCellsShiftUpOp(
+                sheet.Name,
+                _range.Start.Row, _range.End.Row, CellAddress.MaxRow,
+                _range.Start.Col, _range.End.Col,
+                height);
             _formulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook,
-                new DeleteCellsShiftUpOp(
-                    sheet.Name,
-                    _range.Start.Row, _range.End.Row, CellAddress.MaxRow,
-                    _range.Start.Col, _range.End.Col,
-                    height),
-                _formulaSnapshot);
+            RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, deleteUpOp, _formulaSnapshot);
+            _namedFormulaSnapshot.Clear();
+            _scopedNamedFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, deleteUpOp, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+            _cfFormulaSnapshot.Clear();
+            _dvFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.RewriteRuleFormulas(sheet, deleteUpOp, _cfFormulaSnapshot, _dvFormulaSnapshot);
+            _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
+            RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, deleteUpOp, sheet.Name);
         }
 
         return new CommandOutcome(
@@ -605,6 +646,9 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));
         _snapshot = null;
