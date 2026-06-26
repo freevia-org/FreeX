@@ -634,7 +634,7 @@ public static class PptxPackageReader
         // Transition — may be a plain p:transition (legacy) or wrapped in mc:AlternateContent (modern).
         // AC1: resolve mc:AlternateContent → use mc:Choice p:transition (has p14:dur); fall back to
         // mc:Fallback p:transition or a bare p:transition for files written without the extension.
-        slide.Transition = ResolveTransitionEl(xml.Root);
+        slide.Transition = ResolveTransitionEl(xml.Root, archive, slideRels, slidePath);
 
         // Animations (main sequence only)
         var timingEl = xml.Root.Element(P + "timing");
@@ -2700,7 +2700,11 @@ public static class PptxPackageReader
     /// When an mc:AlternateContent is present, use the mc:Choice p:transition (which carries p14:dur);
     /// if no Choice exists, fall back to mc:Fallback's p:transition.
     /// </summary>
-    private static SlideTransition? ResolveTransitionEl(XElement? root)
+    private static SlideTransition? ResolveTransitionEl(
+        XElement? root,
+        ZipArchive? archive = null,
+        List<(string id, string type, string target)>? slideRels = null,
+        string? slidePath = null)
     {
         if (root is null) return null;
 
@@ -2711,24 +2715,29 @@ public static class PptxPackageReader
             var choice = altContent.Element(MC + "Choice");
             var choiceTrans = choice?.Element(P + "transition");
             if (choiceTrans is not null)
-                return ReadTransition(choiceTrans, preferP14Dur: true);
+                return ReadTransition(choiceTrans, preferP14Dur: true, archive, slideRels, slidePath);
 
             // Fallback inside mc:AlternateContent
             var fallback = altContent.Element(MC + "Fallback");
             var fallbackTrans = fallback?.Element(P + "transition");
             if (fallbackTrans is not null)
-                return ReadTransition(fallbackTrans, preferP14Dur: false);
+                return ReadTransition(fallbackTrans, preferP14Dur: false, archive, slideRels, slidePath);
         }
 
         // Legacy: bare p:transition (no mc:AlternateContent wrapper)
         var transEl = root.Element(P + "transition");
         if (transEl is not null)
-            return ReadTransition(transEl, preferP14Dur: false);
+            return ReadTransition(transEl, preferP14Dur: false, archive, slideRels, slidePath);
 
         return null;
     }
 
-    private static SlideTransition ReadTransition(XElement transEl, bool preferP14Dur)
+    private static SlideTransition ReadTransition(
+        XElement transEl,
+        bool preferP14Dur,
+        ZipArchive? archive = null,
+        List<(string id, string type, string target)>? slideRels = null,
+        string? slidePath = null)
     {
         var t = new SlideTransition();
 
@@ -2753,17 +2762,90 @@ public static class PptxPackageReader
         if (int.TryParse(transEl.Attribute("advTm")?.Value, out var advTm) && advTm > 0)
             t.AdvanceAfterMs = advTm;
 
-        // Find the effect child element: first P-namespace child (skip any mc: / extension elements).
-        var effectEl = transEl.Elements().FirstOrDefault(e => e.Name.Namespace == P);
+        // Find the effect child element: first P-namespace child that is NOT sndAc/extLst.
+        // (sndAc and extLst are also P-namespace children but are not the effect.)
+        var effectEl = transEl.Elements()
+            .FirstOrDefault(e => e.Name.Namespace == P
+                                 && e.Name.LocalName != "sndAc"
+                                 && e.Name.LocalName != "extLst");
+
         if (effectEl is not null)
         {
             t.Kind = PptxAnimationMap.ElementNameToTransitionKind(effectEl.Name.LocalName);
+
             // Direction: try "dir" first, then "orient"
             var dirAttr = effectEl.Attribute("dir")?.Value ?? effectEl.Attribute("orient")?.Value;
             t.Direction = PptxAnimationMap.AttrToTransitionDirection(dirAttr);
+
+            // Morph option
+            if (t.Kind == TransitionKind.Morph)
+                t.MorphOption = effectEl.Attribute("option")?.Value;
+
+            // For unrecognized (Other) transitions, capture the entire p:transition element verbatim
+            // so the writer can re-emit it byte-faithfully — ensuring NO transition is silently dropped.
+            if (t.Kind == TransitionKind.Other)
+                t.RawXml = transEl.ToString(SaveOptions.DisableFormatting);
         }
 
+        // p:sndAc / p:stSnd — transition sound
+        var sndAcEl = transEl.Element(P + "sndAc");
+        if (sndAcEl is not null)
+            t.Sound = ReadTransitionSound(sndAcEl, archive, slideRels, slidePath);
+
         return t;
+    }
+
+    /// <summary>
+    /// Parses a <c>p:sndAc</c> element and resolves the referenced audio part bytes.
+    /// </summary>
+    private static TransitionSound? ReadTransitionSound(
+        XElement sndAcEl,
+        ZipArchive? archive,
+        List<(string id, string type, string target)>? slideRels,
+        string? slidePath)
+    {
+        // p:sndAc > p:stSnd > p:snd  (snd has r:embed or r:link)
+        var stSnd = sndAcEl.Element(P + "stSnd");
+        if (stSnd is null) return null;
+
+        var sndEl = stSnd.Element(P + "snd");
+        if (sndEl is null) return null;
+
+        var sound = new TransitionSound();
+        sound.Loop      = stSnd.Attribute("loop")?.Value == "1";
+        sound.RelId     = sndEl.Attribute(R + "embed")?.Value
+                       ?? sndEl.Attribute(R + "link")?.Value;
+
+        // Try to resolve the audio part from the slide's relationships.
+        if (sound.RelId is not null && slideRels is not null && archive is not null && slidePath is not null)
+        {
+            var slideDir = GetDirectory(slidePath);
+            var audioTarget = slideRels.FirstOrDefault(r => r.id == sound.RelId).target;
+            if (!string.IsNullOrEmpty(audioTarget))
+            {
+                var audioPath = ResolvePath(slideDir, audioTarget);
+                sound.PartPath = audioPath;
+
+                // Try to load the audio bytes.
+                try
+                {
+                    var entry = archive.GetEntry(audioPath) ?? archive.GetEntry(audioPath.TrimStart('/'));
+                    if (entry is not null)
+                    {
+                        using var audioStream = entry.Open();
+                        using var ms = new MemoryStream();
+                        audioStream.CopyTo(ms);
+                        sound.AudioBytes = ms.ToArray();
+                    }
+                }
+                catch
+                {
+                    // Audio part missing or unreadable — still preserve relId for re-emit.
+                }
+            }
+        }
+
+        return sound;
     }
 
     // ── p:timing (main sequence + trigger sequences) ─────────────────────────────
