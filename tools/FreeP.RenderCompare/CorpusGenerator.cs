@@ -76,6 +76,7 @@ internal static class CorpusGenerator
                 ("14-smartart-live", GenerateSmartArtLive),
                 ("16-bg-tabs-vtext", GenerateBgTabsVtext),
                 ("18-chart-types",   GenerateChartTypes),
+                ("19-chart-labels",  GenerateChartLabels19),
             };
 
             var errors = 0;
@@ -1974,5 +1975,445 @@ internal static class CorpusGenerator
     {
         try { if (File.Exists(path)) File.Delete(path); }
         catch { }
+    }
+
+    // -----------------------------------------------------------------------
+    // Deck 19: Chart data labels + secondary axis
+    //   Slide 1 — Clustered column with value labels (OutsideEnd)
+    //   Slide 2 — Pie with percent labels
+    //   Slide 3 — Combo: columns (revenue) + line (units) on secondary axis,
+    //             value labels on the column series
+    // -----------------------------------------------------------------------
+    private static void GenerateChartLabels19(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? comPres = null;
+        try
+        {
+            comPres = app.Presentations.Add(MsoTrue);
+            try { app.WindowState = 2; } catch { }
+
+            // Slide 1: column + value labels
+            AddChartSlideViaCom(comPres, "Column Chart — Value Data Labels",
+                51, // xlColumnClustered
+                new[] { "Q1", "Q2", "Q3", "Q4" },
+                new[] {
+                    ("North", new double[] { 120, 195, 165, 240 }),
+                    ("South", new double[] {  80, 145, 220, 185 })
+                });
+
+            // Slide 2: pie + percent labels
+            AddChartSlideViaCom(comPres, "Pie Chart — Percent Labels",
+                5, // xlPie
+                new[] { "Product A", "Product B", "Product C", "Product D" },
+                new[] { ("Share", new double[] { 45, 30, 15, 10 }) });
+
+            // Slide 3: combo (column primary + line secondary axis)
+            AddChartSlideViaCom(comPres, "Combo — Revenue (columns) + Units (line, secondary axis)",
+                51, // xlColumnClustered — will patch one series to line+secondary in XML
+                new[] { "Jan", "Feb", "Mar", "Apr" },
+                new[] {
+                    ("Revenue $K", new double[] { 120, 145, 98, 175 }),
+                    ("Units",      new double[] { 5200, 6100, 4800, 7400 })
+                });
+
+            if (File.Exists(pptxPath)) File.Delete(pptxPath);
+            comPres.SaveAs(pptxPath, 24, MsoFalse);
+            comPres.Close();
+            comPres = null;
+
+            // Patch all 3 charts to inject data labels + secondary-axis wiring
+            PatchChartLabels19InZip(pptxPath);
+
+            // Export reference PNGs
+            dynamic? exportPres = null;
+            try
+            {
+                exportPres = app.Presentations.Open(pptxPath, MsoTrue, MsoFalse, MsoFalse);
+                int slideCount = (int)exportPres.Slides.Count;
+                for (int i = 1; i <= slideCount; i++)
+                {
+                    var pngPath = Path.Combine(refDir, $"slide-{i:D2}.png");
+                    dynamic slide = exportPres.Slides.Item(i);
+                    slide.Export(pngPath, "PNG", ExportWidth, ExportHeight);
+                }
+                exportPres.Close();
+                exportPres = null;
+            }
+            finally
+            {
+                if (exportPres is not null)
+                    try { exportPres.Close(); } catch { }
+            }
+        }
+        finally
+        {
+            if (comPres is not null)
+            {
+                try { comPres.Close(); } catch { }
+                if (Marshal.IsComObject(comPres))
+                    try { Marshal.FinalReleaseComObject(comPres); } catch { }
+            }
+        }
+    }
+
+    /// <summary>Public entry-point so Program.cs can call PatchChartLabels19InZip standalone.</summary>
+    internal static void PatchChartLabels19(string pptxPath) => PatchChartLabels19InZip(pptxPath);
+
+    /// <summary>
+    /// Patches chart XML for the 19-chart-labels deck:
+    ///   chart1 (slide 1) — column chart: patch data + inject c:dLbls showVal OutsideEnd
+    ///   chart2 (slide 2) — pie chart:    patch data + inject c:dLbls showPercent
+    ///   chart3 (slide 3) — combo chart:  patch data + inject c:dLbls on ser[0] + add secondary valAx + change ser[1] to line on secondary
+    /// </summary>
+    private static void PatchChartLabels19InZip(string pptxPath)
+    {
+        var patchedPath = pptxPath + ".patched";
+        using var srcZip  = ZipFile.OpenRead(pptxPath);
+        using var destZip = ZipFile.Open(patchedPath, ZipArchiveMode.Create);
+
+        var chartEntries = srcZip.Entries
+            .Where(e => System.Text.RegularExpressions.Regex.IsMatch(e.FullName, @"ppt/charts/chart\d+\.xml$"))
+            .OrderBy(e => int.Parse(System.Text.RegularExpressions.Regex.Match(e.FullName, @"\d+").Value))
+            .ToList();
+
+        foreach (var entry in srcZip.Entries)
+        {
+            // Use IndexOf so the correct patch is applied regardless of zip-entry order
+            var entryChartIdx = chartEntries.IndexOf(entry);
+            if (entryChartIdx >= 0)
+            {
+                string xmlText;
+                using (var s = entry.Open())
+                using (var reader = new StreamReader(s, Encoding.UTF8))
+                    xmlText = reader.ReadToEnd();
+
+                System.Xml.XmlDocument patched;
+                switch (entryChartIdx)
+                {
+                    case 0: // slide 1: column + value labels OutsideEnd
+                        patched = PatchChartXmlViaXmlDocument(xmlText, new ChartPatchData(
+                            Cats: new[] { "Q1", "Q2", "Q3", "Q4" },
+                            Series: new[] {
+                                ("North", new double[] { 120, 195, 165, 240 }),
+                                ("South", new double[] {  80, 145, 220, 185 })
+                            }));
+                        // Inject chart-level dLbls: showVal + dLblPos outEnd
+                        InjectChartLevelDLbls(patched, showVal: true, showPct: false, position: "outEnd");
+                        break;
+
+                    case 1: // slide 2: pie + percent labels
+                        patched = PatchChartXmlViaXmlDocument(xmlText, new ChartPatchData(
+                            Cats: new[] { "Product A", "Product B", "Product C", "Product D" },
+                            Series: new[] { ("Share", new double[] { 45, 30, 15, 10 }) }));
+                        // Inject chart-level dLbls: showPercent (no value)
+                        InjectChartLevelDLbls(patched, showVal: false, showPct: true, position: "bestFit");
+                        break;
+
+                    case 2: // slide 3: combo — columns + line on secondary axis
+                        patched = PatchComboChartXml(xmlText,
+                            cats: new[] { "Jan", "Feb", "Mar", "Apr" },
+                            primarySeries: ("Revenue $K", new double[] { 120, 145, 98, 175 }),
+                            secondarySeries: ("Units",    new double[] { 5200, 6100, 4800, 7400 }));
+                        break;
+
+                    default:
+                        patched = new System.Xml.XmlDocument();
+                        patched.LoadXml(xmlText);
+                        break;
+                }
+
+                var destEntry = destZip.CreateEntry(entry.FullName, CompressionLevel.Optimal);
+                var utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+                using (var s = destEntry.Open())
+                {
+                    var settings = new System.Xml.XmlWriterSettings
+                        { Encoding = utf8NoBom, Indent = false, CloseOutput = false };
+                    using (var xw = System.Xml.XmlWriter.Create(s, settings))
+                        patched.Save(xw);
+                }
+            }
+            else
+            {
+                var destEntry = destZip.CreateEntry(entry.FullName, CompressionLevel.Optimal);
+                using var src  = entry.Open();
+                using var dest = destEntry.Open();
+                src.CopyTo(dest);
+            }
+        }
+
+        srcZip.Dispose();
+        destZip.Dispose();
+
+        File.Delete(pptxPath);
+        File.Move(patchedPath, pptxPath);
+    }
+
+    /// <summary>
+    /// Injects a c:dLbls element into the first chart-type element of a chart's plotArea.
+    /// </summary>
+    private static void InjectChartLevelDLbls(
+        System.Xml.XmlDocument doc,
+        bool showVal, bool showPct, string position)
+    {
+        var nsMgr = new System.Xml.XmlNamespaceManager(doc.NameTable);
+        nsMgr.AddNamespace("c", ChartNsUri);
+
+        // Find the first chart-type node inside plotArea (e.g. c:barChart, c:pieChart, etc.)
+        var plotArea = doc.SelectSingleNode("//c:plotArea", nsMgr);
+        if (plotArea is null) return;
+
+        // Find first child that looks like a chart type (ends with "Chart" and has c:ser children)
+        System.Xml.XmlNode? chartTypeNode = null;
+        foreach (System.Xml.XmlNode child in plotArea.ChildNodes)
+        {
+            if (child.LocalName.EndsWith("Chart", StringComparison.OrdinalIgnoreCase))
+            {
+                chartTypeNode = child;
+                break;
+            }
+        }
+        if (chartTypeNode is null) return;
+
+        // Remove existing dLbls if any
+        var existing = chartTypeNode.SelectSingleNode("c:dLbls", nsMgr);
+        if (existing is not null)
+            chartTypeNode.RemoveChild(existing);
+
+        // Build dLbls element
+        var dLbls = doc.CreateElement("c", "dLbls", ChartNsUri);
+
+        if (showVal)
+        {
+            var sv = doc.CreateElement("c", "showVal", ChartNsUri);
+            sv.SetAttribute("val", "1");
+            dLbls.AppendChild(sv);
+        }
+        if (showPct)
+        {
+            var sp = doc.CreateElement("c", "showPercent", ChartNsUri);
+            sp.SetAttribute("val", "1");
+            dLbls.AppendChild(sp);
+        }
+        // Always explicitly set the others to 0
+        foreach (var flag in new[] { "showLegendKey", "showSerName", "showCatName" })
+        {
+            if (showVal && flag == "showVal") continue;
+            if (showPct && flag == "showPercent") continue;
+            var el = doc.CreateElement("c", flag, ChartNsUri);
+            el.SetAttribute("val", "0");
+            dLbls.AppendChild(el);
+        }
+        if (!string.IsNullOrEmpty(position))
+        {
+            var pos = doc.CreateElement("c", "dLblPos", ChartNsUri);
+            pos.SetAttribute("val", position);
+            dLbls.AppendChild(pos);
+        }
+
+        // Insert dLbls before the first c:ser node
+        var firstSer = chartTypeNode.SelectSingleNode("c:ser", nsMgr);
+        if (firstSer is not null)
+            chartTypeNode.InsertBefore(dLbls, firstSer);
+        else
+            chartTypeNode.AppendChild(dLbls);
+    }
+
+    /// <summary>
+    /// Patches the combo chart (slide 3) to create a barChart+lineChart combo with secondary valAx.
+    /// Strategy: patch data in the barChart as usual, then move ser[1] into a new lineChart,
+    /// and add a secondary valAx on the right. The lineChart references the secondary valAx,
+    /// satisfying PowerPoint's axis consistency requirement.
+    /// externalData is kept (autoUpdate=0) so PowerPoint uses cached XML data.
+    /// </summary>
+    private static System.Xml.XmlDocument PatchComboChartXml(
+        string xmlText,
+        string[] cats,
+        (string name, double[] vals) primarySeries,
+        (string name, double[] vals) secondarySeries)
+    {
+        // Use the standard patcher to set the data
+        var patchData = new ChartPatchData(
+            Cats: cats,
+            Series: new[]
+            {
+                (primarySeries.name,   primarySeries.vals),
+                (secondarySeries.name, secondarySeries.vals)
+            });
+        var doc = PatchChartXmlViaXmlDocument(xmlText, patchData);
+        var nsMgr = new System.Xml.XmlNamespaceManager(doc.NameTable);
+        nsMgr.AddNamespace("c", ChartNsUri);
+
+        var plotArea = doc.SelectSingleNode("//c:plotArea", nsMgr) as System.Xml.XmlElement;
+        if (plotArea is null) return doc;
+
+        // ── Find the primary barChart element ─────────────────────────────────
+        var barChart = plotArea.SelectSingleNode("c:barChart", nsMgr) as System.Xml.XmlElement;
+        if (barChart is null) return doc;
+
+        // ── Get catAx ID and primary valAx ID from the barChart's axId list ───
+        var barAxIdNodes = barChart.SelectNodes("c:axId", nsMgr);
+        var barAxIds = barAxIdNodes is null
+            ? Array.Empty<string>()
+            : barAxIdNodes.Cast<System.Xml.XmlElement>().Select(e => e.GetAttribute("val")).ToArray();
+        // barAxIds[0] = catAx id, barAxIds[1] = primary valAx id
+        string catAxId = barAxIds.Length > 0 ? barAxIds[0] : "1";
+        string primaryValAxId = barAxIds.Length > 1 ? barAxIds[1] : "2";
+
+        // ── Extract ser[1] (the secondary series) from barChart ───────────────
+        var serNodes = barChart.SelectNodes("c:ser", nsMgr);
+        var allSeries = serNodes is null
+            ? new List<System.Xml.XmlNode>()
+            : serNodes.Cast<System.Xml.XmlNode>().ToList();
+        System.Xml.XmlNode? ser1 = null;
+        if (allSeries.Count >= 2)
+        {
+            ser1 = allSeries[1];
+            barChart.RemoveChild(ser1);
+        }
+
+        // ── Add dLbls to the barChart (primary series) ────────────────────────
+        InjectChartLevelDLbls(doc, showVal: true, showPct: false, position: "outEnd");
+
+        // ── Build the secondary valAx (id=3, pos=r) ───────────────────────────
+        const string SecondaryAxId = "3";
+        var secValAx = BuildValAxEl(doc, SecondaryAxId, "r", catAxId);
+        // crosses=max positions it on the right
+        var crossesEl = secValAx.SelectSingleNode("c:crosses", nsMgr) as System.Xml.XmlElement;
+        if (crossesEl is not null) crossesEl.SetAttribute("val", "max");
+
+        // ── Build lineChart wrapping ser1 + axIds [catAxId, secondaryAxId] ─────
+        var lineChart = doc.CreateElement("c", "lineChart", ChartNsUri);
+        AppendSimpleAttrEl(doc, lineChart, "grouping", "standard");
+        AppendSimpleAttrEl(doc, lineChart, "varyColors", "0");
+        if (ser1 is not null)
+        {
+            // Re-index as ser idx=1, order=1
+            var serIdxEl = ser1.SelectSingleNode("c:idx", nsMgr) as System.Xml.XmlElement;
+            if (serIdxEl is not null) serIdxEl.SetAttribute("val", "1");
+            var serOrderEl = ser1.SelectSingleNode("c:order", nsMgr) as System.Xml.XmlElement;
+            if (serOrderEl is not null) serOrderEl.SetAttribute("val", "1");
+            lineChart.AppendChild(ser1);
+        }
+        AppendAxId(doc, lineChart, catAxId);
+        AppendAxId(doc, lineChart, SecondaryAxId);
+
+        // ── Insert lineChart right after barChart in plotArea ─────────────────
+        var barChartNext = barChart.NextSibling;
+        if (barChartNext is not null)
+            plotArea.InsertBefore(lineChart, barChartNext);
+        else
+            plotArea.AppendChild(lineChart);
+
+        // ── Append secondary valAx at end of plotArea (after all axes) ────────
+        plotArea.AppendChild(secValAx);
+
+        // ── Ensure externalData has autoUpdate=0 ─────────────────────────────
+        var nsMgrR = new System.Xml.XmlNamespaceManager(doc.NameTable);
+        nsMgrR.AddNamespace("c", ChartNsUri);
+        nsMgrR.AddNamespace("r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var extData = doc.SelectSingleNode("//c:externalData", nsMgrR) as System.Xml.XmlElement;
+        if (extData is not null)
+        {
+            var autoUpdate = extData.SelectSingleNode("c:autoUpdate", nsMgrR) as System.Xml.XmlElement;
+            if (autoUpdate is null)
+            {
+                autoUpdate = doc.CreateElement("c", "autoUpdate", ChartNsUri);
+                extData.AppendChild(autoUpdate);
+            }
+            autoUpdate.SetAttribute("val", "0");
+        }
+
+        return doc;
+    }
+
+    private static System.Xml.XmlElement BuildSerElForCombo(
+        System.Xml.XmlDocument doc, System.Xml.XmlNamespaceManager nsMgr,
+        int idx, string serName, string[] cats, double[] vals)
+    {
+        var ser = doc.CreateElement("c", "ser", ChartNsUri);
+
+        var idxEl = doc.CreateElement("c", "idx", ChartNsUri);
+        idxEl.SetAttribute("val", idx.ToString());
+        ser.AppendChild(idxEl);
+
+        var orderEl = doc.CreateElement("c", "order", ChartNsUri);
+        orderEl.SetAttribute("val", idx.ToString());
+        ser.AppendChild(orderEl);
+
+        // c:tx > c:strRef > c:strCache
+        var tx = doc.CreateElement("c", "tx", ChartNsUri);
+        var strRef = doc.CreateElement("c", "strRef", ChartNsUri);
+        var fEl = doc.CreateElement("c", "f", ChartNsUri);
+        fEl.InnerText = "Sheet1!$A$1";
+        strRef.AppendChild(fEl);
+        var sc = CreateStrCache(doc, nsMgr, new[] { serName });
+        strRef.AppendChild(sc);
+        tx.AppendChild(strRef);
+        ser.AppendChild(tx);
+
+        // c:cat
+        var cat = doc.CreateElement("c", "cat", ChartNsUri);
+        var catStrRef = doc.CreateElement("c", "strRef", ChartNsUri);
+        var catF = doc.CreateElement("c", "f", ChartNsUri);
+        catF.InnerText = "Sheet1!$A$2:$A$5";
+        catStrRef.AppendChild(catF);
+        catStrRef.AppendChild(CreateStrCache(doc, nsMgr, cats));
+        cat.AppendChild(catStrRef);
+        ser.AppendChild(cat);
+
+        // c:val
+        var val = doc.CreateElement("c", "val", ChartNsUri);
+        var numRef = doc.CreateElement("c", "numRef", ChartNsUri);
+        var valF = doc.CreateElement("c", "f", ChartNsUri);
+        valF.InnerText = $"Sheet1!$B$2:$B$5";
+        numRef.AppendChild(valF);
+        numRef.AppendChild(CreateNumCache(doc, nsMgr, vals));
+        val.AppendChild(numRef);
+        ser.AppendChild(val);
+
+        return ser;
+    }
+
+    private static void AppendSimpleAttrEl(System.Xml.XmlDocument doc, System.Xml.XmlNode parent, string localName, string attrVal)
+    {
+        var el = doc.CreateElement("c", localName, ChartNsUri);
+        el.SetAttribute("val", attrVal);
+        parent.AppendChild(el);
+    }
+
+    private static void AppendAxId(System.Xml.XmlDocument doc, System.Xml.XmlNode parent, string id)
+    {
+        var el = doc.CreateElement("c", "axId", ChartNsUri);
+        el.SetAttribute("val", id);
+        parent.AppendChild(el);
+    }
+
+    private static System.Xml.XmlElement BuildCatAxEl(System.Xml.XmlDocument doc, string axId, string crossAxId)
+    {
+        var catAx = doc.CreateElement("c", "catAx", ChartNsUri);
+        AppendSimpleAttrEl(doc, catAx, "axId",     axId);
+        var scaling = doc.CreateElement("c", "scaling", ChartNsUri);
+        AppendSimpleAttrEl(doc, scaling, "orientation", "minMax");
+        catAx.AppendChild(scaling);
+        AppendSimpleAttrEl(doc, catAx, "delete",   "0");
+        AppendSimpleAttrEl(doc, catAx, "axPos",    "b");
+        AppendSimpleAttrEl(doc, catAx, "crossAx",  crossAxId);
+        return catAx;
+    }
+
+    private static System.Xml.XmlElement BuildValAxEl(System.Xml.XmlDocument doc, string axId, string axPos, string crossAxId)
+    {
+        var valAx = doc.CreateElement("c", "valAx", ChartNsUri);
+        AppendSimpleAttrEl(doc, valAx, "axId",    axId);
+        var scaling = doc.CreateElement("c", "scaling", ChartNsUri);
+        AppendSimpleAttrEl(doc, scaling, "orientation", "minMax");
+        valAx.AppendChild(scaling);
+        AppendSimpleAttrEl(doc, valAx, "delete",  "0");
+        AppendSimpleAttrEl(doc, valAx, "axPos",   axPos);
+        var crosses = doc.CreateElement("c", "crosses", ChartNsUri);
+        crosses.SetAttribute("val", "autoZero");
+        valAx.AppendChild(crosses);
+        AppendSimpleAttrEl(doc, valAx, "crossAx", crossAxId);
+        return valAx;
     }
 }

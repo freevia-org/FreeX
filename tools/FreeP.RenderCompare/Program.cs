@@ -59,6 +59,7 @@ internal static class Program
                 "--compare"           => RunCompare(args[1..]),
                 "--avalonia-compare"  => RunAvaloniaCompare(args[1..]),
                 "--generate-corpus"           => RunGenerateCorpus(args[1..]),
+                "--patch-chart-labels-19"     => RunPatchChartLabels19(args[1..]),
                 "--generate-smartart-fixture" => RunGenerateSmartArtFixture(args[1..]),
                 _                             => PrintUsageAndError($"Unknown mode: {args[0]}")
             };
@@ -409,6 +410,26 @@ internal static class Program
 
         Console.WriteLine($"Generate corpus -> {outDir}");
         return CorpusGenerator.Generate(outDir);
+    }
+
+    // -----------------------------------------------------------------------
+    // Mode: --patch-chart-labels-19
+    //   Patches 19-chart-labels.pptx chart XML (injects c:dLbls + secondary valAx).
+    //   Run --powerpoint-export on the result to generate reference PNGs.
+    //   Usage: --patch-chart-labels-19 <pptxPath>
+    // -----------------------------------------------------------------------
+    private static int RunPatchChartLabels19(string[] args)
+    {
+        if (args.Length < 1)
+        {
+            Console.Error.WriteLine("usage: --patch-chart-labels-19 <pptxPath>");
+            return 2;
+        }
+        var pptxPath = Path.GetFullPath(args[0]);
+        Console.WriteLine($"Patching chart labels XML in: {pptxPath}");
+        CorpusGenerator.PatchChartLabels19(pptxPath);
+        Console.WriteLine("XML patched successfully.");
+        return 0;
     }
 
     // -----------------------------------------------------------------------
