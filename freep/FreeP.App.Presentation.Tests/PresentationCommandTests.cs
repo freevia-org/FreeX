@@ -417,6 +417,128 @@ public sealed class PresentationCommandTests
         run.Bold.Should().BeFalse();
     }
 
+    // ── RR1: inherited-bold undo must restore inherited state (BoldSet=false) ──────────────────────
+
+    /// <summary>
+    /// RR1: A run that INHERITS bold (BoldSet=false, Bold=false — compositor renders bold via master).
+    /// Apply: effective bold was false (run.Bold=false), so toggle makes it Bold=false,BoldSet=true (explicit non-bold).
+    /// Undo: must restore BoldSet=false (inherit), not leave it as BoldSet=true (explicit non-bold).
+    /// </summary>
+    [Fact]
+    public void ToggleRunBoldCommand_Revert_RestoresInheritedBold_WhenRunWasInheriting()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        // Set up: run inherits bold (BoldSet=false, Bold=false).
+        run.Bold    = false;
+        run.BoldSet = false;
+
+        bus.Execute(new ToggleRunBoldCommand(0, 1, 0, 0));
+        // After apply: Bold=true (toggled from false), BoldSet=true (explicit).
+        run.BoldSet.Should().BeTrue("forward toggle makes the value explicit");
+        run.Bold.Should().BeTrue();
+
+        bus.Undo();
+        // After undo: prior state exactly restored — BoldSet=false (inherit), Bold=false.
+        run.BoldSet.Should().BeFalse("undo must restore inherited state, not bake explicit non-bold");
+        run.Bold.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// RR1: A run that was EXPLICIT bold (BoldSet=true, Bold=true).
+    /// Toggle → (Bold=false, BoldSet=true).  Undo → (Bold=true, BoldSet=true).
+    /// </summary>
+    [Fact]
+    public void ToggleRunBoldCommand_Revert_RestoresExplicitBold_WhenRunWasExplicitlyBold()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        run.Bold    = true;
+        run.BoldSet = true;
+
+        bus.Execute(new ToggleRunBoldCommand(0, 1, 0, 0));
+        run.Bold.Should().BeFalse("toggling explicit-bold gives explicit non-bold");
+        run.BoldSet.Should().BeTrue();
+
+        bus.Undo();
+        run.Bold.Should().BeTrue("undo restores explicit bold");
+        run.BoldSet.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// RR1: Multi-run scenario — each run's prior (Bold, BoldSet) is restored independently.
+    /// We simulate two consecutive commands (one per run) and undo both.
+    /// </summary>
+    [Fact]
+    public void ToggleRunBoldCommand_Revert_RestoresEachRunIndependently()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        var tb    = new TextBody();
+        var para  = new Paragraph();
+
+        // run0: inherited bold (BoldSet=false, Bold=false)
+        var run0 = new Run { Text = "R0", Bold = false, BoldSet = false };
+        // run1: explicit bold (BoldSet=true, Bold=true)
+        var run1 = new Run { Text = "R1", Bold = true,  BoldSet = true };
+        para.Runs.Add(run0);
+        para.Runs.Add(run1);
+        tb.Paragraphs.Add(para);
+        shape.TextBody = tb;
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new ToggleRunBoldCommand(0, 1, 0, 0)); // toggle run0
+        bus.Execute(new ToggleRunBoldCommand(0, 1, 0, 1)); // toggle run1
+
+        bus.Undo(); // undo run1 toggle
+        run1.Bold.Should().BeTrue("run1 undo restores explicit-bold");
+        run1.BoldSet.Should().BeTrue();
+
+        bus.Undo(); // undo run0 toggle
+        run0.Bold.Should().BeFalse("run0 undo restores inherited-bold (Bold=false)");
+        run0.BoldSet.Should().BeFalse("run0 undo restores BoldSet=false (inherit)");
+    }
+
+    // ── RR1: same tests for italic ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// RR1 italic: run inherits italic (ItalicSet=false, Italic=false).
+    /// Undo must restore ItalicSet=false (inherit).
+    /// </summary>
+    [Fact]
+    public void ToggleRunItalicCommand_Revert_RestoresInheritedItalic_WhenRunWasInheriting()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        run.Italic    = false;
+        run.ItalicSet = false;
+
+        bus.Execute(new ToggleRunItalicCommand(0, 1, 0, 0));
+        run.ItalicSet.Should().BeTrue("forward toggle makes the value explicit");
+        run.Italic.Should().BeTrue();
+
+        bus.Undo();
+        run.ItalicSet.Should().BeFalse("undo must restore inherited state, not bake explicit non-italic");
+        run.Italic.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// RR1 italic: run was explicit italic (ItalicSet=true, Italic=true).
+    /// Undo restores (Italic=true, ItalicSet=true).
+    /// </summary>
+    [Fact]
+    public void ToggleRunItalicCommand_Revert_RestoresExplicitItalic_WhenRunWasExplicitlyItalic()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        run.Italic    = true;
+        run.ItalicSet = true;
+
+        bus.Execute(new ToggleRunItalicCommand(0, 1, 0, 0));
+        run.Italic.Should().BeFalse();
+        run.ItalicSet.Should().BeTrue();
+
+        bus.Undo();
+        run.Italic.Should().BeTrue("undo restores explicit italic");
+        run.ItalicSet.Should().BeTrue();
+    }
+
     [Fact]
     public void ToggleRunItalicCommand_Apply_TogglesItalic()
     {

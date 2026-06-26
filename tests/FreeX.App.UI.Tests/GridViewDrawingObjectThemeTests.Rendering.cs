@@ -713,9 +713,26 @@ public sealed partial class GridViewDrawingObjectThemeTests
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
 
         source.Should().Contain("var fillBrush = textBox.HasFill ? GetDrawingObjectBrush(242, colors.Fill) : null;");
-        source.Should().Contain("var fill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;");
+        // WordArt shapes with no authored body fill get null here (HasFill=false → null).
+        // WordArt WITH a body fill now correctly renders it — the condition is simply HasFill.
+        source.Should().Contain("var bodyFill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;");
         source.Should().Contain("dc.DrawRectangle(fillBrush, borderPen, rect);");
-        source.Should().Contain("DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : fill, pen);");
+        source.Should().Contain("DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : bodyFill, pen);");
+    }
+
+    [Fact]
+    public void WordArtRendering_RendersBodyFillWhenShapeHasFill()
+    {
+        // WW4 (WPF): The body fill condition must be simply shape.HasFill so that:
+        //   • WordArt with HasFill=false → bodyFill=null (true WordArt, no box behind text) ✓
+        //   • WordArt with HasFill=true  → bodyFill=<brush> (filled box behind styled text) ✓
+        //   The old gate "shape.HasFill && !shape.IsWordArt" incorrectly suppressed the fill for
+        //   WordArt-classified shapes that also carry an authored spPr body fill.
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+
+        source.Should().Contain("var bodyFill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;");
+        source.Should().NotContain("shape.HasFill && !shape.IsWordArt",
+            "IsWordArt must not gate fill suppression when HasFill is true; HasFill alone governs this");
     }
 
     [Fact]

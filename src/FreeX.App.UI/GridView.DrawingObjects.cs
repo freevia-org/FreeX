@@ -401,10 +401,14 @@ public partial class GridView
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
         var shapeThemeEffect = ResolveDrawingShapeThemeEffect(shape, themeEffect);
         var pen = GetDrawingShapeOutlinePen(colors.Outline, shape);
-        var fill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;
+        // Render the body fill when the shape has an authored fill (HasFill=true).
+        // WordArt with no body fill (HasFill=false) correctly produces null here.
+        // WordArt WITH an authored body fill still renders the box behind the styled text,
+        // matching Excel which shows the filled box and the styled run text together.
+        var bodyFill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;
         DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
-        DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : fill, pen);
+        DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : bodyFill, pen);
         if (DrawingShapeKindSupport.IsLineLike(shape.Kind))
             DrawShapeArrowheads(dc, shape, rect, flipHorizontal, flipVertical, colors.Outline);
         DrawShapeAuthoredBevelEffect(dc, shape.Kind, rect, shape);
@@ -1873,6 +1877,8 @@ public partial class GridView
     /// Draws the shape's <see cref="DrawingShapeModel.ShapeText"/> inside <paramref name="rect"/>
     /// using the font/alignment/anchor stored in the model.  Text is clipped to the rect and
     /// positioned according to the vertical anchor (top / middle / bottom).
+    /// For WordArt shapes, draws styled text with a gradient fill and/or text outline;
+    /// warp presets are preserved but rendered flat (deferred).
     /// </summary>
     private void DrawShapeText(DrawingContext dc, DrawingShapeModel shape, Rect rect, double pixelsPerDip)
     {
@@ -1901,6 +1907,17 @@ public partial class GridView
                             ?? DrawingShapeModel.DefaultFillColor;
             var luminance = 0.299 * fillColor.R + 0.587 * fillColor.G + 0.114 * fillColor.B;
             textBrush = luminance < 128 ? Brushes.White : Brushes.Black;
+        }
+
+        // WordArt gradient text fill: override the text brush with a LinearGradientBrush
+        // when a gradient end color is available. Start = resolvedColor, End = gradientEndColor.
+        // Approximation: gradient is applied to the whole text block (not per-glyph).
+        var gradEndColor = shape.ResolveShapeTextGradientEndColor(WorkbookTheme);
+        if (shape.IsWordArt && gradEndColor is { } gradEnd && resolvedColor is { } startColor)
+        {
+            textBrush = GetDrawingObjectGradientBrush(
+                startColor, gradEnd,
+                DrawingShapeGradientDirection.Vertical);
         }
 
         var fontSize = shape.ShapeTextFontSizePoints > 0
@@ -1950,7 +1967,27 @@ public partial class GridView
         // Clip to the shape's bounding rectangle so text doesn't bleed outside.
         var clipRect = new Rect(rect.Left, rect.Top, rect.Width, rect.Height);
         dc.PushClip(GetDrawingObjectClipGeometry(clipRect));
-        dc.DrawText(formatted, new Point(textLeft, textTop));
+
+        // WordArt text outline: build glyph geometry + DrawGeometry with a fill+stroke pen.
+        // This gives the true "stroked text" look (outline around each letter).
+        var textOutlineColor = shape.ResolveShapeTextOutlineColor(WorkbookTheme);
+        if (shape.IsWordArt && textOutlineColor is { } outlineColor)
+        {
+            const double PtToDipLocal = 96.0 / 72.0;
+            var outlineWidthDip = shape.ShapeTextOutlineWidthPoints > 0
+                ? shape.ShapeTextOutlineWidthPoints * PtToDipLocal
+                : 0.5; // thin default outline
+            var outlinePen = GetDrawingObjectPen(255, outlineColor, outlineWidthDip);
+
+            // Build text geometry and draw it with both fill and stroke.
+            var textGeometry = formatted.BuildGeometry(new Point(textLeft, textTop));
+            dc.DrawGeometry(textBrush, outlinePen, textGeometry);
+        }
+        else
+        {
+            dc.DrawText(formatted, new Point(textLeft, textTop));
+        }
+
         dc.Pop();
     }
 

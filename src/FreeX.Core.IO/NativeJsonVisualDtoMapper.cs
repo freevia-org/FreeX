@@ -200,7 +200,15 @@ internal static class NativeJsonVisualDtoMapper
         ShapeTextThemeColor = FromThemeColorReference(shape.ShapeTextThemeColor),
         ShapeTextHAlign = ValidEnumOrDefault(shape.ShapeTextHAlign, DrawingShapeTextHAlign.Left),
         ShapeTextVAnchor = ValidEnumOrDefault(shape.ShapeTextVAnchor, DrawingShapeTextVAnchor.Middle),
-        ShapeTextWrap = shape.ShapeTextWrap
+        ShapeTextWrap = shape.ShapeTextWrap,
+        IsWordArt = shape.IsWordArt,
+        WarpPreset = shape.WarpPreset,
+        ShapeTextGradientEndColor = shape.ShapeTextGradientEndColor is { } gradEnd ? FormatColor(gradEnd) : null,
+        ShapeTextGradientEndThemeColor = FromThemeColorReference(shape.ShapeTextGradientEndThemeColor),
+        ShapeTextGradientAngle = shape.ShapeTextGradientAngle,
+        ShapeTextOutlineColor = shape.ShapeTextOutlineColor is { } outlineC ? FormatColor(outlineC) : null,
+        ShapeTextOutlineThemeColor = FromThemeColorReference(shape.ShapeTextOutlineThemeColor),
+        ShapeTextOutlineWidthPoints = shape.ShapeTextOutlineWidthPoints
     };
 
     public static bool IsDrawingShapeOnSheet(DrawingShapeModel shape, SheetId sheetId) =>
@@ -260,7 +268,15 @@ internal static class NativeJsonVisualDtoMapper
                 ShapeTextThemeColor = ToThemeColorReference(shapeDto.ShapeTextThemeColor),
                 ShapeTextHAlign = ValidEnumOrDefault(shapeDto.ShapeTextHAlign, DrawingShapeTextHAlign.Left),
                 ShapeTextVAnchor = ValidEnumOrDefault(shapeDto.ShapeTextVAnchor, DrawingShapeTextVAnchor.Middle),
-                ShapeTextWrap = shapeDto.ShapeTextWrap
+                ShapeTextWrap = shapeDto.ShapeTextWrap,
+                IsWordArt = shapeDto.IsWordArt,
+                WarpPreset = shapeDto.WarpPreset,
+                ShapeTextGradientEndColor = shapeDto.ShapeTextGradientEndColor is { } gradEnd ? ParseColor(gradEnd) : null,
+                ShapeTextGradientEndThemeColor = ToThemeColorReference(shapeDto.ShapeTextGradientEndThemeColor),
+                ShapeTextGradientAngle = shapeDto.ShapeTextGradientAngle,
+                ShapeTextOutlineColor = shapeDto.ShapeTextOutlineColor is { } outlineC ? ParseColor(outlineC) : null,
+                ShapeTextOutlineThemeColor = ToThemeColorReference(shapeDto.ShapeTextOutlineThemeColor),
+                ShapeTextOutlineWidthPoints = shapeDto.ShapeTextOutlineWidthPoints
             };
         }
         catch (FormatException)
@@ -411,6 +427,15 @@ internal class DrawingShapeDto
     public DrawingShapeTextHAlign ShapeTextHAlign { get; set; } = DrawingShapeTextHAlign.Left;
     public DrawingShapeTextVAnchor ShapeTextVAnchor { get; set; } = DrawingShapeTextVAnchor.Middle;
     public bool ShapeTextWrap { get; set; } = true;
+    // ── WordArt ──────────────────────────────────────────────────────────
+    public bool IsWordArt { get; set; }
+    public string? WarpPreset { get; set; }
+    public string? ShapeTextGradientEndColor { get; set; }
+    public ThemeColorReferenceDto? ShapeTextGradientEndThemeColor { get; set; }
+    public long ShapeTextGradientAngle { get; set; } = 5400000;
+    public string? ShapeTextOutlineColor { get; set; }
+    public ThemeColorReferenceDto? ShapeTextOutlineThemeColor { get; set; }
+    public double ShapeTextOutlineWidthPoints { get; set; }
 }
 
 internal class ThemeColorReferenceDto

@@ -4531,7 +4531,13 @@ public sealed partial class MainWindow : Window
         double width,
         double height)
     {
-        var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
+        // Render the body fill when the shape carries one (FillColor non-null = HasFill=true in model).
+        // WordArt with no body fill (FillColor=null) uses Transparent so the styled text shows alone.
+        // WordArt WITH an authored body fill still renders the box behind the styled text, matching
+        // Excel which shows the filled box and the styled run text together.
+        var fill = drawingObject.FillColor is { } fc
+            ? Brush(fc)
+            : (drawingObject.IsWordArt ? Brushes.Transparent : Brush(new CellColor(0x5B, 0x9B, 0xD5)));
         // When OutlineHasNoFill is set the shape explicitly has no border stroke.
         IBrush? strokeBrush = drawingObject.OutlineHasNoFill
             ? null
@@ -4691,7 +4697,9 @@ public sealed partial class MainWindow : Window
 
     // Renders shape text as a TextBlock overlay that sits inside the shape's bounding box.
     // Padding, alignment, font, and wrap mirror WPF DrawShapeText.
-    private static TextBlock CreateShapeTextOverlay(DrawingObjectBounds d, double w, double h)
+    // For WordArt shapes: applies gradient Foreground and an outline approximation when set.
+    // Returns Control (not TextBlock) so an outline layer Panel can be returned when needed.
+    private static Control CreateShapeTextOverlay(DrawingObjectBounds d, double w, double h)
     {
         const double HPad = 4;
         const double VPad = 2;
@@ -4713,6 +4721,22 @@ public sealed partial class MainWindow : Window
             textBrush = luminance < 128 ? Brushes.White : Brushes.Black;
         }
 
+        // WordArt gradient text fill: override Foreground with a vertical LinearGradientBrush.
+        // Approximation: the gradient covers the text block bounding box (not per-glyph geometry).
+        if (d.IsWordArt && d.ShapeTextGradientEndColor is { } gradEnd && d.ShapeTextColor is { } startColor)
+        {
+            textBrush = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                EndPoint   = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromRgb(startColor.R, startColor.G, startColor.B), 0),
+                    new GradientStop(Color.FromRgb(gradEnd.R,    gradEnd.G,    gradEnd.B),    1),
+                },
+            };
+        }
+
         var hAlign = d.ShapeTextHAlign switch
         {
             DrawingShapeTextHAlign.Center => TextAlignment.Center,
@@ -4731,7 +4755,7 @@ public sealed partial class MainWindow : Window
             ? TextDecorations.Underline
             : null;
 
-        return new TextBlock
+        var fillBlock = new TextBlock
         {
             Text = d.ShapeText,
             FontSize = fontSizeDip,
@@ -4746,6 +4770,54 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(HPad, VPad, HPad, VPad),
             IsHitTestVisible = false,
         };
+
+        // WordArt text outline: approximate WPF's per-glyph geometry stroke by layering the text
+        // in the outline color at small offsets in 8 directions beneath the fill text.
+        // Avalonia's FormattedText does not expose BuildGeometry, so we use this layered approach.
+        // The offset is proportional to the outline width (clamped to 0.5–3 DIP so thin outlines
+        // remain crisp and thick outlines don't bleed too far).
+        if (d.IsWordArt && d.ShapeTextOutlineColor is { } outlineColor)
+        {
+            const double PtToDipLocal = 96.0 / 72.0;
+            var outlineWidthDip = d.ShapeTextOutlineWidthPoints > 0
+                ? Math.Clamp(d.ShapeTextOutlineWidthPoints * PtToDipLocal, 0.5, 3.0)
+                : 0.75; // thin default outline
+
+            IBrush outlineBrush = Brush(outlineColor);
+
+            // 8-direction offsets (N, NE, E, SE, S, SW, W, NW) at half the outline width.
+            var o = outlineWidthDip * 0.5;
+            ReadOnlySpan<(double dx, double dy)> offsets =
+            [
+                (0, -o), (o, -o), (o, 0), (o, o),
+                (0, o),  (-o, o), (-o, 0), (-o, -o),
+            ];
+
+            var panel = new Panel { IsHitTestVisible = false };
+            foreach (var (dx, dy) in offsets)
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = d.ShapeText,
+                    FontSize = fontSizeDip,
+                    FontWeight = d.ShapeTextBold ? FontWeight.Bold : FontWeight.Normal,
+                    FontStyle = d.ShapeTextItalic ? FontStyle.Italic : FontStyle.Normal,
+                    TextDecorations = decorations,
+                    Foreground = outlineBrush,
+                    TextAlignment = hAlign,
+                    VerticalAlignment = vAlign,
+                    TextWrapping = d.ShapeTextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
+                    TextTrimming = d.ShapeTextWrap ? TextTrimming.None : TextTrimming.CharacterEllipsis,
+                    Margin = new Thickness(HPad + dx, VPad + dy, HPad - dx, VPad - dy),
+                    IsHitTestVisible = false,
+                });
+            }
+            // Fill text on top so gradient/color renders over the outline.
+            panel.Children.Add(fillBlock);
+            return panel;
+        }
+
+        return fillBlock;
     }
 
     // Maps DrawingShapeOutlineDash → dash arrays compatible with Avalonia StrokeDashArray.

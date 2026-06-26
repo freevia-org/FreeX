@@ -86,7 +86,24 @@ internal sealed record XlsxShapePackagePart(
     WorkbookThemeColorReference? ShapeTextThemeColor,
     DrawingShapeTextHAlign ShapeTextHAlign,
     DrawingShapeTextVAnchor ShapeTextVAnchor,
-    bool ShapeTextWrap);
+    bool ShapeTextWrap,
+    // ── WordArt fields (null/false = not WordArt) ─────────────────────────
+    /// <summary>True when the run carries a gradient text fill, text outline, or prstTxWarp.</summary>
+    bool IsWordArt,
+    /// <summary>Warp preset string from &lt;a:prstTxWarp prst="..."&gt;; null = no warp.</summary>
+    string? WarpPreset,
+    /// <summary>Gradient end color for a WordArt text gradient fill; null = solid fill.</summary>
+    CellColor? ShapeTextGradientEndColor,
+    WorkbookThemeColorReference? ShapeTextGradientEndThemeColor,
+    /// <summary>
+    /// Linear gradient angle in OOXML 60,000ths-of-a-degree from &lt;a:lin ang="..."&gt;.
+    /// 5400000 = 90° = top-to-bottom (default).
+    /// </summary>
+    long ShapeTextGradientAngle,
+    /// <summary>Text outline color from &lt;a:rPr&gt;&lt;a:ln&gt;; null = no text outline.</summary>
+    CellColor? ShapeTextOutlineColor,
+    WorkbookThemeColorReference? ShapeTextOutlineThemeColor,
+    double ShapeTextOutlineWidthPoints);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -328,12 +345,13 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var flipHorizontal = ReadDrawingFlipHorizontal(transform);
         var flipVertical = ReadDrawingFlipVertical(transform);
         var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs);
-        var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
+        var (gradFillStartColor, _, gradFillEndColor, _, gradFillDirection, _) =
+            ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
         var solidFill = spPr?.Element(drawingNs + "solidFill");
         var hasFill = spPr?.Element(drawingNs + "noFill") is null;
         var lnElement = spPr?.Element(drawingNs + "ln");
         var outlineFill = lnElement?.Element(drawingNs + "solidFill");
-        var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(solidFill, drawingNs);
+        var fillColor = gradFillStartColor ?? ReadDrawingSolidFillColor(solidFill, drawingNs);
         var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
         var fillThemeColor = solidFill is not null &&
                              XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, drawingNs, out var readFillThemeColor)
@@ -391,7 +409,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
         // Parse txBody text formatting (simplified to first-run properties).
         var shapeText = string.IsNullOrEmpty(text) ? null : text;
         var (textFontSizePt, textBold, textItalic, textUnderline,
-             textColor, textThemeColor, textHAlign, textVAnchor, textWrap) =
+             textColor, textThemeColor, textHAlign, textVAnchor, textWrap,
+             isWordArt, warpPreset,
+             textGradEndColor, textGradEndThemeColor, textGradAngle,
+             textOutlineColor, textOutlineThemeColor, textOutlineWidthPt) =
             ReadShapeTextFormatting(txBodyElement, drawingNs);
 
         shapes.Add(new XlsxShapePackagePart(
@@ -406,8 +427,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             hasFill,
             fillThemeColor is null ? fillColor : null,
             outlineThemeColor is null ? outlineColor : null,
-            gradientFill.EndColor,
-            gradientFill.Direction,
+            gradFillEndColor,
+            gradFillDirection,
             fillThemeColor,
             outlineThemeColor,
             hasShadowEffect,
@@ -430,23 +451,45 @@ internal static partial class XlsxWorksheetDrawingPartReader
             textThemeColor,
             textHAlign,
             textVAnchor,
-            textWrap));
+            textWrap,
+            isWordArt,
+            warpPreset,
+            textGradEndColor,
+            textGradEndThemeColor,
+            textGradAngle,
+            textOutlineColor,
+            textOutlineThemeColor,
+            textOutlineWidthPt));
     }
 
     /// <summary>
     /// Parses formatting from the first run of a shape <c>&lt;txBody&gt;</c> element.
+    /// Also reads WordArt-specific fields: gradient text fill, text outline, and warp preset.
     /// Multi-run rich text is simplified to first-run properties (documented simplification).
     /// </summary>
     private static (double FontSizePt, bool Bold, bool Italic, bool Underline,
         CellColor? Color, WorkbookThemeColorReference? ThemeColor,
-        DrawingShapeTextHAlign HAlign, DrawingShapeTextVAnchor VAnchor, bool Wrap)
+        DrawingShapeTextHAlign HAlign, DrawingShapeTextVAnchor VAnchor, bool Wrap,
+        bool IsWordArt, string? WarpPreset,
+        CellColor? GradEndColor, WorkbookThemeColorReference? GradEndThemeColor, long GradAngle,
+        CellColor? OutlineColor, WorkbookThemeColorReference? OutlineThemeColor, double OutlineWidthPt)
         ReadShapeTextFormatting(XElement? txBody, XNamespace drawingNs)
     {
-        if (txBody is null)
-            return (0, false, false, false, null, null, DrawingShapeTextHAlign.Left,
-                DrawingShapeTextVAnchor.Middle, true);
+        static (double, bool, bool, bool, CellColor?, WorkbookThemeColorReference?,
+            DrawingShapeTextHAlign, DrawingShapeTextVAnchor, bool,
+            bool, string?,
+            CellColor?, WorkbookThemeColorReference?, long,
+            CellColor?, WorkbookThemeColorReference?, double)
+            Default(DrawingShapeTextHAlign hAlign = DrawingShapeTextHAlign.Left,
+                    DrawingShapeTextVAnchor vAnchor = DrawingShapeTextVAnchor.Middle,
+                    bool wrap = true)
+            => (0, false, false, false, null, null, hAlign, vAnchor, wrap,
+                false, null, null, null, 5400000L, null, null, 0);
 
-        // bodyPr: anchor attribute and wrap attribute.
+        if (txBody is null)
+            return Default();
+
+        // bodyPr: anchor attribute, wrap attribute, and prstTxWarp (WordArt warp preset).
         var bodyPr = txBody.Element(drawingNs + "bodyPr");
         var anchorAttr = bodyPr?.Attribute("anchor")?.Value ?? "";
         var vAnchor = anchorAttr switch
@@ -457,6 +500,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
         };
         var wrapAttr = bodyPr?.Attribute("wrap")?.Value ?? "square";
         var wrap = !string.Equals(wrapAttr, "none", StringComparison.OrdinalIgnoreCase);
+
+        // prstTxWarp: WordArt warp preset. Preserved for round-trip; not rendered (deferred).
+        var prstTxWarp = bodyPr?.Element(drawingNs + "prstTxWarp");
+        var warpPreset = prstTxWarp?.Attribute("prst")?.Value;
 
         // Paragraph: first <a:p> → <a:pPr algn>
         var firstParagraph = txBody.Element(drawingNs + "p");
@@ -473,7 +520,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var firstRun = firstParagraph?.Element(drawingNs + "r");
         var rPr = firstRun?.Element(drawingNs + "rPr");
         if (rPr is null)
-            return (0, false, false, false, null, null, hAlign, vAnchor, wrap);
+            return Default(hAlign, vAnchor, wrap);
 
         // sz is in hundredths of a point.
         var szAttr = rPr.Attribute("sz")?.Value;
@@ -487,7 +534,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var underline = !string.IsNullOrEmpty(uAttr) &&
                         !string.Equals(uAttr, "none", StringComparison.OrdinalIgnoreCase);
 
-        // Color from first run's solidFill.
+        // ── Text solid fill (normal) ────────────────────────────────────────
         var solidFill = rPr.Element(drawingNs + "solidFill");
         var textColor = ReadDrawingSolidFillColor(solidFill, drawingNs);
         WorkbookThemeColorReference? textThemeColor = solidFill is not null &&
@@ -496,7 +543,57 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (textThemeColor is not null)
             textColor = null;
 
-        return (fontSizePt, bold, italic, underline, textColor, textThemeColor, hAlign, vAnchor, wrap);
+        // ── WordArt: gradient text fill ────────────────────────────────────
+        // <a:rPr><a:gradFill> carries gradient stops; we read the first and last stop colors,
+        // including theme-color (schemeClr) stops.  A missing distinct end stop means solid fill
+        // — we do NOT synthesise a dummy end stop equal to the start color.
+        CellColor? gradEndColor = null;
+        WorkbookThemeColorReference? gradEndThemeColor = null;
+        long gradAngle = 5400000; // default: top-to-bottom (90°)
+        var gradFillEl = rPr.Element(drawingNs + "gradFill");
+        if (gradFillEl is not null)
+        {
+            var (gradStartColor, gradStartThemeColor, gradStopEndColor, gradStopEndThemeColor, _, gradRawAngle) =
+                ReadDrawingGradientFillColors(gradFillEl, drawingNs);
+            // Use gradient start color/theme as the main text color (replaces solid fill).
+            if (textColor is null && textThemeColor is null)
+            {
+                textColor = gradStartColor;
+                textThemeColor = gradStartThemeColor;
+            }
+            if (textThemeColor is not null)
+                textColor = null;
+            // Preserve distinct end stop.  When there is no distinct end stop, leave null
+            // so the writer emits a solid fill instead of a degenerate 2-stop gradient (WW5).
+            gradEndColor = gradStopEndColor;
+            gradEndThemeColor = gradStopEndThemeColor;
+            gradAngle = gradRawAngle;
+        }
+
+        // ── WordArt: text outline (<a:rPr><a:ln>) ─────────────────────────
+        CellColor? textOutlineColor = null;
+        WorkbookThemeColorReference? textOutlineThemeColor = null;
+        var textOutlineWidthPt = 0.0;
+        var textLnEl = rPr.Element(drawingNs + "ln");
+        if (textLnEl is not null)
+        {
+            var lnFill = textLnEl.Element(drawingNs + "solidFill");
+            textOutlineColor = ReadDrawingSolidFillColor(lnFill, drawingNs);
+            if (lnFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(lnFill, drawingNs, out var otc))
+            {
+                textOutlineThemeColor = otc;
+                textOutlineColor = null;
+            }
+            textOutlineWidthPt = ReadDrawingOutlineWidthPoints(textLnEl);
+        }
+
+        // ── WordArt detection ───────────────────────────────────────────────
+        var isWordArt = warpPreset is not null || gradFillEl is not null || textLnEl is not null;
+
+        return (fontSizePt, bold, italic, underline, textColor, textThemeColor, hAlign, vAnchor, wrap,
+                isWordArt, warpPreset,
+                gradEndColor, gradEndThemeColor, gradAngle,
+                textOutlineColor, textOutlineThemeColor, textOutlineWidthPt);
     }
 
     /// <summary>
@@ -575,7 +672,16 @@ internal static partial class XlsxWorksheetDrawingPartReader
             ShapeTextThemeColor: null,
             DrawingShapeTextHAlign.Left,
             DrawingShapeTextVAnchor.Middle,
-            ShapeTextWrap: true));
+            ShapeTextWrap: true,
+            // connectors are never WordArt
+            IsWordArt: false,
+            WarpPreset: null,
+            ShapeTextGradientEndColor: null,
+            ShapeTextGradientEndThemeColor: null,
+            ShapeTextGradientAngle: 5400000,
+            ShapeTextOutlineColor: null,
+            ShapeTextOutlineThemeColor: null,
+            ShapeTextOutlineWidthPoints: 0));
     }
 
     private static bool ReadUsesThemeEffectStyle(
@@ -767,28 +873,50 @@ internal static partial class XlsxWorksheetDrawingPartReader
             : null;
     }
 
-    private static (CellColor? StartColor, CellColor? EndColor, DrawingShapeGradientDirection Direction) ReadDrawingGradientFillColors(
+    private static (
+        CellColor? StartColor, WorkbookThemeColorReference? StartThemeColor,
+        CellColor? EndColor,   WorkbookThemeColorReference? EndThemeColor,
+        DrawingShapeGradientDirection Direction, long RawAngle) ReadDrawingGradientFillColors(
         XElement? gradientFill,
         XNamespace drawingNs)
     {
-        var colors = gradientFill?
+        if (gradientFill is null)
+            return (null, null, null, null, DrawingShapeGradientDirection.DiagonalDown, 5400000);
+
+        // Read each gradient stop, capturing both concrete RGB and theme-color references.
+        var stops = gradientFill
             .Element(drawingNs + "gsLst")?
             .Elements(drawingNs + "gs")
-            .Select(gs => new
+            .Select(gs =>
             {
-                Position = int.TryParse(gs.Attribute("pos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pos)
-                    ? pos
-                    : 0,
-                Color = ReadDrawingSolidFillColor(gs, drawingNs)
+                var pos = int.TryParse(gs.Attribute("pos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var p) ? p : 0;
+                WorkbookThemeColorReference? themeColor = null;
+                CellColor? color = null;
+                if (XlsxDrawingColorReader.TryReadThemeColorReference(gs, drawingNs, out var tc))
+                    themeColor = tc;
+                else
+                    color = ReadDrawingSolidFillColor(gs, drawingNs);
+                return new { pos, color, themeColor };
             })
-            .Where(item => item.Color is not null)
-            .OrderBy(item => item.Position)
-            .Select(item => item.Color)
+            .Where(s => s.color is not null || s.themeColor is not null)
+            .OrderBy(s => s.pos)
             .ToList();
 
-        return colors is { Count: >= 2 }
-            ? (colors[0], colors[^1], ReadDrawingGradientFillDirection(gradientFill, drawingNs))
-            : (FirstColor(colors), null, DrawingShapeGradientDirection.DiagonalDown);
+        if (stops is not { Count: >= 2 })
+        {
+            var first = stops is { Count: > 0 } ? stops[0] : null;
+            return (first?.color, first?.themeColor, null, null, DrawingShapeGradientDirection.DiagonalDown, 5400000);
+        }
+
+        var rawAngle = long.TryParse(
+            gradientFill.Element(drawingNs + "lin")?.Attribute("ang")?.Value,
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var ang)
+            ? ang
+            : 5400000L;
+
+        return (stops[0].color, stops[0].themeColor,
+                stops[^1].color, stops[^1].themeColor,
+                ReadDrawingGradientFillDirection(gradientFill, drawingNs), rawAngle);
     }
 
     private static string? ReadRelationshipTarget(XElement? relationshipRoot, XNamespace packageRelNs, string relationshipId)

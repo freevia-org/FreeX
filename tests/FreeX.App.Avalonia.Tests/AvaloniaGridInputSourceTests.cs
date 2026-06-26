@@ -203,6 +203,67 @@ public sealed class AvaloniaGridInputSourceTests
             because: "the container-level flip transform that makes passing false correct must remain in place");
     }
 
+    // ── WordArt render parity (WW3 + WW4) ────────────────────────────────────
+
+    [Fact]
+    public void WordArtOverlay_RendersTextOutlineLayerWhenShapeTextOutlineColorIsSet()
+    {
+        // WW3: CreateShapeTextOverlay must return a Panel with offset outline TextBlocks
+        // when IsWordArt=true and ShapeTextOutlineColor is set, approximating WPF's per-glyph stroke.
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var overlayMethod = source[
+            source.IndexOf("private static Control CreateShapeTextOverlay", StringComparison.Ordinal)..
+            source.IndexOf("// Maps DrawingShapeOutlineDash", StringComparison.Ordinal)];
+
+        // Return type must be Control (not TextBlock) to allow returning Panel for outline case.
+        overlayMethod.Should().Contain("private static Control CreateShapeTextOverlay(");
+        overlayMethod.Should().NotContain("private static TextBlock CreateShapeTextOverlay(");
+
+        // Outline branch: guarded by IsWordArt + ShapeTextOutlineColor.
+        overlayMethod.Should().Contain("d.IsWordArt && d.ShapeTextOutlineColor is { } outlineColor");
+
+        // Outline layer uses a Panel to hold offset TextBlocks + the fill text on top.
+        overlayMethod.Should().Contain("var panel = new Panel");
+        overlayMethod.Should().Contain("panel.Children.Add(");
+
+        // Fill text is added last (on top of outline layers).
+        var panelAdd = overlayMethod.IndexOf("var panel = new Panel", StringComparison.Ordinal);
+        var fillBlockAdd = overlayMethod.LastIndexOf("panel.Children.Add(fillBlock)", StringComparison.Ordinal);
+        fillBlockAdd.Should().BeGreaterThan(panelAdd,
+            "fillBlock must be added to the panel after the outline layers so it renders on top");
+
+        // Gradient fill is still applied to fillBlock even when an outline is present.
+        overlayMethod.Should().Contain("d.IsWordArt && d.ShapeTextGradientEndColor is { } gradEnd");
+        var gradientIdx = overlayMethod.IndexOf("d.IsWordArt && d.ShapeTextGradientEndColor is { } gradEnd", StringComparison.Ordinal);
+        gradientIdx.Should().BeLessThan(panelAdd,
+            "gradient brush must be set on textBrush before the outline Panel branch so fillBlock inherits it");
+    }
+
+    [Fact]
+    public void WordArtOverlay_RendersBodyFillWhenShapeHasAuthoredFill()
+    {
+        // WW4 (Avalonia): The body fill must NOT be suppressed for WordArt shapes that carry
+        // an authored fill (FillColor non-null). Only WordArt with FillColor=null uses Transparent.
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var createVisual = source[
+            source.IndexOf("private static Control CreateDrawingShapeVisual(", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddArrowheadOverlays(", StringComparison.Ordinal)];
+
+        // The body fill should now be driven by FillColor alone (non-null = has fill).
+        // The old unconditional IsWordArt → Transparent gate must be gone.
+        createVisual.Should().Contain(
+            "var fill = drawingObject.FillColor is { } fc",
+            "body fill should be derived from FillColor presence, not IsWordArt gate alone");
+        createVisual.Should().Contain(
+            "drawingObject.IsWordArt ? Brushes.Transparent : Brush(new CellColor(",
+            "fallback for null FillColor should still be Transparent for WordArt and default blue otherwise");
+
+        // The old pattern that gated fill on !IsWordArt unconditionally must not appear.
+        createVisual.Should().NotContain(
+            "!drawingObject.IsWordArt && drawingObject.FillColor is { } fc",
+            "IsWordArt must not unconditionally suppress FillColor-bearing shapes");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

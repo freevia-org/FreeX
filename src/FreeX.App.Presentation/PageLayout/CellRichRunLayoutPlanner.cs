@@ -4,7 +4,7 @@ namespace FreeX.App.Presentation.PageLayout;
 
 /// <summary>
 /// Resolves per-run rich-text properties against a cell's base <see cref="CellStyle"/>,
-/// producing a flat list of <see cref="ResolvedCellTextRun"/> that renderers (WPF and Avalonia)
+/// producing a flat list of <see cref="ResolvedCellTextRun"/> that the desktop renderers
 /// can consume directly without re-reading the model.
 /// </summary>
 /// <remarks>
@@ -97,7 +97,7 @@ public static class CellRichRunLayoutPlanner
 
 /// <summary>
 /// A fully-resolved rich-text run with all properties coalesced against the cell style.
-/// Consumed by WPF and Avalonia renderers (Waves 2 and 3).
+/// Consumed by the desktop renderers (Waves 2 and 3).
 /// </summary>
 /// <param name="Text">The run text.</param>
 /// <param name="Bold">Whether bold is applied.</param>
