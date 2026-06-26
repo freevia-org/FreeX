@@ -1454,6 +1454,16 @@ public static class PptxPackageWriter
     /// <summary>
     /// Builds the <c>&lt;p:grpSpPr&gt;</c> required for <c>&lt;p:grpSp&gt;</c>.
     /// CT_GroupShapeProperties requires an a:xfrm with chOff/chExt and must NOT contain a prstGeom.
+    ///
+    /// FF1 fix: FreeP stores group children with ABSOLUTE slide offsets (the compositor and reader
+    /// treat child coords as absolute with no group transform applied).  PowerPoint maps a child's
+    /// rendered position as: groupOff + (childOff - chOff) * (ext / chExt).
+    /// To make that identity for absolute coords we must emit chOff == off and chExt == ext, so:
+    ///   rendered = groupOff + (childAbsOff - groupOff) * 1 = childAbsOff  ✓
+    /// The old chOff=(0,0) was wrong: it displaced every child by the group origin in PowerPoint.
+    ///
+    /// FF3 fix: clamp ext/chExt cx and cy to a minimum of 1 EMU to prevent PowerPoint from
+    /// dividing by zero when a degenerate (zero-size) group is encountered.
     /// </summary>
     private static XElement BuildGrpSpPrEl(SlideShape shape)
     {
@@ -1462,11 +1472,16 @@ public static class PptxPackageWriter
             xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
         if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
         if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
+
+        // FF3: clamp to ≥1 EMU so PowerPoint never divides by chExt=0.
+        long extCx = Math.Max(1L, shape.ExtentCxEmu);
+        long extCy = Math.Max(1L, shape.ExtentCyEmu);
+
         xfrm.Add(new XElement(A + "off",   new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
-        xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
-        // Child coordinate space: use the group's own extent as the identity child space.
-        xfrm.Add(new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")));
-        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", extCx),             new XAttribute("cy", extCy)));
+        // FF1: chOff == off so the group→child transform is identity for absolute child coords.
+        xfrm.Add(new XElement(A + "chOff", new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
+        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", extCx),             new XAttribute("cy", extCy)));
 
         return new XElement(P + "grpSpPr", xfrm);
     }

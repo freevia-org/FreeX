@@ -5892,18 +5892,17 @@ public static class DocxWriter
     {
         var pPr = new XElement(W + "pPr");
 
-        if (f.Alignment != TextAlignment.Left)
-            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
-            {
-                TextAlignment.Center => "center",
-                TextAlignment.Right => "right",
-                TextAlignment.Justify => "both",
-                _ => "left"
-            })));
+        // Children MUST follow the CT_PPr / EG_PPrBase schema sequence, matching the order used by the
+        // main BuildParagraphProperties. The relevant subset emitted here, in schema order, is:
+        //   ... w:spacing, w:ind, ... w:jc, ...
+        // The original code emitted w:jc FIRST (before w:spacing and w:ind), which is out of order and
+        // triggers Word's strict validator ("unreadable content / repair") whenever a tracked paragraph-
+        // format revision (w:pPrChange) or a style definition carries a non-Left alignment together with
+        // indent or spacing values.
 
-        // w:spacing carries before/after and line spacing, mirroring the per-paragraph writer: before/after
-        // are emitted only when non-zero, line spacing only when it differs from the model default. Schema
-        // order places w:spacing before w:ind in CT_PPr.
+        // w:spacing carries before/after and line spacing — CT_PPrBase order: after bidi, before ind.
+        // before/after emitted only when non-zero; line spacing only when it differs from the model
+        // default (a multiple of 1.15), mirroring the per-paragraph writer.
         var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
             || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
         if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
@@ -5928,8 +5927,8 @@ public static class DocxWriter
             pPr.Add(spacing);
         }
 
-        // Indents (w:ind), in dxa; emitted as a group only when any edge is non-zero, exactly like the
-        // per-paragraph writer. Negative FirstLineIndentPt is a hanging indent → emit w:hanging (unsigned).
+        // w:ind (indents) — CT_PPrBase order: after spacing, before contextualSpacing/jc.
+        // Negative FirstLineIndentPt is a hanging indent → emit w:hanging (unsigned).
         if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt != 0)
         {
             var indEl = new XElement(W + "ind",
@@ -5941,6 +5940,16 @@ public static class DocxWriter
                 indEl.Add(new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt)));
             pPr.Add(indEl);
         }
+
+        // w:jc (alignment) — CT_PPrBase order: after ind, before textDirection.
+        if (f.Alignment != TextAlignment.Left)
+            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
+            {
+                TextAlignment.Center => "center",
+                TextAlignment.Right => "right",
+                TextAlignment.Justify => "both",
+                _ => "left"
+            })));
 
         return pPr.HasElements ? pPr : null;
     }

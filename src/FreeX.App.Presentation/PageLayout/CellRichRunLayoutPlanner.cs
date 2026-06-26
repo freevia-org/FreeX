@@ -18,9 +18,9 @@ namespace FreeX.App.Presentation.PageLayout;
 ///     Super/subscript sizing follows Excel's convention: ±33% of the resolved font size.
 ///   </item>
 ///   <item>
-///     The workbook theme is NOT required here: by the time a cell is rendered, the cell
-///     style already has a concrete resolved <see cref="CellColor"/> (the IO layer resolves
-///     theme colors on load).  Run colors are always stored as resolved RGB values.
+///     Run colors are stored as <see cref="CellRunColor"/> which may reference the workbook
+///     theme.  Pass the theme and indexed-color palette to <see cref="Resolve(IReadOnlyList{CellTextRun}?,CellStyle,WorkbookTheme,WorkbookIndexedColorPalette)"/>
+///     for accurate resolution; the two-argument overload falls back to the cell-style color.
 ///   </item>
 /// </list>
 /// </remarks>
@@ -30,17 +30,31 @@ public static class CellRichRunLayoutPlanner
 
     /// <summary>
     /// Resolves the rich-text runs for a cell, coalescing null per-run properties with the
+    /// cell style defaults.  Pass a <see cref="WorkbookTheme"/> via the four-argument overload
+    /// for accurate theme-color resolution.
+    /// </summary>
+    public static IReadOnlyList<ResolvedCellTextRun> Resolve(
+        IReadOnlyList<CellTextRun>? runs,
+        CellStyle cellStyle) =>
+        Resolve(runs, cellStyle, WorkbookTheme.Office, new WorkbookIndexedColorPalette());
+
+    /// <summary>
+    /// Resolves the rich-text runs for a cell, coalescing null per-run properties with the
     /// cell style defaults.
     /// </summary>
     /// <param name="runs">Raw runs from <see cref="Sheet.RichTextRuns"/>.</param>
     /// <param name="cellStyle">The resolved cell style (base font, color, …).</param>
+    /// <param name="theme">Workbook theme used to resolve theme-color references on runs.</param>
+    /// <param name="indexedColors">Indexed-color palette used to resolve legacy indexed colors on runs.</param>
     /// <returns>
     /// A list of fully-resolved runs ready for the renderer.  Never null; an empty list means
     /// no rich runs (caller falls back to plain-text rendering).
     /// </returns>
     public static IReadOnlyList<ResolvedCellTextRun> Resolve(
         IReadOnlyList<CellTextRun>? runs,
-        CellStyle cellStyle)
+        CellStyle cellStyle,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors)
     {
         if (runs is null or { Count: 0 })
             return [];
@@ -54,7 +68,9 @@ public static class CellRichRunLayoutPlanner
             var strikethrough = run.Strikethrough ?? cellStyle.Strikethrough;
             var fontName     = run.FontName ?? cellStyle.FontName;
             var baseSize     = run.FontSize ?? cellStyle.FontSize;
-            var color        = run.FontColor ?? cellStyle.FontColor;
+            var color        = run.FontColor is { } runColor
+                                   ? runColor.Resolve(theme, indexedColors)
+                                   : cellStyle.FontColor;
             var vertAlign    = run.VertAlign;
 
             // Apply super/subscript size scaling (Excel convention: 67% of base size).

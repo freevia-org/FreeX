@@ -1289,18 +1289,64 @@ public sealed class EditingSession
 
     // ── Z-order — BringToFront / SendToBack (BringForward/SendBackward remain in the original region above) ──
 
-    /// <summary>Brings the first selected shape to the very top of z-order.</summary>
+    /// <summary>
+    /// Brings ALL selected shapes to the very top of z-order, preserving their relative order.
+    /// Processes shapes in ascending z-order so the highest-z-selected ends up on top.
+    /// Wrapped in a single BatchCommand so undo restores all shapes in one step.
+    /// </summary>
     public void BringToFront()
     {
         if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
-        Bus.Execute(new BringToFrontCommand(_currentSlideIndex, _selectedShapeIds[0]));
+
+        if (_selectedShapeIds.Count == 1)
+        {
+            Bus.Execute(new BringToFrontCommand(_currentSlideIndex, _selectedShapeIds[0]));
+            return;
+        }
+
+        // FF2: multi-select — bring all selected shapes to front preserving relative order.
+        // Process in ascending z-order (lowest first) so the last-processed (originally topmost)
+        // ends up at the very top, preserving their relative stacking.
+        var shapes = CurrentSlide.Shapes;
+        var orderedIds = _selectedShapeIds
+            .Select(id => (id, zIdx: shapes.FindIndex(s => s.Id == id)))
+            .Where(t => t.zIdx >= 0)
+            .OrderBy(t => t.zIdx)
+            .Select(t => t.id)
+            .ToList();
+
+        var cmds = orderedIds.Select(id => (IPresentationCommand)new BringToFrontCommand(_currentSlideIndex, id));
+        Bus.Execute(new BatchCommand("Bring to Front", cmds));
     }
 
-    /// <summary>Sends the first selected shape to the very bottom of z-order.</summary>
+    /// <summary>
+    /// Sends ALL selected shapes to the very bottom of z-order, preserving their relative order.
+    /// Processes shapes in descending z-order so the lowest-z-selected ends up at the bottom.
+    /// Wrapped in a single BatchCommand so undo restores all shapes in one step.
+    /// </summary>
     public void SendToBack()
     {
         if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
-        Bus.Execute(new SendToBackCommand(_currentSlideIndex, _selectedShapeIds[0]));
+
+        if (_selectedShapeIds.Count == 1)
+        {
+            Bus.Execute(new SendToBackCommand(_currentSlideIndex, _selectedShapeIds[0]));
+            return;
+        }
+
+        // FF2: multi-select — send all selected shapes to back preserving relative order.
+        // Process in descending z-order (highest first) so the last-processed (originally bottommost)
+        // ends up at index 0, preserving their relative stacking.
+        var shapes = CurrentSlide.Shapes;
+        var orderedIds = _selectedShapeIds
+            .Select(id => (id, zIdx: shapes.FindIndex(s => s.Id == id)))
+            .Where(t => t.zIdx >= 0)
+            .OrderByDescending(t => t.zIdx)
+            .Select(t => t.id)
+            .ToList();
+
+        var cmds = orderedIds.Select(id => (IPresentationCommand)new SendToBackCommand(_currentSlideIndex, id));
+        Bus.Execute(new BatchCommand("Send to Back", cmds));
     }
 
     // ── Group / Ungroup ───────────────────────────────────────────────────────────

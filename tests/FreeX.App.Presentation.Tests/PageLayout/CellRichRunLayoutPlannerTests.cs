@@ -140,7 +140,7 @@ public sealed class CellRichRunLayoutPlannerTests
         var runs = CellRichRunLayoutPlanner.Resolve(
             [
                 new CellTextRun("Hello", Bold: true,  null, null, null, null, null, null),
-                new CellTextRun(" World", Bold: false, null, null, null, null, null, FontColor: new CellColor(255, 0, 0)),
+                new CellTextRun(" World", Bold: false, null, null, null, null, null, FontColor: CellRunColor.FromRgb(new CellColor(255, 0, 0))),
             ],
             BaseStyle);
 

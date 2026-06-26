@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
+// NOTE: XlsxColorReader resolves theme/indexed to RGB; for rich runs we preserve
+// the original color-reference kind via TryReadRunColor below (EE6 fix).
 
 namespace FreeX.Core.IO;
 
@@ -47,7 +49,7 @@ internal static class XlsxRichRunReader
             bool?  strikethrough = null;
             string? fontName     = null;
             double? fontSize     = null;
-            CellColor? fontColor = null;
+            CellRunColor? fontColor = null;
             var vertAlign        = CellTextRunVertAlign.None;
 
             if (rPr is not null)
@@ -105,12 +107,12 @@ internal static class XlsxRichRunReader
                     anyFormatting = true;
                 }
 
-                // Font color: <color rgb|theme|indexed …/>
+                // Font color: <color rgb|theme|indexed|auto …/>
+                // Preserve the original reference kind (EE6) rather than resolving to RGB.
                 var colorEl = rPr.Element(workbookNs + "color");
-                if (colorEl is not null &&
-                    XlsxColorReader.TryReadCellColor(colorEl, theme, indexedColors, out var parsedColor))
+                if (colorEl is not null && TryReadRunColor(colorEl, out var parsedRunColor))
                 {
-                    fontColor = parsedColor;
+                    fontColor = parsedRunColor;
                     anyFormatting = true;
                 }
 
@@ -143,6 +145,58 @@ internal static class XlsxRichRunReader
 
         // Single run with formatting.
         return anyFormatting ? runs : null;
+    }
+
+    /// <summary>
+    /// Reads a <c>&lt;color&gt;</c> element and returns a <see cref="CellRunColor"/> that
+    /// preserves the original reference kind (theme index, indexed palette, explicit RGB, or auto)
+    /// so the writer can round-trip the same form without flattening to RGB.
+    /// </summary>
+    private static bool TryReadRunColor(XElement element, out CellRunColor color)
+    {
+        color = default;
+
+        // auto="1"
+        var autoVal = element.Attribute("auto")?.Value;
+        if (!string.IsNullOrWhiteSpace(autoVal) &&
+            (autoVal == "1" || autoVal.Equals("true", StringComparison.OrdinalIgnoreCase)))
+        {
+            color = CellRunColor.Auto();
+            return true;
+        }
+
+        // theme="N" [tint="T"]
+        var themeText = element.Attribute("theme")?.Value;
+        if (!string.IsNullOrWhiteSpace(themeText) &&
+            int.TryParse(themeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var themeIndex))
+        {
+            var tintText = element.Attribute("tint")?.Value;
+            var tint = !string.IsNullOrWhiteSpace(tintText) &&
+                       double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var t)
+                           ? t : 0d;
+            color = CellRunColor.FromTheme(themeIndex, tint);
+            return true;
+        }
+
+        // indexed="N"
+        var indexedText = element.Attribute("indexed")?.Value;
+        if (!string.IsNullOrWhiteSpace(indexedText) &&
+            int.TryParse(indexedText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var indexedIndex))
+        {
+            color = CellRunColor.FromIndexed(indexedIndex);
+            return true;
+        }
+
+        // rgb="[AA]RRGGBB"
+        var rgb = element.Attribute("rgb")?.Value;
+        if (!string.IsNullOrWhiteSpace(rgb) &&
+            XlsxColorReader.TryReadCellColor(element, out var cellColor))
+        {
+            color = CellRunColor.FromRgb(cellColor);
+            return true;
+        }
+
+        return false;
     }
 
     private static bool ParseBoolAttribute(XElement element, string attributeName, bool defaultWhenPresent)

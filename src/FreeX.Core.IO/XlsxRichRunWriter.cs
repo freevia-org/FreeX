@@ -1,0 +1,144 @@
+using System.Globalization;
+using System.Xml.Linq;
+using Free.Shared.Opc;
+using FreeX.Core.Model;
+
+namespace FreeX.Core.IO;
+
+/// <summary>
+/// Writes OOXML inline-string rich-run elements (<c>&lt;is&gt;&lt;r&gt;&lt;rPr&gt;…</c>).
+/// Extracted here so unit tests can exercise the XML-generation logic directly
+/// without going through the full patch-save pipeline.
+/// </summary>
+internal static class XlsxRichRunWriter
+{
+    /// <summary>
+    /// Creates a <c>&lt;is&gt;</c> element with one <c>&lt;r&gt;</c> child per run.
+    /// <para>
+    /// <c>&lt;rPr&gt;</c> children are emitted in CT_RPrElt schema order:<br/>
+    /// <c>rFont, charset, family, b, i, strike, outline, shadow, condense, extend,
+    /// color, sz, u, vertAlign, scheme</c>
+    /// (ECMA-376 Part 1 §18.4.4).  Any child not present in a run is simply omitted.
+    /// </para>
+    /// </summary>
+    internal static XElement CreateRichInlineStringElement(
+        XNamespace worksheetNs,
+        IReadOnlyList<CellTextRun> runs)
+    {
+        var is_ = new XElement(worksheetNs + "is");
+        foreach (var run in runs)
+        {
+            var r = new XElement(worksheetNs + "r");
+
+            // Build <rPr> only when there is at least one non-null property.
+            if (run.Bold is not null ||
+                run.Italic is not null ||
+                run.Underline is not null ||
+                run.Strikethrough is not null ||
+                run.FontName is not null ||
+                run.FontSize is not null ||
+                run.FontColor is not null ||
+                run.VertAlign != CellTextRunVertAlign.None)
+            {
+                var rPr = new XElement(worksheetNs + "rPr");
+
+                // Emit rPr children in OOXML CT_RPrElt schema order:
+                // rFont, charset, family, b, i, strike, outline, shadow, condense, extend, color, sz, u, vertAlign, scheme
+                if (run.FontName is { } rFont)
+                    rPr.Add(new XElement(worksheetNs + "rFont",
+                        new XAttribute("val", rFont)));
+
+                if (run.Bold is { } b)
+                {
+                    var bEl = new XElement(worksheetNs + "b");
+                    if (!b) bEl.SetAttributeValue("val", "0");
+                    rPr.Add(bEl);
+                }
+
+                if (run.Italic is { } i)
+                {
+                    var iEl = new XElement(worksheetNs + "i");
+                    if (!i) iEl.SetAttributeValue("val", "0");
+                    rPr.Add(iEl);
+                }
+
+                if (run.Strikethrough is { } strike)
+                {
+                    var strikeEl = new XElement(worksheetNs + "strike");
+                    if (!strike) strikeEl.SetAttributeValue("val", "0");
+                    rPr.Add(strikeEl);
+                }
+
+                if (run.FontColor is { } runColor)
+                    rPr.Add(CreateRunColorElement(worksheetNs, runColor));
+
+                if (run.FontSize is { } sz)
+                    rPr.Add(new XElement(worksheetNs + "sz",
+                        new XAttribute("val", sz.ToString(CultureInfo.InvariantCulture))));
+
+                if (run.Underline is { } u)
+                {
+                    var uEl = new XElement(worksheetNs + "u");
+                    if (!u) uEl.SetAttributeValue("val", "none");
+                    // When u=true, omit val attribute — OOXML default is "single".
+                    rPr.Add(uEl);
+                }
+
+                if (run.VertAlign != CellTextRunVertAlign.None)
+                    rPr.Add(new XElement(worksheetNs + "vertAlign",
+                        new XAttribute("val",
+                            run.VertAlign == CellTextRunVertAlign.Superscript
+                                ? "superscript"
+                                : "subscript")));
+
+                r.Add(rPr);
+            }
+
+            r.Add(CreateInlineTextElement(worksheetNs, run.Text));
+            is_.Add(r);
+        }
+
+        return is_;
+    }
+
+    /// <summary>
+    /// Emits a <c>&lt;color&gt;</c> element that preserves the original color-reference kind
+    /// (theme, indexed, rgb, or auto) so round-trips do not flatten theme colors to RGB.
+    /// </summary>
+    internal static XElement CreateRunColorElement(XNamespace ns, CellRunColor color) =>
+        color.Kind switch
+        {
+            CellRunColorKind.Theme =>
+                color.Tint is { } tint && Math.Abs(tint) > 0.000001
+                    ? new XElement(ns + "color",
+                        new XAttribute("theme", color.ThemeIndex),
+                        new XAttribute("tint", tint.ToString("G", CultureInfo.InvariantCulture)))
+                    : new XElement(ns + "color",
+                        new XAttribute("theme", color.ThemeIndex)),
+            CellRunColorKind.Indexed =>
+                new XElement(ns + "color",
+                    new XAttribute("indexed", color.IndexedIndex)),
+            CellRunColorKind.Auto =>
+                new XElement(ns + "color",
+                    new XAttribute("auto", "1")),
+            _ => // Rgb (default)
+                new XElement(ns + "color",
+                    new XAttribute("rgb",
+                        $"FF{color.Rgb.R:X2}{color.Rgb.G:X2}{color.Rgb.B:X2}")),
+        };
+
+    /// <summary>
+    /// Creates a <c>&lt;t&gt;</c> element for inline text, setting <c>xml:space="preserve"</c>
+    /// when the text starts or ends with whitespace (OOXML requirement).
+    /// Illegal XML characters (U+0001–U+0008, U+000B–U+000C, U+000E–U+001F, etc.) are
+    /// stripped via <see cref="XlsxXmlTextEscaper.EscapeForXml"/>.
+    /// </summary>
+    internal static XElement CreateInlineTextElement(XNamespace worksheetNs, string text)
+    {
+        var escaped = XlsxXmlTextEscaper.EscapeForXml(text);
+        var t = new XElement(worksheetNs + "t", escaped);
+        if (text.Length > 0 && (char.IsWhiteSpace(text[0]) || char.IsWhiteSpace(text[^1])))
+            t.SetAttributeValue(XNamespace.Xml + "space", "preserve");
+        return t;
+    }
+}
