@@ -18964,7 +18964,7 @@ public sealed partial class MainWindow : Window
                 hasConditionalFormatRuleActionButtons =
                     HasLaunchSmokeButton(probe.OkButton, "ConditionalFormatOkButton", "OK") &&
                     HasLaunchSmokeButton(probe.CancelButton, "ConditionalFormatCancelButton", "Cancel");
-                hasConditionalFormatRuleCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 460, height: 470, minWidth: 420, minHeight: 400);
+                hasConditionalFormatRuleCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 640, height: 380, minWidth: 600, minHeight: 340);
             });
 
         var hasManageConditionalFormatsDialog = false;
