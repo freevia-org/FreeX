@@ -2,8 +2,11 @@ using System;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
+using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Drawing;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -31,7 +34,7 @@ public sealed partial class MainWindow
             if (!TryResolveAnchorBounds(viewport, anchor, showHeadings, zoomFactor, out var bounds))
                 continue;
 
-            var visual = new FormControlVisual(control, zoomFactor)
+            var visual = new FormControlVisual(control, zoomFactor, OnFormControlClicked)
             {
                 Width = Math.Max(1, bounds.Width),
                 Height = Math.Max(1, bounds.Height),
@@ -41,6 +44,131 @@ public sealed partial class MainWindow
             overlay.Children.Add(visual);
         }
     }
+
+    /// <summary>
+    /// Called by <see cref="FormControlVisual"/> when the user clicks a form control.
+    /// Routes to <see cref="FormControlInteractionService"/> and executes the resulting command
+    /// through the session (undoable, triggers recalc), then refreshes the shell.
+    /// </summary>
+    private void OnFormControlClicked(FormControlModel control, FormControlClickKind clickKind, int listItemIndex)
+    {
+        var sheet = _session.ActiveSheet;
+        var sheetId = sheet.Id;
+        var workbook = _session.Workbook;
+
+        EditCellsCommand? command = control.Kind switch
+        {
+            FormControlKind.CheckBox =>
+                FormControlInteractionService.CreateToggleCheckBoxCommand(control, sheetId, workbook),
+
+            FormControlKind.OptionButton =>
+                FormControlInteractionService.CreateSelectOptionButtonCommand(
+                    control, sheet.FormControls, sheetId, workbook),
+
+            FormControlKind.Spinner =>
+                FormControlInteractionService.CreateStepCommand(
+                    control,
+                    clickKind == FormControlClickKind.StepUp ? +1 : -1,
+                    sheetId, workbook),
+
+            FormControlKind.ScrollBar =>
+                FormControlInteractionService.CreateStepCommand(
+                    control,
+                    clickKind == FormControlClickKind.StepUp ? -1 : +1,
+                    sheetId, workbook),
+
+            FormControlKind.ListBox =>
+                listItemIndex > 0
+                    ? FormControlInteractionService.CreateSelectListItemCommand(
+                        control, listItemIndex, sheetId, workbook)
+                    : null,
+
+            FormControlKind.DropDown =>
+                AdvanceAvaloniaDropDownSelection(control, sheet),
+
+            FormControlKind.Button =>
+                // Push-button: FreeX has no macro engine, so no-op (visual press only).
+                null,
+
+            _ => null,
+        };
+
+        if (command is null)
+        {
+            // In-model state already mutated — just refresh rendering.
+            RefreshShell(string.Empty);
+            return;
+        }
+
+        var result = _session.ExecuteReviewCommand(command);
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? "Form control interaction failed.");
+            return;
+        }
+
+        if (result.RecalcReport is not null)
+            RefreshShell(string.Empty);
+        else
+            RefreshShell(string.Empty);
+    }
+
+    private EditCellsCommand? AdvanceAvaloniaDropDownSelection(FormControlModel control, Sheet sheet)
+    {
+        // No popup yet — cycle SelectedIndex through available items on each click.
+        var itemCount = EstimateAvaloniaListItemCount(control, sheet);
+        if (itemCount <= 0)
+            itemCount = 1;
+
+        var current = control.SelectedIndex ?? 0;
+        var next = current >= itemCount ? 1 : current + 1;
+
+        return FormControlInteractionService.CreateSelectListItemCommand(
+            control, next, sheet.Id, _session.Workbook);
+    }
+
+    private int EstimateAvaloniaListItemCount(FormControlModel control, Sheet sheet)
+    {
+        if (string.IsNullOrWhiteSpace(control.ListFillRange))
+            return 0;
+
+        var raw = control.ListFillRange.Trim().TrimStart('=').Trim();
+        var bangIdx = raw.IndexOf('!');
+        string cellPart;
+        Sheet? sourceSheet;
+
+        if (bangIdx >= 0)
+        {
+            var sheetPart = raw[..bangIdx].Trim().Trim('\'');
+            cellPart = raw[(bangIdx + 1)..].Trim().Replace("$", string.Empty, System.StringComparison.Ordinal);
+            sourceSheet = _session.Workbook.GetSheet(sheetPart) ?? sheet;
+        }
+        else
+        {
+            cellPart = raw.Replace("$", string.Empty, System.StringComparison.Ordinal);
+            sourceSheet = sheet;
+        }
+
+        var colon = cellPart.IndexOf(':');
+        if (colon < 0)
+            return 1;
+
+        if (!CellAddress.TryParse(cellPart[..colon], sourceSheet.Id, out var start) ||
+            !CellAddress.TryParse(cellPart[(colon + 1)..], sourceSheet.Id, out var end))
+            return 0;
+
+        var rows = Math.Max(end.Row, start.Row) - Math.Min(end.Row, start.Row) + 1;
+        var cols = Math.Max(end.Col, start.Col) - Math.Min(end.Col, start.Col) + 1;
+        return (int)(rows * cols);
+    }
+}
+
+/// <summary>What sub-region of a form control was clicked (Avalonia side).</summary>
+public enum FormControlClickKind
+{
+    Body,
+    StepUp,
+    StepDown,
 }
 
 /// <summary>Draws one legacy form control's static chrome, mirroring the WPF renderer's appearance.</summary>
@@ -55,20 +183,34 @@ internal sealed class FormControlVisual : Control
 
     private readonly FormControlModel _control;
     private readonly double _zoom;
+    private readonly Action<FormControlModel, FormControlClickKind, int>? _clickCallback;
 
-    public FormControlVisual(FormControlModel control, double zoom)
+    public FormControlVisual(
+        FormControlModel control,
+        double zoom,
+        Action<FormControlModel, FormControlClickKind, int>? clickCallback = null)
     {
         _control = control;
         _zoom = zoom <= 0 ? 1 : zoom;
-        IsHitTestVisible = false;
+        _clickCallback = clickCallback;
+
+        // Enable hit-testing for interactive controls; GroupBox and Label have no interaction.
+        var isInteractive = control.Kind is not (FormControlKind.GroupBox or FormControlKind.Label)
+                            && clickCallback is not null;
+        IsHitTestVisible = isInteractive;
+
+        if (isInteractive)
+        {
+            AddHandler(PointerPressedEvent, OnPointerPressed, handledEventsToo: false);
+            Cursor = new Cursor(StandardCursorType.Hand);
+        }
     }
 
-    // The subset of FormControlRenderPlanner.IsRenderable that this Avalonia renderer actually draws
-    // (the Render switch below). DropDown/ListBox/Button — which the shared planner also flags — are
-    // not yet drawn here, so they are excluded to keep behavior identical to before the dedup.
+    // The subset of FormControlRenderPlanner.IsRenderable that this Avalonia renderer actually draws.
     public static bool IsRenderable(FormControlKind kind) =>
         kind is FormControlKind.CheckBox or FormControlKind.OptionButton or FormControlKind.Spinner
-            or FormControlKind.ScrollBar or FormControlKind.Label or FormControlKind.GroupBox;
+            or FormControlKind.ScrollBar or FormControlKind.Label or FormControlKind.GroupBox
+            or FormControlKind.DropDown or FormControlKind.ListBox or FormControlKind.Button;
 
     private double GlyphSize => Math.Min(13 * _zoom, Math.Min(Bounds.Width, Bounds.Height));
     private IPen BoxBorderPen => new Pen(ShadowBrush, 1);
@@ -85,8 +227,73 @@ internal sealed class FormControlVisual : Control
             case FormControlKind.ScrollBar: DrawScrollBar(context, rect); break;
             case FormControlKind.GroupBox: DrawGroupBox(context, rect); break;
             case FormControlKind.Label: DrawCaption(context, rect, rect.Left + 2); break;
+            case FormControlKind.DropDown: DrawDropDown(context, rect); break;
+            case FormControlKind.ListBox: DrawListBox(context, rect); break;
+            case FormControlKind.Button: DrawButton(context, rect); break;
         }
     }
+
+    // ── Pointer interaction ──────────────────────────────────────────────────
+
+    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_clickCallback is null)
+            return;
+
+        var point = e.GetPosition(this);
+        var rect = new Rect(0, 0, Bounds.Width, Bounds.Height);
+
+        var clickKind = ClassifyClick(rect, point);
+        var listItemIndex = ClassifyListItem(rect, point);
+
+        _clickCallback(_control, clickKind, listItemIndex);
+        InvalidateVisual();
+        e.Handled = true;
+    }
+
+    private FormControlClickKind ClassifyClick(Rect rect, Point pos)
+    {
+        switch (_control.Kind)
+        {
+            case FormControlKind.Spinner:
+            {
+                var half = rect.Height / 2;
+                var upRect = new Rect(rect.Left, rect.Top, rect.Width, half);
+                return upRect.Contains(pos) ? FormControlClickKind.StepUp : FormControlClickKind.StepDown;
+            }
+
+            case FormControlKind.ScrollBar:
+            {
+                if (rect.Width >= rect.Height)
+                {
+                    // Horizontal: left button = decrement, right = increment
+                    var size = Math.Min(rect.Height, rect.Width / 2);
+                    var leftRect = new Rect(rect.Left, rect.Top, size, rect.Height);
+                    return leftRect.Contains(pos) ? FormControlClickKind.StepUp : FormControlClickKind.StepDown;
+                }
+                else
+                {
+                    // Vertical: top button = decrement, bottom = increment
+                    var size = Math.Min(rect.Width, rect.Height / 2);
+                    var topRect = new Rect(rect.Left, rect.Top, rect.Width, size);
+                    return topRect.Contains(pos) ? FormControlClickKind.StepUp : FormControlClickKind.StepDown;
+                }
+            }
+
+            default:
+                return FormControlClickKind.Body;
+        }
+    }
+
+    private static int ClassifyListItem(Rect rect, Point pos)
+    {
+        const double rowHeight = 15;
+        var relativeY = pos.Y - rect.Top;
+        var row = (int)Math.Floor(relativeY / rowHeight);
+        return row + 1; // 1-based
+    }
+
+    // ── Drawing helpers ──────────────────────────────────────────────────────
 
     private Rect GlyphRect(Rect rect)
     {
@@ -163,6 +370,55 @@ internal sealed class FormControlVisual : Control
             DrawTriangle(context, top, TriangleDirection.Up);
             DrawTriangle(context, bottom, TriangleDirection.Down);
         }
+    }
+
+    private void DrawDropDown(DrawingContext context, Rect rect)
+    {
+        context.DrawRectangle(BoxFill, BoxBorderPen, rect);
+        var buttonLayout = FormControlRenderPlanner.GetDropDownButtonRect(new LayoutRect(rect.X, rect.Y, rect.Width, rect.Height));
+        var button = new Rect(buttonLayout.X, buttonLayout.Y, buttonLayout.Width, buttonLayout.Height);
+        DrawRaisedButton(context, button);
+        DrawTriangle(context, button, TriangleDirection.Down);
+
+        var text = FormControlRenderPlanner.GetSelectedText(_control);
+        if (!string.IsNullOrEmpty(text))
+        {
+            var textLayout = FormControlRenderPlanner.GetDropDownTextRect(
+                new LayoutRect(rect.X, rect.Y, rect.Width, rect.Height), buttonLayout);
+            var textRect = new Rect(textLayout.X, textLayout.Y, textLayout.Width, textLayout.Height);
+            DrawCaption(context, textRect, textRect.Left + 3);
+        }
+    }
+
+    private static void DrawListBox(DrawingContext context, Rect rect)
+    {
+        var borderPen = new Pen(ShadowBrush, 1);
+        context.DrawRectangle(BoxFill, borderPen, rect);
+
+        const double rowHeight = 15;
+        var rowPen = new Pen(new SolidColorBrush(Color.FromRgb(224, 224, 224)), 1);
+        for (var y = rect.Top + rowHeight; y < rect.Bottom - 1; y += rowHeight)
+            context.DrawLine(rowPen, new Point(rect.Left + 1, y), new Point(rect.Right - 1, y));
+    }
+
+    private void DrawButton(DrawingContext context, Rect rect)
+    {
+        DrawRaisedButton(context, rect);
+        var caption = FormControlRenderPlanner.GetCaption(_control);
+        if (!string.IsNullOrEmpty(caption))
+            DrawCaption(context, rect, rect.Left + Math.Max(0, (rect.Width - MeasureTextWidth(caption)) / 2));
+    }
+
+    private double MeasureTextWidth(string text)
+    {
+        var formatted = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            Typeface.Default,
+            11 * _zoom,
+            GlyphBrush);
+        return formatted.Width;
     }
 
     private void DrawGroupBox(DrawingContext context, Rect rect)
