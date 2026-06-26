@@ -111,6 +111,45 @@ public sealed partial class MainWindow
             canvas.Children.Add(tileControl);
         }
 
+        // Header chrome: multi-select (☰) and clear-filter (×) icons in the top-right of the header.
+        // Rects come from the shared layout builder so WPF and Avalonia use identical geometry.
+        if (slicer.ShowCaption && layout.MultiSelectIconRect.Width > 0)
+        {
+            var multiSelectIcon = new TextBlock
+            {
+                Text = "☰",
+                FontSize = Math.Max(1, 8 * zoomFactor),
+                Foreground = headerTextBrush,
+                Width = Math.Max(1, layout.MultiSelectIconRect.Width * zoomFactor),
+                Height = Math.Max(1, layout.MultiSelectIconRect.Height * zoomFactor),
+                Margin = new Thickness(layout.MultiSelectIconRect.Left * zoomFactor, layout.MultiSelectIconRect.Top * zoomFactor, 0, 0),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                IsHitTestVisible = false,
+            };
+            canvas.Children.Add(multiSelectIcon);
+        }
+
+        if (slicer.ShowCaption && layout.ClearFilterIconRect.Width > 0)
+        {
+            // Clear-filter icon: full opacity when filter is active, semi-transparent otherwise.
+            var hasFilter = layout.HasActiveFilter;
+            var clearBrush = hasFilter ? headerTextBrush : new SolidColorBrush(Color.FromArgb(128, 255, 255, 255));
+            var clearIcon = new TextBlock
+            {
+                Text = "×",
+                FontSize = Math.Max(1, 8 * zoomFactor),
+                Foreground = clearBrush,
+                Width = Math.Max(1, layout.ClearFilterIconRect.Width * zoomFactor),
+                Height = Math.Max(1, layout.ClearFilterIconRect.Height * zoomFactor),
+                Margin = new Thickness(layout.ClearFilterIconRect.Left * zoomFactor, layout.ClearFilterIconRect.Top * zoomFactor, 0, 0),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                IsHitTestVisible = false,
+            };
+            canvas.Children.Add(clearIcon);
+        }
+
         AutomationProperties.SetAutomationId(canvas, $"Slicer{slicer.Name}");
         AutomationProperties.SetName(canvas, $"Slicer {layout.Caption}");
 
@@ -179,6 +218,49 @@ public sealed partial class MainWindow
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(layout.DateLabelRect.Left * zoomFactor, layout.DateLabelRect.Top * zoomFactor, 0, 0),
         });
+
+        // Granularity dropdown label ("MONTHS ▾" etc.) — affordance for switching granularity.
+        // Interactivity (the actual popup) is render-only here; dropdown click is deferred.
+        if (layout.GranularityDropdownRect.Width > 0)
+        {
+            var granLabel = layout.Granularity switch
+            {
+                TimelineGranularity.Year => "YEARS ▾",
+                TimelineGranularity.Quarter => "QUARTERS ▾",
+                TimelineGranularity.Month => "MONTHS ▾",
+                _ => "DAYS ▾"
+            };
+            canvas.Children.Add(new TextBlock
+            {
+                Text = granLabel,
+                FontSize = Math.Max(1, 7.5 * zoomFactor),
+                Foreground = Brushes.White,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Width = Math.Max(1, layout.GranularityDropdownRect.Width * zoomFactor),
+                Height = Math.Max(1, layout.GranularityDropdownRect.Height * zoomFactor),
+                Margin = new Thickness(layout.GranularityDropdownRect.Left * zoomFactor, layout.GranularityDropdownRect.Top * zoomFactor, 0, 0),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                TextAlignment = TextAlignment.Right,
+                IsHitTestVisible = false,
+            });
+        }
+
+        // Clear-filter (×) icon — shown when a date range filter is active.
+        if (layout.HasActiveFilter && layout.ClearFilterIconRect.Width > 0)
+        {
+            canvas.Children.Add(new TextBlock
+            {
+                Text = "×",
+                FontSize = Math.Max(1, 9 * zoomFactor),
+                Foreground = Brushes.White,
+                Width = Math.Max(1, layout.ClearFilterIconRect.Width * zoomFactor),
+                Height = Math.Max(1, layout.ClearFilterIconRect.Height * zoomFactor),
+                Margin = new Thickness(layout.ClearFilterIconRect.Left * zoomFactor, layout.ClearFilterIconRect.Top * zoomFactor, 0, 0),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                IsHitTestVisible = false,
+            });
+        }
 
         canvas.Children.Add(CreateTrackRect(layout.TrackRect, SlicerTrackBrush, zoomFactor));
         canvas.Children.Add(CreateTrackRect(layout.SelectionRect, SlicerSelectionBrush, zoomFactor));

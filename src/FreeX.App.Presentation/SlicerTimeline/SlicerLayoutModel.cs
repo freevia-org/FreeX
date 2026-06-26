@@ -22,6 +22,11 @@ public readonly record struct SlicerTileLayout(
 /// header bar rectangle and caption, the body rectangle, the laid-out tiles, and overflow/scroll
 /// information for the renderers. The geometry is faithful to the source desktop renderer: a header
 /// band capped at 22px, a tile grid starting 26px from the top, and a four-tile preview cap.
+/// <para>
+/// <see cref="MultiSelectIconRect"/> and <see cref="ClearFilterIconRect"/> are the two header chrome
+/// icons Excel shows at the top-right of the header band: a multi-select toggle and a clear-filter
+/// (funnel-×) glyph. Both are zero-height when the header is absent (ShowCaption=false).
+/// </para>
 /// </summary>
 public sealed record SlicerLayoutModel(
     string Name,
@@ -34,7 +39,9 @@ public sealed record SlicerLayoutModel(
     IReadOnlyList<SlicerTileLayout> Tiles,
     int TotalItemCount,
     int VisibleItemCount,
-    bool HasOverflow);
+    bool HasOverflow,
+    LayoutRect MultiSelectIconRect,
+    LayoutRect ClearFilterIconRect);
 
 /// <summary>
 /// The result of toggling a slicer tile: the new selection set ready to hand to the selection command.
@@ -65,6 +72,13 @@ public static class SlicerLayoutBuilder
     private const double TileMaxHeight = 22;
     private const int TilePreviewCap = 4;
 
+    // Header icon chrome sizes (matching Excel's slicer header icon dimensions).
+    // Two icons sit at the header top-right: [multi-select ☰] [clear-filter ✕]
+    // Each icon slot is 16×16 px with a 2px gap between them and a 3px right margin.
+    private const double HeaderIconSize = 16;
+    private const double HeaderIconGap = 2;
+    private const double HeaderIconRightMargin = 3;
+
     /// <summary>
     /// Builds a button-grid layout for <paramref name="slicer"/> within <paramref name="bounds"/>.
     /// <paramref name="availableItems"/> is the full set of items offered by the slicer's source field;
@@ -92,6 +106,7 @@ public static class SlicerLayoutBuilder
         var bodyRect = bounds;
 
         var tiles = BuildTiles(slicer, items, selected, bounds);
+        var (multiSelectRect, clearFilterRect) = BuildHeaderIconRects(headerRect, slicer.ShowCaption);
 
         return new SlicerLayoutModel(
             Name: slicer.Name,
@@ -104,7 +119,9 @@ public static class SlicerLayoutBuilder
             Tiles: tiles,
             TotalItemCount: items.Count,
             VisibleItemCount: tiles.Count(static tile => !tile.IsAllPreview),
-            HasOverflow: items.Count > tiles.Count(static tile => !tile.IsAllPreview));
+            HasOverflow: items.Count > tiles.Count(static tile => !tile.IsAllPreview),
+            MultiSelectIconRect: multiSelectRect,
+            ClearFilterIconRect: clearFilterRect);
     }
 
     /// <summary>
@@ -134,6 +151,7 @@ public static class SlicerLayoutBuilder
 
         var tiles = BuildFullTiles(slicer, items, selected, bounds, showCaption);
         var visibleCount = tiles.Count;
+        var (multiSelectRect, clearFilterRect) = BuildHeaderIconRects(headerRect, showCaption);
 
         return new SlicerLayoutModel(
             Name: slicer.Name,
@@ -146,7 +164,9 @@ public static class SlicerLayoutBuilder
             Tiles: tiles,
             TotalItemCount: items.Count,
             VisibleItemCount: visibleCount,
-            HasOverflow: items.Count > visibleCount);
+            HasOverflow: items.Count > visibleCount,
+            MultiSelectIconRect: multiSelectRect,
+            ClearFilterIconRect: clearFilterRect);
     }
 
     // Lays out every available item across slicer.ColumnCount columns, capping the visible ROWS to what
@@ -333,6 +353,29 @@ public static class SlicerLayoutBuilder
         if (!string.IsNullOrWhiteSpace(slicer.Name))
             return slicer.Name.Trim();
         return string.IsNullOrWhiteSpace(slicer.DrawingShapeName) ? "Filter" : slicer.DrawingShapeName.Trim();
+    }
+
+    // Computes the two header-chrome icon slots matching Excel's slicer header layout:
+    //   Right edge → [rightMargin] [clear-filter icon] [gap] [multi-select icon] [rightMargin] → caption
+    // Both rects collapse to zero height when the header is absent (showCaption=false).
+    private static (LayoutRect MultiSelect, LayoutRect ClearFilter) BuildHeaderIconRects(
+        LayoutRect headerRect,
+        bool showCaption)
+    {
+        if (!showCaption || headerRect.Height <= 0)
+        {
+            var empty = new LayoutRect(headerRect.Right, headerRect.Top, 0, 0);
+            return (empty, empty);
+        }
+
+        var iconY = headerRect.Top + (headerRect.Height - HeaderIconSize) / 2;
+        // Clear-filter (✕ funnel) is the rightmost icon.
+        var clearFilterLeft = headerRect.Right - HeaderIconRightMargin - HeaderIconSize;
+        var clearFilterRect = new LayoutRect(clearFilterLeft, iconY, HeaderIconSize, HeaderIconSize);
+        // Multi-select (☰) is to the left of clear-filter, with a gap.
+        var multiSelectLeft = clearFilterLeft - HeaderIconGap - HeaderIconSize;
+        var multiSelectRect = new LayoutRect(multiSelectLeft, iconY, HeaderIconSize, HeaderIconSize);
+        return (multiSelectRect, clearFilterRect);
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;

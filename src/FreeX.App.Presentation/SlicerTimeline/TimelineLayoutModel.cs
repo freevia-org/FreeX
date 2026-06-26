@@ -55,6 +55,14 @@ public readonly record struct TimelineHitResult(TimelineHitKind Kind, DateOnly? 
 /// window (the subset of the range that the track renders — used for tick and selection mapping).
 /// When no scroll window is active, Window == Range.
 /// </para>
+/// <para>
+/// <see cref="GranularityDropdownRect"/> is the affordance Excel shows at the top-right of the
+/// header: "MONTHS ▾" (or YEARS/QUARTERS/DAYS) label + chevron. <see cref="ClearFilterIconRect"/>
+/// is the clear-filter (×) slot immediately to the right of the dropdown, only present when
+/// <see cref="HasActiveFilter"/> is true. Both rects are in the same pixel space as
+/// <see cref="HeaderRect"/>. The actual granularity-change popup is not yet interactive —
+/// renderers should draw the affordances but interactivity is deferred.
+/// </para>
 /// </summary>
 public sealed record TimelineLayoutModel(
     string Name,
@@ -82,7 +90,9 @@ public sealed record TimelineLayoutModel(
     DateOnly? WindowStart,
     DateOnly? WindowEnd,
     double ScrollThumbLeftRatio,
-    double ScrollThumbWidthRatio);
+    double ScrollThumbWidthRatio,
+    LayoutRect GranularityDropdownRect,
+    LayoutRect ClearFilterIconRect);
 
 /// <summary>
 /// Builds <see cref="TimelineLayoutModel"/> layouts, formats date labels per granularity, and
@@ -116,6 +126,16 @@ public static class TimelineLayoutBuilder
     private const double PreviewSelectionLeftRatio = 0.18;
     private const double PreviewSelectionWidthRatio = 0.56;
     private const double HandleWidth = 6;
+
+    // Header chrome: granularity dropdown label ("MONTHS ▾") + clear-filter (×) icon.
+    // The dropdown sits to the right of the caption, and the clear-filter is the rightmost slot.
+    // Geometry: clear icon is GranClearIconSize px at far right with GranClearIconMargin inset;
+    // the dropdown label is GranDropdownWidth px to the left of the clear icon.
+    private const double GranDropdownWidth = 72;
+    private const double GranDropdownHeight = 10;
+    private const double GranClearIconSize = 10;
+    private const double GranClearIconMargin = 4;
+    private const double GranDropdownRightMargin = 4;
 
     // OOXML timeline level → granularity mapping (date hierarchy: 0=years, 1=quarters, 2=months, 3=days).
     // Confirmed: fixture has level="2" and Excel shows MONTHS.
@@ -222,11 +242,14 @@ public static class TimelineLayoutBuilder
             new LayoutRect(selectionRect.Right - (HandleWidth / 2), trackRect.Top, HandleWidth, trackRect.Height),
             IsStart: false);
 
+        var hasActiveFilter = HasActiveFilter(timeline);
+        var (granDropdownRect, clearFilterRect) = BuildHeaderChromeRects(headerRect, hasActiveFilter);
+
         return new TimelineLayoutModel(
             Name: timeline.Name,
             Caption: ResolveCaption(timeline),
             SourceFieldName: timeline.SourceFieldName,
-            HasActiveFilter: HasActiveFilter(timeline),
+            HasActiveFilter: hasActiveFilter,
             DateLabel: FormatDateLabel(timeline, granularity),
             Granularity: granularity,
             Bounds: bounds,
@@ -248,7 +271,44 @@ public static class TimelineLayoutBuilder
             WindowStart: windowStart,
             WindowEnd: windowEnd,
             ScrollThumbLeftRatio: thumbLeft,
-            ScrollThumbWidthRatio: thumbWidth);
+            ScrollThumbWidthRatio: thumbWidth,
+            GranularityDropdownRect: granDropdownRect,
+            ClearFilterIconRect: clearFilterRect);
+    }
+
+    // Computes the header chrome rects for the timeline:
+    // - GranularityDropdownRect: "MONTHS ▾" label area, right-of-center in the header.
+    // - ClearFilterIconRect: × icon slot, rightmost, only non-zero when hasActiveFilter is true.
+    // Geometry: clearIcon is 10px at the far right
+    // with GranClearIconMargin inset; the dropdown is labelWidth px to the left of the clear icon.
+    private static (LayoutRect Dropdown, LayoutRect ClearFilter) BuildHeaderChromeRects(
+        LayoutRect headerRect,
+        bool hasActiveFilter)
+    {
+        if (headerRect.Height <= 0)
+        {
+            var empty = new LayoutRect(headerRect.Right, headerRect.Top, 0, 0);
+            return (empty, empty);
+        }
+
+        var iconCenterY = headerRect.Top + (headerRect.Height - GranClearIconSize) / 2;
+        // Clear-filter × slot (rightmost).
+        var clearFilterLeft = headerRect.Right - GranClearIconSize - GranClearIconMargin;
+        var clearFilterRect = hasActiveFilter
+            ? new LayoutRect(clearFilterLeft, iconCenterY, GranClearIconSize, GranClearIconSize)
+            : new LayoutRect(headerRect.Right, headerRect.Top, 0, 0);
+
+        // Granularity dropdown label sits to the left of the clear-filter icon.
+        var dropdownRight = hasActiveFilter
+            ? clearFilterLeft - GranDropdownRightMargin
+            : headerRect.Right - GranClearIconMargin;
+        var dropdownLeft = dropdownRight - GranDropdownWidth;
+        var dropdownCenterY = headerRect.Top + (headerRect.Height - GranDropdownHeight) / 2;
+        var dropdownRect = dropdownLeft > headerRect.Left + 5
+            ? new LayoutRect(dropdownLeft, dropdownCenterY, GranDropdownWidth, GranDropdownHeight)
+            : new LayoutRect(headerRect.Right, headerRect.Top, 0, 0); // too narrow to show
+
+        return (dropdownRect, clearFilterRect);
     }
 
     // Computes the visible window [windowStart, windowEnd) from the OOXML scrollPosition and

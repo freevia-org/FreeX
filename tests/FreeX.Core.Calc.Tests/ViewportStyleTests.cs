@@ -153,7 +153,9 @@ public class ViewportStyleTests
         negative.DisplayText.Should().Be("-2.50");
         positive.DisplayText.Should().Be("2.50");
         negative.Style!.FontColor.Should().Be(CellColor.FromArgb(255, 0, 0));
-        positive.Style!.FontColor.Should().Be(CellColor.FromArgb(0, 112, 192));
+        // [Blue] maps to the Excel legacy palette pure blue (#0000FF = RGB 0,0,255),
+        // not the Office brand blue #0070C0 that was previously (incorrectly) used.
+        positive.Style!.FontColor.Should().Be(CellColor.FromArgb(0, 0, 255));
         negative.Style.Should().NotBeSameAs(positive.Style);
     }
 

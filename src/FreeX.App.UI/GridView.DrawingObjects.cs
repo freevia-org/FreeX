@@ -642,6 +642,14 @@ public partial class GridView
             hasHeader,
             boldHeader: isAccentStyle);
 
+        // Header chrome: multi-select toggle + clear-filter icons in the top-right of the header band.
+        // Geometry mirrors SlicerLayoutBuilder.BuildHeaderIconRects.
+        if (hasHeader)
+        {
+            var headerRect = new Rect(rect.Left, rect.Top, rect.Width, Math.Min(22, rect.Height));
+            DrawSlicerHeaderIcons(dc, headerRect, slicer.SelectedItems.Count > 0, GetDrawingObjectBrush(255, style.HeaderText), pixelsPerDip);
+        }
+
         // Lay out the slicer's item buttons: prefer the resolved available items (table-column distinct
         // values / pivot cache shared items); fall back to the slicer's selected items, then a single
         // field-name tile, matching the source desktop renderer. Honor the slicer's columnCount.
@@ -691,6 +699,44 @@ public partial class GridView
                 2,
                 2);
             DrawClippedText(dc, caption, tileRect, itemTextBrush, 10, verticalPadding: 1, pixelsPerDip);
+        }
+    }
+
+    // Draws the two slicer header chrome icons at the top-right of the header band.
+    // Geometry matches SlicerLayoutBuilder.BuildHeaderIconRects:
+    //   Right edge → [3px margin] [clear-filter ×] [2px gap] [multi-select ☰] → caption
+    // The multi-select icon is always shown; clear-filter is rendered at full opacity only when
+    // hasActiveFilter is true (grayed-out when no filter is active, matching Excel's behavior).
+    private void DrawSlicerHeaderIcons(
+        DrawingContext dc,
+        Rect headerRect,
+        bool hasActiveFilter,
+        Brush iconBrush,
+        double pixelsPerDip)
+    {
+        const double iconSize = 16;
+        const double iconGap = 2;
+        const double rightMargin = 3;
+        const double iconFontSize = 8;
+
+        var iconY = headerRect.Top + (headerRect.Height - iconSize) / 2;
+
+        // Clear-filter icon (× glyph) — rightmost slot.
+        var clearFilterLeft = headerRect.Right - rightMargin - iconSize;
+        if (clearFilterLeft > headerRect.Left + 5)
+        {
+            var clearFilterRect = new Rect(clearFilterLeft, iconY, iconSize, iconSize);
+            // Use a semi-transparent brush when inactive, fully opaque when filter is active.
+            var clearBrush = hasActiveFilter ? iconBrush : GetDrawingObjectBrush(128, new CellColor(255, 255, 255));
+            DrawClippedText(dc, "×", clearFilterRect, clearBrush, iconFontSize, verticalPadding: 0, pixelsPerDip);
+        }
+
+        // Multi-select icon (☰ glyph) — to the left of clear-filter.
+        var multiSelectLeft = clearFilterLeft - iconGap - iconSize;
+        if (multiSelectLeft > headerRect.Left + 5)
+        {
+            var multiSelectRect = new Rect(multiSelectLeft, iconY, iconSize, iconSize);
+            DrawClippedText(dc, "☰", multiSelectRect, iconBrush, iconFontSize, verticalPadding: 0, pixelsPerDip);
         }
     }
 
@@ -750,22 +796,23 @@ public partial class GridView
             hasHeader: true,
             boldHeader: isAccentStyle);
 
-        // Granularity label in the header top-right area (e.g. "MONTHS ▾"), left of the clear icon.
-        DrawTimelineGranularityLabel(dc, rect, layout, headerTextBrush, pixelsPerDip);
-
-        // Draw the clear-filter (×) glyph top-right of the header when an active filter exists.
-        if (layout.HasActiveFilter)
+        // Granularity dropdown label (e.g. "MONTHS ▾") — use the layout's rect so geometry
+        // is shared with the Avalonia renderer via TimelineLayoutBuilder.
+        if (layout.GranularityDropdownRect.Width > 0)
         {
-            var headerRect = new Rect(rect.Left, rect.Top, rect.Width, Math.Min(22, rect.Height));
-            const double glyphSize = 10;
-            const double glyphMargin = 4;
-            var glyphRect = new Rect(
-                headerRect.Right - glyphSize - glyphMargin,
-                headerRect.Top + (headerRect.Height - glyphSize) / 2,
-                glyphSize,
-                glyphSize);
-            DrawClippedText(dc, "×", glyphRect, headerTextBrush, 9, verticalPadding: 0, pixelsPerDip);
+            var granLabel = layout.Granularity switch
+            {
+                TimelineGranularity.Year => "YEARS ▾",
+                TimelineGranularity.Quarter => "QUARTERS ▾",
+                TimelineGranularity.Month => "MONTHS ▾",
+                _ => "DAYS ▾"
+            };
+            DrawClippedText(dc, granLabel, ToRect(layout.GranularityDropdownRect), headerTextBrush, 7.5, verticalPadding: 0, pixelsPerDip);
         }
+
+        // Clear-filter (×) glyph — draw from the layout's shared rect when the filter is active.
+        if (layout.HasActiveFilter && layout.ClearFilterIconRect.Width > 0)
+            DrawClippedText(dc, "×", ToRect(layout.ClearFilterIconRect), headerTextBrush, 9, verticalPadding: 0, pixelsPerDip);
 
         // Summary date label — accent color and bold so it reads clearly against the white body.
         DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect), summaryLabelBrush, 9, verticalPadding: 0, pixelsPerDip, isBold: isAccentStyle);
@@ -786,38 +833,6 @@ public partial class GridView
         // Scrollbar strip at the bottom.
         if (layout.ScrollbarRect.Height > 0)
             DrawTimelineScrollbar(dc, layout, scrollbarFillBrush, scrollbarArrowBrush);
-    }
-
-    // Renders the "MONTHS ▾" granularity label in the header top-right, to the left of the clear icon.
-    private void DrawTimelineGranularityLabel(
-        DrawingContext dc,
-        Rect rect,
-        TimelineLayoutModel layout,
-        Brush brush,
-        double pixelsPerDip)
-    {
-        var granLabel = layout.Granularity switch
-        {
-            TimelineGranularity.Year => "YEARS ▾",
-            TimelineGranularity.Quarter => "QUARTERS ▾",
-            TimelineGranularity.Month => "MONTHS ▾",
-            _ => "DAYS ▾"
-        };
-
-        var headerHeight = Math.Min(22, rect.Height);
-        // Reserve space for the clear icon (~18px) and place the label to its left.
-        const double clearIconReserve = 18;
-        const double labelWidth = 72;
-        const double rightMargin = 4;
-        var labelRect = new Rect(
-            rect.Right - clearIconReserve - labelWidth - rightMargin,
-            rect.Top + (headerHeight - 10) / 2,
-            labelWidth,
-            10);
-        if (labelRect.Left < rect.Left + 5 || labelRect.Width < 20)
-            return;
-
-        DrawClippedText(dc, granLabel, labelRect, brush, 7.5, verticalPadding: 0, pixelsPerDip);
     }
 
     // Renders the year banner row — "2026" left-aligned at the start of each year's track span.

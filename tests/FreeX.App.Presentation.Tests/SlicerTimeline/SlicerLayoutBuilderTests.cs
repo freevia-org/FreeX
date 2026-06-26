@@ -255,4 +255,54 @@ public sealed class SlicerLayoutBuilderTests
         // Tiles start near the very top of the box, not below a 22px band.
         layout.Tiles[0].Rect.Top.Should().BeLessThan(TallBounds.Top + 22);
     }
+
+    // --- Header icon chrome (multi-select + clear-filter) -------------------------------------------
+
+    [Fact]
+    public void Build_WithCaption_ProducesHeaderIconRectsInHeaderBand()
+    {
+        var slicer = new SlicerModel { Name = "S", Caption = "Region", ShowCaption = true };
+
+        var layout = SlicerLayoutBuilder.Build(slicer, ["A"], Bounds);
+
+        // Both icon rects must have positive dimensions and sit inside the header band.
+        layout.MultiSelectIconRect.Width.Should().BeGreaterThan(0);
+        layout.ClearFilterIconRect.Width.Should().BeGreaterThan(0);
+        layout.MultiSelectIconRect.Height.Should().BeGreaterThan(0);
+        layout.ClearFilterIconRect.Height.Should().BeGreaterThan(0);
+
+        // Both icons must be within the header band vertically.
+        layout.MultiSelectIconRect.Top.Should().BeGreaterThanOrEqualTo(layout.HeaderRect.Top);
+        layout.ClearFilterIconRect.Top.Should().BeGreaterThanOrEqualTo(layout.HeaderRect.Top);
+        layout.MultiSelectIconRect.Bottom.Should().BeLessThanOrEqualTo(layout.HeaderRect.Bottom + 1);
+        layout.ClearFilterIconRect.Bottom.Should().BeLessThanOrEqualTo(layout.HeaderRect.Bottom + 1);
+    }
+
+    [Fact]
+    public void Build_WithCaption_ClearFilterIsRightmostThenMultiSelect()
+    {
+        var layout = SlicerLayoutBuilder.Build(
+            new SlicerModel { Name = "S", Caption = "Region", ShowCaption = true },
+            ["A"],
+            Bounds);
+
+        // Clear-filter is the rightmost icon; multi-select is to its left.
+        layout.ClearFilterIconRect.Left.Should().BeGreaterThan(layout.MultiSelectIconRect.Left,
+            because: "clear-filter (×) is the rightmost icon, multi-select (☰) is to its left");
+        layout.MultiSelectIconRect.Right.Should().BeLessThanOrEqualTo(layout.ClearFilterIconRect.Left + 1);
+
+        // Both icons fit within the header bounds.
+        layout.ClearFilterIconRect.Right.Should().BeLessThanOrEqualTo(layout.HeaderRect.Right + 1);
+    }
+
+    [Fact]
+    public void BuildFull_ShowCaptionFalse_IconRectsAreEmpty()
+    {
+        var slicer = new SlicerModel { Name = "S", Caption = "Region", ShowCaption = false };
+
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, ["A"], TallBounds);
+
+        layout.MultiSelectIconRect.Width.Should().Be(0, "no header band → no icons");
+        layout.ClearFilterIconRect.Width.Should().Be(0, "no header band → no icons");
+    }
 }
