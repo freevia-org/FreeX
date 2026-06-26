@@ -504,6 +504,9 @@ internal static class Program
             ShowHeaders     = showHeaders,
             ZoomFactor      = 1.0,
             WorksheetViewMode = sheet.ViewMode,
+            // Wire per-run rich text so cells with character-level formatting render correctly.
+            ActiveSheetId   = sheet.Id,
+            SheetRichTextRuns = sheet.RichTextRuns.Count > 0 ? sheet.RichTextRuns : null,
         };
 
         // Surface the sheet's AutoFilter range (worksheet-level OR carried inside a structured table)

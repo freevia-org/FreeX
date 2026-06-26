@@ -6225,11 +6225,11 @@ public sealed partial class MainWindow : Window
 
         // Per-run rich text: resolve raw runs (null props → cell style) via the shared planner.
         // Only text cells with multiple character-level format variations carry entries here.
+        // Use CellStyle.Default when style is null so run props inherit sensible defaults.
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null;
-        if (style is not null &&
-            _session.ActiveSheet.RichTextRuns.TryGetValue(address, out var rawRuns))
+        if (_session.ActiveSheet.RichTextRuns.TryGetValue(address, out var rawRuns))
         {
-            richRuns = CellRichRunLayoutPlanner.Resolve(rawRuns, style);
+            richRuns = CellRichRunLayoutPlanner.Resolve(rawRuns, style ?? CellStyle.Default);
         }
 
         return CreateInteractiveCellBorder(
