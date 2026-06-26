@@ -18,5 +18,6 @@
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
     <Project Path="freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj" />
     <Project Path="freep/FreeP.App.Rendering.Avalonia.Tests/FreeP.App.Rendering.Avalonia.Tests.csproj" />
+    <Project Path="freep/FreeP.App.Avalonia.Tests/FreeP.App.Avalonia.Tests.csproj" />
   </Folder>
 </Solution>
