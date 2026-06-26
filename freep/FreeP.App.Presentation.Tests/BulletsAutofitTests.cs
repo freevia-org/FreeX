@@ -454,6 +454,93 @@ public sealed class BulletsAutofitTests
         return shapeOp.Text!;
     }
 
+    // ─── BU4: bullet theme/scheme color round-trip ───────────────────────────
+
+    /// <summary>
+    /// BU4: A paragraph bullet whose color is a DrawingML scheme color (e.g. accent1 with
+    /// a lumMod modifier) must survive write→read with the scheme reference intact, NOT
+    /// flattened to a plain sRGB value.  Verifies the writer calls BuildColorEl() rather
+    /// than hard-coding a:srgbClr.
+    /// </summary>
+    [Fact]
+    public void BU4_BulletSchemeColor_RoundTrip_PreservesSchemeRef()
+    {
+        // accent1 at 80% luminance — a realistic DrawingML theme color with a modifier.
+        var schemeRef = new SchemeColorRef
+        {
+            Slot   = ThemeColorSlot.Accent1,
+            LumMod = 0.8,
+            LumOff = 0.0,
+        };
+        var themeColor = new ThemeAwareColor(new SrgbColor(0x44, 0x72, 0xC4), schemeRef);
+
+        var body = new TextBody();
+        var para = new Paragraph
+        {
+            BulletKind  = BulletKind.Char,
+            BulletChar  = "•",
+            BulletColor = themeColor,
+        };
+        para.Runs.Add(new Run { Text = "Theme-colored bullet", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(p, ms);
+        ms.Position = 0;
+        var p2 = FreeP.Core.IO.PptxPackageReader.Read(ms);
+
+        var rt = p2.Slides[0].Shapes[0].TextBody!.Paragraphs[0];
+        rt.BulletColor.Should().NotBeNull("bullet color must survive round-trip");
+        rt.BulletColor!.SchemeColor.Should().NotBeNull(
+            "BU4: schemeClr theme reference must be preserved, not flattened to sRGB");
+        rt.BulletColor.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent1,
+            "the accent1 slot must round-trip intact");
+        rt.BulletColor.SchemeColor.LumMod.Should().BeApproximately(0.8, 1e-6,
+            "the lumMod modifier (80%) must round-trip intact");
+    }
+
+    /// <summary>
+    /// BU4 (no-regression): An explicit sRGB bullet color must still round-trip as sRGB
+    /// (no SchemeColor), confirming BuildColorEl() falls through correctly when there is
+    /// no scheme reference.
+    /// </summary>
+    [Fact]
+    public void BU4_BulletSrgbColor_RoundTrip_StaysAsSrgb()
+    {
+        var explicitRed = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00));
+
+        var body = new TextBody();
+        var para = new Paragraph
+        {
+            BulletKind  = BulletKind.Char,
+            BulletChar  = "–",
+            BulletColor = explicitRed,
+        };
+        para.Runs.Add(new Run { Text = "Red bullet", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(p, ms);
+        ms.Position = 0;
+        var p2 = FreeP.Core.IO.PptxPackageReader.Read(ms);
+
+        var rt = p2.Slides[0].Shapes[0].TextBody!.Paragraphs[0];
+        rt.BulletColor.Should().NotBeNull("explicit sRGB bullet color must survive round-trip");
+        rt.BulletColor!.SchemeColor.Should().BeNull(
+            "a plain sRGB bullet color must NOT gain a scheme reference after round-trip");
+        rt.BulletColor.Resolved.R.Should().Be(0xFF);
+        rt.BulletColor.Resolved.G.Should().Be(0x00);
+        rt.BulletColor.Resolved.B.Should().Be(0x00);
+    }
+
     // ─── BU2: CT_TextParagraphProperties child order ──────────────────────────
 
     /// <summary>

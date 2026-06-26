@@ -1158,6 +1158,20 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Set a multi-paragraph selection for testing: anchor at (anchorBlock, anchorOffset),
+    /// caret at (caretBlock, caretOffset). The selection direction follows Word convention
+    /// (anchor is where the selection started, caret is where it ends).
+    /// Exposed for BS4 / AV-LIST unit tests.
+    /// </summary>
+    internal void SetSelectionRangePublic(int anchorBlock, int anchorOffset, int caretBlock, int caretOffset)
+    {
+        _cellCaret = null;
+        _cellAnchor = null;
+        _selectionAnchor = new DocPosition(anchorBlock, anchorOffset);
+        _caret = new DocPosition(caretBlock, caretOffset);
+    }
+
+    /// <summary>
     /// Trigger an Enter key (InsertParagraphBreak) programmatically.
     /// Exposed for AV-LIST unit tests.
     /// </summary>
@@ -5406,6 +5420,54 @@ public sealed class DocumentView : Control
     // should fall through to normal Tab behavior.
     private bool ListTabAtItemStart(bool shift)
     {
+        // BS4: Multi-paragraph selection → demote/promote ALL selected list paragraphs (Word behavior).
+        // When there is an active selection spanning multiple paragraphs, apply the level change to
+        // every list paragraph in the range (skipping non-list paragraphs, matching WPF ChangeListLevel).
+        // A single collapsed caret falls through to the existing offset-0 single-item behavior below.
+        if (NormalizedSelection() is { } sel)
+        {
+            // Collect list paragraphs in the selection range.
+            var listIndices = new System.Collections.Generic.List<int>();
+            for (var i = sel.Start.Block; i <= sel.End.Block && i < _doc.Blocks.Count; i++)
+            {
+                if (_doc.Blocks[i] is Paragraph lp && IsEditable(lp) && lp.Formatting.ListKind != ListKind.None)
+                    listIndices.Add(i);
+            }
+
+            if (listIndices.Count == 0)
+                return false; // Selection has no list paragraphs → fall through to normal tab/shift-tab.
+
+            // Apply demote (+1) or promote (-1) to every list paragraph in the selection.
+            if (listIndices.Count == 1)
+            {
+                // Single list paragraph in selection: no undo-group overhead.
+                var idx = listIndices[0];
+                var f = ((Paragraph)_doc.Blocks[idx]).Formatting;
+                _bus.Execute(new SetParagraphFormattingCommand(idx, shift
+                    ? (f.ListLevel == 0
+                        ? f with { ListKind = ListKind.None, ListLevel = 0 }
+                        : f with { ListLevel = f.ListLevel - 1 })
+                    : f with { ListLevel = Math.Min(f.ListLevel + 1, 8) }));
+            }
+            else
+            {
+                // Multiple list paragraphs: wrap in one undo group so a single Ctrl+Z reverts all.
+                _bus.BeginUndoGroup();
+                foreach (var idx in listIndices)
+                {
+                    var f = ((Paragraph)_doc.Blocks[idx]).Formatting;
+                    _bus.Execute(new SetParagraphFormattingCommand(idx, shift
+                        ? (f.ListLevel == 0
+                            ? f with { ListKind = ListKind.None, ListLevel = 0 }
+                            : f with { ListLevel = f.ListLevel - 1 })
+                        : f with { ListLevel = Math.Min(f.ListLevel + 1, 8) }));
+                }
+                _bus.CommitUndoGroup(shift ? "Promote List Items" : "Demote List Items");
+            }
+            return true;
+        }
+
+        // Single collapsed caret: original behavior — only act when caret is at item start (offset 0).
         if (_caret.Offset != 0)
             return false;
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))

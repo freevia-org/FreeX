@@ -539,6 +539,197 @@ public sealed class DocumentViewListEditTests
     // ── BW1: inline-image paragraph resets counter, matching the render loop ─────────────────────
 
     /// <summary>
+    // ── BS4: Tab/Shift+Tab with multi-paragraph selection demotes/promotes ALL list items ──────────
+
+    /// <summary>
+    /// BS4: A selection spanning three list items + Tab → all three demote (ListLevel + 1).
+    /// Matches Word / WPF ChangeListLevel behavior.
+    /// </summary>
+    [Fact]
+    public async Task BS4_Tab_with_multi_selection_demotes_all_selected_list_items()
+    {
+        int level0 = -1, level1 = -1, level2 = -1;
+        bool consumed = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Item A") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Item B") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Item C") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            // Select all three items: anchor at block 0 offset 0, caret at block 2 end.
+            view.SetSelectionRangePublic(0, 0, 2, 6);
+            consumed = view.ListTabAtItemStartPublic(shift: false); // Tab → demote
+
+            level0 = Para(view, 0).Formatting.ListLevel;
+            level1 = Para(view, 1).Formatting.ListLevel;
+            level2 = Para(view, 2).Formatting.ListLevel;
+        });
+
+        if (!ran) return;
+        consumed.Should().BeTrue("Tab with a list selection should be consumed");
+        level0.Should().Be(1, "Item A demoted to level 1");
+        level1.Should().Be(1, "Item B demoted to level 1");
+        level2.Should().Be(1, "Item C demoted to level 1");
+    }
+
+    /// <summary>
+    /// BS4: A selection spanning three list items + Shift+Tab → all three promote (ListLevel - 1,
+    /// clamped at 0 so level-0 items stay at 0, not leave the list, when others are higher).
+    /// </summary>
+    [Fact]
+    public async Task BS4_ShiftTab_with_multi_selection_promotes_all_selected_list_items()
+    {
+        int level0 = -1, level1 = -1, level2 = -1;
+        bool consumed = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Item A") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 2 } });
+            doc.Blocks.Add(new Paragraph("Item B") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 1 } });
+            doc.Blocks.Add(new Paragraph("Item C") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 2 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            // Select all three items.
+            view.SetSelectionRangePublic(0, 0, 2, 6);
+            consumed = view.ListTabAtItemStartPublic(shift: true); // Shift+Tab → promote
+
+            level0 = Para(view, 0).Formatting.ListLevel;
+            level1 = Para(view, 1).Formatting.ListLevel;
+            level2 = Para(view, 2).Formatting.ListLevel;
+        });
+
+        if (!ran) return;
+        consumed.Should().BeTrue("Shift+Tab with a list selection should be consumed");
+        level0.Should().Be(1, "Item A promoted from level 2 to level 1");
+        level1.Should().Be(0, "Item B promoted from level 1 to level 0");
+        level2.Should().Be(1, "Item C promoted from level 2 to level 1");
+    }
+
+    /// <summary>
+    /// BS4: Single collapsed caret at item start still demotes just that item (regression guard).
+    /// </summary>
+    [Fact]
+    public async Task BS4_single_caret_at_item_start_still_demotes_single_item()
+    {
+        int level0 = -1, level1 = -1, level2 = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Item A") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Item B") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Item C") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            // Collapsed caret at block 1, offset 0 only.
+            view.MoveCaretToBlock(1, 0);
+            view.ListTabAtItemStartPublic(shift: false); // Tab → demote only block 1
+
+            level0 = Para(view, 0).Formatting.ListLevel;
+            level1 = Para(view, 1).Formatting.ListLevel;
+            level2 = Para(view, 2).Formatting.ListLevel;
+        });
+
+        if (!ran) return;
+        level0.Should().Be(0, "Item A unchanged (only caret item demotes)");
+        level1.Should().Be(1, "Item B (caret item) demoted to level 1");
+        level2.Should().Be(0, "Item C unchanged (only caret item demotes)");
+    }
+
+    /// <summary>
+    /// BS4: One Ctrl+Z (Undo) reverts the entire multi-item demote atomically.
+    /// After Tab demotes 3 items, a single Undo restores all three to their original level.
+    /// </summary>
+    [Fact]
+    public async Task BS4_single_undo_reverts_multi_item_demote()
+    {
+        int level0Before = -1, level1Before = -1, level2Before = -1;
+        int level0After  = -1, level1After  = -1, level2After  = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Item A") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Item B") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Item C") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            // Demote all three with Tab.
+            view.SetSelectionRangePublic(0, 0, 2, 6);
+            view.ListTabAtItemStartPublic(shift: false);
+
+            level0Before = Para(view, 0).Formatting.ListLevel;
+            level1Before = Para(view, 1).Formatting.ListLevel;
+            level2Before = Para(view, 2).Formatting.ListLevel;
+
+            // One Undo should revert all three.
+            view.Undo();
+
+            level0After = Para(view, 0).Formatting.ListLevel;
+            level1After = Para(view, 1).Formatting.ListLevel;
+            level2After = Para(view, 2).Formatting.ListLevel;
+        });
+
+        if (!ran) return;
+        // Verify demote happened.
+        level0Before.Should().Be(1, "Item A demoted before undo");
+        level1Before.Should().Be(1, "Item B demoted before undo");
+        level2Before.Should().Be(1, "Item C demoted before undo");
+        // Verify single undo reverted all three.
+        level0After.Should().Be(0, "Item A back to level 0 after undo");
+        level1After.Should().Be(0, "Item B back to level 0 after undo");
+        level2After.Should().Be(0, "Item C back to level 0 after undo");
+    }
+
+    /// <summary>
+    /// BS4: A selection that contains NO list paragraphs → Tab falls through (returns false),
+    /// so the caller can insert a tab character as normal.
+    /// </summary>
+    [Fact]
+    public async Task BS4_selection_with_no_list_paragraphs_falls_through()
+    {
+        bool consumed = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Plain text A") { Formatting = new ParagraphFormatting { ListKind = ListKind.None } });
+            doc.Blocks.Add(new Paragraph("Plain text B") { Formatting = new ParagraphFormatting { ListKind = ListKind.None } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            view.SetSelectionRangePublic(0, 0, 1, 12);
+            consumed = view.ListTabAtItemStartPublic(shift: false);
+        });
+
+        if (!ran) return;
+        consumed.Should().BeFalse("Tab with a non-list selection should not be consumed by the list handler");
+    }
+
+    /// <summary>
     /// BW1: the render loop routes paragraphs with inline images through LayoutImageParagraphPaged,
     /// which resets levelCounters and emits no list marker.  The helper must agree.
     /// Layout: numbered "1.", image-para (resets → null), numbered "1." (restarts from 1).
