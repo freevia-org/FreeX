@@ -98,6 +98,12 @@ internal static class PptxChartWriter
     {
         var seriesEls = chart.Series.Select((s, i) => BuildSeriesEl(chart, s, i)).ToList();
 
+        // For scatter/bubble, series elements need xVal/yVal/bubbleSize; build them separately.
+        bool isScatterLike = chart.ChartType is ChartType.Scatter or ChartType.Bubble;
+        var scatterSeriesEls = isScatterLike
+            ? chart.Series.Select((s, i) => BuildScatterSeriesEl(chart, s, i)).ToList()
+            : null;
+
         XElement? chartTypeEl = chart.ChartType switch
         {
             ChartType.BarClustered or ChartType.BarStacked or ChartType.BarStacked100 =>
@@ -108,23 +114,36 @@ internal static class PptxChartWriter
                 BuildLineChartEl(chart, seriesEls),
             ChartType.Pie =>
                 BuildPieChartEl(chart, seriesEls),
+            ChartType.Doughnut =>
+                BuildDoughnutChartEl(chart, seriesEls),
             ChartType.Area or ChartType.AreaStacked =>
                 BuildAreaChartEl(chart, seriesEls),
             ChartType.Scatter =>
-                BuildScatterChartEl(chart, seriesEls),
+                BuildScatterChartEl(chart, scatterSeriesEls!),
+            ChartType.Bubble =>
+                BuildBubbleChartEl(chart, scatterSeriesEls!),
+            ChartType.Radar =>
+                BuildRadarChartEl(chart, seriesEls),
             _ =>
                 BuildBarChartEl(chart, seriesEls, isBar: false) // default fallback
         };
 
-        var catAxEl = chart.ChartType is not (ChartType.Pie or ChartType.Unknown)
+        bool noCatAx = chart.ChartType is ChartType.Pie or ChartType.Doughnut
+                                       or ChartType.Unknown;
+        var catAxEl = !noCatAx && !isScatterLike
             ? BuildCatAxEl(chart.CategoryAxis, 1, 2)
             : null;
-        var valAxEl = chart.ChartType is not (ChartType.Pie or ChartType.Unknown)
+        // Scatter/bubble use two valAx elements (one for X, one for Y)
+        var valAxEl = !noCatAx
             ? BuildValAxEl(chart.ValueAxis, 2, 1)
+            : null;
+        var xValAxEl = isScatterLike
+            ? BuildValAxEl(chart.CategoryAxis, 1, 2)   // X axis is also a valAx for scatter/bubble
             : null;
 
         return new XElement(C + "plotArea",
             chartTypeEl,
+            xValAxEl,
             catAxEl,
             valAxEl);
     }
@@ -167,10 +186,116 @@ internal static class PptxChartWriter
 
     private static XElement BuildScatterChartEl(ChartShape chart, List<XElement> seriesEls) =>
         new XElement(C + "scatterChart",
-            new XElement(C + "scatterStyle", new XAttribute("val", "lineMarker")),
+            new XElement(C + "scatterStyle",
+                new XAttribute("val", chart.ScatterStyle switch
+                {
+                    ScatterStyle.Marker       => "marker",
+                    ScatterStyle.Line         => "line",
+                    ScatterStyle.Smooth       => "smooth",
+                    ScatterStyle.SmoothMarker => "smoothMarker",
+                    _                         => "lineMarker"
+                })),
             seriesEls,
             new XElement(C + "axId", new XAttribute("val", "1")),
             new XElement(C + "axId", new XAttribute("val", "2")));
+
+    private static XElement BuildDoughnutChartEl(ChartShape chart, List<XElement> seriesEls) =>
+        new XElement(C + "doughnutChart",
+            new XElement(C + "holeSize",
+                new XAttribute("val", chart.DoughnutHolePercent.ToString(CultureInfo.InvariantCulture))),
+            seriesEls);
+
+    private static XElement BuildRadarChartEl(ChartShape chart, List<XElement> seriesEls) =>
+        new XElement(C + "radarChart",
+            new XElement(C + "radarStyle",
+                new XAttribute("val", chart.RadarStyle switch
+                {
+                    RadarStyle.Marker => "marker",
+                    RadarStyle.Filled => "filled",
+                    _                 => "standard"
+                })),
+            seriesEls,
+            new XElement(C + "axId", new XAttribute("val", "1")),
+            new XElement(C + "axId", new XAttribute("val", "2")));
+
+    private static XElement BuildBubbleChartEl(ChartShape chart, List<XElement> seriesEls) =>
+        new XElement(C + "bubbleChart",
+            seriesEls,
+            new XElement(C + "axId", new XAttribute("val", "1")),
+            new XElement(C + "axId", new XAttribute("val", "2")));
+
+    // ── Scatter/bubble series element (uses xVal/yVal/bubbleSize instead of cat/val) ────
+
+    private static XElement BuildScatterSeriesEl(ChartShape chart, ChartSeries series, int index)
+    {
+        var el = new XElement(C + "ser",
+            new XElement(C + "idx",   new XAttribute("val", index)),
+            new XElement(C + "order", new XAttribute("val", index)));
+
+        // Series name
+        el.Add(new XElement(C + "tx",
+            new XElement(C + "strRef",
+                new XElement(C + "strCache",
+                    new XElement(C + "ptCount", new XAttribute("val", "1")),
+                    new XElement(C + "pt",
+                        new XAttribute("idx", "0"),
+                        new XElement(C + "v", series.Name))))));
+
+        // Fill color
+        if (series.FillColor is not null)
+            el.Add(new XElement(C + "spPr",
+                new XElement(A + "solidFill", BuildColorEl(series.FillColor))));
+
+        // X values (c:xVal)
+        if (series.XValues.Count > 0)
+        {
+            el.Add(new XElement(C + "xVal",
+                new XElement(C + "numRef",
+                    new XElement(C + "numCache",
+                        new XElement(C + "formatCode", "General"),
+                        new XElement(C + "ptCount", new XAttribute("val", series.XValues.Count)),
+                        series.XValues.Select((v, vi) =>
+                            v.HasValue
+                                ? new XElement(C + "pt",
+                                    new XAttribute("idx", vi),
+                                    new XElement(C + "v", v.Value.ToString("G", CultureInfo.InvariantCulture)))
+                                : null).Where(e => e is not null)))));
+        }
+
+        // Y values (c:yVal)
+        if (series.Values.Count > 0)
+        {
+            el.Add(new XElement(C + "yVal",
+                new XElement(C + "numRef",
+                    new XElement(C + "numCache",
+                        new XElement(C + "formatCode", "General"),
+                        new XElement(C + "ptCount", new XAttribute("val", series.Values.Count)),
+                        series.Values.Select((v, vi) =>
+                            v.HasValue
+                                ? new XElement(C + "pt",
+                                    new XAttribute("idx", vi),
+                                    new XElement(C + "v", v.Value.ToString("G", CultureInfo.InvariantCulture)))
+                                : null).Where(e => e is not null)))));
+        }
+
+        // Bubble sizes (c:bubbleSize) — only for bubble charts
+        if (series.BubbleSizes.Count > 0)
+        {
+            el.Add(new XElement(C + "bubbleSize",
+                new XElement(C + "numRef",
+                    new XElement(C + "numCache",
+                        new XElement(C + "formatCode", "General"),
+                        new XElement(C + "ptCount", new XAttribute("val", series.BubbleSizes.Count)),
+                        series.BubbleSizes.Select((v, vi) =>
+                            v.HasValue
+                                ? new XElement(C + "pt",
+                                    new XAttribute("idx", vi),
+                                    new XElement(C + "v", v.Value.ToString("G", CultureInfo.InvariantCulture)))
+                                : null).Where(e => e is not null)))));
+        }
+
+        return el;
+    }
 
     // ── Series element ────────────────────────────────────────────────────────
 

@@ -132,20 +132,21 @@ internal static class PptxChartReader
                     ReadLineChart(el, shape, scheme); return;
                 case "pieChart":
                 case "pie3DChart":
-                case "doughnutChart":
                 case "ofPieChart":          // pie-of-pie / bar-of-pie — best effort as Pie
                     ReadPieChart(el, shape, scheme); return;
+                case "doughnutChart":
+                    ReadDoughnutChart(el, shape, scheme); return;
                 case "areaChart":
                 case "area3DChart":
                     ReadAreaChart(el, shape, scheme); return;
                 case "scatterChart":
-                    ReadScatterChart(el, shape, scheme); return;
+                    ReadScatterChartDistinct(el, shape, scheme); return;
                 case "bubbleChart":
-                    ReadScatterChart(el, shape, scheme); return;  // bubble ~= scatter
+                    ReadBubbleChart(el, shape, scheme); return;
                 case "stockChart":
                     ReadLineChart(el, shape, scheme); return;     // stock ~= line
                 case "radarChart":
-                    ReadLineChart(el, shape, scheme); return;     // radar ~= line best-effort
+                    ReadRadarChart(el, shape, scheme); return;
                 case "surfaceChart":
                 case "surface3DChart":
                     ReadBarChart(el, shape, scheme); return;      // surface ~= column best-effort
@@ -204,6 +205,175 @@ internal static class PptxChartReader
     {
         shape.ChartType = ChartType.Scatter;
         ReadSeriesFromChart(el, shape, scheme);
+    }
+
+    private static void ReadDoughnutChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    {
+        shape.ChartType = ChartType.Doughnut;
+
+        // c:holeSize val= gives the inner radius as a percentage (default 50).
+        var holeSizeStr = el.Element(C + "holeSize")?.Attribute("val")?.Value;
+        if (holeSizeStr is not null && int.TryParse(holeSizeStr,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var hs))
+            shape.DoughnutHolePercent = Math.Clamp(hs, 0, 90);
+
+        ReadSeriesFromChart(el, shape, scheme);
+    }
+
+    private static void ReadScatterChartDistinct(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    {
+        shape.ChartType = ChartType.Scatter;
+
+        // c:scatterStyle val= → marker/line/lineMarker/smooth/smoothMarker
+        var styleStr = el.Element(C + "scatterStyle")?.Attribute("val")?.Value ?? "lineMarker";
+        shape.ScatterStyle = styleStr switch
+        {
+            "marker"       => ScatterStyle.Marker,
+            "line"         => ScatterStyle.Line,
+            "lineMarker"   => ScatterStyle.LineMarker,
+            "smooth"       => ScatterStyle.Smooth,
+            "smoothMarker" => ScatterStyle.SmoothMarker,
+            _              => ScatterStyle.LineMarker
+        };
+
+        ReadScatterSeriesFromChart(el, shape, scheme);
+    }
+
+    private static void ReadRadarChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    {
+        shape.ChartType = ChartType.Radar;
+
+        var styleStr = el.Element(C + "radarStyle")?.Attribute("val")?.Value ?? "standard";
+        shape.RadarStyle = styleStr switch
+        {
+            "marker" => RadarStyle.Marker,
+            "filled" => RadarStyle.Filled,
+            _        => RadarStyle.Standard
+        };
+
+        ReadSeriesFromChart(el, shape, scheme);
+    }
+
+    private static void ReadBubbleChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    {
+        shape.ChartType = ChartType.Bubble;
+
+        // Bubble charts also have a scatterStyle-like attribute (c:bubble3D is irrelevant for us).
+        // Treat as SmoothMarker by default; exact style rarely stored explicitly.
+        shape.ScatterStyle = ScatterStyle.Marker;
+
+        ReadBubbleSeriesFromChart(el, shape, scheme);
+    }
+
+    // ── Scatter series (x:xVal / c:yVal, no categories axis) ─────────────────
+
+    private static void ReadScatterSeriesFromChart(
+        XElement chartEl, ChartShape shape, PresentationColorScheme scheme)
+    {
+        int seriesIndex = 0;
+        foreach (var serEl in chartEl.Elements(C + "ser"))
+        {
+            var series = new ChartSeries();
+            ReadSeriesNameAndColor(serEl, shape, scheme, seriesIndex, series);
+
+            // X values (c:xVal)
+            var xValEl = serEl.Element(C + "xVal");
+            if (xValEl is not null)
+                ReadValues(xValEl, series.XValues);
+
+            // Y values (c:yVal)
+            var yValEl = serEl.Element(C + "yVal");
+            if (yValEl is not null)
+                ReadValues(yValEl, series.Values);
+
+            // If categories are empty but we have X values, build string labels from them
+            if (shape.Categories.Count == 0 && series.XValues.Count > 0)
+            {
+                foreach (var xv in series.XValues)
+                    shape.Categories.Add(xv.HasValue
+                        ? xv.Value.ToString("G4", System.Globalization.CultureInfo.InvariantCulture)
+                        : string.Empty);
+            }
+
+            shape.Series.Add(series);
+            seriesIndex++;
+        }
+    }
+
+    // ── Bubble series (c:xVal / c:yVal / c:bubbleSize) ───────────────────────
+
+    private static void ReadBubbleSeriesFromChart(
+        XElement chartEl, ChartShape shape, PresentationColorScheme scheme)
+    {
+        int seriesIndex = 0;
+        foreach (var serEl in chartEl.Elements(C + "ser"))
+        {
+            var series = new ChartSeries();
+            ReadSeriesNameAndColor(serEl, shape, scheme, seriesIndex, series);
+
+            // X values (c:xVal)
+            var xValEl = serEl.Element(C + "xVal");
+            if (xValEl is not null)
+                ReadValues(xValEl, series.XValues);
+
+            // Y values (c:yVal)
+            var yValEl = serEl.Element(C + "yVal");
+            if (yValEl is not null)
+                ReadValues(yValEl, series.Values);
+
+            // Bubble sizes (c:bubbleSize)
+            var sizeEl = serEl.Element(C + "bubbleSize");
+            if (sizeEl is not null)
+                ReadValues(sizeEl, series.BubbleSizes);
+
+            shape.Series.Add(series);
+            seriesIndex++;
+        }
+    }
+
+    // ── Shared series header reader ───────────────────────────────────────────
+
+    private static void ReadSeriesNameAndColor(
+        XElement serEl, ChartShape shape, PresentationColorScheme scheme,
+        int seriesIndex, ChartSeries series)
+    {
+        // Series name
+        var txEl = serEl.Element(C + "tx");
+        if (txEl is not null)
+        {
+            var nameV = txEl.Element(C + "strRef")
+                ?.Element(C + "strCache")
+                ?.Elements(C + "pt").FirstOrDefault()
+                ?.Element(C + "v")?.Value;
+            if (nameV is not null)
+                series.Name = nameV;
+            else
+            {
+                var directV = txEl.Element(C + "v")?.Value;
+                if (directV is not null) series.Name = directV;
+            }
+        }
+        if (string.IsNullOrWhiteSpace(series.Name))
+            series.Name = $"Series {seriesIndex + 1}";
+
+        // Series fill color from c:spPr/a:solidFill
+        var spPr = serEl.Element(C + "spPr");
+        if (spPr is not null)
+        {
+            var solidFill = spPr.Element(A + "solidFill");
+            if (solidFill is not null)
+                series.FillColor = PptxColorReader.TryReadColor(solidFill, scheme);
+        }
+
+        // Fall back to theme accent cycle
+        if (series.FillColor is null)
+        {
+            var slot = AccentSlots[seriesIndex % AccentSlots.Length];
+            series.FillColor = new ThemeAwareColor(
+                new SrgbColor(0x4F, 0x81, 0xBD),
+                new SchemeColorRef { Slot = slot, LumMod = 1.0, LumOff = 0.0 });
+        }
     }
 
     // ── Series parsing ────────────────────────────────────────────────────────
