@@ -2319,4 +2319,84 @@ public sealed class SlideCompositorTests
         ((ResolvedFill.Solid)shapeOp.Fill).Color.Should().Be(SrgbColor.FromRgb(0x00FF00),
             "when master.Theme is null, falls back to presentation.Theme");
     }
+
+    // ─── BV1: doughnut chart per-point slice colors ───────────────────────────────────────────
+
+    /// <summary>
+    /// BV1: A doughnut chart must expand seriesColors one-per-POINT (like pie), not one-per-series.
+    /// Before the fix the per-series branch produced seriesColors.Length == 1 (single series)
+    /// so the renderer mis-colored slices.
+    /// </summary>
+    [Fact]
+    public void BV1_DoughnutChart_SeriesColors_OnePerPoint()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var chart = new ChartShape { ChartType = ChartType.Doughnut };
+        chart.Categories.AddRange(new[] { "Slice A", "Slice B", "Slice C" });
+
+        var series = new ChartSeries { Name = "Doughnut" };
+        series.Values.AddRange(new double?[] { 40.0, 35.0, 25.0 });
+        // Give slice 1 an explicit sRGB point color so we can verify it's used.
+        series.PointColors[1] = new ThemeAwareColor(new SrgbColor(0x00, 0x80, 0x00));
+        chart.Series.Add(series);
+
+        var shape = new SlideShape
+        {
+            Id   = 9,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu  = 457200,
+            OffsetYEmu  = 457200,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 3429000,
+            Chart = chart
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var chartOp = ops.OfType<DrawOp.Chart>().Single();
+
+        // SeriesColors must have one entry per data POINT (3), not per series (1).
+        chartOp.SeriesColors.Should().HaveCount(3,
+            "doughnut chart must expand one color per point, not per series (BV1 fix)");
+
+        // Slice 1 had an explicit green point color — verify it was resolved.
+        chartOp.SeriesColors[1].G.Should().Be(0x80,
+            "explicit PointColors[1] (green) must be resolved into SeriesColors[1]");
+    }
+
+    /// <summary>
+    /// BV1 regression: pie chart still gets per-point colors (not regressed by the fix).
+    /// </summary>
+    [Fact]
+    public void BV1_PieChart_SeriesColors_OnePerPoint_Regression()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var chart = new ChartShape { ChartType = ChartType.Pie };
+        chart.Categories.AddRange(new[] { "A", "B" });
+
+        var series = new ChartSeries { Name = "Pie" };
+        series.Values.AddRange(new double?[] { 60.0, 40.0 });
+        chart.Series.Add(series);
+
+        var shape = new SlideShape
+        {
+            Id   = 10,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu  = 0, OffsetYEmu  = 0,
+            ExtentCxEmu = 4572000, ExtentCyEmu = 3429000,
+            Chart = chart
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var chartOp = ops.OfType<DrawOp.Chart>().Single();
+
+        // Still two colors — one per slice (regression guard).
+        chartOp.SeriesColors.Should().HaveCount(2,
+            "pie chart must still expand one color per point (regression guard)");
+    }
 }

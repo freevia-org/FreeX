@@ -1346,7 +1346,9 @@ public sealed class SlideCanvas : FrameworkElement
         var borderPen = new Pen(FreezeBrush(new SolidColorBrush(Colors.White)), 0.8);
         if (borderPen.CanFreeze) borderPen.Freeze();
 
-        // One ring per series (outer ring = last series in OOXML, but we draw from outermost first)
+        // BV3: PowerPoint draws series 0 as the INNERMOST ring (nearest the hole), later series outward.
+        // The old formula rOut - si*(ringW+ringGap) made series 0 the outermost — inverted.
+        // Fix: series 0 starts at rIn, each subsequent series adds one ring band outward.
         int serCount = chart.Series.Count;
         double ringGap = serCount > 1 ? rOut * 0.04 : 0;
         double ringW   = serCount > 1 ? (rOut - rIn - (serCount - 1) * ringGap) / serCount : (rOut - rIn);
@@ -1360,8 +1362,9 @@ public sealed class SlideCanvas : FrameworkElement
             double total = values.Sum();
             if (total <= 0) continue;
 
-            double outerR = rOut - si * (ringW + ringGap);
-            double innerR = outerR - ringW;
+            // si=0 → innermost ring; si=serCount-1 → outermost ring (matches PowerPoint order)
+            double innerR = rIn + si * (ringW + ringGap);
+            double outerR = innerR + ringW;
             if (outerR <= 0 || innerR < 0) innerR = 0;
 
             double startAngle = -Math.PI / 2;

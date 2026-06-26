@@ -138,7 +138,7 @@ internal static class PptxChartWriter
             ? BuildValAxEl(chart.ValueAxis, 2, 1)
             : null;
         var xValAxEl = isScatterLike
-            ? BuildValAxEl(chart.CategoryAxis, 1, 2)   // X axis is also a valAx for scatter/bubble
+            ? BuildValAxEl(chart.CategoryAxis, 1, 2, axPos: "b")   // BV2: scatter/bubble X axis at bottom
             : null;
 
         return new XElement(C + "plotArea",
@@ -383,7 +383,9 @@ internal static class PptxChartWriter
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
 
-    private static XElement BuildValAxEl(ChartAxis axis, int axId, int crossAxId)
+    // BV2: axPos parameter — scatter/bubble X value axis must use "b" (bottom), Y stays "l" (left).
+    // Category-axis charts pass the default "l" from their single valAx call site.
+    private static XElement BuildValAxEl(ChartAxis axis, int axId, int crossAxId, string axPos = "l")
     {
         var scalingEl = new XElement(C + "scaling",
             new XElement(C + "orientation", new XAttribute("val", "minMax")));
@@ -399,7 +401,7 @@ internal static class PptxChartWriter
             scalingEl,
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
-            new XElement(C + "axPos", new XAttribute("val", "l")),
+            new XElement(C + "axPos", new XAttribute("val", axPos)),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,

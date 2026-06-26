@@ -1087,8 +1087,10 @@ public sealed class DocumentView : Control
         {
             if (_doc.Blocks[i] is not Paragraph p)
             {
-                // Non-list block: reset all counters.
-                Array.Clear(levelCounters, 0, MaxListDepth);
+                // BT1 fix: Table and other non-Paragraph blocks (read-only, etc.) do NOT reset
+                // the numbered-list counters — the render loop passes them with levelCounters
+                // untouched (see LayoutTablePaged / LayoutReadOnlyBlockPaged branches).
+                // Word numbering continues across an intervening table; the helper must match.
                 continue;
             }
             var kind = p.Formatting.ListKind;

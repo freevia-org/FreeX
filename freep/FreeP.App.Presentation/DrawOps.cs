@@ -490,9 +490,10 @@ public abstract class DrawOp
         public FreeP.Core.Model.ChartShape ChartShape { get; init; } = new();
 
         /// <summary>
-        /// Resolved series fill colors, one per series (index matches ChartShape.Series).
-        /// For pie charts, per-point overrides are in ChartShape.Series[i].PointColors
-        /// but the base color for each slice is SeriesColors[0][pointIndex % 6].
+        /// Resolved series fill colors. For bar/line/area charts: one color per series
+        /// (index matches ChartShape.Series). For pie and doughnut charts (BV1): one color
+        /// per data POINT in the first series — SeriesColors[pointIndex] is the slice color,
+        /// already resolved from PointColors[pointIndex] or the default accent palette.
         /// </summary>
         public IReadOnlyList<SrgbColor> SeriesColors { get; init; } = Array.Empty<SrgbColor>();
     }

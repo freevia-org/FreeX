@@ -514,6 +514,40 @@ public sealed class ChartTests : IDisposable
         r50.Should().BeApproximately(Math.Sqrt(0.5) * maxRadius, 0.001);
     }
 
+    /// <summary>
+    /// BV3: PowerPoint draws series 0 as the INNERMOST ring (nearest the hole), later series
+    /// outward.  The old formula rOut - si*(ringW+ringGap) produced si=0 as outermost — reversed.
+    /// The corrected formula is: innerR = rIn + si*(ringW+ringGap), outerR = innerR + ringW.
+    /// This test verifies the math: si=0 must produce the smallest outerR and the largest si
+    /// must produce the largest outerR.
+    /// </summary>
+    [Fact]
+    public void BV3_Doughnut_MultiSeries_RingOrder_Series0IsInnermost()
+    {
+        // Reproduce the ring-radius arithmetic from RenderDoughnutChart.
+        int serCount = 3;
+        double rOut  = 100.0;
+        double rIn   = 40.0;   // 40% hole
+        double ringGap = rOut * 0.04;
+        double ringW   = (rOut - rIn - (serCount - 1) * ringGap) / serCount;
+
+        // Corrected formula: si=0 → innermost, si=serCount-1 → outermost
+        double[] outerRadii = new double[serCount];
+        for (int si = 0; si < serCount; si++)
+        {
+            double innerR = rIn + si * (ringW + ringGap);
+            outerRadii[si] = innerR + ringW;
+        }
+
+        // series 0 must be smallest (innermost), series 2 must be largest (outermost)
+        outerRadii[0].Should().BeLessThan(outerRadii[1],
+            "BV3: series 0 must be the innermost ring (smaller outerR than series 1)");
+        outerRadii[1].Should().BeLessThan(outerRadii[2],
+            "BV3: series 1 must be inside series 2");
+        outerRadii[serCount - 1].Should().BeApproximately(rOut, 1e-9,
+            "the outermost ring of the last series must reach rOut");
+    }
+
     // ── Helpers for new chart types ──────────────────────────────────────────
 
     private static ChartShape BuildDoughnutChart(int holeSize = 50)

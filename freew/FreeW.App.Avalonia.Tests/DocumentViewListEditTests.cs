@@ -451,6 +451,57 @@ public sealed class DocumentViewListEditTests
         markerSecond.Should().Be("2.", "numbered list continues as 2. after interleaved sub-bullet");
     }
 
+    // ── 16. BT1: numbered list continues across an intervening Table block ───────────────────────
+
+    /// <summary>
+    /// BT1 regression: numbered para (level 0) → Table block → numbered para (level 0).
+    /// The second numbered paragraph must be "2." (counters preserved across the table),
+    /// matching both Word behaviour and the render loop which leaves levelCounters untouched
+    /// when processing a Table block.
+    /// </summary>
+    [Fact]
+    public async Task BT1_numbered_list_continues_across_intervening_table()
+    {
+        string? markerFirst = null, markerSecond = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            // Block 0: first numbered item → "1."
+            doc.Blocks.Add(new Paragraph("One")
+            {
+                Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 }
+            });
+
+            // Block 1: a Table — must NOT reset numbered-list counters (Word behaviour).
+            var tbl = new Table();
+            var row = new TableRow();
+            row.Cells.Add(new TableCell("Cell"));
+            tbl.Rows.Add(row);
+            tbl.ColumnWidthsPt.Add(120.0);
+            doc.Blocks.Add(tbl);
+
+            // Block 2: second numbered item → "2." (continues from before the table).
+            doc.Blocks.Add(new Paragraph("Two")
+            {
+                Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 }
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            markerFirst  = view.GetListMarkerForBlockPublic(0);
+            markerSecond = view.GetListMarkerForBlockPublic(2);
+        });
+
+        if (!ran) return;
+        markerFirst.Should().Be("1.", "first numbered item is 1.");
+        markerSecond.Should().Be("2.", "numbered list continues as 2. after an intervening Table block");
+    }
+
     // ── 15. Flat single-level list still numbers 1,2,3 (no regression) ──────────────────────────
 
     /// <summary>

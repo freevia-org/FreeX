@@ -641,4 +641,76 @@ public sealed class ChartDataCommandTests
         restored.PointColors.Should().ContainKey(1, "point color at index 1 must survive undo");
         restored.PointColors[1].Resolved.G.Should().Be(0x80, "point color is green");
     }
+
+    // ─── BV2: scatter/bubble X value axis axPos ───────────────────────────────
+
+    /// <summary>
+    /// BV2: scatter and bubble charts emit two c:valAx elements (X axis axId=1, Y axis axId=2).
+    /// The X axis must have axPos="b" (bottom), the Y axis axPos="l" (left).
+    /// Both at "l" → malformed layout that can trigger PowerPoint's repair prompt.
+    /// </summary>
+    [Theory]
+    [InlineData(ChartType.Scatter)]
+    [InlineData(ChartType.Bubble)]
+    public void BV2_ScatterBubble_XValAx_HasAxPosBottom_YValAx_HasAxPosLeft(ChartType chartType)
+    {
+        var p     = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { ChartType = chartType };
+        if (chartType == ChartType.Scatter)
+        {
+            var s = new ChartSeries { Name = "Series1" };
+            s.XValues.AddRange(new double?[] { 1, 2, 3 });
+            s.Values.AddRange(new double?[]  { 4, 5, 6 });
+            chart.Series.Add(s);
+        }
+        else // Bubble
+        {
+            var s = new ChartSeries { Name = "Bubbles" };
+            s.XValues.AddRange(new double?[]     { 1, 2, 3 });
+            s.Values.AddRange(new double?[]      { 2, 4, 1 });
+            s.BubbleSizes.AddRange(new double?[] { 5, 10, 3 });
+            chart.Series.Add(s);
+        }
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "C", Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 5000000, ExtentCyEmu = 3000000,
+            Chart = chart
+        });
+        p.Slides.Add(slide);
+
+        // Write to in-memory stream and inspect the chart XML directly.
+        using var ms = new System.IO.MemoryStream();
+        PptxPackageWriter.Write(p, ms);
+        ms.Position = 0;
+        using var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read);
+        var chartEntry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/charts/chart", StringComparison.OrdinalIgnoreCase) &&
+            e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+        chartEntry.Should().NotBeNull("chart XML must exist in the PPTX");
+        using var entryStream = chartEntry!.Open();
+        var doc = System.Xml.Linq.XDocument.Load(entryStream);
+        System.Xml.Linq.XNamespace c = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+        // Collect all c:valAx elements and their axId + axPos values.
+        var valAxEls = doc.Descendants(c + "valAx").ToList();
+        valAxEls.Should().HaveCount(2, $"{chartType} must emit exactly two c:valAx elements");
+
+        // axId=1 → X axis → axPos must be "b"
+        var xAx = valAxEls.FirstOrDefault(el =>
+            el.Element(c + "axId")?.Attribute("val")?.Value == "1");
+        xAx.Should().NotBeNull("X value axis (axId=1) must be present");
+        xAx!.Element(c + "axPos")?.Attribute("val")?.Value
+            .Should().Be("b",
+            $"BV2: {chartType} X value axis (axId=1) must have axPos=\"b\" (bottom), not \"l\"");
+
+        // axId=2 → Y axis → axPos must be "l"
+        var yAx = valAxEls.FirstOrDefault(el =>
+            el.Element(c + "axId")?.Attribute("val")?.Value == "2");
+        yAx.Should().NotBeNull("Y value axis (axId=2) must be present");
+        yAx!.Element(c + "axPos")?.Attribute("val")?.Value
+            .Should().Be("l",
+            $"BV2: {chartType} Y value axis (axId=2) must have axPos=\"l\" (left)");
+    }
 }

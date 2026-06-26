@@ -2217,10 +2217,13 @@ public static class PptxPackageReader
                 _ => (TextAlign?)null
             };
 
-            if (int.TryParse(pPr.Attribute("lvl")?.Value, out var lvl)) para.Level = lvl;
+            if (int.TryParse(pPr.Attribute("lvl")?.Value, out var lvl)) para.Level = Math.Clamp(lvl, 0, 8); // BU3: clamp to valid array range [0,8]
 
             if (pPr.Element(A + "buNone") is not null)
+            {
                 para.BulletKind = BulletKind.None;
+                para.BulletSuppressed = true;   // BU1: explicit <a:buNone/> — suppress inheritance
+            }
             else if (pPr.Element(A + "buChar") is { } buChar)
             {
                 para.BulletKind = BulletKind.Char;
