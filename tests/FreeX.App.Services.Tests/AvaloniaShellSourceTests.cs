@@ -2323,8 +2323,9 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.FormatCells\", () => ShowFormatCellsDialogAsync(),");
         parityCaptureSource.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Fill\", \"Border\", \"Protection\"]),");
         parityCaptureSource.Should().Contain("(\"dialog.FindReplace\", () => ShowFindDialogAsync(),");
-        // PageSetup stays a single default surface (tab counts differ across shells), not per-tab.
-        parityCaptureSource.Should().Contain("(\"dialog.PageSetup\", () => ShowPageSetupDialogAsync()),");
+        // PageSetup is registered per-tab (both shells have Page/Margins/Header-Footer/Sheet in order).
+        parityCaptureSource.Should().Contain("(\"dialog.PageSetup\", () => ShowPageSetupDialogAsync(),");
+        parityCaptureSource.Should().Contain("[\"Page\", \"Margins\", \"HeaderFooter\", \"Sheet\"]),");
         parityCaptureSource.Should().Contain("(\"dialog.PivotTableOptions\", () => ShowPivotTableOptionsParityDialogAsync(),");
         parityCaptureSource.Should().Contain("(\"dialog.PivotFieldFilter\", () => ShowPivotFieldFilterParityDialogAsync(),");
         parityCaptureSource.Should().Contain("(\"dialog.PivotValueFieldSettings\", () => ShowPivotValueFieldSettingsParityDialogAsync(),");
@@ -2538,6 +2539,7 @@ public sealed class AvaloniaShellSourceTests
         var tabNamesById = new (string DialogId, string[] TabNames)[]
         {
             ("dialog.FormatCells", ["Number", "Alignment", "Font", "Fill", "Border", "Protection"]),
+            ("dialog.PageSetup", ["Page", "Margins", "HeaderFooter", "Sheet"]),
             ("dialog.FindReplace", ["Find", "Replace"]),
             ("dialog.PivotTableOptions", ["LayoutAndFormat", "TotalsAndFilters", "Display", "Printing", "Data", "AltText"]),
             ("dialog.PivotFieldFilter", ["SelectItems", "LabelFilters", "ValueFilters"]),

@@ -181,10 +181,6 @@ public sealed partial class MainWindow
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsParityDialogAsync()),
-        // PageSetup is captured as a single default surface (not per-tab): the WPF dialog has 3 tabs
-        // (Page/Margins/Sheet) while the Avalonia dialog has 4 (adds Header/Footer), so an index-based
-        // per-tab pairing would mismatch. See ParityTabDialogOpeners for the per-tab dialogs.
-        ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
     ];
 
     /// <summary>
@@ -198,6 +194,9 @@ public sealed partial class MainWindow
     [
         ("dialog.FormatCells", () => ShowFormatCellsDialogAsync(),
             ["Number", "Alignment", "Font", "Fill", "Border", "Protection"]),
+        // Page Setup: both shells have the same 4 tabs in the same order (Page/Margins/Header-Footer/Sheet).
+        ("dialog.PageSetup", () => ShowPageSetupDialogAsync(),
+            ["Page", "Margins", "HeaderFooter", "Sheet"]),
         ("dialog.FindReplace", () => ShowFindDialogAsync(),
             ["Find", "Replace"]),
         ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync(),

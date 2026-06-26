@@ -631,11 +631,10 @@ internal static class ParityCapture
             return new ManageConditionalFormatsDialog(sheet, range);
         });
 
-        // PageSetup is a single default surface (not per-tab): the WPF dialog has 3 tabs
-        // (Page/Margins/Sheet) while Avalonia has 4 (adds Header/Footer), so per-tab index pairing
-        // would mismatch. Captured whole instead.
-        CaptureDialog(results, "dialog.PageSetup", outDir, () =>
-            new PageSetupDialog(sheet));
+        // Page Setup: both shells have the same 4 tabs in the same order (Page/Margins/Header-Footer/Sheet).
+        CaptureDialogTabs(results, "dialog.PageSetup", outDir,
+            () => new PageSetupDialog(sheet),
+            ["Page", "Margins", "HeaderFooter", "Sheet"]);
 
         CaptureDialogTabs(results, "dialog.Options", outDir,
             () => new OptionsDialog(FreeXOptions.Load()),
