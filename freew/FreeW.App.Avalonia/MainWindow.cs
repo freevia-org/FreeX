@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Free.Shared.AppServices;
+using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
@@ -38,6 +39,8 @@ public sealed class MainWindow : Window
     private readonly IReadOnlyList<IDocumentFileAdapter> _adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
     private readonly DocumentView _editor = new();
     private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    // AV-MAIL: the Mailings engine (recipients / merge fields / preview / finish-merge) shared with the ribbon.
+    private MailMergeEngine? _mailMerge;
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
@@ -434,9 +437,20 @@ public sealed class MainWindow : Window
             },
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
             NewWindow:       OpenNewWindow,
-            ToggleSplit:     ToggleSplit);
+            ToggleSplit:     ToggleSplit,
+            // AV-MAIL: surface mail-merge info messages in the status bar.
+            ShowMailMergeInfo: msg => _status.Text = msg);
 
-        var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
+        // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
+        // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
+        // ribbon commands share. The remaining Mailings commands (address-block / greeting / preview /
+        // next / prev / finish) are wired directly by the registry and need no shell glue.
+        var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
+        _mailMerge = mailMerge;
+        registry.Register(new RibbonCommandId("freew.select-recipients"),
+            new RelayCommand(() => _ = SelectRecipientsAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-field"),
+            new RelayCommand(() => _ = InsertMergeFieldAsync()));
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(
@@ -455,6 +469,37 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = ribbon,
         };
+    }
+
+    // AV-MAIL: Mailings > Select Recipients. Prompt for a CSV recipient list (seeded with the document's
+    // existing merge-field names as the header hint), then load it into the shared merge session.
+    private async Task SelectRecipientsAsync()
+    {
+        if (_mailMerge is null)
+            return;
+        var fields = FreeW.Core.Model.MailMerge.FieldNames(_editor.Document);
+        var seed = fields.Count > 0 ? string.Join(",", fields) : string.Empty;
+        var csv = await MailMergeDialogs.AskRecipientCsvAsync(this, seed);
+        if (string.IsNullOrWhiteSpace(csv))
+            return;
+        var data = _mailMerge.LoadRecipientsCsv(csv);
+        _status.Text = data.Count > 0
+            ? $"Loaded {data.Count} recipient(s): {string.Join(", ", data.Header)}"
+            : "Recipient list is empty.";
+        _editor.Focus();
+    }
+
+    // AV-MAIL: Mailings > Insert Merge Field. Pick / type a field name (seeded with the loaded recipient
+    // list's columns), then insert the «Field» placeholder at the caret through the undoable edit path.
+    private async Task InsertMergeFieldAsync()
+    {
+        if (_mailMerge is null)
+            return;
+        var name = await MailMergeDialogs.AskMergeFieldNameAsync(this, _mailMerge.AvailableFieldNames);
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+        _mailMerge.InsertMergeFieldNamed(name);
+        _editor.Focus();
     }
 
     // OS clipboard via Avalonia's data-transfer API (same pattern as the FreeX shell):
