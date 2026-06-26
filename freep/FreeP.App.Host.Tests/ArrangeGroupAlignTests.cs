@@ -1,0 +1,640 @@
+using System.IO;
+using FreeP.App.Compositor;
+using Free.Shared.Drawing;
+
+namespace FreeP.App.Host.Tests;
+
+/// <summary>
+/// Wave 12A unit tests: Group/Ungroup, Align/Distribute, BringToFront/SendToBack.
+///
+/// All tests run pure model logic (no WPF required — no [StaFact] needed).
+/// EditingSession is constructed directly with a real Presentation + bus.
+/// </summary>
+public sealed class ArrangeGroupAlignTests
+{
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private static (Presentation pres, EditingSession session) CreateSession(int slideCount = 1)
+    {
+        var pres = Presentation.CreateEmpty();
+        // CreateEmpty gives 1 slide; clear its placeholder shapes so tests start with a clean canvas.
+        foreach (var s in pres.Slides)
+            s.Shapes.Clear();
+        // Add more slides if needed.
+        while (pres.Slides.Count < slideCount)
+        {
+            var s = new Slide();
+            pres.Slides.Add(s);
+        }
+        var bus     = new PresentationCommandBus(pres);
+        var session = new EditingSession(pres, bus);
+        return (pres, session);
+    }
+
+    private static SlideShape MakeRect(uint id, long x, long y, long cx, long cy) =>
+        new SlideShape
+        {
+            Id          = id,
+            Name        = $"Shape{id}",
+            Kind        = SlideShapeKind.AutoShape,
+            OffsetXEmu  = x,
+            OffsetYEmu  = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+        };
+
+    // ── Group ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GroupSelectedShapes_TwoShapes_CreatesGroupWithTwoChildren()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 100, 200, 300, 400));
+        slide.Shapes.Add(MakeRect(11, 500, 600, 300, 400));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+
+        session.GroupSelectedShapes();
+
+        // Slide should have exactly 1 shape (the group).
+        slide.Shapes.Should().HaveCount(1);
+        var group = slide.Shapes[0];
+        group.Kind.Should().Be(SlideShapeKind.Group);
+        group.Children.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void GroupSelectedShapes_UnionBoundingBox_IsCorrect()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // Shape A: x=100, y=200, cx=300, cy=400  → right=400, bottom=600
+        // Shape B: x=500, y=100, cx=200, cy=500  → right=700, bottom=600
+        // Union:   x=100, y=100, cx=600, cy=500
+        slide.Shapes.Add(MakeRect(10, 100, 200, 300, 400));
+        slide.Shapes.Add(MakeRect(11, 500, 100, 200, 500));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+
+        var group = slide.Shapes[0];
+        group.OffsetXEmu.Should().Be(100);
+        group.OffsetYEmu.Should().Be(100);
+        group.ExtentCxEmu.Should().Be(600);
+        group.ExtentCyEmu.Should().Be(500);
+    }
+
+    [Fact]
+    public void GroupSelectedShapes_ChildrenRetainAbsoluteOffsets()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 100, 200, 300, 400));
+        slide.Shapes.Add(MakeRect(11, 500, 100, 200, 500));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+
+        var group = slide.Shapes[0];
+        // Children keep their original absolute offsets.
+        var child10 = group.Children.First(c => c.Id == 10);
+        var child11 = group.Children.First(c => c.Id == 11);
+
+        child10.OffsetXEmu.Should().Be(100);
+        child10.OffsetYEmu.Should().Be(200);
+        child11.OffsetXEmu.Should().Be(500);
+        child11.OffsetYEmu.Should().Be(100);
+    }
+
+    [Fact]
+    public void GroupSelectedShapes_SelectsGroup()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 200, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+
+        session.SelectedShapeIds.Should().HaveCount(1);
+        var selectedId = session.SelectedShapeIds[0];
+        slide.Shapes.Single(s => s.Id == selectedId).Kind.Should().Be(SlideShapeKind.Group);
+    }
+
+    [Fact]
+    public void GroupSelectedShapes_LessThanTwo_DoesNothing()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.GroupSelectedShapes();
+
+        slide.Shapes.Should().HaveCount(1);
+        slide.Shapes[0].Kind.Should().Be(SlideShapeKind.AutoShape);
+    }
+
+    [Fact]
+    public void GroupSelectedShapes_IsUndoable()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 200, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+
+        slide.Shapes.Should().HaveCount(1, "group was created");
+
+        session.Undo();
+
+        slide.Shapes.Should().HaveCount(2, "undo restored originals");
+        slide.Shapes.Any(s => s.Kind == SlideShapeKind.Group).Should().BeFalse();
+    }
+
+    // ── Ungroup ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void UngroupSelected_Group_ReleasesChildrenToSlide()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 200, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+
+        // Now ungroup.
+        session.UngroupSelected();
+
+        slide.Shapes.Should().HaveCount(2);
+        slide.Shapes.Any(s => s.Kind == SlideShapeKind.Group).Should().BeFalse();
+    }
+
+    [Fact]
+    public void UngroupSelected_RestoresAbsoluteOffsets()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 100, 200, 300, 400));
+        slide.Shapes.Add(MakeRect(11, 500, 100, 200, 500));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+
+        session.UngroupSelected();
+
+        var shape10 = slide.Shapes.First(s => s.Id == 10);
+        var shape11 = slide.Shapes.First(s => s.Id == 11);
+
+        shape10.OffsetXEmu.Should().Be(100);
+        shape10.OffsetYEmu.Should().Be(200);
+        shape11.OffsetXEmu.Should().Be(500);
+        shape11.OffsetYEmu.Should().Be(100);
+    }
+
+    [Fact]
+    public void UngroupSelected_IsUndoable()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 200, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.GroupSelectedShapes();
+        session.UngroupSelected();
+
+        slide.Shapes.Should().HaveCount(2, "ungrouped");
+
+        session.Undo();
+
+        slide.Shapes.Should().HaveCount(1, "group re-formed by undo");
+        slide.Shapes[0].Kind.Should().Be(SlideShapeKind.Group);
+    }
+
+    // ── Group round-trip via PPTX writer/reader ──────────────────────────────────
+
+    [Fact]
+    public void GroupShape_PptxRoundTrip_ChildrenPreserved()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Clear();
+
+        // Build group manually.
+        var group = new SlideShape
+        {
+            Id          = 1,
+            Name        = "Group 1",
+            Kind        = SlideShapeKind.Group,
+            OffsetXEmu  = 100,
+            OffsetYEmu  = 100,
+            ExtentCxEmu = 700,
+            ExtentCyEmu = 500,
+        };
+        group.Children.Add(MakeRect(2, 100, 100, 300, 400));
+        group.Children.Add(MakeRect(3, 500, 100, 200, 500));
+        slide.Shapes.Add(group);
+
+        // Round-trip through PPTX bytes.
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            PptxPackageWriter.Write(pres, ms);
+            bytes = ms.ToArray();
+        }
+
+        Presentation loaded;
+        using (var ms = new MemoryStream(bytes))
+            loaded = PptxPackageReader.Read(ms);
+
+        var loadedSlide = loaded.Slides[0];
+        loadedSlide.Shapes.Should().HaveCount(1);
+        var loadedGroup = loadedSlide.Shapes[0];
+        loadedGroup.Kind.Should().Be(SlideShapeKind.Group);
+        loadedGroup.Children.Should().HaveCount(2);
+        loadedGroup.OffsetXEmu.Should().Be(100);
+        loadedGroup.OffsetYEmu.Should().Be(100);
+        loadedGroup.ExtentCxEmu.Should().Be(700);
+        loadedGroup.ExtentCyEmu.Should().Be(500);
+    }
+
+    // ── Align ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void AlignLeft_MovesAllShapesToSameLeftEdge()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // Shape A at x=100, Shape B at x=300; bounding box minX=100
+        slide.Shapes.Add(MakeRect(10, 100, 0, 200, 100));
+        slide.Shapes.Add(MakeRect(11, 300, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignLeft();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetXEmu.Should().Be(100);
+        slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be(100);
+    }
+
+    [Fact]
+    public void AlignRight_MovesAllShapesToSameRightEdge()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // A: x=100, cx=200, right=300; B: x=400, cx=100, right=500; bboxRight=500
+        slide.Shapes.Add(MakeRect(10, 100, 0, 200, 100));
+        slide.Shapes.Add(MakeRect(11, 400, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignRight();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetXEmu.Should().Be(300); // 500 - 200
+        slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be(400); // 500 - 100, unchanged
+    }
+
+    [Fact]
+    public void AlignTop_MovesAllShapesToSameTopEdge()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 100, 100, 200));
+        slide.Shapes.Add(MakeRect(11, 0, 300, 100, 200));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignTop();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetYEmu.Should().Be(100);
+        slide.Shapes.First(s => s.Id == 11).OffsetYEmu.Should().Be(100);
+    }
+
+    [Fact]
+    public void AlignBottom_MovesAllShapesToSameBottomEdge()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // A: y=100, cy=200, bottom=300; B: y=0, cy=400, bottom=400; bboxBottom=400
+        slide.Shapes.Add(MakeRect(10, 0, 100, 100, 200));
+        slide.Shapes.Add(MakeRect(11, 0, 0,   100, 400));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignBottom();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetYEmu.Should().Be(200); // 400 - 200
+        slide.Shapes.First(s => s.Id == 11).OffsetYEmu.Should().Be(0);   // 400 - 400
+    }
+
+    [Fact]
+    public void AlignCenterH_CentersShapesHorizontally()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // bbox: x=0 to x=600 (cx=600), center at x=300
+        // A: cx=200 → should be at x=200 (so center is at 300)
+        // B: cx=400 → should be at x=100 (so center is at 300)
+        slide.Shapes.Add(MakeRect(10, 0,   0, 200, 100));  // right=200
+        slide.Shapes.Add(MakeRect(11, 200, 0, 400, 100));  // right=600
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignCenterH();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetXEmu.Should().Be(200); // (0 + 600-200)/2 = 200
+        slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be(100); // (0 + 600-400)/2 = 100
+    }
+
+    [Fact]
+    public void AlignMiddle_CentersShapesVertically()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // bbox: y=0 to y=600 (cy=600), center at y=300
+        // A: cy=200 → y=200; B: cy=400 → y=100
+        slide.Shapes.Add(MakeRect(10, 0, 0,   200, 200));
+        slide.Shapes.Add(MakeRect(11, 0, 100, 200, 400));  // bottom=500... wait let me recalculate
+        // A: y=0, cy=200, bottom=200; B: y=100, cy=400, bottom=500 → bboxMinY=0, bboxMaxY=500, bboxCy=500
+        // center of bbox = 250; A target y = 250 - 100 = 150; B target y = 250 - 200 = 50
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignMiddle();
+
+        slide.Shapes.First(s => s.Id == 10).OffsetYEmu.Should().Be(150); // 0 + (500-200)/2 = 150
+        slide.Shapes.First(s => s.Id == 11).OffsetYEmu.Should().Be(50);  // 0 + (500-400)/2 = 50
+    }
+
+    [Fact]
+    public void AlignLeft_IsUndoableInOneStep()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 100, 0, 200, 100));
+        slide.Shapes.Add(MakeRect(11, 300, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.AlignLeft();
+
+        // Both moved to x=100.
+        slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be(100);
+
+        session.Undo();
+
+        // Both restored.
+        slide.Shapes.First(s => s.Id == 10).OffsetXEmu.Should().Be(100, "original position restored");
+        slide.Shapes.First(s => s.Id == 11).OffsetXEmu.Should().Be(300, "original position restored");
+    }
+
+    // ── Distribute ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DistributeHorizontally_ThreeShapes_EvensSpacing()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // A: x=0,   cx=100 → right=100
+        // B: x=300, cx=100 → right=400
+        // C: x=600, cx=100 → right=700
+        // span = 0..700 = 700; totalWidth = 300; gaps = 2; gapTotal=400; gapPerSlot=200
+        // after distribute: A=0, B=0+100+200=300 (unchanged), C=300+100+200=600 (unchanged)
+        // Actually all three end up evenly spread: spacing between each pair = 200
+        slide.Shapes.Add(MakeRect(10, 0,   0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 300, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 600, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.Select(12, addToSelection: true);
+        session.DistributeHorizontally();
+
+        var s10 = slide.Shapes.First(s => s.Id == 10);
+        var s11 = slide.Shapes.First(s => s.Id == 11);
+        var s12 = slide.Shapes.First(s => s.Id == 12);
+
+        s10.OffsetXEmu.Should().Be(0);
+        s11.OffsetXEmu.Should().Be(300);
+        s12.OffsetXEmu.Should().Be(600);
+    }
+
+    [Fact]
+    public void DistributeHorizontally_ThreeUnevenShapes_EvensGaps()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        // A: x=0,  cx=100 → right=100
+        // B: x=50, cx=100 → right=150  (overlapping initially)
+        // C: x=900, cx=100 → right=1000
+        // span=0..1000=1000; totalWidth=300; gapTotal=700; gaps=2; gapPerSlot=350
+        // A stays at 0; B=0+100+350=450; C=450+100+350=900 (unchanged)
+        slide.Shapes.Add(MakeRect(10, 0,   0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 50,  0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 900, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.Select(12, addToSelection: true);
+        session.DistributeHorizontally();
+
+        var s10 = slide.Shapes.First(s => s.Id == 10);
+        var s11 = slide.Shapes.First(s => s.Id == 11);
+        var s12 = slide.Shapes.First(s => s.Id == 12);
+
+        s10.OffsetXEmu.Should().Be(0);
+        s11.OffsetXEmu.Should().Be(450);
+        s12.OffsetXEmu.Should().Be(900);
+    }
+
+    [Fact]
+    public void DistributeVertically_ThreeShapes_EvensSpacing()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0,   100, 100));
+        slide.Shapes.Add(MakeRect(11, 0, 150, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 0, 400, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.Select(12, addToSelection: true);
+        session.DistributeVertically();
+
+        // span=0..500=500; totalHeight=300; gapTotal=200; gaps=2; gapPerSlot=100
+        // A stays at 0; B=0+100+100=200; C=200+100+100=400
+        // But current B=150 → becomes 200; C=400 → stays 400
+        var s10 = slide.Shapes.First(s => s.Id == 10);
+        var s11 = slide.Shapes.First(s => s.Id == 11);
+        var s12 = slide.Shapes.First(s => s.Id == 12);
+
+        s10.OffsetYEmu.Should().Be(0);
+        s11.OffsetYEmu.Should().Be(200);
+        s12.OffsetYEmu.Should().Be(400);
+    }
+
+    [Fact]
+    public void DistributeHorizontally_IsUndoableInOneStep()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0,  0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 50, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 900, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(11, addToSelection: true);
+        session.Select(12, addToSelection: true);
+        session.DistributeHorizontally();
+
+        var s11 = slide.Shapes.First(s => s.Id == 11);
+        s11.OffsetXEmu.Should().NotBe(50, "distribute moved shape 11");
+
+        session.Undo();
+
+        s11.OffsetXEmu.Should().Be(50, "undo restored original position");
+    }
+
+    // ── Z-order: BringToFront / SendToBack ────────────────────────────────────────
+
+    [Fact]
+    public void BringToFront_MovesShapeToTopOfZOrder()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 0, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10); // at index 0 (back)
+        session.BringToFront();
+
+        slide.Shapes.Last().Id.Should().Be(10, "shape 10 should now be at the front (last in list)");
+    }
+
+    [Fact]
+    public void SendToBack_MovesShapeToBottomOfZOrder()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 0, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(12); // at index 2 (front)
+        session.SendToBack();
+
+        slide.Shapes.First().Id.Should().Be(12, "shape 12 should now be at the back (index 0)");
+    }
+
+    [Fact]
+    public void BringToFront_IsUndoable()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.BringToFront();
+
+        slide.Shapes.Last().Id.Should().Be(10);
+
+        session.Undo();
+
+        slide.Shapes[0].Id.Should().Be(10, "10 restored to index 0");
+        slide.Shapes[1].Id.Should().Be(11);
+    }
+
+    [Fact]
+    public void SendToBack_IsUndoable()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 0, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(12); // front → send to back
+        session.SendToBack();
+
+        slide.Shapes[0].Id.Should().Be(12);
+
+        session.Undo();
+
+        slide.Shapes[2].Id.Should().Be(12, "12 restored to index 2");
+    }
+
+    // ── BringForward / SendBackward (existing, sanity check) ─────────────────────
+
+    [Fact]
+    public void BringForward_IncrementsZIndex()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 0, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.BringForward(); // 10 moves from 0 to 1
+
+        slide.Shapes[1].Id.Should().Be(10);
+    }
+
+    [Fact]
+    public void SendBackward_DecrementsZIndex()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 0, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(12);
+        session.SendBackward(); // 12 moves from 2 to 1
+
+        slide.Shapes[1].Id.Should().Be(12);
+    }
+}
