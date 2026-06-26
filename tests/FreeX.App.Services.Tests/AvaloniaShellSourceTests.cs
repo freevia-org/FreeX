@@ -2190,6 +2190,99 @@ public sealed class AvaloniaShellSourceTests
         keyboardRouteSource.Should().NotContain("DataTransferManager");
     }
 
+    /// <summary>
+    /// Source-contract test for three DV input-message tooltip parity bugs (BM1/BM2/BM3):
+    ///
+    /// BM1 — The input-message tooltip must render for ANY DV type (Decimal, WholeNumber, etc.),
+    ///   not only for List rules.  In the fixed code, AddDvInputMessageOverlay is called BEFORE
+    ///   DataValidationDropdownPlanner.TryPlan (which only succeeds for List+ShowDropdown), so the
+    ///   tooltip is produced regardless of DV type.
+    ///
+    /// BM2 — The tooltip must remain visible while the user is editing (FormulaEditAddress is set),
+    ///   matching WPF's RefreshDvInputMessage (no edit guard) and Excel.  In the fixed code, the
+    ///   FormulaEditAddress guard comes AFTER AddDvInputMessageOverlay, so it gates only the arrow
+    ///   button, not the tooltip.
+    ///
+    /// BM3 — The tooltip clamp must use the visible scroll-viewport dimensions, not the full grid
+    ///   canvas extent, so the tooltip flips correctly near the viewport edge (matching WPF's
+    ///   CommentOverlay.ActualWidth/Height clamp).  The fixed code reads _sheetScrollViewer.Bounds.
+    /// </summary>
+    [Fact]
+    public void MainWindow_DvInputMessageOverlay_IsTypeAgnosticAndVisibleDuringEditAndClampsToViewport()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        // ── Shared planner wiring ──────────────────────────────────────────
+        // GetInputMessagePrompt is DV-type-agnostic (delegates to DataValidationService.GetInputPrompt
+        // which only checks ShowInputMessage), so the tooltip works for any DV rule.
+        source.Should().Contain("private void AddDvInputMessageOverlay(");
+        source.Should().Contain("DataValidationAffordancePlanner.GetInputMessagePrompt(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(border, \"WorksheetDvInputMessagePopup\");");
+        source.Should().Contain("AutomationProperties.SetName(border, \"Data validation input message\");");
+
+        // ── BM1 + BM2: order within AddDataValidationDropdownOverlay ──────
+        // The contract is expressed as a relative ordering of key tokens inside the method body:
+        //   1. AddDvInputMessageOverlay call
+        //   2. FormulaEditAddress guard   (gates only the arrow button, not the tooltip)
+        //   3. DataValidationDropdownPlanner.TryPlan  (gates only the arrow button)
+        var overlayMethodStart = normalizedSource.IndexOf(
+            "\n    private void AddDataValidationDropdownOverlay(", StringComparison.Ordinal);
+        overlayMethodStart.Should().BeGreaterThanOrEqualTo(0,
+            "AddDataValidationDropdownOverlay must exist in MainWindow.cs");
+
+        // Find the boundary of the method body (the next private/protected/public method).
+        var overlayMethodEnd = normalizedSource.IndexOf(
+            "\n    private void AddDvInputMessageOverlay(", overlayMethodStart + 1, StringComparison.Ordinal);
+        overlayMethodEnd.Should().BeGreaterThan(overlayMethodStart,
+            "AddDvInputMessageOverlay must immediately follow AddDataValidationDropdownOverlay");
+
+        var overlayMethodBody = normalizedSource[overlayMethodStart..overlayMethodEnd];
+
+        var inputMsgCallIdx = overlayMethodBody.IndexOf(
+            "AddDvInputMessageOverlay(", StringComparison.Ordinal);
+        inputMsgCallIdx.Should().BeGreaterThanOrEqualTo(0,
+            "AddDvInputMessageOverlay must be called inside AddDataValidationDropdownOverlay");
+
+        var formulaGuardIdx = overlayMethodBody.IndexOf(
+            "FormulaEditAddress is not null", StringComparison.Ordinal);
+        formulaGuardIdx.Should().BeGreaterThanOrEqualTo(0,
+            "FormulaEditAddress guard must still exist (for the arrow button)");
+
+        var tryPlanIdx = overlayMethodBody.IndexOf(
+            "DataValidationDropdownPlanner.TryPlan(", StringComparison.Ordinal);
+        tryPlanIdx.Should().BeGreaterThanOrEqualTo(0,
+            "DataValidationDropdownPlanner.TryPlan must still exist (gates the arrow button)");
+
+        // BM1: tooltip call precedes TryPlan → tooltip renders for non-list DV cells
+        inputMsgCallIdx.Should().BeLessThan(tryPlanIdx,
+            "AddDvInputMessageOverlay must be called BEFORE DataValidationDropdownPlanner.TryPlan " +
+            "so non-list DV cells (Decimal, WholeNumber, etc.) still get their input-message tooltip (BM1)");
+
+        // BM2: tooltip call precedes FormulaEditAddress guard → tooltip stays visible during edit
+        inputMsgCallIdx.Should().BeLessThan(formulaGuardIdx,
+            "AddDvInputMessageOverlay must be called BEFORE the FormulaEditAddress guard " +
+            "so the tooltip remains visible while the user is editing a cell (BM2)");
+
+        // ── BM3: viewport clamp uses scroll-viewer bounds, not grid canvas extent ──
+        // The overlay method body must read _sheetScrollViewer.Bounds before calling AddDvInputMessageOverlay.
+        var viewportBoundsIdx = overlayMethodBody.IndexOf(
+            "_sheetScrollViewer.Bounds", StringComparison.Ordinal);
+        viewportBoundsIdx.Should().BeGreaterThanOrEqualTo(0,
+            "_sheetScrollViewer.Bounds must be read in AddDataValidationDropdownOverlay " +
+            "so the viewport clamp uses the visible area, not the full grid canvas (BM3)");
+
+        viewportBoundsIdx.Should().BeLessThan(inputMsgCallIdx,
+            "_sheetScrollViewer.Bounds must be read BEFORE the AddDvInputMessageOverlay call " +
+            "so the viewport dimensions are passed for clamping (BM3)");
+
+        // The old bug: clamping against overlay.Width / overlay.Height (full grid canvas) is gone.
+        // The overlay dimensions are still used as fallback when the scroll-viewer has not yet laid out.
+        overlayMethodBody.Should().NotContain(
+            "AddDvInputMessageOverlay(overlay, left, top + height, overlay.Width, overlay.Height)",
+            "the old unclamped call (using full grid canvas dimensions) must no longer be present");
+    }
+
     [Fact]
     public void MainWindow_WiresNativeGoalSeekThroughSharedParserSessionAndStatusDialog()
     {

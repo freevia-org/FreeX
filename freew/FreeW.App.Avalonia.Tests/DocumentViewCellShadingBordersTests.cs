@@ -313,4 +313,253 @@ public sealed class DocumentViewCellShadingBordersTests
         });
         if (!ran) return;
     }
+
+    // ── BL1 regression: SetCellShading with a preceding merged cell ──────────────────────────────
+
+    /// <summary>
+    /// BL1 regression: when a row has a preceding cell with GridSpan=2 (covering grid cols 0-1),
+    /// the next logical cell B starts at grid col 2 (cell-list index 1).
+    /// SetCellShading with the caret at grid col 2 must shade B (cell-list index 1), not
+    /// cell-list index 2 (which is out-of-range / wrong cell).
+    /// </summary>
+    [Fact]
+    public async Task SetCellShading_CaretAfterMergedCell_ShadesCorrectCell()
+    {
+        string? shadingA   = "SENTINEL";
+        string? shadingB   = "SENTINEL";
+        var ran = await OnUiThread(() =>
+        {
+            // Row: [A(GridSpan=2), B] — grid widths 0-1 and 2.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 2);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { GridSpan = 2 };
+            tbl.Rows[0].Cells[1] = new TableCell("B");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Place caret in B — grid col 2, cell-list index 1.
+            view.PlaceCaretInCell(idx, row: 0, col: 2, paraIdx: 0, offset: 0);
+            view.SetCellShading("#FFFF00");
+
+            shadingA = tbl.Rows[0].Cells[0].ShadingColorHex; // must be untouched
+            shadingB = tbl.Rows[0].Cells[1].ShadingColorHex; // must get the color
+        });
+        if (!ran) return;
+        shadingA.Should().BeNull("cell A (the merged cell) must not be shaded");
+        shadingB.Should().Be("#FFFF00", "cell B (grid col 2, cell-list index 1) must be shaded");
+    }
+
+    /// <summary>
+    /// BL1/BL3 regression: block selection covering grid cols 2..3 in a row where col 0-1 is
+    /// a merged cell (GridSpan=2). Only B (at cell-list index 1) should be shaded; A (the
+    /// merged cell occupying grid cols 0-1) is outside the selection and must not be touched.
+    /// Also verifies the rightmost selected cell is not skipped (BL3: loop bound was
+    /// cells.Count which is smaller than maxCol in grid space).
+    /// </summary>
+    [Fact]
+    public async Task SetCellShading_BlockSelection_AfterMergedCell_ShadesCorrectCells()
+    {
+        string? shadingA = "SENTINEL";
+        string? shadingB = "SENTINEL";
+        string? shadingC = "SENTINEL";
+        var ran = await OnUiThread(() =>
+        {
+            // Row: [A(GridSpan=2), B, C] — grid widths 0-1, 2, 3.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 3);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { GridSpan = 2 };
+            tbl.Rows[0].Cells[1] = new TableCell("B");
+            tbl.Rows[0].Cells[2] = new TableCell("C");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Select grid cols 2..3 (B and C); A (grid 0-1) is outside.
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 2, focusRow: 0, focusCol: 3);
+            view.SetCellShading("#00FF00");
+
+            shadingA = tbl.Rows[0].Cells[0].ShadingColorHex;
+            shadingB = tbl.Rows[0].Cells[1].ShadingColorHex;
+            shadingC = tbl.Rows[0].Cells[2].ShadingColorHex;
+        });
+        if (!ran) return;
+        shadingA.Should().BeNull("cell A (preceding merged cell, outside selection) must not be shaded");
+        shadingB.Should().Be("#00FF00", "cell B (grid col 2, cell-list index 1) must be shaded");
+        shadingC.Should().Be("#00FF00", "cell C (grid col 3, cell-list index 2, rightmost) must not be skipped");
+    }
+
+    /// <summary>
+    /// BL1 regression: a merged cell spanning grid cols 0-1 in a block selection covering 0..1
+    /// must only be shaded ONCE (not twice — once per grid column), so the undo stack has exactly
+    /// one entry for it.
+    /// </summary>
+    [Fact]
+    public async Task SetCellShading_BlockSelection_MergedCellDedupedToOneCommand()
+    {
+        string? shadingA = "SENTINEL";
+        int commandCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            // Row: [A(GridSpan=2)] — only one logical cell spanning grid cols 0-1.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 1);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { GridSpan = 2 };
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Select grid cols 0..1 — both map to the same logical cell A.
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 0, focusRow: 0, focusCol: 1);
+            view.SetCellShading("#FF00FF");
+
+            shadingA = tbl.Rows[0].Cells[0].ShadingColorHex;
+            // Undo once — if the command was issued once, the shading should be gone.
+            view.Undo();
+            commandCount = tbl.Rows[0].Cells[0].ShadingColorHex is null ? 1 : 0;
+        });
+        if (!ran) return;
+        // After shading: color must be set.
+        shadingA.Should().Be("#FF00FF", "the merged cell must be shaded");
+        // After one undo: color must be gone (proving only ONE command was issued).
+        commandCount.Should().Be(1, "exactly one SetCellShadingCommand must be issued for a deduplicated merged cell");
+    }
+
+    // ── BL2 regression: SetCellBorders with a preceding merged cell ──────────────────────────────
+
+    /// <summary>
+    /// BL2 regression: a row with [A(GridSpan=2), B] — applying "All" borders with caret in B
+    /// (grid col 2, cell-list index 1) must set borders on B, not on A or out-of-range.
+    /// </summary>
+    [Fact]
+    public async Task SetCellBorders_CaretAfterMergedCell_BordersLandOnCorrectCell()
+    {
+        CellBorders? bordersA = new CellBorders(); // non-null sentinel
+        CellBorders? bordersB = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 2);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { GridSpan = 2 };
+            tbl.Rows[0].Cells[1] = new TableCell("B");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Caret in B (grid col 2 = cell-list index 1).
+            view.PlaceCaretInCell(idx, row: 0, col: 2, paraIdx: 0, offset: 0);
+            view.SetCellBorders(CellBorderEdges.All, "#000000", 0.5);
+
+            bordersA = tbl.Rows[0].Cells[0].Borders;
+            bordersB = tbl.Rows[0].Cells[1].Borders;
+        });
+        if (!ran) return;
+        bordersA.Should().BeNull("cell A (the merged cell) must not receive borders");
+        bordersB.Should().NotBeNull("cell B (grid col 2, cell-list index 1) must get borders");
+        bordersB!.Top.Should().NotBeNull();
+        bordersB.Bottom.Should().NotBeNull();
+        bordersB.Left.Should().NotBeNull();
+        bordersB.Right.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// BL2 regression: applying a "Right" border to a block selection [gridCol 0..3] in a row
+    /// with [A(GridSpan=2), B, C]. Every selected logical cell should get its Right edge set.
+    /// This verifies the grid→cell-list conversion in the border path: without the fix, the loop
+    /// would compare grid col against cells.Count and skip the rightmost cells or target wrong ones.
+    /// </summary>
+    [Fact]
+    public async Task SetCellBorders_Right_BlockSelection_WithMergedCell_AllCellsGetRightEdge()
+    {
+        CellBorders? bordersA = null;
+        CellBorders? bordersB = null;
+        CellBorders? bordersC = null;
+        var ran = await OnUiThread(() =>
+        {
+            // Row: [A(GridSpan=2), B, C] — grid cols 0-1, 2, 3.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 3);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { GridSpan = 2 };
+            tbl.Rows[0].Cells[1] = new TableCell("B");
+            tbl.Rows[0].Cells[2] = new TableCell("C");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Select the full row: grid cols 0..3 (A occupies 0-1, B=2, C=3).
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 0, focusRow: 0, focusCol: 3);
+            // Apply a primitive Right edge to every cell in the selection.
+            view.SetCellBorders(CellBorderEdges.Right, "#000000", 0.5);
+
+            bordersA = tbl.Rows[0].Cells[0].Borders;
+            bordersB = tbl.Rows[0].Cells[1].Borders;
+            bordersC = tbl.Rows[0].Cells[2].Borders;
+        });
+        if (!ran) return;
+        // All three logical cells must get the Right edge.
+        bordersA.Should().NotBeNull("A (cell-list index 0, GridSpan=2) must receive a Right border");
+        bordersA!.Right.Should().NotBeNull("A must get Right edge (primitive flag applies to every cell)");
+        bordersA.Left.Should().BeNull("only Right was requested");
+        bordersB.Should().NotBeNull("B (cell-list index 1) must receive a Right border");
+        bordersB!.Right.Should().NotBeNull();
+        bordersC.Should().NotBeNull("C (cell-list index 2, rightmost, grid col 3) must not be skipped");
+        bordersC!.Right.Should().NotBeNull("C is the rightmost cell and must get the Right border");
+    }
+
+    /// <summary>
+    /// BL2 regression: applying "All" borders to a block selection [gridCol 2..3] in a row
+    /// with [A(GridSpan=2), B, C] — only B and C (grid cols 2 and 3) are selected.
+    /// B and C must get all four borders; A (outside the selection) must not be touched.
+    /// </summary>
+    [Fact]
+    public async Task SetCellBorders_All_BlockSelection_AfterMergedCell_SkipsOutOfSelectionCells()
+    {
+        CellBorders? bordersA = null;
+        CellBorders? bordersB = null;
+        CellBorders? bordersC = null;
+        var ran = await OnUiThread(() =>
+        {
+            // Row: [A(GridSpan=2), B, C] — grid cols 0-1, 2, 3.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 3);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { GridSpan = 2 };
+            tbl.Rows[0].Cells[1] = new TableCell("B");
+            tbl.Rows[0].Cells[2] = new TableCell("C");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Select only grid cols 2..3 (B and C); A (grid 0-1) is outside.
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 2, focusRow: 0, focusCol: 3);
+            view.SetCellBorders(CellBorderEdges.All, "#000000", 0.5);
+
+            bordersA = tbl.Rows[0].Cells[0].Borders;
+            bordersB = tbl.Rows[0].Cells[1].Borders;
+            bordersC = tbl.Rows[0].Cells[2].Borders;
+        });
+        if (!ran) return;
+        bordersA.Should().BeNull("A (outside the selection, grid cols 0-1) must not be touched");
+        bordersB.Should().NotBeNull("B (grid col 2, cell-list index 1) must get all borders");
+        bordersB!.Top.Should().NotBeNull();
+        bordersB.Bottom.Should().NotBeNull();
+        bordersB.Left.Should().NotBeNull();
+        bordersB.Right.Should().NotBeNull();
+        bordersC.Should().NotBeNull("C (grid col 3, cell-list index 2, rightmost) must not be skipped");
+        bordersC!.Top.Should().NotBeNull();
+        bordersC.Bottom.Should().NotBeNull();
+        bordersC.Left.Should().NotBeNull();
+        bordersC.Right.Should().NotBeNull();
+    }
 }

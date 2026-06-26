@@ -216,4 +216,54 @@ public partial class InsertDeleteColumnsTests
 
         sheet.ColumnPageBreaks.Should().Equal(2u, 4u, 8u);
     }
+
+    /// <summary>
+    /// BK1: DeleteColumnsCommand must clear _cfThresholdSnapshot before each Apply so that
+    /// a redo (second Apply on the same command instance) does not use a stale snapshot entry
+    /// and corrupt the threshold on the following Revert.
+    /// </summary>
+    [Fact]
+    public void DeleteColumn_CfColorScaleFormulaThreshold_RedoCycleDoesNotCorruptSnapshot()
+    {
+        // colorScale rule with Min = Formula "$G$1" (column 7).
+        // Delete columns 3–4 (count=2) → $G$1 shifts left to $E$1.
+        var (_, sheet, ctx) = Setup();
+        var cf = new ConditionalFormat
+        {
+            AppliesTo         = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 10, 7)),
+            RuleType          = CfRuleType.ColorScale,
+            MinThresholdType  = CfThresholdType.Formula,
+            MinThresholdValue = "$G$1",
+            MaxThresholdType  = CfThresholdType.Max,
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        var cmd = new DeleteColumnsCommand(sheet.Id, startCol: 3, count: 2);
+
+        // ── First Apply ──────────────────────────────────────────────────────
+        cmd.Apply(ctx).Success.Should().BeTrue();
+        cf.MinThresholdValue.Should().Be("$E$1", because: "$G$1 (col 7) shifts to $E$1 (col 5) after deleting cols 3-4");
+
+        // ── Revert (undo) ────────────────────────────────────────────────────
+        cmd.Revert(ctx);
+        cf.MinThresholdValue.Should().Be("$G$1", because: "undo must restore the original formula threshold");
+
+        // Simulate a user edit between undo and redo: change the threshold to a
+        // column-1 reference that will NOT be shifted by the next Apply (col 1 < startCol 3).
+        // Without _cfThresholdSnapshot.Clear() the stale {(id, slot): "$G$1"} entry from the
+        // first Apply survives. The second Apply does not overwrite it (no rewrite for col 1).
+        // The second Revert then incorrectly restores "$G$1" over "$A$1".
+        cf.MinThresholdValue = "$A$1";
+
+        // ── Second Apply (redo) ───────────────────────────────────────────────
+        cmd.Apply(ctx).Success.Should().BeTrue();
+        cf.MinThresholdValue.Should().Be("$A$1", because: "$A$1 (col 1) is left of the deleted range (cols 3-4) and must not be shifted");
+
+        // ── Second Revert ─────────────────────────────────────────────────────
+        cmd.Revert(ctx);
+        // With the bug: stale snapshot "$G$1" would be restored here, corrupting "$A$1".
+        // With the fix:  snapshot was cleared before second Apply; no entry exists for
+        //                this slot, so "$A$1" is left intact.
+        cf.MinThresholdValue.Should().Be("$A$1", because: "second undo must restore the pre-redo value, not a stale snapshot from the first Apply");
+    }
 }

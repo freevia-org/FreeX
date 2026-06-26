@@ -186,4 +186,55 @@ public partial class InsertDeleteColumnsTests
 
         sheet.ColumnPageBreaks.Should().Equal(3u, 8u);
     }
+
+    /// <summary>
+    /// BK1: InsertColumnsCommand must clear _cfThresholdSnapshot before each Apply so that
+    /// a redo (second Apply on the same command instance) does not use a stale snapshot entry
+    /// and corrupt the threshold on the following Revert.
+    /// </summary>
+    [Fact]
+    public void InsertColumn_CfColorScaleFormulaThreshold_RedoCycleDoesNotCorruptSnapshot()
+    {
+        // colorScale rule with Min = Formula "$E$1" (column 5).
+        // Insert 2 columns before column 3 → $E$1 shifts right to $G$1.
+        var (_, sheet, ctx) = Setup();
+        var cf = new ConditionalFormat
+        {
+            AppliesTo          = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 10, 5)),
+            RuleType           = CfRuleType.ColorScale,
+            MinThresholdType   = CfThresholdType.Formula,
+            MinThresholdValue  = "$E$1",
+            MaxThresholdType   = CfThresholdType.Max,
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        var cmd = new InsertColumnsCommand(sheet.Id, beforeCol: 3, count: 2);
+
+        // ── First Apply ──────────────────────────────────────────────────────
+        cmd.Apply(ctx).Success.Should().BeTrue();
+        cf.MinThresholdValue.Should().Be("$G$1", because: "$E$1 (col 5) shifts to $G$1 (col 7) after inserting 2 cols before col 3");
+
+        // ── Revert (undo) ────────────────────────────────────────────────────
+        cmd.Revert(ctx);
+        cf.MinThresholdValue.Should().Be("$E$1", because: "undo must restore the original formula threshold");
+
+        // Simulate a user edit between undo and redo: change the threshold to a
+        // column-1 reference that will NOT be shifted by the next Apply.
+        // This is the stale-snapshot trap: without _cfThresholdSnapshot.Clear() the
+        // command still holds {(id, slot): "$E$1"} from the first Apply. After the
+        // second Apply the threshold stays "$A$1" (no rewrite needed), so the snapshot
+        // entry is never updated. When Revert fires it incorrectly restores "$E$1".
+        cf.MinThresholdValue = "$A$1";
+
+        // ── Second Apply (redo) ───────────────────────────────────────────────
+        cmd.Apply(ctx).Success.Should().BeTrue();
+        cf.MinThresholdValue.Should().Be("$A$1", because: "$A$1 (col 1) is left of the insert point (col 3) and must not be shifted");
+
+        // ── Second Revert ─────────────────────────────────────────────────────
+        cmd.Revert(ctx);
+        // With the bug: stale snapshot "$E$1" would be restored here, corrupting "$A$1".
+        // With the fix:  snapshot was cleared before second Apply; no entry exists for
+        //                this slot, so "$A$1" is left intact.
+        cf.MinThresholdValue.Should().Be("$A$1", because: "second undo must restore the pre-redo value, not a stale snapshot from the first Apply");
+    }
 }

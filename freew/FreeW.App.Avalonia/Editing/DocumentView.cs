@@ -592,11 +592,18 @@ public sealed class DocumentView : Control
             for (var r = sel.MinRow; r <= sel.MaxRow; r++)
             {
                 if (r >= selTbl.Rows.Count) break;
-                var cells = selTbl.Rows[r].Cells;
-                for (var c = sel.MinCol; c <= sel.MaxCol; c++)
+                var row = selTbl.Rows[r];
+                // BL1/BL3: _cellCaret/SelectedCellRange use GRID columns; SetCellShadingCommand
+                // expects CELL-LIST indices. Convert each grid column and dedupe so a merged cell
+                // spanning multiple grid columns is only shaded once.
+                var lastCellIdx = -1;
+                for (var gridCol = sel.MinCol; gridCol <= sel.MaxCol; gridCol++)
                 {
-                    if (c >= cells.Count) break;
-                    _bus.Execute(new SetCellShadingCommand(sel.TableBlock, r, c, hexColor));
+                    var cellIdx = GridColumnToCellIndex(row, gridCol);
+                    if (cellIdx < 0) break; // beyond row's grid width
+                    if (cellIdx == lastCellIdx) continue; // merged cell already processed
+                    lastCellIdx = cellIdx;
+                    _bus.Execute(new SetCellShadingCommand(sel.TableBlock, r, cellIdx, hexColor));
                 }
             }
         }
@@ -604,9 +611,12 @@ public sealed class DocumentView : Control
         {
             // Single caret cell.
             if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
-                || _doc.Blocks[cc.TableBlock] is not Table)
+                || _doc.Blocks[cc.TableBlock] is not Table ccTbl)
                 return;
-            _bus.Execute(new SetCellShadingCommand(cc.TableBlock, cc.Row, cc.Col, hexColor));
+            // BL1: cc.Col is a GRID column; convert to cell-list index before issuing the command.
+            var caretCellIdx = GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col);
+            if (caretCellIdx < 0) return;
+            _bus.Execute(new SetCellShadingCommand(cc.TableBlock, cc.Row, caretCellIdx, hexColor));
         }
         else
         {
@@ -665,17 +675,53 @@ public sealed class DocumentView : Control
         for (var r = minRow; r <= maxRow; r++)
         {
             if (r >= tbl.Rows.Count) break;
-            var cells = tbl.Rows[r].Cells;
-            for (var c = minCol; c <= maxCol; c++)
+            var row = tbl.Rows[r];
+            // BL2/BL3: minCol..maxCol are GRID columns; SetCellBordersCommand expects CELL-LIST
+            // indices. Convert each grid column and dedupe merged cells.
+            // Edge boundary resolution (Outside/Inside) stays in GRID space.
+            // A merged cell spanning multiple grid columns must:
+            //   - get Left  if its FIRST grid column == minCol (it touches the outer-left boundary)
+            //   - get Right if its LAST  grid column == maxCol (it touches the outer-right boundary)
+            //   - get Inside Right if its LAST grid column < maxCol (it has a shared right inner edge)
+            // Track both firstGridCol and lastGridCol per merged cell for correct edge resolution.
+            var lastCellIdx      = -1;
+            int firstGridColForCell = -1;
+            int lastGridColForCell  = -1;
+            for (var gridCol = minCol; gridCol <= maxCol; gridCol++)
             {
-                if (c >= cells.Count) break;
+                var cellIdx = GridColumnToCellIndex(row, gridCol);
+                if (cellIdx < 0) break; // beyond row's grid width
 
-                // Determine which primitive edges apply to this cell given the edge selector.
-                var effectiveEdges = ResolveEdgesForCell(edges, r, c, minRow, maxRow, minCol, maxCol);
-                if (effectiveEdges == CellBorderEdges.None)
-                    continue;
-
-                _bus.Execute(new SetCellBordersCommand(blockIdx, r, c, effectiveEdges, style, colorHex, widthPt, clearEdges));
+                bool isNewCell = cellIdx != lastCellIdx;
+                if (isNewCell)
+                {
+                    // Flush the previous merged cell using its first/last grid columns for edge checks.
+                    if (lastCellIdx >= 0)
+                    {
+                        var flushedEdges = ResolveEdgesForMergedCell(
+                            edges, r, firstGridColForCell, lastGridColForCell,
+                            minRow, maxRow, minCol, maxCol);
+                        if (flushedEdges != CellBorderEdges.None)
+                            _bus.Execute(new SetCellBordersCommand(blockIdx, r, lastCellIdx, flushedEdges, style, colorHex, widthPt, clearEdges));
+                    }
+                    lastCellIdx         = cellIdx;
+                    firstGridColForCell = gridCol;
+                    lastGridColForCell  = gridCol;
+                }
+                else
+                {
+                    // Same merged cell — extend the last grid column it covers.
+                    lastGridColForCell = gridCol;
+                }
+            }
+            // Flush the final cell.
+            if (lastCellIdx >= 0)
+            {
+                var finalEdges = ResolveEdgesForMergedCell(
+                    edges, r, firstGridColForCell, lastGridColForCell,
+                    minRow, maxRow, minCol, maxCol);
+                if (finalEdges != CellBorderEdges.None)
+                    _bus.Execute(new SetCellBordersCommand(blockIdx, r, lastCellIdx, finalEdges, style, colorHex, widthPt, clearEdges));
             }
         }
         InvalidateLayoutAndVisual();
@@ -723,6 +769,53 @@ public sealed class DocumentView : Control
         }
 
         // Primitive edge bits applied to every cell in the selection.
+        if (hasTop)    result |= CellBorderEdges.Top;
+        if (hasBottom) result |= CellBorderEdges.Bottom;
+        if (hasLeft)   result |= CellBorderEdges.Left;
+        if (hasRight)  result |= CellBorderEdges.Right;
+
+        return result;
+    }
+
+    /// <summary>
+    /// Variant of <see cref="ResolveEdgesForCell"/> for cells that may span multiple grid columns
+    /// (horizontally merged). Uses <paramref name="firstGridCol"/> for Left-boundary checks and
+    /// <paramref name="lastGridCol"/> for Right-boundary / Inside-Right checks so that the outer
+    /// left/right edges land on the correct boundary cell and the inside Right is suppressed for
+    /// the rightmost physical cell in the selection.
+    /// </summary>
+    private static CellBorderEdges ResolveEdgesForMergedCell(
+        CellBorderEdges edges,
+        int row, int firstGridCol, int lastGridCol,
+        int minRow, int maxRow, int minCol, int maxCol)
+    {
+        bool hasAll     = (edges & CellBorderEdges.All)     == CellBorderEdges.All;
+        bool hasOutside = (edges & CellBorderEdges.Outside) == CellBorderEdges.Outside;
+        bool hasInside  = (edges & CellBorderEdges.Inside)  != 0;
+        bool hasTop     = (edges & CellBorderEdges.Top)     != 0;
+        bool hasBottom  = (edges & CellBorderEdges.Bottom)  != 0;
+        bool hasLeft    = (edges & CellBorderEdges.Left)    != 0;
+        bool hasRight   = (edges & CellBorderEdges.Right)   != 0;
+
+        if (hasAll)
+            return CellBorderEdges.Top | CellBorderEdges.Bottom | CellBorderEdges.Left | CellBorderEdges.Right;
+
+        var result = CellBorderEdges.None;
+
+        if (hasOutside)
+        {
+            if (row == minRow)         result |= CellBorderEdges.Top;
+            if (row == maxRow)         result |= CellBorderEdges.Bottom;
+            if (firstGridCol == minCol) result |= CellBorderEdges.Left;   // leftmost grid col of this cell
+            if (lastGridCol  == maxCol) result |= CellBorderEdges.Right;  // rightmost grid col of this cell
+        }
+
+        if (hasInside)
+        {
+            if (row < maxRow)          result |= CellBorderEdges.Bottom;
+            if (lastGridCol < maxCol)  result |= CellBorderEdges.Right;   // has a shared right inner edge
+        }
+
         if (hasTop)    result |= CellBorderEdges.Top;
         if (hasBottom) result |= CellBorderEdges.Bottom;
         if (hasLeft)   result |= CellBorderEdges.Left;
