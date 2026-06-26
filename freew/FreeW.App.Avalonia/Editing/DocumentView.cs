@@ -2256,15 +2256,15 @@ public sealed class DocumentView : Control
                 var sentinelParaOffset = parasLengths.Count > 0 ? parasLengths[sentinelParaIdx] : 0;
                 // Position the sentinel at the right edge of the last text line, or at pad if no text.
                 var sentinelX = ty > rowPageSpaceY + pad
-                    ? columnLeft[startCol] + pad  // start of next line
-                    : columnLeft[startCol] + pad;
+                    ? cellX + pad  // start of next line
+                    : cellX + pad;
                 var sentinelY = lines.Count > 0 ? rowPageSpaceY + pad + lines.Sum(l => l.Height) - lines[^1].Height : rowPageSpaceY + pad;
                 var sentinelH = lines.Count > 0 ? lines[^1].Height : Build("A", fmt).Height;
                 // Advance sentinel X past last character on last line
                 if (lines.Count > 0)
                 {
                     var lastLineChars = lines[^1].Chars;
-                    var lastX = columnLeft[startCol] + pad + lastLineChars.Sum(c => c.W);
+                    var lastX = cellX + pad + lastLineChars.Sum(c => c.W);
                     sentinelX = lastX;
                 }
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset, sentinelX, sentinelY, 0, sentinelH, fmt, '\0',
