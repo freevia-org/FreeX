@@ -145,7 +145,8 @@ public sealed class MainWindow : Window
             stateStore,
             Editor,
             onStartFromStart:   () => StartSlideShow(true),
-            onStartFromCurrent: () => StartSlideShow(false));
+            onStartFromCurrent: () => StartSlideShow(false),
+            onEditChartData:    () => OpenChartDataDialog());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -476,6 +477,24 @@ public sealed class MainWindow : Window
         if (IsVisible)
             window.Owner = this;
         window.Show();
+    }
+
+    // ── Chart data editing (Wave 9B) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Opens the <see cref="ChartDataDialog"/> for the currently selected chart.
+    /// If the selection is empty or the selected shape is not a chart, does nothing.
+    /// </summary>
+    internal void OpenChartDataDialog()
+    {
+        if (Editor.SelectedChart is null) return;
+
+        var dialog = new ChartDataDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
+        // dialog.ShowDialog() returns true when OK was clicked; the command is already
+        // applied inside ChartDataDialog.OnOk() via EditingSession.ReplaceChartData().
+        dialog.ShowDialog();
     }
 
     // ── Backstage ─────────────────────────────────────────────────────────────────

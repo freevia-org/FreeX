@@ -29,11 +29,16 @@ internal static class FreePRibbonCommands
     /// <param name="onStartFromCurrent">
     ///   Callback that starts the slideshow from the current slide (wired to MainWindow.StartSlideShow(false)).
     /// </param>
+    /// <param name="onEditChartData">
+    ///   Callback that opens the chart data editing dialog for the currently selected chart.
+    ///   Provided by Wave 9B / MainWindow.  When null the button is a no-op.
+    /// </param>
     public static RibbonCommandRegistry Build(
         RibbonStateStore stateStore,
         EditingSession   editor,
         Action?          onStartFromStart   = null,
-        Action?          onStartFromCurrent = null)
+        Action?          onStartFromCurrent = null,
+        Action?          onEditChartData    = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -330,6 +335,17 @@ internal static class FreePRibbonCommands
 
         registry.Register("freep.slide-size-4x3",
             new ActionCommand(() => editor.SetSlideSize4x3()));
+
+        // ── Wave 9B: Chart data editing ───────────────────────────────────────────
+        // Enabled only when a chart shape is selected; otherwise silently a no-op.
+        registry.Register("freep.chart.edit-data",
+            new ActionCommand(() =>
+            {
+                // If caller supplied a dedicated open-dialog callback (e.g. MainWindow),
+                // use it; otherwise fall back to the no-op.
+                if (onEditChartData is not null)
+                    onEditChartData();
+            }));
 
         return registry;
     }
