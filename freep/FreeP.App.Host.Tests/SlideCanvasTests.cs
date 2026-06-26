@@ -529,4 +529,132 @@ public sealed class SlideCanvasTests
         act.Should().NotThrow(
             "BQ2: wide aligned segment must not cause curX to go behind the prior pen (backward clamp)");
     }
+
+    // ── CB1: secondary-axis range isolation (WPF) ─────────────────────────────
+
+    /// <summary>
+    /// CB1: primary ComputeNiceAxisRange must exclude secondary-axis series.
+    /// Chart: primary bars 0-100, secondary line 0-1_000_000.
+    /// Primary range ≈ 0-100 (NOT 0-1M); secondary range ≈ 0-1M.
+    /// </summary>
+    [Fact]
+    public void CB1_WPF_PrimaryRange_ExcludesSecondaryAxisSeries()
+    {
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (min, max, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+
+        min.Should().BeGreaterThanOrEqualTo(0, "primary range min should start at or above 0");
+        max.Should().BeLessThan(10_000,
+            "CB1: primary range must not be polluted by the 1M secondary series (should be ~100-200)");
+        max.Should().BeGreaterThanOrEqualTo(100, "primary range must cover the 100 primary max");
+    }
+
+    [Fact]
+    public void CB1_WPF_SecondaryRange_CoversSecondaryAxisSeriesOnly()
+    {
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (secMin, secMax, secMu) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+
+        secMin.Should().BeGreaterThanOrEqualTo(0, "secondary range min should start at or above 0");
+        secMax.Should().BeGreaterThanOrEqualTo(1_000_000, "secondary range must cover the 1M secondary max");
+        secMu.Should().BePositive("secondary major unit must be positive");
+    }
+
+    [Fact]
+    public void CB1_WPF_SecondarySeriesPixelFraction_IsReasonable()
+    {
+        // Verify that a secondary series value maps to a sensible pixel fraction when scaled
+        // against the secondary range — not a huge ratio (broken) or ~0 (invisible).
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (secMin, secMax, _) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+
+        // A mid-range secondary value (600,000) at plotH=400 should map to a reasonable pixel
+        double midVal = 600_000.0;
+        double frac   = (midVal - secMin) / secRange;
+
+        frac.Should().BeGreaterThan(0.3, "CB1: mid-range secondary value must occupy a meaningful fraction of the plot");
+        frac.Should().BeLessThan(1.1,   "CB1: secondary fraction must not exceed 1.0 (plus rounding)");
+    }
+
+    [Fact]
+    public void CB1_WPF_NoSecondarySeriesChart_FallbackRange()
+    {
+        // No secondary series: primary range unchanged; secondary fallback = (0,1,1).
+        var s = new ChartSeries { Name = "S1", OnSecondaryAxis = false };
+        s.Values.AddRange(new double?[] { 10, 50, 100 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(s);
+
+        var (sMin, sMax, sMu) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+
+        sMin.Should().Be(0,   "fallback secondary min");
+        sMax.Should().Be(1,   "fallback secondary max");
+        sMu.Should().Be(1,    "fallback secondary unit");
+    }
+
+    [StaFact]
+    public void CB1_WPF_ComboChart_RendersWithoutThrow()
+    {
+        // Smoke test: a combo chart (primary column + secondary line) must not throw during Measure.
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape
+        {
+            ChartType          = ChartType.ColumnClustered,
+            SecondaryValueAxis = new ChartAxis(),
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var p = Presentation.CreateEmpty();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Kind        = SlideShapeKind.Chart,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 457200,
+            ExtentCxEmu = 5486400,
+            ExtentCyEmu = 3657600,
+            Chart       = chart,
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+        var act = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow(
+            "CB1: combo chart with primary bars + secondary line must render without throwing");
+    }
 }

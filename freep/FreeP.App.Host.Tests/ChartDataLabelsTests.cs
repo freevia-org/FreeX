@@ -156,7 +156,22 @@ public sealed class ChartDataLabelsTests : IDisposable
         var rt = DoRoundTrip(chart);
 
         // After round-trip the secondary axis info should be retained
-        rt.SecondaryValueAxis.Should().NotBeNull();
+        rt.SecondaryValueAxis.Should().NotBeNull("secondary valAx survives round-trip");
+        // CA4: the per-series flag must also round-trip (writer splits groups, reader detects it)
+        rt.Series.Should().HaveCountGreaterThanOrEqualTo(2, "both series survive round-trip");
+        rt.Series[0].OnSecondaryAxis.Should().BeFalse("primary series stays on primary axis");
+        rt.Series[1].OnSecondaryAxis.Should().BeTrue("secondary series flag round-trips");
+    }
+
+    [Fact]
+    public void RoundTrip_NoSecondaryAxis_NoRegression()
+    {
+        // A plain column chart with no secondary axis must not emit a secondary valAx.
+        var chart = BuildColumnChart();
+        var rt    = DoRoundTrip(chart);
+
+        rt.SecondaryValueAxis.Should().BeNull("no secondary axis without SecondaryValueAxis set");
+        rt.Series.Should().AllSatisfy(s => s.OnSecondaryAxis.Should().BeFalse());
     }
 
     // ── 4. Label string composition ───────────────────────────────────────────
@@ -197,12 +212,12 @@ public sealed class ChartDataLabelsTests : IDisposable
 
     private static string FormatWithCodeTest(double value, string code)
     {
-        // Mirror of renderer's FormatWithCode helper
+        // Mirror of renderer's FormatWithCode helper (CB5: count digits between '.' and '%')
         if (code.Contains('%'))
         {
             double pct = value * 100.0;
             int dotPos = code.IndexOf('.');
-            int decimals = dotPos >= 0 ? code.Length - dotPos - 1 : 0;
+            int decimals = dotPos >= 0 ? code.LastIndexOf('%') - dotPos - 1 : 0;
             return pct.ToString(decimals > 0 ? $"F{decimals}" : "F0", System.Globalization.CultureInfo.InvariantCulture) + "%";
         }
         if (code.Contains(','))
@@ -372,5 +387,149 @@ public sealed class ChartDataLabelsTests : IDisposable
         });
         pres.Slides.Add(slide);
         return pres;
+    }
+
+    // ── CA2: dLbls child order ────────────────────────────────────────────────
+
+    [Fact]
+    public void DLbls_ChildOrder_NumFmtBeforeDLblPos_BeforeShowFlags()
+    {
+        // A chart with numFmt + position + showValue — verify the written XML
+        // has numFmt FIRST, then dLblPos, then show* (CT_DLbls schema order).
+        var chart = BuildColumnChartWithLabels(showValue: true,
+            position: DataLabelPosition.OutsideEnd, numFmt: "0.00");
+
+        var pptxPath = WriteToTempPptx(chart);
+        var xmlText  = ExtractFirstChartXml(pptxPath);
+
+        // Find positions of elements inside c:dLbls
+        int numFmtPos   = xmlText.IndexOf("<c:numFmt",    StringComparison.Ordinal);
+        int dLblPosPos  = xmlText.IndexOf("<c:dLblPos",   StringComparison.Ordinal);
+        int showValPos  = xmlText.IndexOf("<c:showVal",   StringComparison.Ordinal);
+
+        numFmtPos.Should().BeGreaterThan(-1,  "numFmt must be present");
+        dLblPosPos.Should().BeGreaterThan(-1, "dLblPos must be present");
+        showValPos.Should().BeGreaterThan(-1, "showVal must be present");
+
+        numFmtPos.Should().BeLessThan(dLblPosPos,
+            "numFmt must appear before dLblPos (CT_DLbls schema order)");
+        dLblPosPos.Should().BeLessThan(showValPos,
+            "dLblPos must appear before showVal (CT_DLbls schema order)");
+    }
+
+    // ── CA3: dLblPos gating ───────────────────────────────────────────────────
+
+    [Fact]
+    public void DLblPos_StackedColumn_OutsideEnd_Suppressed()
+    {
+        // Stacked column + OutsideEnd → dLblPos must NOT be written (invalid for stacked).
+        var chart = new ChartShape { ChartType = ChartType.ColumnStacked };
+        chart.Categories.AddRange(new[] { "A", "B" });
+        var s = new ChartSeries { Name = "S1" };
+        s.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(s);
+        chart.DataLabels = new ChartDataLabels
+        {
+            ShowValue = true,
+            Position  = DataLabelPosition.OutsideEnd
+        };
+
+        var pptxPath = WriteToTempPptx(chart);
+        var xmlText  = ExtractFirstChartXml(pptxPath);
+
+        // dLblPos must be absent (suppressed) since outEnd is invalid for stacked column.
+        xmlText.Should().NotContain("<c:dLblPos",
+            "outEnd is invalid for stacked column — dLblPos must be suppressed");
+    }
+
+    [Fact]
+    public void DLblPos_StackedColumn_Center_Preserved()
+    {
+        // Stacked column + Center → dLblPos="ctr" must be written (the only valid value).
+        var chart = new ChartShape { ChartType = ChartType.ColumnStacked };
+        chart.Categories.AddRange(new[] { "A", "B" });
+        var s = new ChartSeries { Name = "S1" };
+        s.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(s);
+        chart.DataLabels = new ChartDataLabels
+        {
+            ShowValue = true,
+            Position  = DataLabelPosition.Center
+        };
+
+        var pptxPath = WriteToTempPptx(chart);
+        var xmlText  = ExtractFirstChartXml(pptxPath);
+
+        xmlText.Should().Contain("dLblPos", "ctr is valid for stacked column and must be written");
+        xmlText.Should().Contain("val=\"ctr\"");
+    }
+
+    // ── XML inspection helpers ────────────────────────────────────────────────
+
+    private string WriteToTempPptx(ChartShape chart)
+    {
+        var pres = BuildPresWithChart(chart);
+        var path = Path.Combine(_tempDir, Guid.NewGuid().ToString("N") + ".pptx");
+        PptxPackageWriter.Write(pres, path);
+        return path;
+    }
+
+    private static string ExtractFirstChartXml(string pptxPath)
+    {
+        using var zip = System.IO.Compression.ZipFile.OpenRead(pptxPath);
+        var chartEntry = zip.Entries
+            .Where(e => System.Text.RegularExpressions.Regex.IsMatch(
+                e.FullName, @"ppt/charts/chart\d+\.xml$"))
+            .OrderBy(e => e.FullName)
+            .First();
+        using var stream = chartEntry.Open();
+        using var reader = new System.IO.StreamReader(stream, System.Text.Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+
+    // ── 8. Wave-20 CB render-bug regressions (CB2/CB5/CB6) ────────────────────
+
+    /// <summary>CB5: "0.00%" format code must yield exactly 2 decimal places.</summary>
+    [Fact]
+    public void FormatWithCode_PercentWithTwoDecimals_YieldsTwoDecimals_CB5()
+    {
+        // "0.00%" → LastIndexOf('%')=4, dotPos=1 → decimals=2 → "12.34%"
+        string result = FormatWithCodeTest(0.1234, "0.00%");
+        result.Should().Be("12.34%", "CB5: 0.00% must produce 2 decimal places, not 3");
+    }
+
+    /// <summary>CB5: "0.0%" format code must yield exactly 1 decimal place.</summary>
+    [Fact]
+    public void FormatWithCode_PercentOneDecimal_YieldsOneDecimal_CB5()
+    {
+        string result = FormatWithCodeTest(0.123, "0.0%");
+        result.Should().Be("12.3%", "CB5: 0.0% must produce 1 decimal place");
+    }
+
+    /// <summary>CB5: "0%" format code (no dot) must yield 0 decimal places.</summary>
+    [Fact]
+    public void FormatWithCode_PercentNoDot_YieldsZeroDecimals_CB5()
+    {
+        string result = FormatWithCodeTest(0.5, "0%");
+        result.Should().Be("50%", "CB5: 0% must produce no decimal places");
+    }
+
+    /// <summary>CB2: ShowPercent with non-zero total must render the actual share, not "0%".</summary>
+    [Fact]
+    public void LabelComposition_ShowPercent_WithNonZeroTotal_RendersActualShare_CB2()
+    {
+        var dl = new ChartDataLabels { ShowPercent = true };
+        // 40 out of 100 → "40%"
+        string lbl = ComposeLabel(dl, value: 40.0, total: 100.0, cat: "A", ser: "S");
+        lbl.Should().Be("40%", "CB2: ShowPercent with total=100 and value=40 must render '40%', not '0%'");
+    }
+
+    /// <summary>CB2: ShowPercent with total=0 must render "0%" (guard).</summary>
+    [Fact]
+    public void LabelComposition_ShowPercent_ZeroTotal_Renders0Pct_CB2()
+    {
+        var dl = new ChartDataLabels { ShowPercent = true };
+        string lbl = ComposeLabel(dl, value: 10.0, total: 0.0, cat: "A", ser: "S");
+        lbl.Should().Be("0%", "CB2: ShowPercent with total=0 (guard) must render '0%'");
     }
 }

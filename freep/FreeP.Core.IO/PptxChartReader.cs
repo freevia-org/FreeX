@@ -174,39 +174,74 @@ internal static class PptxChartReader
     private static void DetectChartTypeAndSeries(
         XElement plotArea, ChartShape shape, PresentationColorScheme scheme)
     {
+        bool primaryFound = false;
+
         foreach (var el in plotArea.Elements())
         {
-            switch (el.Name.LocalName)
+            bool isChartType = el.Name.LocalName is
+                "barChart" or "bar3DChart" or "lineChart" or "line3DChart" or
+                "pieChart" or "pie3DChart" or "ofPieChart" or "doughnutChart" or
+                "areaChart" or "area3DChart" or "scatterChart" or "bubbleChart" or
+                "stockChart" or "radarChart" or "surfaceChart" or "surface3DChart";
+
+            if (!isChartType) continue;
+
+            if (!primaryFound)
             {
-                case "barChart":
-                case "bar3DChart":          // 3-D column/bar charts — treat same as 2D
-                    ReadBarChart(el, shape, scheme); return;
-                case "lineChart":
-                case "line3DChart":
-                    ReadLineChart(el, shape, scheme); return;
-                case "pieChart":
-                case "pie3DChart":
-                case "ofPieChart":          // pie-of-pie / bar-of-pie — best effort as Pie
-                    ReadPieChart(el, shape, scheme); return;
-                case "doughnutChart":
-                    ReadDoughnutChart(el, shape, scheme); return;
-                case "areaChart":
-                case "area3DChart":
-                    ReadAreaChart(el, shape, scheme); return;
-                case "scatterChart":
-                    ReadScatterChartDistinct(el, shape, scheme); return;
-                case "bubbleChart":
-                    ReadBubbleChart(el, shape, scheme); return;
-                case "stockChart":
-                    ReadLineChart(el, shape, scheme); return;     // stock ~= line
-                case "radarChart":
-                    ReadRadarChart(el, shape, scheme); return;
-                case "surfaceChart":
-                case "surface3DChart":
-                    ReadBarChart(el, shape, scheme); return;      // surface ~= column best-effort
+                // First chart-type group: sets shape.ChartType and reads primary series.
+                primaryFound = true;
+                switch (el.Name.LocalName)
+                {
+                    case "barChart":
+                    case "bar3DChart":
+                        ReadBarChart(el, shape, scheme); break;
+                    case "lineChart":
+                    case "line3DChart":
+                        ReadLineChart(el, shape, scheme); break;
+                    case "pieChart":
+                    case "pie3DChart":
+                    case "ofPieChart":
+                        ReadPieChart(el, shape, scheme); break;
+                    case "doughnutChart":
+                        ReadDoughnutChart(el, shape, scheme); break;
+                    case "areaChart":
+                    case "area3DChart":
+                        ReadAreaChart(el, shape, scheme); break;
+                    case "scatterChart":
+                        ReadScatterChartDistinct(el, shape, scheme); break;
+                    case "bubbleChart":
+                        ReadBubbleChart(el, shape, scheme); break;
+                    case "stockChart":
+                        ReadLineChart(el, shape, scheme); break;    // stock ~= line
+                    case "radarChart":
+                        ReadRadarChart(el, shape, scheme); break;
+                    case "surfaceChart":
+                    case "surface3DChart":
+                        ReadBarChart(el, shape, scheme); break;     // surface ~= column best-effort
+                }
+            }
+            else
+            {
+                // CA4: Secondary chart-type group in a combo chart (e.g. lineChart holding secondary
+                // series). Read its c:ser elements without changing shape.ChartType.
+                // The secondary axis detection (valAxIds loop below) will then mark these series
+                // with OnSecondaryAxis = true via their c:idx values.
+                switch (el.Name.LocalName)
+                {
+                    case "scatterChart":
+                        ReadScatterSeriesFromChart(el, shape, scheme); break;
+                    case "bubbleChart":
+                        ReadBubbleSeriesFromChart(el, shape, scheme); break;
+                    default:
+                        // All other combo secondaries (lineChart, barChart, areaChart, etc.)
+                        // use the standard cat/val series format.
+                        ReadSeriesFromChart(el, shape, scheme); break;
+                }
             }
         }
-        shape.ChartType = ChartType.Unknown;
+
+        if (!primaryFound)
+            shape.ChartType = ChartType.Unknown;
     }
 
     private static void ReadBarChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
