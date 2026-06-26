@@ -33,6 +33,12 @@ public static class PptxPackageReader
     private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
+    private const string CommentsRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
+
+    // p14 section extension namespace
+    private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 
     // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -140,6 +146,45 @@ public static class PptxPackageReader
             presentation.Slides.Add(slide);
         }
 
+        // Build a mapping from sldId integer → rId so we can resolve section membership.
+        // sldIdList was built above from p:sldIdLst elements.
+        var sldIdToRId = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var sldIdEl in sldIdList)
+        {
+            var numId = sldIdEl.Attribute("id")?.Value;
+            var rId2  = sldIdEl.Attribute(R + "id")?.Value;
+            if (!string.IsNullOrWhiteSpace(numId) && !string.IsNullOrWhiteSpace(rId2))
+                sldIdToRId[numId] = rId2;
+        }
+
+        // Sections from p:extLst / p:ext[@uri="{521415D9-…}"] / p14:sectionLst
+        ReadSections(presRoot, sldIdToRId, presentation);
+
+        // Comment authors live in a single ppt/commentAuthors.xml part referenced from presRels.
+        var cmAuthorsTarget = GetRelTarget(presRels, CommentAuthorsRelType);
+        var authorMap = new Dictionary<int, (string name, string initials)>();
+        if (cmAuthorsTarget is not null)
+        {
+            var cmAuthorsPath = ResolvePath(presDir, cmAuthorsTarget);
+            authorMap = ReadCommentAuthors(archive, cmAuthorsPath);
+        }
+
+        // Re-process each slide's comments now that we have the author map.
+        // (Comments were NOT parsed in ReadSlide yet — we do it here so authorMap is available.)
+        for (int si = 0; si < presentation.Slides.Count; si++)
+        {
+            var slide = presentation.Slides[si];
+            var rId = sldIdList.Count > si ? sldIdList[si].Attribute(R + "id")?.Value : null;
+            if (rId is null) continue;
+            if (!slideRelEntries.TryGetValue(rId, out var sr)) continue;
+            var slidePath2 = ResolvePath(presDir, sr.target);
+            var slideRels2 = LoadRels(archive, GetRelsPath(slidePath2));
+            var cmTarget = GetRelTarget(slideRels2, CommentsRelType);
+            if (cmTarget is null) continue;
+            var cmPath = ResolvePath(GetDirectory(slidePath2), cmTarget);
+            ReadSlideComments(archive, cmPath, authorMap, slide.Comments);
+        }
+
         return presentation;
     }
 
@@ -155,6 +200,127 @@ public static class PptxPackageReader
         props.Subject = xml.Root.Element(Dc + "subject")?.Value;
         props.Keywords = xml.Root.Element(Cp + "keywords")?.Value;
         props.Comments = xml.Root.Element(Dc + "description")?.Value;
+    }
+
+    // ── Sections ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses p14:sectionLst from the presentation.xml extLst and populates
+    /// <see cref="Presentation.Sections"/>.  <paramref name="sldIdToRId"/> maps the numeric
+    /// sldId integer (as string) to the relationship id so sections can reference Slide.Id.
+    /// </summary>
+    private static void ReadSections(
+        XElement presRoot,
+        Dictionary<string, string> sldIdToRId,
+        Presentation presentation)
+    {
+        var extLst = presRoot.Element(P + "extLst");
+        if (extLst is null) return;
+
+        foreach (var ext in extLst.Elements(P + "ext"))
+        {
+            if (ext.Attribute("uri")?.Value != SectionExtUri) continue;
+
+            var sectionLst = ext.Element(P14 + "sectionLst");
+            if (sectionLst is null) continue;
+
+            foreach (var sectionEl in sectionLst.Elements(P14 + "section"))
+            {
+                var section = new PresentationSection
+                {
+                    Name = sectionEl.Attribute("name")?.Value ?? string.Empty,
+                    Id   = sectionEl.Attribute("id")?.Value   ?? Guid.NewGuid().ToString("B").ToUpperInvariant(),
+                };
+
+                // p14:sldIdLst holds the slide ids belonging to this section.
+                var sldIdLstEl = sectionEl.Element(P14 + "sldIdLst");
+                if (sldIdLstEl is not null)
+                {
+                    foreach (var sldIdEl in sldIdLstEl.Elements(P14 + "sldId"))
+                    {
+                        // The id= attribute is the numeric sldId integer (same as p:sldId id=).
+                        var numId = sldIdEl.Attribute("id")?.Value;
+                        if (!string.IsNullOrWhiteSpace(numId))
+                            section.SlideIds.Add(numId);
+                    }
+                }
+
+                presentation.Sections.Add(section);
+            }
+            break; // only one sectionLst ext expected
+        }
+    }
+
+    // ── Comment authors ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads ppt/commentAuthors.xml and returns a map of authorId → (name, initials).
+    /// </summary>
+    private static Dictionary<int, (string name, string initials)> ReadCommentAuthors(
+        ZipArchive archive, string path)
+    {
+        var result = new Dictionary<int, (string name, string initials)>();
+        var xml = LoadXml(archive, path);
+        if (xml?.Root is null) return result;
+
+        foreach (var cmAuthorEl in xml.Root.Elements(P + "cmAuthor"))
+        {
+            if (!int.TryParse(cmAuthorEl.Attribute("id")?.Value, out var id)) continue;
+            var name     = cmAuthorEl.Attribute("name")?.Value     ?? string.Empty;
+            var initials = cmAuthorEl.Attribute("initials")?.Value ?? string.Empty;
+            result[id] = (name, initials);
+        }
+
+        return result;
+    }
+
+    // ── Slide comments ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads a ppt/comments/commentN.xml part and appends parsed comments to
+    /// <paramref name="comments"/>.  Author names/initials are resolved from
+    /// <paramref name="authorMap"/>.
+    /// </summary>
+    private static void ReadSlideComments(
+        ZipArchive archive,
+        string path,
+        Dictionary<int, (string name, string initials)> authorMap,
+        List<SlideComment> comments)
+    {
+        var xml = LoadXml(archive, path);
+        if (xml?.Root is null) return;
+
+        foreach (var cmEl in xml.Root.Elements(P + "cm"))
+        {
+            if (!int.TryParse(cmEl.Attribute("authorId")?.Value, out var authorId)) authorId = 0;
+            if (!int.TryParse(cmEl.Attribute("idx")?.Value, out var idx)) idx = 0;
+
+            authorMap.TryGetValue(authorId, out var author);
+
+            DateTime? dt = null;
+            var dtStr = cmEl.Attribute("dt")?.Value;
+            if (!string.IsNullOrWhiteSpace(dtStr) &&
+                System.DateTime.TryParse(dtStr, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
+                dt = parsed;
+
+            var posEl = cmEl.Element(P + "pos");
+            long x = ParseLong(posEl?.Attribute("x")?.Value);
+            long y = ParseLong(posEl?.Attribute("y")?.Value);
+
+            var text = cmEl.Element(P + "text")?.Value ?? string.Empty;
+
+            comments.Add(new SlideComment
+            {
+                AuthorId = authorId,
+                Author   = author.name,
+                Initials = author.initials,
+                Text     = text,
+                DateTime = dt,
+                Xemu     = x,
+                Yemu     = y,
+                Idx      = idx,
+            });
+        }
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────────

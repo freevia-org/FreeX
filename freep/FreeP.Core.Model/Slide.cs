@@ -340,6 +340,15 @@ public sealed class Slide
     /// </summary>
     public TextBody? Notes { get; set; }
 
+    // ── Comments ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Comments attached to this slide (legacy p:cm schema, ppt/comments/commentN.xml).
+    /// Empty when the slide has no comments. Author identity is de-duplicated on write
+    /// into a shared commentAuthors.xml part.
+    /// </summary>
+    public List<SlideComment> Comments { get; } = new();
+
     // ── Legacy title accessor ─────────────────────────────────────────────────────
 
     /// <summary>
