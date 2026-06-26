@@ -526,6 +526,11 @@ public sealed partial class MainWindow
 
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
         var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog");
+        // Explicit size so the headless parity capture (which reads dialog.Bounds verbatim) shows the full
+        // two-group layout + OK/Cancel without clipping and without a stray scrollbar track on the right.
+        dialog.SizeToContent = SizeToContent.Manual;
+        dialog.Width = 432;
+        dialog.Height = 760;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>
@@ -583,9 +588,8 @@ public sealed partial class MainWindow
             {
                 new ScrollViewer
                 {
-                    MaxHeight = 520,
                     HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                     Content = bodyStack,
                 },
                 buttonRow,

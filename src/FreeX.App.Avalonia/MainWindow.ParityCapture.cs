@@ -170,7 +170,7 @@ public sealed partial class MainWindow
         ("dialog.InsertTimeline", () => ShowInsertTimelineParityDialogAsync()),
         ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
         ("dialog.ProtectSheet", () => ShowProtectSheetDialogAsync()),
-        ("dialog.ProtectWorkbook", () => ShowProtectWorkbookDialogAsync()),
+        ("dialog.ProtectWorkbook", () => ShowProtectWorkbookParityDialogAsync()),
         ("dialog.AccessibilityChecker", () => ShowAccessibilityCheckerDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
@@ -956,6 +956,20 @@ public sealed partial class MainWindow
         _session.Workbook.CustomViews.Add(new WorkbookCustomView("Summary View", []));
         _session.Workbook.CustomViews.Add(new WorkbookCustomView("Detailed View", []));
         await ShowCustomViewsManagerDialogAsync();
+    }
+
+    private async Task ShowProtectWorkbookParityDialogAsync()
+    {
+        // Protect the workbook (with a password) first so the dialog renders the SAME "Unprotect
+        // Workbook" variant the WPF host capture hard-codes — otherwise Linux shows the Protect
+        // variant and the two captures can't be compared.
+        if (!_session.Workbook.IsStructureProtected)
+        {
+            _session.ExecuteReviewCommand(new ProtectWorkbookCommand("pw"));
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+
+        await ShowProtectWorkbookDialogAsync();
     }
 
     private async Task ShowAllowEditRangesParityDialogAsync()

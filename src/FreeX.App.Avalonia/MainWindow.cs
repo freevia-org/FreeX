@@ -8649,18 +8649,10 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetHelpText(sheetBox, UiText.Get("UnhideSheet_SelectTheHiddenWorksheetToMakeVisible"));
         sheetBox.DoubleTapped += (_, _) => Accept();
 
-        var okButton = new Button
-        {
-            Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
-        };
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
-        };
+        var okButton = new Button { Content = "OK" };
+        var cancelButton = new Button { Content = "Cancel" };
+        ApplyDialogButtonChrome(okButton, width: 84, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, width: 84);
         AutomationProperties.SetAutomationId(okButton, "UnhideSheetOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "UnhideSheetCancelButton");
 
@@ -8696,8 +8688,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
@@ -8936,6 +8928,7 @@ public sealed partial class MainWindow : Window
             SelectedIndex = 0,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
+        ApplyClassicTabChrome(tabs);
 
         // ── Shared options ──────────────────────────────────────────────────────
         var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
@@ -10178,6 +10171,9 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(targetBox, "HyperlinkTargetTextBox");
         ApplyDialogTextBoxChrome(targetBox);
 
+        // ScreenTip / Bookmark are surfaced as buttons on Windows (not inline fields).
+        // These backing text boxes hold the current values but are not added to the
+        // visible tree; the buttons below edit them via small popup prompts.
         var screenTipBox = new TextBox
         {
             Text = prefill.ScreenTip,
@@ -10195,6 +10191,18 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(bookmarkBox, UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel"));
         AutomationProperties.SetAutomationId(bookmarkBox, "HyperlinkBookmarkTextBox");
         ApplyDialogTextBoxChrome(bookmarkBox);
+
+        var screenTipButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTip")) };
+        ApplyDialogButtonChrome(screenTipButton, width: 96);
+        AutomationProperties.SetName(screenTipButton, "ScreenTip");
+        AutomationProperties.SetAutomationId(screenTipButton, "HyperlinkScreenTipButton");
+        AutomationProperties.SetHelpText(screenTipButton, "Set the ScreenTip text shown when hovering the hyperlink.");
+
+        var bookmarkButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_Bookmark")) };
+        ApplyDialogButtonChrome(bookmarkButton, width: 96);
+        AutomationProperties.SetName(bookmarkButton, "Bookmark");
+        AutomationProperties.SetAutomationId(bookmarkButton, "HyperlinkBookmarkButton");
+        AutomationProperties.SetHelpText(bookmarkButton, "Choose a bookmark or cell reference within the destination.");
 
         var validationText = new TextBlock
         {
@@ -10258,6 +10266,26 @@ public sealed partial class MainWindow : Window
         linkTypeBox.SelectionChanged += (_, _) => RefreshTargetField();
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
+        screenTipButton.Click += async (_, _) =>
+        {
+            var value = await ShowHyperlinkSubPromptAsync(
+                dialog,
+                UiText.Get("Hyperlink_SetHyperlinkScreenTipTitle"),
+                StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTipTextLabel")),
+                screenTipBox.Text);
+            if (value is not null)
+                screenTipBox.Text = value;
+        };
+        bookmarkButton.Click += async (_, _) =>
+        {
+            var value = await ShowHyperlinkSubPromptAsync(
+                dialog,
+                StripDisplayMnemonic(UiText.Get("Hyperlink_Bookmark")).Replace(".", string.Empty).Trim(),
+                StripDisplayMnemonic(UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel")),
+                bookmarkBox.Text);
+            if (value is not null)
+                bookmarkBox.Text = value;
+        };
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -10306,8 +10334,17 @@ public sealed partial class MainWindow : Window
         // arranged as label/field rows like the Windows dialog's right region.
         targetBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         displayBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-        screenTipBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-        bookmarkBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+
+        // ScreenTip... + Bookmark... sit on one right-aligned row beneath the Address
+        // field (as buttons, not inline fields), matching the Windows dialog.
+        var hyperlinkButtonsRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children = { screenTipButton, bookmarkButton },
+        };
+
         var detailArea = new StackPanel
         {
             Spacing = 10,
@@ -10315,12 +10352,7 @@ public sealed partial class MainWindow : Window
             {
                 CreateHyperlinkField(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_TextToDisplay")) }, displayBox),
                 CreateHyperlinkField(targetLabel, targetBox),
-                CreateHyperlinkField(
-                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTipTextLabel")) },
-                    screenTipBox),
-                CreateHyperlinkField(
-                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel")) },
-                    bookmarkBox),
+                hyperlinkButtonsRow,
             },
         };
 
@@ -10353,6 +10385,75 @@ public sealed partial class MainWindow : Window
         };
 
         await dialog.ShowDialog(this);
+        return result;
+    }
+
+    // Small modal prompt used by the Insert Hyperlink "ScreenTip..." / "Bookmark..."
+    // buttons to edit their value, mirroring the Windows secondary dialogs.
+    private static async Task<string?> ShowHyperlinkSubPromptAsync(
+        Window owner,
+        string title,
+        string label,
+        string? initialValue)
+    {
+        string? result = null;
+        var prompt = new Window
+        {
+            Title = title,
+            Width = 380,
+            Height = 160,
+            MinWidth = 340,
+            MinHeight = 150,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+        };
+
+        var inputBox = new TextBox { Text = initialValue ?? string.Empty, MinWidth = 300 };
+        ApplyDialogTextBoxChrome(inputBox);
+        AutomationProperties.SetName(inputBox, label);
+
+        var okButton = new Button { Content = UiText.Get("Common_Ok") };
+        ApplyDialogButtonChrome(okButton, width: 84, isDefault: true);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel") };
+        ApplyDialogButtonChrome(cancelButton, width: 84);
+
+        void Accept()
+        {
+            result = inputBox.Text ?? string.Empty;
+            prompt.Close();
+        }
+
+        okButton.Click += (_, _) => Accept();
+        cancelButton.Click += (_, _) => prompt.Close();
+        prompt.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { e.Handled = true; Accept(); }
+            else if (e.Key == Key.Escape) { e.Handled = true; prompt.Close(); }
+        };
+
+        prompt.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = label },
+                inputBox,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Margin = new Thickness(0, 8, 0, 0),
+                    Children = { okButton, cancelButton },
+                },
+            },
+        };
+        prompt.Opened += (_, _) => { inputBox.Focus(); inputBox.SelectAll(); };
+
+        await prompt.ShowDialog(owner);
         return result;
     }
 
@@ -11821,19 +11922,28 @@ public sealed partial class MainWindow : Window
         contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
         tabStrip.Styles.Add(contentPaneStyle);
 
-        // Outlined inactive tabs (classic look). Default + non-selected.
+        // Outlined inactive tabs (classic look). Default + non-selected. The bottom
+        // border is omitted so the tab strip sits flush against the pane below.
         var tabStyle = new Style(s => s.OfType<TabItem>());
         tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, inactiveTabBorder));
         tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
         tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, inactiveTabBackground));
         tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(10, 4)));
+        // No vertical margin keeps the tab row touching the pane (removes the gap);
+        // the small right margin separates adjacent tabs.
         tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, 0)));
         tabStrip.Styles.Add(tabStyle);
 
-        // Selected tab: white background to merge with the content pane.
+        // Selected tab: white body that overlaps the pane's top border by 1px so the
+        // border visually BREAKS under the active tab name and the tab merges into the
+        // pane (matching the Windows classic tab look). The bottom margin of -1 pulls
+        // the white tab down over the gray pane line directly beneath it.
         var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
         selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, paneBorder));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, -1)));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));
         tabStrip.Styles.Add(selectedTabStyle);
     }
 
@@ -12132,20 +12242,12 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(inputBox, label);
         AutomationProperties.SetAutomationId(inputBox, automationId);
 
-        var acceptButton = new Button
-        {
-            Content = acceptText,
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
-        };
+        var acceptButton = new Button { Content = acceptText };
+        ApplyDialogButtonChrome(acceptButton, width: 84, isDefault: true);
         AutomationProperties.SetAutomationId(acceptButton, $"{automationId}AcceptButton");
 
-        var cancelButton = new Button
-        {
-            Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
-        };
+        var cancelButton = new Button { Content = "Cancel" };
+        ApplyDialogButtonChrome(cancelButton, width: 84);
         AutomationProperties.SetAutomationId(cancelButton, $"{automationId}CancelButton");
 
         void Accept()
@@ -12177,8 +12279,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
                 acceptButton,
+                cancelButton,
             },
         };
 
@@ -13863,6 +13965,9 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 0, 0, 16),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
+            // Space the status lines out vertically to match the Windows dialog,
+            // which renders each line with a blank-line gap between them.
+            LineHeight = 28,
         };
         AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
@@ -15174,9 +15279,9 @@ public sealed partial class MainWindow : Window
         {
             Title = UiText.Get("ScenarioManager_ScenarioManager"),
             Width = 500,
-            Height = 560,
+            Height = 640,
             MinWidth = 480,
-            MinHeight = 520,
+            MinHeight = 600,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             FontFamily = FormulaBarFontFamily,
@@ -15245,6 +15350,17 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(changingCellsBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCellsAutomationName")));
         AutomationProperties.SetAutomationId(changingCellsBox, "ScenarioManagerChangingCellsBox");
         AutomationProperties.SetHelpText(changingCellsBox, UiText.Get("ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario"));
+
+        // Result cells field (Windows shows both Changing cells and Result cells).
+        var resultCellsBox = new TextBox
+        {
+            MinWidth = 260,
+            IsReadOnly = true,
+        };
+        ApplyDataToolsTextBoxChrome(resultCellsBox);
+        AutomationProperties.SetName(resultCellsBox, "Result cells");
+        AutomationProperties.SetAutomationId(resultCellsBox, "ScenarioManagerResultCellsBox");
+        AutomationProperties.SetHelpText(resultCellsBox, "The worksheet cells whose results the scenario reports.");
 
         var preventChangesBox = new CheckBox
         {
@@ -15503,13 +15619,14 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            // Top margin keeps Close clearly below the "Add/Edit Scenario" group box
+            // instead of overlapping its bottom border.
+            Margin = new Thickness(0, 14, 0, 0),
             Children =
             {
                 closeButton,
             },
         };
-        DockPanel.SetDock(closeButtonRow, Dock.Bottom);
 
         var actionColumn = new StackPanel
         {
@@ -15565,6 +15682,9 @@ public sealed partial class MainWindow : Window
                         StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCells")),
                         changingCellsBox),
                     CreateScenarioManagerField(
+                        "Result cells:",
+                        resultCellsBox),
+                    CreateScenarioManagerField(
                         StripDisplayMnemonic(UiText.Get("ScenarioManager_Comment")),
                         commentBox),
                     new StackPanel
@@ -15579,25 +15699,24 @@ public sealed partial class MainWindow : Window
 
         RefreshDialogPlan(selectedScenarioName);
         nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
-        dialog.Content = new DockPanel
+        dialog.Content = new ScrollViewer
         {
-            Margin = new Thickness(16),
-            Children =
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = new StackPanel
             {
-                closeButtonRow,
-                new StackPanel
+                Margin = new Thickness(16),
+                Spacing = 10,
+                Children =
                 {
-                    Spacing = 10,
-                    Children =
-                    {
-                        statusText,
-                        scenariosHeader,
-                        listWithButtons,
-                        selectionText,
-                        scenarioDetailsText,
-                        addEditGroup,
-                        errorText,
-                    },
+                    statusText,
+                    scenariosHeader,
+                    listWithButtons,
+                    selectionText,
+                    scenarioDetailsText,
+                    addEditGroup,
+                    errorText,
+                    closeButtonRow,
                 },
             },
         };
@@ -15840,8 +15959,8 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
@@ -16068,8 +16187,8 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 10, 0, 0),
             Children =
             {
-                cancelButton,
                 createButton,
+                cancelButton,
             },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);

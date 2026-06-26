@@ -151,11 +151,15 @@ public sealed partial class MainWindow
         var searchBox = new TextBox
         {
             MinWidth = 150,
-            Width = 150,
+            MaxWidth = 200,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             FontSize = 12,
             Height = 24,
             MinHeight = 24,
             MaxHeight = 24,
+            // Right margin keeps the field inside the tab pane (it sits in the trailing
+            // star column and would otherwise stretch flush to / past the dialog edge).
+            Margin = new Thickness(0, 0, 8, 0),
             Padding = new Thickness(4, 1),
             VerticalContentAlignment = VerticalAlignment.Center,
         };
@@ -242,6 +246,7 @@ public sealed partial class MainWindow
                 new TabItem { Header = "Special Characters", Content = specialPanel },
             },
         };
+        ApplyClassicTabChrome(tabs);
 
         var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, ApplySelection);
         // Right details column: 210px to comfortably fit "Inverted Exclamation Mark" in SemiBold on Linux/Skia.

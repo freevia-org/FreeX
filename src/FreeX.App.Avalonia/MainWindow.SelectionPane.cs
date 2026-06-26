@@ -232,6 +232,7 @@ public sealed partial class MainWindow
             {
                 IsChecked = row.IsVisible,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                 MinWidth = 0,
                 Margin = new Thickness(0),
@@ -263,19 +264,25 @@ public sealed partial class MainWindow
                 Text = SelectionPaneKindLabel(row.Kind),
                 Foreground = SecondaryInk,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
             };
 
-            // Fixed shared columns so the checkbox / name / type line up row-to-row (Windows parity).
+            // Fixed shared columns so the checkbox / name / type line up row-to-row (Windows parity):
+            // the name occupies a fixed-width slot and the type label sits immediately after it (matching
+            // the Windows screenshot, where the type is not pushed to the far right). Every cell is
+            // vertically centered in a uniform 24px row so the three columns share one horizontal line.
             var rowGrid = new Grid
             {
                 MinHeight = 24,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 ColumnDefinitions =
                 {
                     new ColumnDefinition { Width = new GridLength(28) },
+                    new ColumnDefinition { Width = new GridLength(150) },
+                    new ColumnDefinition { Width = GridLength.Auto },
                     new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                    new ColumnDefinition { Width = new GridLength(110) },
                 },
             };
             Grid.SetColumn(visibilityBox, 0);

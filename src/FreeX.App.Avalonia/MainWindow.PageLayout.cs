@@ -867,6 +867,7 @@ public sealed partial class MainWindow
             Items = { pageTab, marginsTab, headerFooterTab, sheetTab },
         };
         AutomationProperties.SetAutomationId(tabs, "PageSetupTabs");
+        ApplyClassicTabChrome(tabs);
 
         void SelectValidationRoute(PageSetupValidationRoute route)
         {

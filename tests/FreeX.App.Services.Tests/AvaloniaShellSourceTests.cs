@@ -2315,7 +2315,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.PivotValueFieldSettings\", () => ShowPivotValueFieldSettingsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.AllowEditRanges\", () => ShowAllowEditRangesParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.ProtectSheet\", () => ShowProtectSheetDialogAsync()),");
-        parityCaptureSource.Should().Contain("(\"dialog.ProtectWorkbook\", () => ShowProtectWorkbookDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ProtectWorkbook\", () => ShowProtectWorkbookParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerDialogAsync()),");
 
         parityCaptureSource.Should().Contain("private Task ShowInsertHyperlinkParityDialogAsync()");
