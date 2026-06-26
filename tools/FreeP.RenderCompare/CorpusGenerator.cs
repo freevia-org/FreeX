@@ -74,6 +74,7 @@ internal static class CorpusGenerator
                 ("12-fills",        GenerateFills),
                 ("13-wordart",      GenerateWordArt),
                 ("14-smartart-live", GenerateSmartArtLive),
+                ("16-bg-tabs-vtext", GenerateBgTabsVtext),
             };
 
             var errors = 0;
@@ -1558,6 +1559,144 @@ internal static class CorpusGenerator
                         try { nodes.Item(ni).TextFrame2.TextRange.Text = texts[ni - 1]; } catch { }
                 }
                 catch (Exception ex) { Console.Write($"(List SmartArt: {ex.Message}) "); }
+            }
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 16-bg-tabs-vtext: slide gradient background + tab stops + vertical text
+    // -----------------------------------------------------------------------
+
+    private static void GenerateBgTabsVtext(dynamic app, string pptxPath, string refDir)
+    {
+        // PowerPoint COM constants
+        const int PpTabStopLeft       = 1;  // ppTabStopLeft
+        const int PpTabStopRight      = 3;  // ppTabStopRight
+        const int PpOrientationUpward = 2;  // ppUpward  (90° vertical text)
+        const int PpOrientationDownward = 3;  // ppDownward (270°)
+
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+
+            // ── Slide 1: gradient slide background ──────────────────────────
+            {
+                dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+                // Set a two-color gradient background.
+                // Must unlink from master first (FollowMasterBackground = MsoFalse).
+                try
+                {
+                    slide.FollowMasterBackground = MsoFalse;
+                    slide.Background.Fill.TwoColorGradient(1, 1);  // msoGradientHorizontal, variant 1
+                    slide.Background.Fill.ForeColor.RGB = 0xFFD0A0;  // peach / light orange
+                    slide.Background.Fill.BackColor.RGB = 0x0070C0;  // blue
+                }
+                catch (Exception ex) { Console.Write($"(bg gradient: {ex.Message}) "); }
+
+                // Title label
+                dynamic tb = slide.Shapes.AddTextbox(1, 20f, 8f, 900f, 35f);
+                tb.TextFrame.TextRange.Text = "Slide 1 — Gradient Background";
+                tb.TextFrame.TextRange.Font.Size = 20;
+                tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+                tb.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            }
+
+            // ── Slide 2: tab stops ───────────────────────────────────────────
+            {
+                dynamic slide = pres.Slides.Add(2, PpLayoutBlank);
+
+                // Title
+                dynamic lblTb = slide.Shapes.AddTextbox(1, 20f, 8f, 900f, 35f);
+                lblTb.TextFrame.TextRange.Text = "Slide 2 — Tab Stops";
+                lblTb.TextFrame.TextRange.Font.Size = 18;
+                lblTb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+                // Textbox with tab-delimited columns
+                dynamic tb = slide.Shapes.AddTextbox(1, 40f, 60f, 880f, 300f);
+                tb.Name = "TabDemo";
+                tb.TextFrame.WordWrap = MsoTrue;
+
+                // Three tab stops using TextFrame2.TextRange API.
+                try
+                {
+                    dynamic tf2 = tb.TextFrame2;
+                    dynamic tr = tf2.TextRange;
+                    tr.Text = "Name\tDept\tSalary\rAlice\tEngineering\t$95,000\rBob\tMarketing\t$72,000\rCarol\tFinance\t$88,000";
+                    // TabStops via TextFrame2.TextRange.ParagraphFormat
+                    dynamic pf2 = tr.ParagraphFormat;
+                    try
+                    {
+                        pf2.TabStops.Add(200f * 12700, PpTabStopLeft);   // EMU: 200pt * 12700
+                        pf2.TabStops.Add(450f * 12700, PpTabStopLeft);
+                        pf2.TabStops.Add(680f * 12700, PpTabStopRight);
+                    }
+                    catch
+                    {
+                        // Fallback: Tab stops via points using TextRange1.ParagraphFormat
+                        try
+                        {
+                            dynamic pf1 = tb.TextFrame.TextRange.ParagraphFormat;
+                            pf1.TabStops.Add(200f, PpTabStopLeft);
+                            pf1.TabStops.Add(450f, PpTabStopLeft);
+                            pf1.TabStops.Add(680f, PpTabStopRight);
+                        }
+                        catch { }
+                    }
+                    tr.Font.Size = 16;
+                }
+                catch (Exception ex) { Console.Write($"(tabs: {ex.Message}) "); }
+            }
+
+            // ── Slide 3: vertical text ───────────────────────────────────────
+            {
+                dynamic slide = pres.Slides.Add(3, PpLayoutBlank);
+
+                // Title
+                dynamic lblTb = slide.Shapes.AddTextbox(1, 20f, 8f, 900f, 35f);
+                lblTb.TextFrame.TextRange.Text = "Slide 3 — Vertical Text";
+                lblTb.TextFrame.TextRange.Font.Size = 18;
+                lblTb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+                // Vertical-up textbox (90°)
+                try
+                {
+                    dynamic sh1 = slide.Shapes.AddShape(MsoShapeRectangle, 60f, 60f, 80f, 300f);
+                    sh1.Name = "VertUp";
+                    sh1.Fill.ForeColor.RGB = 0x4472C4;
+                    sh1.Fill.Solid();
+                    sh1.TextFrame.TextRange.Text = "Vertical Upward Text";
+                    sh1.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+                    sh1.TextFrame.TextRange.Font.Size = 14;
+                    sh1.TextFrame.Orientation = PpOrientationUpward;
+                }
+                catch (Exception ex) { Console.Write($"(vert-up: {ex.Message}) "); }
+
+                // Vertical-down textbox (270°)
+                try
+                {
+                    dynamic sh2 = slide.Shapes.AddShape(MsoShapeRectangle, 200f, 60f, 80f, 300f);
+                    sh2.Name = "VertDown";
+                    sh2.Fill.ForeColor.RGB = 0xED7D31;
+                    sh2.Fill.Solid();
+                    sh2.TextFrame.TextRange.Text = "Vertical Downward Text";
+                    sh2.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+                    sh2.TextFrame.TextRange.Font.Size = 14;
+                    sh2.TextFrame.Orientation = PpOrientationDownward;
+                }
+                catch (Exception ex) { Console.Write($"(vert-down: {ex.Message}) "); }
+
+                // Regular horizontal comparison text
+                dynamic cmpTb = slide.Shapes.AddTextbox(1, 340f, 150f, 500f, 60f);
+                cmpTb.TextFrame.TextRange.Text = "← Compare with horizontal text here";
+                cmpTb.TextFrame.TextRange.Font.Size = 14;
             }
 
             SaveAndExport(pres, pptxPath, refDir);
