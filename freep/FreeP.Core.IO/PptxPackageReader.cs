@@ -1563,7 +1563,8 @@ public static class PptxPackageReader
         // P3: also carry the picture's outline (a:ln inside p:spPr) — already handled by ReadSpPr.
 
         // blipFill → poster / image
-        var blip = pic.Element(P + "blipFill")?.Element(A + "blip");
+        var blipFillEl = pic.Element(P + "blipFill");
+        var blip = blipFillEl?.Element(A + "blip");
         var embedId = blip?.Attribute(R + "embed")?.Value;
         if (!string.IsNullOrWhiteSpace(embedId))
         {
@@ -1586,6 +1587,10 @@ public static class PptxPackageReader
                 }
             }
         }
+
+        // 18A: parse crop (a:srcRect) and blip colour effects
+        if (blipFillEl is not null || blip is not null)
+            shape.PictureFormat = ReadPictureFormat(blipFillEl, blip);
 
         // Detect media (audio/video) — a:videoFile or a:audioFile inside p:nvPr
         if (nvPr is not null)
@@ -2996,6 +3001,79 @@ public static class PptxPackageReader
     }
 
     // ── Content-type guessing ────────────────────────────────────────────────────
+
+    // ── 18A: picture crop + colour effects ───────────────────────────────────────────
+
+    /// <summary>
+    /// Parses <c>a:srcRect</c> (crop) from <paramref name="blipFillEl"/> and colour-effect
+    /// child elements of <paramref name="blip"/> into a <see cref="PictureFormat"/>.
+    /// Returns null when neither crop nor any effect is present.
+    /// </summary>
+    private static PictureFormat? ReadPictureFormat(XElement? blipFillEl, XElement? blip)
+    {
+        var fmt = new PictureFormat();
+
+        // ── Crop — a:blipFill/a:srcRect ──────────────────────────────────────────
+        // l/t/r/b are in 1/1000 of a percent (100000 = 100%).  Divide by 100000 to get 0..1.
+        var srcRect = blipFillEl?.Element(A + "srcRect");
+        if (srcRect is not null)
+        {
+            fmt.CropLeft   = ParsePercentFraction(srcRect.Attribute("l")?.Value);
+            fmt.CropTop    = ParsePercentFraction(srcRect.Attribute("t")?.Value);
+            fmt.CropRight  = ParsePercentFraction(srcRect.Attribute("r")?.Value);
+            fmt.CropBottom = ParsePercentFraction(srcRect.Attribute("b")?.Value);
+        }
+
+        // ── Colour effects — children of a:blip ──────────────────────────────────
+        if (blip is not null)
+        {
+            // a:grayscl (no attributes)
+            if (blip.Element(A + "grayscl") is not null)
+                fmt.Grayscale = true;
+
+            // a:biLevel thresh="50000"  (1/1000 %)
+            var biLevel = blip.Element(A + "biLevel");
+            if (biLevel is not null)
+                fmt.BiLevelThreshold = ParsePercentFraction(biLevel.Attribute("thresh")?.Value);
+
+            // a:lum bright="-10000" contrast="20000"
+            var lum = blip.Element(A + "lum");
+            if (lum is not null)
+            {
+                var bStr = lum.Attribute("bright")?.Value;
+                var cStr = lum.Attribute("contrast")?.Value;
+                if (bStr is not null)
+                    fmt.Brightness = ParseSignedPercentFraction(bStr);
+                if (cStr is not null)
+                    fmt.Contrast = ParseSignedPercentFraction(cStr);
+            }
+
+            // a:alphaModFix amt="75000" (1/1000 %; 100000 = fully opaque = 1.0)
+            var alphaFix = blip.Element(A + "alphaModFix");
+            if (alphaFix is not null)
+                fmt.AlphaModPct = ParsePercentFraction(alphaFix.Attribute("amt")?.Value);
+        }
+
+        // Return null when nothing was set so the caller can use null as "no format".
+        return (fmt.HasCrop || fmt.HasColorEffect) ? fmt : null;
+    }
+
+    /// <summary>Parses an OOXML 1/1000-of-a-percent string to a 0..1 fraction (unsigned).</summary>
+    private static double ParsePercentFraction(string? value)
+    {
+        if (!long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
+            return 0;
+        return v / 100_000.0;
+    }
+
+    /// <summary>Parses an OOXML 1/1000-of-a-percent string to a -1..1 fraction (signed, e.g. lum bright=).</summary>
+    private static double ParseSignedPercentFraction(string? value)
+    {
+        if (!long.TryParse(value, NumberStyles.Integer | NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture, out var v))
+            return 0;
+        return v / 100_000.0;
+    }
 
     private static string GuessContentType(string path)
     {

@@ -1479,16 +1479,83 @@ public static class PptxPackageWriter
         mediaById.TryGetValue(shape.Id, out var embedRelId);
         embedRelId ??= "rIdMedia1";
 
+        // 18A: build a:blip with optional colour effects
+        var blipEl = BuildBlipEl(embedRelId, shape.PictureFormat);
+
+        // 18A: build a:blipFill with optional a:srcRect (crop)
+        var blipFillEl = BuildBlipFillEl(blipEl, shape.PictureFormat);
+
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
                 CnvPr(shape.Id, shape.Name),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr")),
-            new XElement(P + "blipFill",
-                new XElement(A + "blip", new XAttribute(R + "embed", embedRelId)),
-                new XElement(A + "stretch", new XElement(A + "fillRect"))),
+            blipFillEl,
             BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
     }
+
+    /// <summary>
+    /// 18A: Builds <c>a:blip</c> with the embed rel id and any colour-effect child elements
+    /// derived from <paramref name="fmt"/>.
+    /// </summary>
+    private static XElement BuildBlipEl(string embedRelId, PictureFormat? fmt)
+    {
+        var blip = new XElement(A + "blip", new XAttribute(R + "embed", embedRelId));
+        if (fmt is null) return blip;
+
+        // Colour effects — order matches OOXML schema sequence
+        if (fmt.Grayscale)
+            blip.Add(new XElement(A + "grayscl"));
+
+        if (fmt.BiLevelThreshold.HasValue)
+            blip.Add(new XElement(A + "biLevel",
+                new XAttribute("thresh", FormatPercentFraction(fmt.BiLevelThreshold.Value))));
+
+        if (fmt.Brightness.HasValue || fmt.Contrast.HasValue)
+        {
+            var lum = new XElement(A + "lum");
+            if (fmt.Brightness.HasValue)
+                lum.Add(new XAttribute("bright", FormatSignedPercentFraction(fmt.Brightness.Value)));
+            if (fmt.Contrast.HasValue)
+                lum.Add(new XAttribute("contrast", FormatSignedPercentFraction(fmt.Contrast.Value)));
+            blip.Add(lum);
+        }
+
+        if (fmt.AlphaModPct.HasValue)
+            blip.Add(new XElement(A + "alphaModFix",
+                new XAttribute("amt", FormatPercentFraction(fmt.AlphaModPct.Value))));
+
+        return blip;
+    }
+
+    /// <summary>
+    /// 18A: Builds <c>p:blipFill</c> containing the blip element, an optional <c>a:srcRect</c>
+    /// for crop, and a standard <c>a:stretch/a:fillRect</c>.
+    /// </summary>
+    private static XElement BuildBlipFillEl(XElement blipEl, PictureFormat? fmt)
+    {
+        var blipFill = new XElement(P + "blipFill", blipEl);
+
+        if (fmt is { HasCrop: true })
+        {
+            blipFill.Add(new XElement(A + "srcRect",
+                new XAttribute("l", FormatPercentFraction(fmt.CropLeft)),
+                new XAttribute("t", FormatPercentFraction(fmt.CropTop)),
+                new XAttribute("r", FormatPercentFraction(fmt.CropRight)),
+                new XAttribute("b", FormatPercentFraction(fmt.CropBottom))));
+        }
+
+        blipFill.Add(new XElement(A + "stretch", new XElement(A + "fillRect")));
+        return blipFill;
+    }
+
+    // Converts a 0..1 fraction to OOXML 1/1000-of-a-percent integer (e.g. 0.125 → 12500).
+    private static string FormatPercentFraction(double v) =>
+        ((long)Math.Round(v * 100_000.0)).ToString(CultureInfo.InvariantCulture);
+
+    // Converts a -1..1 fraction to OOXML 1/1000-of-a-percent signed integer (e.g. -0.1 → -10000).
+    private static string FormatSignedPercentFraction(double v) =>
+        ((long)Math.Round(v * 100_000.0)).ToString(CultureInfo.InvariantCulture);
 
     private static XElement BuildMediaPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
     {
