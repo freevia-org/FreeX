@@ -7,6 +7,7 @@
     <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
@@ -58,6 +59,7 @@
     <DefineConstants>$(DefineConstants);FREEX_MACOS_SHARE_SHEET</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Opc" />
   </ItemGroup>
   <ItemGroup>

@@ -1060,13 +1060,13 @@ public partial class GridView
             DrawArrowheadWpf(dc, tailArrow, endPt, dirStartToEnd, strokeDip, arrowBrush);
     }
 
-    private static Point ArrowWpfPointFromLayout(FreeX.App.Presentation.Charts.LayoutPoint p) =>
+    private static Point ArrowWpfPointFromLayout(LayoutPoint p) =>
         new(p.X, p.Y);
 
     private void DrawArrowheadWpf(
         DrawingContext dc,
         DrawingArrowhead arrowhead,
-        FreeX.App.Presentation.Charts.LayoutPoint tip,
+        LayoutPoint tip,
         double directionRadians,
         double strokeWidth,
         Brush brush)
@@ -2041,14 +2041,14 @@ public partial class GridView
                     continue;
 
                 // Build the portable layout to access the icon rects, using the control bounds.
-                var modelBounds = new FreeX.App.Presentation.Charts.LayoutRect(
+                var modelBounds = new LayoutRect(
                     controlRect.Left, controlRect.Top, controlRect.Width, controlRect.Height);
                 var availableItems = slicer.AvailableItems.Count > 0
                     ? (IEnumerable<string>)slicer.AvailableItems
                     : slicer.SelectedItems;
                 var layout = FreeX.App.Presentation.SlicerTimeline.SlicerLayoutBuilder.BuildFull(
                     slicer, availableItems, modelBounds);
-                var hitPoint = new FreeX.App.Presentation.Charts.LayoutPoint(pos.X, pos.Y);
+                var hitPoint = new LayoutPoint(pos.X, pos.Y);
 
                 // Clear-filter icon hit?
                 if (layout.HasActiveFilter &&
@@ -2084,11 +2084,11 @@ public partial class GridView
                 if (!controlRect.Contains(pos))
                     continue;
 
-                var modelBounds = new FreeX.App.Presentation.Charts.LayoutRect(
+                var modelBounds = new LayoutRect(
                     controlRect.Left, controlRect.Top, controlRect.Width, controlRect.Height);
                 var layout = FreeX.App.Presentation.SlicerTimeline.TimelineLayoutBuilder.Build(
                     timeline, modelBounds, ResolveTimelineGranularity(timeline));
-                var hitPoint = new FreeX.App.Presentation.Charts.LayoutPoint(pos.X, pos.Y);
+                var hitPoint = new LayoutPoint(pos.X, pos.Y);
 
                 // Clear-filter icon hit?
                 if (layout.HasActiveFilter &&
@@ -2129,8 +2129,8 @@ public partial class GridView
     }
 
     private static bool ContainsLayoutPoint(
-        FreeX.App.Presentation.Charts.LayoutRect rect,
-        FreeX.App.Presentation.Charts.LayoutPoint point) =>
+        LayoutRect rect,
+        LayoutPoint point) =>
         rect.Width > 0 && rect.Height > 0 &&
         point.X >= rect.Left && point.X <= rect.Right &&
         point.Y >= rect.Top && point.Y <= rect.Bottom;

@@ -134,7 +134,7 @@ public sealed partial class MainWindow
     /// overlay already renders. The shape is selectable and editable (move/resize/rotate) like other drawing
     /// objects. Surfaces the Core guard message on failure.
     /// </summary>
-    private void InsertShapeAtActiveCell(FreeX.Core.Model.DrawingShapeKind kind)
+    private void InsertShapeAtActiveCell(DrawingShapeKind kind)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
