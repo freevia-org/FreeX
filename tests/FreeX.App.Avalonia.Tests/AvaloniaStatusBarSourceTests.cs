@@ -67,6 +67,24 @@ public sealed class AvaloniaStatusBarSourceTests
     }
 
     [Fact]
+    public void BuildReadyText_UsesSharedInputPromptPlanner()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(address, address),
+            ShowInputMessage = true,
+            PromptTitle = "Input",
+            PromptMessage = "Use a number"
+        });
+
+        var text = AvaloniaStatusBarSource.BuildReadyText(sheet, address, "Ready");
+
+        Assert.Equal("Input: Use a number", text);
+    }
+
+    [Fact]
     public void FormatVisibleReadouts_JoinsDefaultVisibleReadouts_InWpfOrder()
     {
         var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
