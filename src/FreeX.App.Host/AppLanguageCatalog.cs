@@ -11,7 +11,7 @@ internal static class AppLanguageCatalog
 {
     public const string SystemDefaultCultureName = "";
     public const string EnglishUnitedStatesCultureName = "en-US";
-    public const string PseudoLocalizationCultureName = "qps-ploc";
+    public const string PseudoLocalizationCultureName = Loc.PseudoLocalizationCultureName;
 
     private const string SatelliteAssemblyName = "FreeX.App.Localization.resources.dll";
 
@@ -53,7 +53,7 @@ internal static class AppLanguageCatalog
         try
         {
             var trimmedCultureName = cultureName.Trim();
-            if (string.Equals(trimmedCultureName, PseudoLocalizationCultureName, StringComparison.OrdinalIgnoreCase))
+            if (Loc.IsPseudoLocalizationCulture(trimmedCultureName))
                 return PseudoLocalizationCultureName;
 
             var culture = CultureInfo.GetCultureInfo(trimmedCultureName);
@@ -76,7 +76,7 @@ internal static class AppLanguageCatalog
     }
 
     internal static bool IsPseudoLocalizationCulture(string? cultureName) =>
-        string.Equals(NormalizeCultureName(cultureName), PseudoLocalizationCultureName, StringComparison.OrdinalIgnoreCase);
+        Loc.IsPseudoLocalizationCulture(NormalizeCultureName(cultureName));
 
     private static string GetResourceProbeDirectory()
     {
