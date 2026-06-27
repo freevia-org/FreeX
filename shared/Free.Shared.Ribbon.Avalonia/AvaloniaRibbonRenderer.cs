@@ -1466,6 +1466,7 @@ public static class AvaloniaRibbonRenderer
         }
 
         public int Priority { get; }
+        public string GroupId => _group.Id;
         public double FullWidth { get; set; }
 
         public bool Collapsed
@@ -1553,20 +1554,19 @@ public static class AvaloniaRibbonRenderer
                 .Where(child => child is not AvaloniaRibbonGroupHost)
                 .Sum(child => child.DesiredSize.Width);
             var available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
-            var total = hosts.Sum(host => host.FullWidth) + nonHostWidth + spacing;
-            var collapsed = new HashSet<AvaloniaRibbonGroupHost>();
+            var decisions = RibbonAdaptiveCollapsePolicy.Plan(
+                available,
+                hosts
+                    .Select(host => new RibbonAdaptiveCollapseGroup(
+                        host.GroupId,
+                        host.FullWidth,
+                        AvaloniaRibbonGroupHost.CollapsedWidth,
+                        host.Priority))
+                    .ToList(),
+                fixedChromeWidth: nonHostWidth + spacing);
 
-            foreach (var host in hosts.OrderBy(host => host.Priority))
-            {
-                if (total <= available)
-                    break;
-
-                collapsed.Add(host);
-                total += AvaloniaRibbonGroupHost.CollapsedWidth - host.FullWidth;
-            }
-
-            foreach (var host in hosts)
-                host.Collapsed = collapsed.Contains(host);
+            for (var index = 0; index < hosts.Count; index++)
+                hosts[index].Collapsed = decisions[index].IsCollapsed;
 
             foreach (var child in children)
                 child.Measure(infinite);
