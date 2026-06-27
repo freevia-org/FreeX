@@ -9,6 +9,10 @@ internal enum AutoFilterMenuItemKind
     SortDescending,
     Separator,
     ClearFilter,
+    FilterByColor,
+    FilterFamily,
+    FilterFamilyCommand,
+    Search,
     SelectAll,
     ChecklistItem,
 }
@@ -63,4 +67,32 @@ internal static class AutoFilterMenuPlanner
 
         return new AutoFilterMenuModel(header, items);
     }
+
+    public static AutoFilterMenuModel Build(AutoFilterMenuPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return new AutoFilterMenuModel(
+            plan.HeaderText,
+            plan.Entries.Select(ToMenuItem).ToList());
+    }
+
+    private static AutoFilterMenuItem ToMenuItem(AutoFilterMenuEntry entry) =>
+        new(
+            entry.Kind switch
+            {
+                AutoFilterMenuEntryKind.SortAscending => AutoFilterMenuItemKind.SortAscending,
+                AutoFilterMenuEntryKind.SortDescending => AutoFilterMenuItemKind.SortDescending,
+                AutoFilterMenuEntryKind.ClearFilter => AutoFilterMenuItemKind.ClearFilter,
+                AutoFilterMenuEntryKind.FilterByColor => AutoFilterMenuItemKind.FilterByColor,
+                AutoFilterMenuEntryKind.FilterFamily => AutoFilterMenuItemKind.FilterFamily,
+                AutoFilterMenuEntryKind.FilterFamilyCommand => AutoFilterMenuItemKind.FilterFamilyCommand,
+                AutoFilterMenuEntryKind.Search => AutoFilterMenuItemKind.Search,
+                AutoFilterMenuEntryKind.SelectAll => AutoFilterMenuItemKind.SelectAll,
+                AutoFilterMenuEntryKind.ChecklistItem => AutoFilterMenuItemKind.ChecklistItem,
+                _ => AutoFilterMenuItemKind.Separator
+            },
+            entry.Header,
+            entry.Value,
+            entry.IsEnabled);
 }

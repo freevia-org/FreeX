@@ -146,7 +146,11 @@ public sealed partial class AutoFilterDropdownPlannerTests
     [Fact]
     public void CreateSections_AvoidsRepeatedEntryLinqScans()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterMenuCatalog.cs");
+        var source = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Presentation",
+            "Filtering",
+            "AutoFilterMenuCatalog.cs");
         var createSections = source.Substring(
             source.IndexOf("public static IReadOnlyList<AutoFilterMenuSection> CreateSections", StringComparison.Ordinal),
             source.IndexOf("private static IReadOnlyList<AutoFilterMenuEntry> CreateFilterFamilyChildren", StringComparison.Ordinal)
