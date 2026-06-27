@@ -2,29 +2,11 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Consolidate;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public sealed record ConsolidateDialogResult(
-    IReadOnlyList<GridRange> SourceRanges,
-    CellAddress DestinationCell,
-    ConsolidateFunction Function,
-    bool UseTopRowLabels = false,
-    bool UseLeftColumnLabels = false,
-    bool CreateLinksToSourceData = false);
-
-public enum ConsolidateRangeSelectionTarget
-{
-    Reference,
-    DestinationCell
-}
-
-public sealed record ConsolidateRangeSelectionRequest(
-    ConsolidateRangeSelectionTarget Target,
-    string CurrentText,
-    bool CollapseDialog = true);
 
 public sealed partial class ConsolidateDialog : Window
 {

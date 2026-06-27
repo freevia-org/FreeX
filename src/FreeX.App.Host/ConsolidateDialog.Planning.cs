@@ -1,4 +1,5 @@
 using FreeX.Core.Commands;
+using FreeX.App.Presentation.Consolidate;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
