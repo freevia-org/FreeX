@@ -24,6 +24,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         "Free.Shared.Shell",
         "FreeX.Ribbon.Definitions",
         "Free.Shared.Ribbon.Avalonia",
+        "Free.Shared.Shell.Avalonia",
         "Free.Shared.Theme.Avalonia"
     ];
 

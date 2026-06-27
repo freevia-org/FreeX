@@ -1546,7 +1546,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly ScrollBar _verticalWorksheetScrollBar = new();");
         source.Should().Contain("private readonly ScrollBar _horizontalWorksheetScrollBar = new();");
         source.Should().Contain("private bool _isUpdatingWorksheetScrollBars;");
-        source.Should().Contain("root.Children.Add(BuildWorksheetViewportChrome());");
+        source.Should().Contain("workArea.Children.Add(BuildWorksheetViewportChrome());");
         source.Should().Contain("_sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;");
         source.Should().Contain("_sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;");
         source.Should().Contain("_verticalWorksheetScrollBar.Orientation = Orientation.Vertical;");
