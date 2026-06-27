@@ -733,7 +733,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static bool FocusControl(Control control)");
         script.Should().Contain("private void NavigateSheetTabFromKeyboard(SheetId sheetId, KeyEventArgs args)");
         script.Should().Contain("private bool SelectAdjacentVisibleSheetFromKeyboard(int direction, bool selectRange)");
-        script.Should().Contain("Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1)");
+        script.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_session.SheetTabs, sheetId, direction, static tab => tab.Id)");
+        script.Should().Contain("SheetTabFocusPlanner.EdgeTab(_session.SheetTabs, first, static tab => tab.Id)");
         script.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
         script.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard, CellAddress destination)");
         script.Should().Contain("await clipboard.TryGetBitmapAsync()");
@@ -2650,7 +2651,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     Key.Right => GetAdjacentSheetTabId(sheetId, direction: 1);
                     Key.Home => GetEdgeSheetTabId(first: true);
                     Key.End => GetEdgeSheetTabId(first: false);
-                    Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1);
+                    SheetTabFocusPlanner.AdjacentTab(_session.SheetTabs, sheetId, direction, static tab => tab.Id);
+                    SheetTabFocusPlanner.EdgeTab(_session.SheetTabs, first, static tab => tab.Id);
                     FocusFirstEnabledSheetTabMenuItem(items);
                     private static void FocusFirstEnabledSheetTabMenuItem(IEnumerable<Control> items);
                     foreach (var item in items);
@@ -4436,9 +4438,32 @@ public sealed class MacOsAppReadinessPreflightTests
             }
             """);
 
+        CreatePortableSourceRoots(root);
+
         if (!string.IsNullOrWhiteSpace(extraAvaloniaSource))
         {
             WriteFile(root, extraAvaloniaSourcePath, extraAvaloniaSource);
+        }
+    }
+
+    private static void CreatePortableSourceRoots(string root)
+    {
+        foreach (var relativePath in new[]
+        {
+            "src/FreeX.App.Avalonia",
+            "src/FreeX.App.Presentation",
+            "src/FreeX.App.Services",
+            "shared/Free.Shared.Ribbon.Avalonia",
+            "shared/Free.Shared.AppServices",
+            "shared/Free.Shared.Drawing",
+            "shared/Free.Shared.IO",
+            "shared/Free.Shared.Pdf",
+            "shared/Free.Shared.Pdf.Skia",
+            "shared/Free.Shared.Ribbon",
+            "shared/Free.Shared.Shell.Avalonia"
+        })
+        {
+            Directory.CreateDirectory(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
         }
     }
 

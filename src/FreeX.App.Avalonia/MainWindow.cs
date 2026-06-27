@@ -24,6 +24,7 @@ using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -8168,31 +8169,10 @@ public sealed partial class MainWindow : Window
     }
 
     private SheetId? GetAdjacentSheetTabId(SheetId sheetId, int direction)
-    {
-        if (_session.SheetTabs.Count == 0)
-            return null;
-
-        var index = FindSheetTabIndex(sheetId);
-        if (index < 0)
-            index = direction switch
-            {
-                < 0 => _session.SheetTabs.Count,
-                0 => 0,
-                _ => -1
-            };
-
-        var targetIndex = index + Math.Sign(direction);
-        targetIndex = Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1);
-        return _session.SheetTabs[targetIndex].Id;
-    }
+        => SheetTabFocusPlanner.AdjacentTab(_session.SheetTabs, sheetId, direction, static tab => tab.Id);
 
     private SheetId? GetEdgeSheetTabId(bool first)
-    {
-        if (_session.SheetTabs.Count == 0)
-            return null;
-
-        return _session.SheetTabs[first ? 0 : _session.SheetTabs.Count - 1].Id;
-    }
+        => SheetTabFocusPlanner.EdgeTab(_session.SheetTabs, first, static tab => tab.Id);
 
     private bool FocusActiveSheetTab()
         => FocusSheetTab(_session.ActiveSheet.Id);

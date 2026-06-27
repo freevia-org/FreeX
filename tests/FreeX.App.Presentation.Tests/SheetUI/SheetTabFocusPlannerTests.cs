@@ -1,7 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.SheetUI;
 
 public sealed class SheetTabFocusPlannerTests
 {
@@ -16,10 +17,10 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
 
-        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[0].Id, -1).Should().Be(tabs[0].Id);
-        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[0].Id, 1).Should().Be(tabs[1].Id);
-        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[2].Id, 1).Should().Be(tabs[2].Id);
-        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[2].Id, -1).Should().Be(tabs[1].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[0].Id, -1, TabId).Should().Be(tabs[0].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[0].Id, 1, TabId).Should().Be(tabs[1].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[2].Id, 1, TabId).Should().Be(tabs[2].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[2].Id, -1, TabId).Should().Be(tabs[1].Id);
     }
 
     [Fact]
@@ -27,8 +28,8 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2");
 
-        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), 1).Should().Be(tabs[0].Id);
-        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), -1).Should().Be(tabs[1].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), 1, TabId).Should().Be(tabs[0].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), -1, TabId).Should().Be(tabs[1].Id);
     }
 
     [Theory]
@@ -38,7 +39,7 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
 
-        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), direction).Should().Be(tabs[0].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), direction, TabId).Should().Be(tabs[0].Id);
     }
 
     [Theory]
@@ -48,7 +49,7 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
 
-        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), direction).Should().Be(tabs[2].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), direction, TabId).Should().Be(tabs[2].Id);
     }
 
     [Theory]
@@ -58,7 +59,7 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3", "Sheet4");
 
-        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[0].Id, direction).Should().Be(tabs[1].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[0].Id, direction, TabId).Should().Be(tabs[1].Id);
     }
 
     [Theory]
@@ -68,7 +69,7 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3", "Sheet4");
 
-        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[3].Id, direction).Should().Be(tabs[2].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[3].Id, direction, TabId).Should().Be(tabs[2].Id);
     }
 
     [Fact]
@@ -76,7 +77,7 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
 
-        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[1].Id, 0).Should().Be(tabs[1].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[1].Id, 0, TabId).Should().Be(tabs[1].Id);
     }
 
     [Fact]
@@ -84,7 +85,15 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
 
-        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), 0).Should().Be(tabs[0].Id);
+        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), 0, TabId).Should().Be(tabs[0].Id);
+    }
+
+    [Fact]
+    public void AdjacentTab_SupportsSheetIdListsWithoutASelector()
+    {
+        var ids = new[] { SheetId.New(), SheetId.New(), SheetId.New() };
+
+        SheetTabFocusPlanner.AdjacentTab(ids, ids[0], 1).Should().Be(ids[1]);
     }
 
     [Fact]
@@ -92,11 +101,15 @@ public sealed class SheetTabFocusPlannerTests
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
 
-        SheetTabFocusPlanner.EdgeTab(tabs, first: true).Should().Be(tabs[0].Id);
-        SheetTabFocusPlanner.EdgeTab(tabs, first: false).Should().Be(tabs[2].Id);
+        SheetTabFocusPlanner.EdgeTab(tabs, first: true, getSheetId: TabId).Should().Be(tabs[0].Id);
+        SheetTabFocusPlanner.EdgeTab(tabs, first: false, getSheetId: TabId).Should().Be(tabs[2].Id);
         SheetTabFocusPlanner.EdgeTab([], first: true).Should().BeNull();
     }
 
-    private static IReadOnlyList<SheetTabViewModel> CreateTabs(params string[] names) =>
-        names.Select(name => new SheetTabViewModel(SheetId.New(), name, null)).ToList();
+    private static IReadOnlyList<TestSheetTab> CreateTabs(params string[] names) =>
+        names.Select(name => new TestSheetTab(SheetId.New(), name)).ToList();
+
+    private static SheetId TabId(TestSheetTab tab) => tab.Id;
+
+    private sealed record TestSheetTab(SheetId Id, string Name);
 }
