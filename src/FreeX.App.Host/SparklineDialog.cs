@@ -2,16 +2,10 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public enum SparklineKindChoice
-{
-    Line,
-    Column,
-    WinLoss
-}
 
 public enum SparklineRangeSelectionTarget
 {
@@ -19,7 +13,7 @@ public enum SparklineRangeSelectionTarget
     Location
 }
 
-public sealed record SparklineDialogResult(string DataRangeText, string LocationText, SparklineKindChoice Kind);
+public sealed record SparklineDialogResult(string DataRangeText, string LocationText, SparklineKind Kind);
 
 public sealed record SparklineRangeSelectionRequest(
     SparklineRangeSelectionTarget Target,
@@ -42,7 +36,7 @@ public sealed class SparklineDialog : Window
     public SparklineDialog(
         string dataRangeText,
         string locationText,
-        SparklineKindChoice kind,
+        SparklineKind kind,
         Action<SparklineRangeSelectionRequest>? requestRangeSelection = null,
         SheetId sheetId = default)
     {
@@ -83,13 +77,13 @@ public sealed class SparklineDialog : Window
         AutomationProperties.SetName(_kindBox, UiText.Get("Sparkline_SparklineTypeAutomationName"));
         AutomationProperties.SetAutomationId(_kindBox, "SparklineTypeBox");
         AutomationProperties.SetHelpText(_kindBox, UiText.Get("Sparkline_ChooseWhetherTheSparklineIsLineColumnOrWinLoss"));
-        _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
+        _kindBox.ItemsSource = SparklinePlanner.Kinds
             .Select(choice => new ComboBoxItem
             {
                 Content = GetKindLabel(choice),
                 Tag = choice
             });
-        _kindBox.SelectedIndex = Math.Max(0, Array.IndexOf(Enum.GetValues<SparklineKindChoice>(), kind));
+        _kindBox.SelectedIndex = GetKindIndex(kind);
         _kindBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_kindBox);
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
@@ -97,7 +91,7 @@ public sealed class SparklineDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKindChoice kind) =>
+    public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKind kind) =>
         SparklineDialogPlanner.CreateResult(dataRangeText, locationText, kind);
 
     public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
@@ -113,7 +107,7 @@ public sealed class SparklineDialog : Window
         Result = CreateResult(
             _dataRangeBox.Text,
             _locationBox.Text,
-            _kindBox.SelectedItem is ComboBoxItem { Tag: SparklineKindChoice kind } ? kind : SparklineKindChoice.Line);
+            _kindBox.SelectedItem is ComboBoxItem { Tag: SparklineKind kind } ? kind : SparklineKind.Line);
         CompleteAcceptedDialog();
     }
 
@@ -136,8 +130,19 @@ public sealed class SparklineDialog : Window
         return false;
     }
 
-    public static string GetKindLabel(SparklineKindChoice kind) =>
+    public static string GetKindLabel(SparklineKind kind) =>
         SparklineDialogPlanner.GetKindLabel(kind);
+
+    private static int GetKindIndex(SparklineKind kind)
+    {
+        for (var i = 0; i < SparklinePlanner.Kinds.Count; i++)
+        {
+            if (SparklinePlanner.Kinds[i] == kind)
+                return i;
+        }
+
+        return 0;
+    }
 
     private void FocusInitialKeyboardTarget()
     {

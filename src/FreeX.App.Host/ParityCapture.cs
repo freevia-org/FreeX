@@ -498,7 +498,7 @@ internal static class ParityCapture
             new SubtotalDialog(CreateSubtotalChoices("Region", "Product", "Revenue", "Units")));
 
         CaptureDialog(results, "dialog.Sparkline", outDir, () =>
-            new SparklineDialog("Sheet1!$D$2:$D$5", "Sheet1!$H$2:$H$5", SparklineKindChoice.Line, sheetId: sheet.Id));
+            new SparklineDialog("Sheet1!$D$2:$D$5", "Sheet1!$H$2:$H$5", SparklineKind.Line, sheetId: sheet.Id));
 
         CaptureDialog(results, "dialog.InsertHyperlink", outDir, () =>
             new HyperlinkDialog("https://freex.local/report", "Quarterly report"));
