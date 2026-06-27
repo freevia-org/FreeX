@@ -1582,9 +1582,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("string.IsNullOrEmpty(e.Text)");
         source.Should().Contain("char.IsControl(character)");
         source.Should().Contain("BeginFormulaEdit(_session.ActiveCell, e.Text);");
-        source.Should().Contain("else if (e.Key == Key.Tab)");
-        source.Should().Contain("e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1");
-        source.Should().Contain("_session.MoveActiveCell(0, colDelta);");
+        source.Should().Contain("ExcelEditKeyPlanner.GetIntent(");
+        source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key)");
+        source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers)");
+        source.Should().Contain("intent.Action == ExcelEditKeyAction.CommitAndMove");
+        source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, target.Row);");
+        source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, target.Col);");
+        source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
         source.Should().Contain("var result = _session.CommitCellText(_formulaBox.Text ?? \"\");");
         source.Should().Contain("if (_isOpening || _isSaving)");
         source.Should().Contain("Finish saving before editing cells.");
