@@ -225,32 +225,17 @@ public partial class PageSetupDialog : Window
     }
 
     private WorksheetPageOrientation SelectedOrientation() =>
-        PageSetupDialogModel.ChoiceValue(
-            PageSetupDialogModel.OrientationChoices,
-            OrientationBox.SelectedIndex,
-            WorksheetPageOrientation.Portrait);
+        PageSetupDialogPlanner.OrientationChoices.ValueAt(OrientationBox.SelectedIndex);
 
     private WorksheetPaperSize SelectedPaperSize() =>
-        PageSetupDialogModel.ChoiceValue(
-            PageSetupDialogModel.PaperSizeChoices,
-            PaperSizeBox.SelectedIndex,
-            WorksheetPaperSize.A4);
+        PageSetupDialogPlanner.PaperSizeChoices.ValueAt(PaperSizeBox.SelectedIndex);
 
     private WorksheetPageOrder SelectedPageOrder() =>
-        PageSetupDialogModel.ChoiceValue(
-            PageSetupDialogModel.PageOrderChoices,
-            PageOrderBox.SelectedIndex,
-            WorksheetPageOrder.DownThenOver);
+        PageSetupDialogPlanner.PageOrderChoices.ValueAt(PageOrderBox.SelectedIndex);
 
     private WorksheetPrintErrorValue SelectedPrintErrorValue() =>
-        PageSetupDialogModel.ChoiceValue(
-            PageSetupDialogModel.PrintErrorValueChoices,
-            PrintErrorValueBox.SelectedIndex,
-            WorksheetPrintErrorValue.Displayed);
+        PageSetupDialogPlanner.PrintErrorValueChoices.ValueAt(PrintErrorValueBox.SelectedIndex);
 
     private WorksheetPrintComments SelectedPrintComments() =>
-        PageSetupDialogModel.ChoiceValue(
-            PageSetupDialogModel.PrintCommentChoices,
-            PrintCommentsBox.SelectedIndex,
-            WorksheetPrintComments.None);
+        PageSetupDialogPlanner.PrintCommentChoices.ValueAt(PrintCommentsBox.SelectedIndex);
 }

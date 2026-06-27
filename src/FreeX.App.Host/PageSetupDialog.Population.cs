@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
@@ -14,14 +15,9 @@ public partial class PageSetupDialog
         var fields = Fields;
         var margins = ParseMarginsForDisplay(fields.MarginsText);
 
-        OrientationBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-            PageSetupDialogModel.OrientationChoices,
-            fields.Orientation,
-            WorksheetPageOrientation.Portrait);
-        PaperSizeBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-            PageSetupDialogModel.PaperSizeChoices,
-            fields.PaperSize,
-            WorksheetPaperSize.A4);
+        PopulateChoiceBoxes();
+        OrientationBox.SelectedIndex = PageSetupDialogPlanner.OrientationChoices.IndexOf(fields.Orientation);
+        PaperSizeBox.SelectedIndex = PageSetupDialogPlanner.PaperSizeChoices.IndexOf(fields.PaperSize);
         LeftMarginBox.Text = margins.Left.ToString(CultureInfo.InvariantCulture);
         RightMarginBox.Text = margins.Right.ToString(CultureInfo.InvariantCulture);
         TopMarginBox.Text = margins.Top.ToString(CultureInfo.InvariantCulture);
@@ -56,20 +52,11 @@ public partial class PageSetupDialog
             : fields.RepeatColumnsText;
         PrintGridlinesBox.IsChecked = fields.PrintGridlines;
         PrintHeadingsBox.IsChecked = fields.PrintHeadings;
-        PageOrderBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-            PageSetupDialogModel.PageOrderChoices,
-            fields.PageOrder,
-            WorksheetPageOrder.DownThenOver);
+        PageOrderBox.SelectedIndex = PageSetupDialogPlanner.PageOrderChoices.IndexOf(fields.PageOrder);
         PrintBlackAndWhiteBox.IsChecked = fields.PrintBlackAndWhite;
         PrintDraftQualityBox.IsChecked = fields.PrintDraftQuality;
-        PrintErrorValueBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-            PageSetupDialogModel.PrintErrorValueChoices,
-            fields.PrintErrorValue,
-            WorksheetPrintErrorValue.Displayed);
-        PrintCommentsBox.SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-            PageSetupDialogModel.PrintCommentChoices,
-            fields.PrintComments,
-            WorksheetPrintComments.None);
+        PrintErrorValueBox.SelectedIndex = PageSetupDialogPlanner.PrintErrorValueChoices.IndexOf(fields.PrintErrorValue);
+        PrintCommentsBox.SelectedIndex = PageSetupDialogPlanner.PrintCommentChoices.IndexOf(fields.PrintComments);
         PopulateHeaderFooterPresetBoxes();
         SelectPreset(HeaderPresetBox, Header.Center);
         SelectPreset(FooterPresetBox, Footer.Center);
@@ -79,6 +66,29 @@ public partial class PageSetupDialog
         AlignWithMarginsBox.IsChecked = AlignHeaderFooterWithMargins;
         UpdateScalingInputState();
         UpdateHeaderFooterPreview();
+    }
+
+    private void PopulateChoiceBoxes()
+    {
+        PopulateChoiceBox(OrientationBox, PageSetupDialogPlanner.OrientationChoices);
+        PopulateChoiceBox(PaperSizeBox, PageSetupDialogPlanner.PaperSizeChoices);
+        PopulateChoiceBox(PageOrderBox, PageSetupDialogPlanner.PageOrderChoices);
+        PopulateChoiceBox(PrintErrorValueBox, PageSetupDialogPlanner.PrintErrorValueChoices);
+        PopulateChoiceBox(PrintCommentsBox, PageSetupDialogPlanner.PrintCommentChoices);
+    }
+
+    private static void PopulateChoiceBox<T>(ComboBox comboBox, PageSetupChoicePlan<T> plan)
+    {
+        comboBox.Items.Clear();
+
+        foreach (var choice in plan.Choices)
+        {
+            comboBox.Items.Add(new ComboBoxItem
+            {
+                Content = UiText.Get(choice.LabelResourceKey),
+                Tag = choice.Value?.ToString() ?? string.Empty
+            });
+        }
     }
 
     private static WorksheetPageMargins ParseMarginsForDisplay(string marginsText) =>

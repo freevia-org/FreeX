@@ -2555,6 +2555,28 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void AvaloniaPageSetupDialog_UsesSharedPlannerForChoiceSurface()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("Title = UiText.Get(PageSetupDialogPlanner.TitleResourceKey)");
+        source.Should().Contain("Width = PageSetupDialogPlanner.WindowWidth");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, PageSetupDialogPlanner.DialogAutomationId)");
+        source.Should().Contain("var orientationChoices = PageSetupDialogPlanner.OrientationChoices");
+        source.Should().Contain("ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(orientationChoices, UiText.Get)");
+        source.Should().Contain("SelectedIndex = orientationChoices.IndexOf(initial.Orientation)");
+        source.Should().Contain("Orientation = orientationChoices.ValueAt(orientationBox.SelectedIndex)");
+        source.Should().Contain("var paperSizeChoices = PageSetupDialogPlanner.PaperSizeChoices");
+        source.Should().Contain("var pageOrderChoices = PageSetupDialogPlanner.PageOrderChoices");
+        source.Should().Contain("var printErrorValueChoices = PageSetupDialogPlanner.PrintErrorValueChoices");
+        source.Should().Contain("var printCommentChoices = PageSetupDialogPlanner.PrintCommentChoices");
+        source.Should().Contain("AutomationProperties.SetAutomationId(tabs, PageSetupDialogPlanner.TabsAutomationId)");
+        source.Should().NotContain("static IReadOnlyList<string> ChoiceLabels");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceIndex(");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceValue(");
+    }
+
+    [Fact]
     public void WpfParityCapture_RegistersSameDialogSurfaceIdsAsAvalonia()
     {
         var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));

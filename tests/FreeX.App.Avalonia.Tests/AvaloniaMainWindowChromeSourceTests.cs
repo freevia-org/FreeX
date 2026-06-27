@@ -441,21 +441,24 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
 
-        source.Should().Contain("PageSetupDialogModel.OrientationChoices");
-        source.Should().Contain("PageSetupDialogModel.PaperSizeChoices");
-        source.Should().Contain("PageSetupDialogModel.PageOrderChoices");
-        source.Should().Contain("PageSetupDialogModel.PrintErrorValueChoices");
-        source.Should().Contain("PageSetupDialogModel.PrintCommentChoices");
+        source.Should().Contain("PageSetupDialogPlanner.OrientationChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PaperSizeChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PageOrderChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PrintErrorValueChoices");
+        source.Should().Contain("PageSetupDialogPlanner.PrintCommentChoices");
+        source.Should().Contain("PageSetupDialogPlanner.ResolveChoiceLabels(");
         source.Should().Contain("PageSetupDialogModel.HeaderPresetChoices");
         source.Should().Contain("PageSetupDialogModel.FooterPresetChoices");
         source.Should().Contain("HeaderFooterEditorPlanner.ApplyCenterPreset(");
-        source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
-        source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
+        source.Should().Contain(".IndexOf(initial.Orientation)");
+        source.Should().Contain(".ValueAt(orientationBox.SelectedIndex)");
         source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetIndex(");
         source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(");
         source.Should().Contain("SelectValidationRoute(validation.Route)");
         source.Should().Contain("ResolvePageSetupValidationIssue(validation)");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceIndex(");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceValue(");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields)");
         source.Should().NotContain("headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().NotContain("footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
