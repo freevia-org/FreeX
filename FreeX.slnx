@@ -56,6 +56,8 @@
   <Folder Name="/freep/">
     <Project Path="freep/FreeP.Core.Model/FreeP.Core.Model.csproj" />
     <Project Path="freep/FreeP.Core.IO/FreeP.Core.IO.csproj" />
+    <Project Path="freep/FreeP.Ribbon.Definitions/FreeP.Ribbon.Definitions.csproj" />
+    <Project Path="freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freep/FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
     <Project Path="freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj" />
     <Project Path="freep/FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
