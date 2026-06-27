@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.PageLayout;
 
 namespace FreeX.App.Host;
 
@@ -146,52 +147,91 @@ public partial class MainWindow
         };
 
     private Action ResolveBackstageCommand(FreeXBackstageCommandId command) =>
-        command switch
+        ResolveBackstageCommand(FreeXBackstageFlowPlanner.BuildCommandWorkflow(command));
+
+    private Action ResolveBackstageCommand(FreeXBackstageCommandWorkflowPlan plan) =>
+        plan.Workflow switch
         {
-            FreeXBackstageCommandId.New => async () => await RequestNewWorkbookAsync(),
-            FreeXBackstageCommandId.Open => () => OpenButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.Share => async () => await ShareWorkbookAsync(),
-            FreeXBackstageCommandId.Save => () => SaveButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.SaveAs => () => SaveAsButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.Export => () => ExportPdfButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.Close => Close,
-            FreeXBackstageCommandId.Account => () => SsAccountBtn_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandId.Options => () => SsOptionsBtn_Click(this, new RoutedEventArgs()),
-            _ => throw new InvalidOperationException($"Unsupported Backstage command '{command}'.")
+            FreeXBackstageCommandWorkflowKind.NewWorkbook => async () => await RequestNewWorkbookAsync(),
+            FreeXBackstageCommandWorkflowKind.OpenWorkbook => () => OpenButton_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandWorkflowKind.ShareWorkbook => async () => await ShareWorkbookAsync(),
+            FreeXBackstageCommandWorkflowKind.SaveWorkbook => () => SaveButton_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandWorkflowKind.SaveWorkbookAs => () => SaveAsButton_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandWorkflowKind.ExportWorkbook => () => ExportPdfButton_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandWorkflowKind.CloseWorkbook => Close,
+            FreeXBackstageCommandWorkflowKind.Account => () => SsAccountBtn_Click(this, new RoutedEventArgs()),
+            FreeXBackstageCommandWorkflowKind.Options => () => SsOptionsBtn_Click(this, new RoutedEventArgs()),
+            _ => throw new InvalidOperationException($"Unsupported Backstage command '{plan.Command}'.")
         };
 
     // ── Pane content factories ──────────────────────────────────────────────────
     // Each runs the same live-refresh the old Show*View methods did, then hands the existing pane element to
     // the frame (after detaching it from its current parent — a WPF element has exactly one logical parent).
 
-    private UIElement BuildHomePane()
+    private UIElement BuildHomePane() =>
+        BuildBackstagePane(FreeXBackstagePaneId.Home);
+
+    private UIElement BuildInfoPane() =>
+        BuildBackstagePane(FreeXBackstagePaneId.Info);
+
+    private UIElement BuildPrintPane() =>
+        BuildBackstagePane(FreeXBackstagePaneId.Print);
+
+    private UIElement BuildBackstagePane(FreeXBackstagePaneId pane)
     {
-        UpdateSsGreeting();
-        SwitchToRecentTab();
-        UpdateSsRecentList();
-        return ReparentForBackstage(SsHomeView);
+        var plan = FreeXBackstageFlowPlanner.BuildPaneFlow(pane);
+        ApplyBackstagePaneFlow(plan);
+        var element = ReparentForBackstage(ResolveBackstagePaneElement(plan.Pane));
+        ApplyBackstagePaneFocus(plan);
+        return element;
     }
 
-    private UIElement BuildInfoPane()
+    private void ApplyBackstagePaneFlow(FreeXBackstagePaneFlowPlan plan)
     {
-        UpdateInfoView();
-        return ReparentForBackstage(SsInfoView);
-    }
+        if (plan.RefreshGreeting)
+            UpdateSsGreeting();
 
-    private UIElement BuildPrintPane()
-    {
+        if (plan.ResetRecentTab)
+            SwitchToRecentTab();
+
+        if (plan.RefreshRecentFiles)
+            UpdateSsRecentList();
+
+        if (plan.RefreshInfo)
+            UpdateInfoView();
+
+        if (!plan.RefreshPrintOptions && !plan.RefreshPrintPreview)
+            return;
+
         var activeSheet = _workbook.GetSheet(_currentSheetId);
-        _backstagePrintPreviewSettings = new PrintPreviewSettings();
-        ConfigureBackstagePrintOptions(activeSheet);
-        RefreshBackstagePrintPreview();
-        var pane = ReparentForBackstage(SsPrintView);
+        if (plan.ResetPrintPreviewSettings)
+            _backstagePrintPreviewSettings = new PrintPreviewSettings();
+        if (plan.RefreshPrintOptions)
+            ConfigureBackstagePrintOptions(activeSheet);
+        if (plan.RefreshPrintPreview)
+            RefreshBackstagePrintPreview();
+    }
+
+    private FrameworkElement ResolveBackstagePaneElement(FreeXBackstagePaneId pane) =>
+        pane switch
+        {
+            FreeXBackstagePaneId.Home => SsHomeView,
+            FreeXBackstagePaneId.Info => SsInfoView,
+            FreeXBackstagePaneId.Print => SsPrintView,
+            _ => throw new InvalidOperationException($"Unsupported Backstage pane '{pane}'.")
+        };
+
+    private void ApplyBackstagePaneFocus(FreeXBackstagePaneFlowPlan plan)
+    {
+        if (plan.FocusTarget != FreeXBackstagePaneFocusTarget.PrintNowButton)
+            return;
+
         // The print pane lands focus on Print Now (Ctrl+P / the screenshot tour rely on this).
         Dispatcher.BeginInvoke(() =>
         {
             SsBackstagePrintNowButton.Focus();
             System.Windows.Input.Keyboard.Focus(SsBackstagePrintNowButton);
         }, System.Windows.Threading.DispatcherPriority.Loaded);
-        return pane;
     }
 
     // Make a pane visible (the holder kept them collapsed) and detach it from whatever parent currently

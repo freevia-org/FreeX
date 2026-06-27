@@ -65,6 +65,61 @@ public sealed class WorkbookFileLifecycleCoordinatorTests
     }
 
     [Fact]
+    public async Task CanProceedAfterDirtyGate_Cancel_ReturnsFalseWithoutActionCeremony()
+    {
+        var canProceed = await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.Cancel),
+            saveCurrentAsync: () => throw new InvalidOperationException("Cancel should not save."));
+
+        canProceed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RunAfterDirtyGate_DirtySaveAnswer_RunsActionAfterSave()
+    {
+        var saved = false;
+        var actionRan = false;
+
+        var proceeded = await WorkbookFileLifecycleCoordinator.RunAfterDirtyGateAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.Save),
+            saveCurrentAsync: () =>
+            {
+                saved = true;
+                return Task.FromResult(true);
+            },
+            runActionAsync: () =>
+            {
+                actionRan = true;
+                return Task.CompletedTask;
+            });
+
+        proceeded.Should().BeTrue();
+        saved.Should().BeTrue();
+        actionRan.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RunAfterDirtyGate_SaveFailure_DoesNotRunAction()
+    {
+        var actionRan = false;
+
+        var proceeded = await WorkbookFileLifecycleCoordinator.RunAfterDirtyGateAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.Save),
+            saveCurrentAsync: () => Task.FromResult(false),
+            runActionAsync: () =>
+            {
+                actionRan = true;
+                return Task.CompletedTask;
+            });
+
+        proceeded.Should().BeFalse();
+        actionRan.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task SaveResolved_NoCurrentPath_UsesSaveAsWithoutResolvingTarget()
     {
         var resolved = false;

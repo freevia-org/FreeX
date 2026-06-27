@@ -434,7 +434,7 @@ public partial class MainWindow
 
     private async Task RequestNewWorkbookAsync()
     {
-        if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")) == SaveChangesConfirmation.Cancel)
+        if (!await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")))
             return;
 
         // Advance the session name sequence so File > New produces Book2, Book3, … rather than
@@ -463,7 +463,7 @@ public partial class MainWindow
         using var operationCancellation = BeginFileOperationCancellation();
         try
         {
-            if (await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")) == SaveChangesConfirmation.Cancel)
+            if (!await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")))
                 return;
 
             _operationProgressFileName = System.IO.Path.GetFileName(path);
