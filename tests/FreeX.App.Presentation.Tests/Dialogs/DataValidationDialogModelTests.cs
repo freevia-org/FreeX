@@ -481,6 +481,41 @@ public sealed class DataValidationDialogModelTests
         any.ShowDropdown.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(DvType.WholeNumber, DvOperator.Between, "1", "100", false)]
+    [InlineData(DvType.Decimal, DvOperator.Between, "0", "100", false)]
+    [InlineData(DvType.List, DvOperator.Between, "Yes,No", "", true)]
+    [InlineData(DvType.Date, DvOperator.Between, "2024-01-01", "2024-12-31", false)]
+    [InlineData(DvType.Time, DvOperator.Between, "09:00", "17:00", false)]
+    [InlineData(DvType.TextLength, DvOperator.LessThanOrEqual, "50", "", false)]
+    [InlineData(DvType.Custom, DvOperator.Between, "=A1>0", "", false)]
+    [InlineData(DvType.Any, DvOperator.Between, "", "", false)]
+    public void Planner_CreateDefaultRule_SeedsRuleEditorDefaults(
+        DvType type,
+        DvOperator expectedOperator,
+        string expectedFormula1,
+        string expectedFormula2,
+        bool expectedDropdown)
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 2, 2));
+
+        var rule = DataValidationDialogPlanner.CreateDefaultRule(type, range);
+
+        rule.AppliesTo.Should().Be(range);
+        rule.Type.Should().Be(type);
+        rule.Operator.Should().Be(expectedOperator);
+        rule.Formula1.Should().Be(expectedFormula1);
+        rule.Formula2.Should().Be(expectedFormula2);
+        rule.AllowBlank.Should().BeTrue();
+        rule.ShowDropdown.Should().Be(expectedDropdown);
+        rule.AlertStyle.Should().Be(DvAlertStyle.Stop);
+        rule.ShowInputMessage.Should().BeTrue();
+        rule.ShowErrorMessage.Should().BeTrue();
+    }
+
     [Fact]
     public void Planner_FocusTargetForInvalidCriteria_PrefersSecondWhenFirstIsValid()
     {

@@ -20,6 +20,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using System.Globalization;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
@@ -17112,7 +17113,7 @@ public sealed partial class MainWindow : Window
         var initialType = activeTypeChoice?.Type ?? DvType.WholeNumber;
         var initialRule = activeRule is not null && activeTypeChoice is not null
             ? activeRule
-            : CreateDefaultDataValidationRule(initialType, _session.SelectedRange);
+            : DataValidationDialogPlanner.CreateDefaultRule(initialType, _session.SelectedRange);
 
         var summaryText = new TextBlock
         {
@@ -17291,7 +17292,7 @@ public sealed partial class MainWindow : Window
         DvOperator SelectedOperator() =>
             operatorBox.SelectedItem is DataValidationOperatorChoice choice
                 ? choice.Operator
-                : GetDefaultDataValidationOperator(SelectedType());
+                : DataValidationDialogPlanner.DefaultOperatorForType(SelectedType());
 
         DvAlertStyle SelectedAlertStyle() =>
             alertStyleBox.SelectedItem is DataValidationAlertStyleChoice choice
@@ -17322,74 +17323,62 @@ public sealed partial class MainWindow : Window
 
         void UpdateCriteriaVisibility()
         {
-            var type = SelectedType();
-            var op = SelectedOperator();
-            var showSecondFormula = DataValidationPresetPlanner.RequiresSecondFormula(type, op);
-            var isList = type == DvType.List;
-            var isCustom = type == DvType.Custom;
-            var isAny = type == DvType.Any;
+            var plan = DataValidationDialogPlanner.CreateVisibilityPlan(
+                SelectedType(),
+                SelectedOperator(),
+                hasSelectionSource: false);
 
-            formula1Label.Text = StripDisplayMnemonic(isList
-                ? UiText.Get("DataValidation_Source")
-                : isCustom
-                    ? UiText.Get("DataValidation_Formula")
-                    : showSecondFormula
-                        ? UiText.Get("DataValidation_Minimum")
-                        : UiText.Get("DataValidation_Value"));
+            formula1Label.Text = StripDisplayMnemonic(UiText.Get(DataValidationFormula1LabelKey(plan.Formula1Label)));
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
-            AutomationProperties.SetHelpText(
-                formula1Box,
-                isList
-                    ? "List source range or comma-separated values."
-                    : isCustom
-                        ? "Formula that must evaluate to TRUE (e.g. =A1>0)."
-                        : showSecondFormula
-                            ? "Minimum value for the validation rule."
-                            : "Value for the validation rule.");
+            AutomationProperties.SetHelpText(formula1Box, DataValidationFormula1HelpText(plan.Formula1Label));
             formula2Label.Text = StripDisplayMnemonic(UiText.Get("DataValidation_Maximum"));
-            operatorField.IsVisible = !isList && !isCustom && !isAny;
-            formula1Field.IsVisible = !isAny;
-            formula2Field.IsVisible = showSecondFormula;
-            showDropdownBox.IsVisible = isList;
+            operatorField.IsVisible = plan.ShowOperator;
+            formula1Field.IsVisible = plan.ShowFormula1;
+            formula2Field.IsVisible = plan.ShowFormula2;
+            showDropdownBox.IsVisible = plan.ShowDropdown;
         }
 
         void RefreshMessageEditorStates()
         {
-            var inputEnabled = showInputMessageBox.IsChecked == true;
-            promptTitleBox.IsEnabled = inputEnabled;
-            promptMessageBox.IsEnabled = inputEnabled;
+            var plan = new DvMessageVisibility(
+                showInputMessageBox.IsChecked == true,
+                showErrorMessageBox.IsChecked == true,
+                SelectedAlertStyle());
 
-            var errorEnabled = showErrorMessageBox.IsChecked == true;
-            alertStyleBox.IsEnabled = errorEnabled;
-            errorTitleBox.IsEnabled = errorEnabled;
-            errorMessageBox.IsEnabled = errorEnabled;
+            promptTitleBox.IsEnabled = plan.InputEditorsEnabled;
+            promptMessageBox.IsEnabled = plan.InputEditorsEnabled;
+            alertStyleBox.IsEnabled = plan.AlertStyleEnabled;
+            errorTitleBox.IsEnabled = plan.ErrorEditorsEnabled;
+            errorMessageBox.IsEnabled = plan.ErrorEditorsEnabled;
         }
 
         void Accept()
         {
             var type = SelectedType();
             var op = SelectedOperator();
-            if (!TryValidateDataValidationCriteria(type, op, formula1Box.Text, formula2Box.Text, out var message))
+            var validation = DataValidationDialogPlanner.ValidateCriteria(type, op, formula1Box.Text, formula2Box.Text);
+            if (!validation.IsValid)
             {
-                errorText.Text = message;
+                errorText.Text = DataValidationValidationErrorText(validation.FirstError);
                 return;
             }
 
-            var rule = DataValidationPresetPlanner.CreateDefaultRule(type, _session.SelectedRange);
-            rule.Operator = op;
-            rule.Formula1 = formula1Box.Text?.Trim() ?? "";
-            rule.Formula2 = DataValidationPresetPlanner.RequiresSecondFormula(type, op)
-                ? formula2Box.Text?.Trim() ?? ""
-                : "";
-            rule.AllowBlank = allowBlankBox.IsChecked == true;
-            rule.ShowDropdown = type == DvType.List && showDropdownBox.IsChecked == true;
-            rule.ShowInputMessage = showInputMessageBox.IsChecked == true;
-            rule.ShowErrorMessage = showErrorMessageBox.IsChecked == true;
-            rule.AlertStyle = SelectedAlertStyle();
-            rule.PromptTitle = promptTitleBox.Text?.Trim() ?? "";
-            rule.PromptMessage = promptMessageBox.Text?.Trim() ?? "";
-            rule.ErrorTitle = errorTitleBox.Text?.Trim() ?? "";
-            rule.ErrorMessage = errorMessageBox.Text?.Trim() ?? "";
+            var rule = DataValidationDialogPlanner.CreateRule(new DataValidationRuleEditorInput
+            {
+                Type = type,
+                Operator = op,
+                Formula1 = formula1Box.Text,
+                Formula2 = formula2Box.Text,
+                AllowBlank = allowBlankBox.IsChecked == true,
+                ShowDropdown = showDropdownBox.IsChecked == true,
+                ShowInputMessage = showInputMessageBox.IsChecked == true,
+                ShowErrorMessage = showErrorMessageBox.IsChecked == true,
+                AlertStyle = SelectedAlertStyle(),
+                PromptTitle = promptTitleBox.Text,
+                PromptMessage = promptMessageBox.Text,
+                ErrorTitle = errorTitleBox.Text,
+                ErrorMessage = errorMessageBox.Text
+            });
 
             result = new DataValidationDialogResult(DataValidationDialogAction.Apply, rule);
             dialog.Close();
@@ -17423,7 +17412,7 @@ public sealed partial class MainWindow : Window
         typeBox.SelectionChanged += (_, _) =>
         {
             var type = SelectedType();
-            LoadRule(CreateDefaultDataValidationRule(type, _session.SelectedRange));
+            LoadRule(DataValidationDialogPlanner.CreateDefaultRule(type, _session.SelectedRange));
             UpdateCriteriaVisibility();
             RefreshMessageEditorStates();
         };
@@ -17634,167 +17623,24 @@ public sealed partial class MainWindow : Window
         return choices[0];
     }
 
-    private static DataValidation CreateDefaultDataValidationRule(DvType type, GridRange selectedRange)
+    private static string DataValidationFormula1LabelKey(DvFormula1Label label) => label switch
     {
-        var rule = DataValidationPresetPlanner.CreateDefaultRule(type, selectedRange);
-        rule.Operator = GetDefaultDataValidationOperator(type);
-        rule.Formula1 = type switch
-        {
-            DvType.List => "Yes,No",
-            DvType.TextLength => "50",
-            DvType.Decimal => "0",
-            DvType.Date => "2024-01-01",
-            DvType.Time => "09:00",
-            DvType.Custom => "=A1>0",
-            DvType.Any => "",
-            _ => "1",
-        };
-        rule.Formula2 = type switch
-        {
-            DvType.WholeNumber => "100",
-            DvType.Decimal => "100",
-            DvType.Date => "2024-12-31",
-            DvType.Time => "17:00",
-            _ => "",
-        };
-        rule.ShowDropdown = type == DvType.List;
-        return rule;
-    }
+        DvFormula1Label.Source => "DataValidation_Source",
+        DvFormula1Label.Formula => "DataValidation_Formula",
+        DvFormula1Label.Value => "DataValidation_Value",
+        _ => "DataValidation_Minimum",
+    };
 
-    private static DvOperator GetDefaultDataValidationOperator(DvType type) =>
-        type == DvType.TextLength
-            ? DvOperator.LessThanOrEqual
-            : DvOperator.Between;
-
-    private static bool TryValidateDataValidationCriteria(
-        DvType type,
-        DvOperator op,
-        string? formula1,
-        string? formula2,
-        out string errorMessage)
+    private static string DataValidationFormula1HelpText(DvFormula1Label label) => label switch
     {
-        var first = formula1?.Trim() ?? "";
-        var second = formula2?.Trim() ?? "";
+        DvFormula1Label.Source => "List source range or comma-separated values.",
+        DvFormula1Label.Formula => "Formula that must evaluate to TRUE (e.g. =A1>0).",
+        DvFormula1Label.Minimum => "Minimum value for the validation rule.",
+        _ => "Value for the validation rule.",
+    };
 
-        if (type == DvType.Any)
-        {
-            errorMessage = "";
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(first))
-        {
-            errorMessage = type switch
-            {
-                DvType.List => "List source is required.",
-                DvType.Custom => "Formula is required.",
-                _ => "Value is required.",
-            };
-            return false;
-        }
-
-        if (DataValidationPresetPlanner.RequiresSecondFormula(type, op) &&
-            string.IsNullOrWhiteSpace(second))
-        {
-            errorMessage = "Maximum is required.";
-            return false;
-        }
-
-        if (type == DvType.List)
-        {
-            if (HasDataValidationListSource(first))
-            {
-                errorMessage = "";
-                return true;
-            }
-
-            errorMessage = "List source must contain at least one item or range reference.";
-            return false;
-        }
-
-        if (type == DvType.WholeNumber)
-        {
-            return TryValidateIntegralDataValidationCriterion(first, allowNegative: true, out errorMessage) &&
-                (!DataValidationPresetPlanner.RequiresSecondFormula(type, op) ||
-                    TryValidateIntegralDataValidationCriterion(second, allowNegative: true, out errorMessage));
-        }
-
-        if (type == DvType.TextLength)
-        {
-            return TryValidateIntegralDataValidationCriterion(first, allowNegative: false, out errorMessage) &&
-                (!DataValidationPresetPlanner.RequiresSecondFormula(type, op) ||
-                    TryValidateIntegralDataValidationCriterion(second, allowNegative: false, out errorMessage));
-        }
-
-        if (type == DvType.Decimal)
-        {
-            return TryValidateNumericDataValidationCriterion(first, out errorMessage) &&
-                (!DataValidationPresetPlanner.RequiresSecondFormula(type, op) ||
-                    TryValidateNumericDataValidationCriterion(second, out errorMessage));
-        }
-
-        errorMessage = "";
-        return true;
-    }
-
-    private static bool HasDataValidationListSource(string text) =>
-        text.TrimStart().StartsWith('=') ||
-        text.Split(',').Any(static item => item.Trim().Trim('"').Length > 0);
-
-    private static bool TryValidateIntegralDataValidationCriterion(
-        string text,
-        bool allowNegative,
-        out string errorMessage)
-    {
-        if (text.TrimStart().StartsWith('='))
-        {
-            errorMessage = "";
-            return true;
-        }
-
-        if (!long.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) &&
-            !long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
-        {
-            errorMessage = "Value must be a whole number or formula.";
-            return false;
-        }
-
-        if (!allowNegative && value < 0)
-        {
-            errorMessage = "Text length must be zero or greater.";
-            return false;
-        }
-
-        errorMessage = "";
-        return true;
-    }
-
-    private static bool TryValidateNumericDataValidationCriterion(
-        string text,
-        out string errorMessage)
-    {
-        if (text.TrimStart().StartsWith('='))
-        {
-            errorMessage = "";
-            return true;
-        }
-
-        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
-            !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
-        {
-            errorMessage = "Value must be a number or formula.";
-            return false;
-        }
-
-        if (!double.IsFinite(value))
-        {
-            errorMessage = "Value must be a finite number.";
-            return false;
-        }
-
-        errorMessage = "";
-        return true;
-    }
+    private static string DataValidationValidationErrorText(DvValidationError? error) =>
+        error?.Message ?? "";
 
     private static StackPanel CreateDataValidationField(string label, Control control) =>
         CreateDataValidationField(new TextBlock { Text = StripDisplayMnemonic(label) }, control);

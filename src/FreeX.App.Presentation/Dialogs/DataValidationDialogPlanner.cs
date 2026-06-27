@@ -51,6 +51,54 @@ public sealed record DataValidationRuleEditorInput
 
 public static class DataValidationDialogPlanner
 {
+    public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)
+    {
+        var op = DefaultOperatorForType(type);
+        return new DataValidation
+        {
+            AppliesTo = selectedRange,
+            Type = type,
+            Operator = op,
+            Formula1 = DefaultFormula1ForType(type),
+            Formula2 = DefaultFormula2ForType(type),
+            AllowBlank = true,
+            ShowDropdown = type == DvType.List,
+            AlertStyle = DvAlertStyle.Stop,
+            ShowInputMessage = true,
+            ShowErrorMessage = true,
+            ErrorTitle = "",
+            ErrorMessage = "",
+            PromptTitle = "",
+            PromptMessage = ""
+        };
+    }
+
+    public static DvOperator DefaultOperatorForType(DvType type) =>
+        type == DvType.TextLength
+            ? DvOperator.LessThanOrEqual
+            : DvOperator.Between;
+
+    public static string DefaultFormula1ForType(DvType type) => type switch
+    {
+        DvType.List => "Yes,No",
+        DvType.TextLength => "50",
+        DvType.Decimal => "0",
+        DvType.Date => "2024-01-01",
+        DvType.Time => "09:00",
+        DvType.Custom => "=A1>0",
+        DvType.Any => "",
+        _ => "1",
+    };
+
+    public static string DefaultFormula2ForType(DvType type) => type switch
+    {
+        DvType.WholeNumber => "100",
+        DvType.Decimal => "100",
+        DvType.Date => "2024-12-31",
+        DvType.Time => "17:00",
+        _ => "",
+    };
+
     public static DataValidationRuleEditorVisibilityPlan CreateVisibilityPlan(
         DvType type,
         DvOperator op,
