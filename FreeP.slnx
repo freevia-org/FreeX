@@ -7,6 +7,7 @@
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
     <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <Project Path="shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
   </Folder>
   <Folder Name="/freep/">

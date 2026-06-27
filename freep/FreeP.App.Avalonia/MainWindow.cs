@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
@@ -148,25 +149,14 @@ public sealed class MainWindow : Window
 
         // ── Root layout ───────────────────────────────────────────────────────
 
-        var root = new DockPanel();
-
-        // Ribbon (top)
         var ribbon = BuildRibbon();
-        DockPanel.SetDock(ribbon, Dock.Top);
-        root.Children.Add(ribbon);
-
-        // Status bar (bottom)
-        var statusBar = new Border
-        {
-            Background = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
-            Height     = 26,
-            Child      = _statusText,
-        };
-        DockPanel.SetDock(statusBar, Dock.Bottom);
-        root.Children.Add(statusBar);
-
-        // Body (fills remainder)
-        root.Children.Add(BuildBody());
+        var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
+            Background: new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            LeftContent: _statusText)).Root;
+        var frame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Ribbon: ribbon,
+            WorkArea: BuildBody(),
+            StatusBar: statusBar));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
@@ -183,7 +173,7 @@ public sealed class MainWindow : Window
         else
             LoadPresentation(_presentation, path: null);
 
-        Content = root;
+        Content = frame.Root;
         UpdateStatus();
     }
 
