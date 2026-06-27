@@ -1,14 +1,25 @@
 name: Linux Release
 
-# Manual-only release channel for the Linux Avalonia app, comparable to the
+# Manual-only release channel for the Linux Avalonia apps, comparable to the
 # Windows tester release. Builds versioned, checksummed linux-x64/linux-arm64
-# tarballs + AppImages, validates artifact readiness and a promotion gate
-# (accessibility evidence required for a public-preview candidate), and publishes
-# them as GitHub release assets. Dispatch with:
-#   gh workflow run linux-release.yml --ref <branch> -f release_version=0.1.0
+# tarballs + AppImages when app packaging assets exist, validates FreeX artifact
+# readiness and a promotion gate (accessibility evidence required for a
+# public-preview candidate), and publishes them as GitHub release assets.
+# Dispatch with:
+#   gh workflow run linux-release.yml --ref <branch> -f release_version=0.1.0 -f app=freex
 on:
   workflow_dispatch:
     inputs:
+      app:
+        description: App to release
+        required: true
+        default: freex
+        type: choice
+        options:
+          - freex
+          - freew
+          - freep
+          - all
       release_version:
         description: Release version, for example 0.1.0
         required: true
@@ -62,7 +73,7 @@ concurrency:
 
 jobs:
   build:
-    name: Linux release build (${{ matrix.runtime }})
+    name: Linux release build (${{ inputs.app }}, ${{ matrix.runtime }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -81,6 +92,7 @@ jobs:
       FREEX_RUNTIME: ${{ matrix.runtime }}
       FREEX_ARCH: ${{ matrix.arch }}
       FREEX_APP_VERSION: ${{ inputs.release_version }}
+      FREEX_RELEASE_APP: ${{ inputs.app }}
       LIBGL_ALWAYS_SOFTWARE: "1"
     steps:
       - name: Checkout
@@ -112,127 +124,297 @@ jobs:
           runtime="$FREEX_RUNTIME"
           version="$FREEX_APP_VERSION"
           artifact_root="$GITHUB_WORKSPACE/artifacts"
-          evidence_path="$artifact_root/freex-$runtime-linux-evidence.txt"
-          smoke_log="$artifact_root/freex-$runtime-linux-packaging-smoke.log"
-          launch_smoke_report="$artifact_root/freex-$runtime-linux-launch-smoke.txt"
-          app_diagnostics_dir="$artifact_root/freex-$runtime-linux-app-diagnostics"
-          published="$RUNNER_TEMP/freex-$runtime-publish"
           dist="$artifact_root"
+          appimage_tool=""
 
-          mkdir -p "$artifact_root" "$app_diagnostics_dir"
-          {
-            echo "runtime=$runtime"
-            echo "arch=$FREEX_ARCH"
-            echo "artifact_channel=internal-preview"
-            echo "app_version=$version"
-            echo "github_run_id=${GITHUB_RUN_ID}"
-            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
-          } > "$evidence_path"
+          mkdir -p "$artifact_root"
 
-          dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
-            --configuration Release --framework net10.0 --runtime "$runtime" \
-            --self-contained true -p:UseAppHost=true -p:PublishReadyToRun=false \
-            -p:PublishSingleFile=false --output "$published"
-          test -x "$published/FreeX"
+          case "$FREEX_RELEASE_APP" in
+            freex) apps=(freex);;
+            freew) apps=(freew);;
+            freep) apps=(freep);;
+            all) apps=(freex freew freep);;
+            *) echo "Unsupported app input: $FREEX_RELEASE_APP" >&2; exit 2;;
+          esac
 
-          desktop_file="src/FreeX.App.Avalonia/Packaging/linux/io.github.tony-xmelon.freex.desktop"
-          desktop-file-validate "$desktop_file"
-          {
-            echo "desktop_entry_valid=true"
-            echo "mime_definition_present=true"
-            echo "icon_present=true"
-          } >> "$evidence_path"
+          configure_app() {
+            case "$1" in
+              freex)
+                app_slug="freex"
+                app_title="FreeX"
+                app_binary="FreeX"
+                project_path="src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj"
+                packaging_dir="src/FreeX.App.Avalonia/Packaging/linux"
+                desktop_file="$packaging_dir/io.github.tony-xmelon.freex.desktop"
+                icon_file="$packaging_dir/io.github.tony-xmelon.freex.svg"
+                mime_file="$packaging_dir/io.github.tony-xmelon.freex.xml"
+                ;;
+              freew)
+                app_slug="freew"
+                app_title="FreeW"
+                app_binary="FreeW"
+                project_path="freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj"
+                packaging_dir="freew/FreeW.App.Avalonia/Packaging/linux"
+                desktop_file="$packaging_dir/io.github.tony-xmelon.freew.desktop"
+                icon_file="$packaging_dir/io.github.tony-xmelon.freew.svg"
+                mime_file=""
+                ;;
+              freep)
+                app_slug="freep"
+                app_title="FreeP"
+                app_binary="FreeP"
+                project_path="freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj"
+                packaging_dir=""
+                desktop_file=""
+                icon_file=""
+                mime_file=""
+                ;;
+              *) echo "Unsupported app: $1" >&2; exit 2;;
+            esac
+          }
 
-          tarball="$(src/FreeX.App.Avalonia/Packaging/linux/package-linux-app.sh \
-            --runtime "$runtime" --published "$published" --version "$version" --output "$dist")"
-          test -f "$tarball"
-          tarball_name="$(basename "$tarball")"
-          (cd "$dist" && sha256sum "$tarball_name" > "$tarball_name.sha256")
-          (cd "$dist" && sha256sum -c "$tarball_name.sha256")
-          {
-            echo "tarball_name=$tarball_name"
-            echo "tarball_sha256=$(cut -d ' ' -f 1 "$dist/$tarball_name.sha256")"
-          } >> "$evidence_path"
+          ensure_appimagetool() {
+            if [[ -n "$appimage_tool" ]]; then
+              return 0
+            fi
 
-          # Headless packaging smoke (hard gate).
-          "$published/FreeX" --packaging-smoke | tee "$smoke_log"
-          grep -q "Packaging smoke opened" "$smoke_log"
-          grep -q "format_cells_style_roundtrip=true" "$smoke_log"
-          smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
-          printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
-          "$published/FreeX" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
-          rt_count="$(grep -c "format_cells_style_roundtrip=true" "$smoke_log")"
-          test "$rt_count" -ge 2
-          {
-            echo "format_cells_style_roundtrip=true"
-            echo "format_cells_style_roundtrip_count=$rt_count"
-            echo "packaging_smoke_status=passed"
-          } >> "$evidence_path"
+            appimage_tool="$RUNNER_TEMP/appimagetool"
+            curl -fsSL -o "$appimage_tool" \
+              "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$FREEX_ARCH.AppImage"
+            chmod +x "$appimage_tool"
+          }
 
-          # GUI launch smoke under Xvfb (hard gate).
-          launch_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
-          printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_file"
-          xvfb-run -a "$published/FreeX" \
-            --launch-smoke "$launch_smoke_report" \
-            --launch-smoke-diagnostics-dir "$app_diagnostics_dir" "$launch_file"
-          grep -q "window_shown=true" "$launch_smoke_report"
-          grep -q "viewport_rows=[1-9]" "$launch_smoke_report"
-          grep -q "native_file_menu=true" "$launch_smoke_report"
-          echo "launch_smoke_status=passed" >> "$evidence_path"
+          create_generic_tarball() {
+            local stage_name="$app_slug-$version-$runtime"
+            local stage="$dist/$stage_name"
+            rm -rf "$stage"
+            mkdir -p "$stage/lib/$app_slug" "$stage/bin"
+            cp -a "$published/." "$stage/lib/$app_slug/"
+            chmod +x "$stage/lib/$app_slug/$app_binary"
+            cat > "$stage/bin/$app_slug" <<LAUNCH
+          #!/usr/bin/env bash
+          set -euo pipefail
+          here="\$(cd "\$(dirname "\$(readlink -f "\${BASH_SOURCE[0]}")")" && pwd)"
+          exec "\$here/../lib/$app_slug/$app_binary" "\$@"
+          LAUNCH
+            chmod +x "$stage/bin/$app_slug"
+            cat > "$stage/README.md" <<README
+          $app_title Linux $version
 
-          test -f "$app_diagnostics_dir/events.jsonl"
-          grep -q '"eventName":"app_start"' "$app_diagnostics_dir/events.jsonl"
-          echo "app_diagnostics_events_jsonl=true" >> "$evidence_path"
+          Add bin/ to PATH, then launch '$app_slug'. This generic tarball is used because no Linux desktop packaging assets are present for $app_title.
+          README
+            local tarball="$dist/$stage_name.tar.gz"
+            rm -f "$tarball"
+            tar -C "$dist" -czf "$tarball" "$stage_name"
+            echo "$tarball"
+          }
 
-          # AppImage (release artifact; non-fatal evidence).
-          appimage_status="skipped"
-          tool="$RUNNER_TEMP/appimagetool"
-          appimage="$dist/FreeX-$version-$FREEX_ARCH.AppImage"
-          if curl -fsSL -o "$tool" \
-               "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$FREEX_ARCH.AppImage" \
-             && chmod +x "$tool" \
-             && APPIMAGE_EXTRACT_AND_RUN=1 src/FreeX.App.Avalonia/Packaging/linux/build-appimage.sh \
-                  --runtime "$runtime" --published "$published" --version "$version" \
-                  --output "$dist" --appimagetool "$tool" \
-             && test -f "$appimage"; then
-            (cd "$dist" && sha256sum "$(basename "$appimage")" > "$(basename "$appimage").sha256")
-            appimage_status="built"
-            echo "appimage_name=$(basename "$appimage")" >> "$evidence_path"
-          else
-            appimage_status="failed"
-          fi
-          echo "appimage_status=$appimage_status" >> "$evidence_path"
+          run_packaging_smoke() {
+            case "$app_slug" in
+              freex)
+                "$published/$app_binary" --packaging-smoke | tee "$smoke_log"
+                grep -q "Packaging smoke opened" "$smoke_log"
+                grep -q "format_cells_style_roundtrip=true" "$smoke_log"
+                smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
+                printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
+                "$published/$app_binary" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
+                rt_count="$(grep -c "format_cells_style_roundtrip=true" "$smoke_log")"
+                test "$rt_count" -ge 2
+                {
+                  echo "format_cells_style_roundtrip=true"
+                  echo "format_cells_style_roundtrip_count=$rt_count"
+                  echo "packaging_smoke_status=passed"
+                } >> "$evidence_path"
+                ;;
+              freew)
+                "$published/$app_binary" --packaging-smoke | tee "$smoke_log"
+                grep -q "freew_packaging_smoke=passed" "$smoke_log"
+                echo "packaging_smoke_status=passed" >> "$evidence_path"
+                ;;
+              freep)
+                packaging_report="$artifact_root/freep-$runtime-linux-packaging-smoke-report.txt"
+                "$published/$app_binary" --packaging-smoke "$packaging_report" | tee "$smoke_log"
+                grep -q "freep_packaging_smoke=passed" "$smoke_log"
+                test -f "$packaging_report"
+                echo "packaging_smoke_status=passed" >> "$evidence_path"
+                ;;
+            esac
+          }
 
-          # Debian package (distro-native install; non-fatal evidence).
-          deb_status="skipped"
-          case "$runtime" in linux-x64) deb_arch="amd64";; linux-arm64) deb_arch="arm64";; *) deb_arch="";; esac
-          deb="$dist/freex_${version}_${deb_arch}.deb"
-          if [[ -n "$deb_arch" ]] \
-             && src/FreeX.App.Avalonia/Packaging/linux/build-deb.sh \
-                  --runtime "$runtime" --published "$published" --version "$version" --output "$dist" \
-             && test -f "$deb"; then
-            (cd "$dist" && sha256sum "$(basename "$deb")" > "$(basename "$deb").sha256")
-            deb_status="built"
-            echo "deb_name=$(basename "$deb")" >> "$evidence_path"
-          else
-            deb_status="failed"
-          fi
-          echo "deb_status=$deb_status" >> "$evidence_path"
+          run_launch_smoke() {
+            case "$app_slug" in
+              freex)
+                launch_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
+                printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_file"
+                xvfb-run -a "$published/$app_binary" \
+                  --launch-smoke "$launch_smoke_report" \
+                  --launch-smoke-diagnostics-dir "$app_diagnostics_dir" "$launch_file"
+                grep -q "window_shown=true" "$launch_smoke_report"
+                grep -q "viewport_rows=[1-9]" "$launch_smoke_report"
+                grep -q "native_file_menu=true" "$launch_smoke_report"
+                echo "launch_smoke_status=passed" >> "$evidence_path"
+                ;;
+              freew)
+                xvfb-run -a "$published/$app_binary" \
+                  --launch-smoke "$launch_smoke_report" \
+                  --launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                grep -q "window_shown=true" "$launch_smoke_report"
+                grep -q "has_toolbar=true" "$launch_smoke_report"
+                grep -q "paragraph_count=[1-9]" "$launch_smoke_report"
+                grep -q "placed_glyphs=[1-9]" "$launch_smoke_report"
+                echo "launch_smoke_status=passed" >> "$evidence_path"
+                ;;
+              freep)
+                xvfb-run -a "$published/$app_binary" \
+                  --launch-smoke "$launch_smoke_report" \
+                  --launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                grep -q "window_shown=true" "$launch_smoke_report"
+                grep -q "has_toolbar=true" "$launch_smoke_report"
+                grep -q "slide_count=[0-9]" "$launch_smoke_report"
+                echo "launch_smoke_status=passed" >> "$evidence_path"
+                ;;
+            esac
+          }
+
+          for app in "${apps[@]}"; do
+            configure_app "$app"
+            evidence_path="$artifact_root/$app_slug-$runtime-linux-evidence.txt"
+            smoke_log="$artifact_root/$app_slug-$runtime-linux-packaging-smoke.log"
+            launch_smoke_report="$artifact_root/$app_slug-$runtime-linux-launch-smoke.txt"
+            app_diagnostics_dir="$artifact_root/$app_slug-$runtime-linux-app-diagnostics"
+            published="$RUNNER_TEMP/$app_slug-$runtime-publish"
+
+            mkdir -p "$app_diagnostics_dir"
+            {
+              echo "app=$app_slug"
+              echo "runtime=$runtime"
+              echo "arch=$FREEX_ARCH"
+              echo "artifact_channel=internal-preview"
+              echo "app_version=$version"
+              echo "github_run_id=${GITHUB_RUN_ID}"
+              echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            } > "$evidence_path"
+
+            # FreeX default still publishes via: dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj
+            dotnet publish "$project_path" \
+              --configuration Release --framework net10.0 --runtime "$runtime" \
+              --self-contained true -p:UseAppHost=true -p:PublishReadyToRun=false \
+              -p:PublishSingleFile=false --output "$published"
+            test -x "$published/$app_binary"
+
+            if [[ -n "$desktop_file" ]]; then
+              desktop-file-validate "$desktop_file"
+              echo "desktop_entry_valid=true" >> "$evidence_path"
+            else
+              echo "desktop_entry_valid=not_available" >> "$evidence_path"
+            fi
+            if [[ -n "$mime_file" && -f "$mime_file" ]]; then
+              echo "mime_definition_present=true" >> "$evidence_path"
+            else
+              echo "mime_definition_present=not_applicable" >> "$evidence_path"
+            fi
+            if [[ -n "$icon_file" && -f "$icon_file" ]]; then
+              echo "icon_present=true" >> "$evidence_path"
+            else
+              echo "icon_present=not_available" >> "$evidence_path"
+            fi
+
+            if [[ -n "$packaging_dir" && -x "$packaging_dir/package-linux-app.sh" ]]; then
+              tarball="$("$packaging_dir/package-linux-app.sh" \
+                --runtime "$runtime" --published "$published" --version "$version" --output "$dist")"
+              echo "tarball_kind=packaged" >> "$evidence_path"
+            else
+              tarball="$(create_generic_tarball)"
+              echo "tarball_kind=generic" >> "$evidence_path"
+            fi
+            test -f "$tarball"
+            tarball_name="$(basename "$tarball")"
+            (cd "$dist" && sha256sum "$tarball_name" > "$tarball_name.sha256")
+            (cd "$dist" && sha256sum -c "$tarball_name.sha256")
+            {
+              echo "tarball_name=$tarball_name"
+              echo "tarball_sha256=$(cut -d ' ' -f 1 "$dist/$tarball_name.sha256")"
+            } >> "$evidence_path"
+
+            # Headless packaging smoke (hard gate).
+            run_packaging_smoke
+
+            # GUI launch smoke under Xvfb (hard gate).
+            run_launch_smoke
+
+            if [[ "$app_slug" == "freex" ]]; then
+              test -f "$app_diagnostics_dir/events.jsonl"
+              grep -q '"eventName":"app_start"' "$app_diagnostics_dir/events.jsonl"
+              echo "app_diagnostics_events_jsonl=true" >> "$evidence_path"
+            elif [[ -f "$app_diagnostics_dir/events.jsonl" ]]; then
+              echo "app_diagnostics_events_jsonl=true" >> "$evidence_path"
+            else
+              echo "app_diagnostics_events_jsonl=not_available" >> "$evidence_path"
+            fi
+
+            # AppImage (release artifact; non-fatal evidence).
+            appimage_status="skipped"
+            appimage="$dist/$app_title-$version-$FREEX_ARCH.AppImage"
+            if [[ -n "$packaging_dir" && -x "$packaging_dir/build-appimage.sh" ]] \
+               && ensure_appimagetool \
+               && APPIMAGE_EXTRACT_AND_RUN=1 "$packaging_dir/build-appimage.sh" \
+                    --runtime "$runtime" --published "$published" --version "$version" \
+                    --output "$dist" --appimagetool "$appimage_tool" \
+               && test -f "$appimage"; then
+              (cd "$dist" && sha256sum "$(basename "$appimage")" > "$(basename "$appimage").sha256")
+              appimage_status="built"
+              echo "appimage_name=$(basename "$appimage")" >> "$evidence_path"
+            elif [[ -n "$packaging_dir" && -x "$packaging_dir/build-appimage.sh" ]]; then
+              appimage_status="failed"
+            fi
+            echo "appimage_status=$appimage_status" >> "$evidence_path"
+
+            # Debian package (distro-native install; non-fatal evidence).
+            deb_status="skipped"
+            case "$runtime" in linux-x64) deb_arch="amd64";; linux-arm64) deb_arch="arm64";; *) deb_arch="";; esac
+            deb="$dist/${app_slug}_${version}_${deb_arch}.deb"
+            if [[ -n "$deb_arch" && -n "$packaging_dir" && -x "$packaging_dir/build-deb.sh" ]] \
+               && "$packaging_dir/build-deb.sh" \
+                    --runtime "$runtime" --published "$published" --version "$version" --output "$dist" \
+               && test -f "$deb"; then
+              (cd "$dist" && sha256sum "$(basename "$deb")" > "$(basename "$deb").sha256")
+              deb_status="built"
+              echo "deb_name=$(basename "$deb")" >> "$evidence_path"
+            elif [[ -n "$deb_arch" && -n "$packaging_dir" && -x "$packaging_dir/build-deb.sh" ]]; then
+              deb_status="failed"
+            fi
+            echo "deb_status=$deb_status" >> "$evidence_path"
+          done
 
       - name: Upload release build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: freex-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-linux-app
+          name: ${{ inputs.app }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-linux-app
           path: |
             artifacts/freex-${{ inputs.release_version }}-${{ matrix.runtime }}.tar.gz
             artifacts/freex-${{ inputs.release_version }}-${{ matrix.runtime }}.tar.gz.sha256
+            artifacts/freew-${{ inputs.release_version }}-${{ matrix.runtime }}.tar.gz
+            artifacts/freew-${{ inputs.release_version }}-${{ matrix.runtime }}.tar.gz.sha256
+            artifacts/freep-${{ inputs.release_version }}-${{ matrix.runtime }}.tar.gz
+            artifacts/freep-${{ inputs.release_version }}-${{ matrix.runtime }}.tar.gz.sha256
             artifacts/FreeX-${{ inputs.release_version }}-${{ matrix.arch }}.AppImage
             artifacts/FreeX-${{ inputs.release_version }}-${{ matrix.arch }}.AppImage.sha256
+            artifacts/FreeW-${{ inputs.release_version }}-${{ matrix.arch }}.AppImage
+            artifacts/FreeW-${{ inputs.release_version }}-${{ matrix.arch }}.AppImage.sha256
             artifacts/freex_${{ inputs.release_version }}_*.deb
             artifacts/freex_${{ inputs.release_version }}_*.deb.sha256
+            artifacts/freew_${{ inputs.release_version }}_*.deb
+            artifacts/freew_${{ inputs.release_version }}_*.deb.sha256
             artifacts/freex-${{ matrix.runtime }}-linux-evidence.txt
             artifacts/freex-${{ matrix.runtime }}-linux-packaging-smoke.log
             artifacts/freex-${{ matrix.runtime }}-linux-launch-smoke.txt
+            artifacts/freew-${{ matrix.runtime }}-linux-evidence.txt
+            artifacts/freew-${{ matrix.runtime }}-linux-packaging-smoke.log
+            artifacts/freew-${{ matrix.runtime }}-linux-launch-smoke.txt
+            artifacts/freep-${{ matrix.runtime }}-linux-evidence.txt
+            artifacts/freep-${{ matrix.runtime }}-linux-packaging-smoke.log
+            artifacts/freep-${{ matrix.runtime }}-linux-packaging-smoke-report.txt
+            artifacts/freep-${{ matrix.runtime }}-linux-launch-smoke.txt
           if-no-files-found: warn
           retention-days: 14
 
@@ -252,11 +434,34 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           path: downloaded-artifacts
-          pattern: freex-${{ github.run_id }}-${{ github.run_attempt }}-*-linux-app
+          pattern: ${{ inputs.app }}-${{ github.run_id }}-${{ github.run_attempt }}-*-linux-app
 
       - name: Validate promotion gate
         shell: pwsh
         run: |
+          $app = "${{ inputs.app }}"
+          if ($app -notin @("freex", "all")) {
+            if ("${{ inputs.public_preview_candidate }}" -eq "true") {
+              throw "Public-preview promotion validation is currently available only for FreeX, or all-app runs that include FreeX."
+            }
+
+            New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
+            $manifest = [ordered]@{
+              schema = "io.github.tony-xmelon.$app.linux-promotion.v1"
+              app = $app
+              channel = "internal-preview"
+              status = "internal_preview_ready"
+              repository = $env:GITHUB_REPOSITORY
+              run_id = $env:GITHUB_RUN_ID
+              run_attempt = $env:GITHUB_RUN_ATTEMPT
+              commit = $env:GITHUB_SHA
+              note = "FreeX public-preview readiness validation was skipped because the selected app does not include FreeX."
+            }
+            $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath "artifacts/linux-preview-promotion-manifest.json" -Encoding ascii
+            Write-Host "Linux promotion status: internal_preview_ready (channel: internal-preview, app: $app)."
+            return
+          }
+
           # Hashtable splat so switch parameters bind correctly (array splat would pass
           # "-Switch" strings as positional arguments, not switches).
           $params = @{
@@ -278,29 +483,76 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ inputs.release_version }}"
+          release_app="${{ inputs.app }}"
           stage="$GITHUB_WORKSPACE/release-assets"
           mkdir -p "$stage"
           find downloaded-artifacts -type f \( \
             -name 'freex-*.tar.gz' -o -name 'freex-*.tar.gz.sha256' -o \
+            -name 'freew-*.tar.gz' -o -name 'freew-*.tar.gz.sha256' -o \
+            -name 'freep-*.tar.gz' -o -name 'freep-*.tar.gz.sha256' -o \
             -name 'FreeX-*.AppImage' -o -name 'FreeX-*.AppImage.sha256' -o \
+            -name 'FreeW-*.AppImage' -o -name 'FreeW-*.AppImage.sha256' -o \
+            -name 'FreeP-*.AppImage' -o -name 'FreeP-*.AppImage.sha256' -o \
             -name 'freex_*.deb' -o -name 'freex_*.deb.sha256' -o \
-            -name 'freex-*-linux-evidence.txt' \) -exec cp {} "$stage/" \;
+            -name 'freew_*.deb' -o -name 'freew_*.deb.sha256' -o \
+            -name 'freep_*.deb' -o -name 'freep_*.deb.sha256' -o \
+            -name 'freex-*-linux-evidence.txt' -o \
+            -name 'freew-*-linux-evidence.txt' -o \
+            -name 'freep-*-linux-evidence.txt' \) -exec cp {} "$stage/" \;
           ls -la "$stage"
+          case "$release_app" in
+            freex)
+              tag="freex-linux-v$version"
+              title="FreeX Linux v$version"
+              heading="FreeX Linux v$version"
+              summary="Self-contained Linux build of the FreeX Avalonia app (linux-x64 and linux-arm64)."
+              tarball_note="Tarball: extract and run \`install.sh\` (installs to ~/.local), then launch \`freex\`."
+              appimage_note="AppImage: \`chmod +x FreeX-$version-<arch>.AppImage && ./FreeX-$version-<arch>.AppImage\`"
+              deb_note="Debian/Ubuntu: \`sudo apt install ./freex_${version}_<arch>.deb\` (amd64 or arm64), then launch \`freex\`."
+              ;;
+            freew)
+              tag="freew-linux-v$version"
+              title="FreeW Linux v$version"
+              heading="FreeW Linux v$version"
+              summary="Self-contained Linux build of the FreeW Avalonia app (linux-x64 and linux-arm64)."
+              tarball_note="Tarball: extract and run \`install.sh\` (installs to ~/.local), then launch \`freew\`."
+              appimage_note="AppImage: \`chmod +x FreeW-$version-<arch>.AppImage && ./FreeW-$version-<arch>.AppImage\`"
+              deb_note="Debian/Ubuntu: \`sudo apt install ./freew_${version}_<arch>.deb\` (amd64 or arm64), then launch \`freew\`."
+              ;;
+            freep)
+              tag="freep-linux-v$version"
+              title="FreeP Linux v$version"
+              heading="FreeP Linux v$version"
+              summary="Self-contained Linux build of the FreeP Avalonia app (linux-x64 and linux-arm64)."
+              tarball_note="Tarball: extract and add \`bin/\` to PATH, then launch \`freep\`."
+              appimage_note="AppImage: not produced unless FreeP Linux packaging assets are added."
+              deb_note="Debian/Ubuntu: not produced unless FreeP Linux packaging assets are added."
+              ;;
+            all)
+              tag="free-suite-linux-v$version"
+              title="FreeX/FreeW/FreeP Linux v$version"
+              heading="FreeX/FreeW/FreeP Linux v$version"
+              summary="Self-contained Linux builds of the FreeX, FreeW, and FreeP Avalonia apps (linux-x64 and linux-arm64)."
+              tarball_note="Tarball: FreeX/FreeW packaged tarballs include \`install.sh\`; FreeP generic tarballs include \`bin/freep\`."
+              appimage_note="AppImage: produced for apps with Linux AppImage packaging assets."
+              deb_note="Debian/Ubuntu: produced for apps with Linux Debian packaging assets."
+              ;;
+          esac
           {
-            echo "tag=freex-linux-v$version"
-            echo "title=FreeX Linux v$version"
+            echo "tag=$tag"
+            echo "title=$title"
           } >> "$GITHUB_OUTPUT"
 
           cat > "$stage/RELEASE_NOTES.md" <<EOF
-          # FreeX Linux v$version
+          # $heading
 
-          Self-contained Linux build of the FreeX Avalonia app (linux-x64 and linux-arm64).
+          $summary
 
           - Channel: $([[ "${{ inputs.public_preview_candidate }}" == "true" ]] && echo public-preview-candidate || echo internal-preview)
           - Verify with: \`sha256sum -c <asset>.sha256\`
-          - Tarball: extract and run \`install.sh\` (installs to ~/.local), then launch \`freex\`.
-          - AppImage: \`chmod +x FreeX-$version-<arch>.AppImage && ./FreeX-$version-<arch>.AppImage\`
-          - Debian/Ubuntu: \`sudo apt install ./freex_${version}_<arch>.deb\` (amd64 or arm64), then launch \`freex\`.
+          - $tarball_note
+          - $appimage_note
+          - $deb_note
 
           A desktop session with X11 or Wayland is required; no system .NET install is needed.
 

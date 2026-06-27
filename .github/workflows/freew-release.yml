@@ -1,13 +1,22 @@
-name: FreeW Release
+name: Windows App Release
 
-# Manual-only release channel for the FreeW WPF word processor, mirroring the
-# Linux Avalonia release lane. Produces a self-contained win-x64 build, zips it,
-# and uploads the artifact. This lane is intentionally NOT run on push/PR.
+# Manual-only release channel for the Windows WPF apps, mirroring the Linux
+# Avalonia release lanes. Produces self-contained win-x64 builds, zips them,
+# and uploads artifacts. This lane is intentionally NOT run on push/PR.
 # Dispatch with:
-#   gh workflow run freew-release.yml --ref <branch> -f release_version=0.1.0
+#   gh workflow run freew-release.yml --ref <branch> -f release_version=0.1.0 -f app=freew
 on:
   workflow_dispatch:
     inputs:
+      app:
+        description: App artifact to build
+        required: true
+        default: freew
+        type: choice
+        options:
+          - freew
+          - freep
+          - all
       release_version:
         description: Release version, for example 0.1.0
         required: true
@@ -23,7 +32,7 @@ concurrency:
 
 jobs:
   build:
-    name: FreeW release build (win-x64)
+    name: Windows app release build (win-x64)
     runs-on: windows-latest
     timeout-minutes: 45
     env:
@@ -41,14 +50,94 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Publish self-contained win-x64 build + zip
+      - name: Publish FreeW self-contained win-x64 build + zip
+        if: ${{ inputs.app == 'freew' || inputs.app == 'all' }}
         shell: pwsh
         run: ./freew/build/publish-windows.ps1 -Version "${{ inputs.release_version }}"
 
-      - name: Upload release artifact
+      - name: Upload FreeW release artifact
+        if: ${{ inputs.app == 'freew' || inputs.app == 'all' }}
         uses: actions/upload-artifact@v7
         with:
           name: FreeW-win-x64-${{ inputs.release_version }}
           path: artifacts/FreeW-win-x64-${{ inputs.release_version }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish FreeP self-contained win-x64 build + zip
+        if: ${{ inputs.app == 'freep' || inputs.app == 'all' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
+
+          $version = "${{ inputs.release_version }}"
+          $runtime = "win-x64"
+          $project = "freep/FreeP.App.Host/FreeP.App.Host.csproj"
+          $outputDir = Join-Path $PWD "artifacts"
+          $publishDir = Join-Path $outputDir "publish/FreeP-$runtime"
+          $zipPath = Join-Path $outputDir "FreeP-$runtime-$version.zip"
+          $checksumPath = "$zipPath.sha256"
+
+          if (-not (Test-Path -LiteralPath $project)) {
+              throw "Could not find FreeP.App.Host.csproj at '$project'."
+          }
+
+          if (Test-Path -LiteralPath $publishDir) {
+              Remove-Item -LiteralPath $publishDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+          foreach ($path in @($zipPath, $checksumPath)) {
+              if (Test-Path -LiteralPath $path) {
+                  Remove-Item -LiteralPath $path -Force
+              }
+          }
+
+          $publishArgs = @(
+              "publish", $project,
+              "-c", "Release",
+              "-r", $runtime,
+              "--self-contained", "true",
+              "/p:PublishSingleFile=false",
+              "/p:Version=$version",
+              "/p:InformationalVersion=$version",
+              "-o", $publishDir
+          )
+
+          Write-Host "dotnet $($publishArgs -join ' ')"
+          & dotnet @publishArgs
+          if ($LASTEXITCODE -ne 0) {
+              throw "dotnet publish failed with exit code $LASTEXITCODE."
+          }
+
+          $appHost = Join-Path $publishDir "FreeP.App.Host.exe"
+          if (-not (Test-Path -LiteralPath $appHost)) {
+              throw "Publish output missing expected apphost '$appHost'."
+          }
+
+          Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -Force
+          if (-not (Test-Path -LiteralPath $zipPath)) {
+              throw "Expected zip '$zipPath' was not produced."
+          }
+
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash.ToLowerInvariant()
+          $zipName = Split-Path -Leaf $zipPath
+          Set-Content -LiteralPath $checksumPath -Value "$hash  $zipName" -Encoding ascii
+
+          $zipFull = (Resolve-Path -LiteralPath $zipPath).Path
+          $checksumFull = (Resolve-Path -LiteralPath $checksumPath).Path
+          $sizeMb = [math]::Round((Get-Item -LiteralPath $zipFull).Length / 1MB, 1)
+          Write-Host "FreeP artifact produced: $zipFull ($sizeMb MB)"
+          Write-Host "FreeP checksum produced: $checksumFull"
+
+      - name: Upload FreeP release artifact
+        if: ${{ inputs.app == 'freep' || inputs.app == 'all' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: FreeP-win-x64-${{ inputs.release_version }}
+          path: |
+            artifacts/FreeP-win-x64-${{ inputs.release_version }}.zip
+            artifacts/FreeP-win-x64-${{ inputs.release_version }}.zip.sha256
           if-no-files-found: error
           retention-days: 14
