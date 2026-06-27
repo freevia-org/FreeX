@@ -9,14 +9,14 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>
-/// FreeP's File lifecycle: New / Open / Save / Save As / Close over the stub <c>.fxp</c> reader+writer.
+/// FreeP's File lifecycle: New / Open / Save / Save As / Close over native <c>.pptx</c> packages.
 ///
 /// <para>
 /// The file-lifecycle <em>ceremony</em> — the dirty-gate before destructive actions, the Save-vs-Save-As
 /// resolution, and recent-files registration — is decided by the shared, neutral
 /// <see cref="FileLifecyclePlanner"/>. FreeP supplies only the thin host side: the native
-/// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for its single <c>.fxp</c> format (via the shared
-/// <see cref="FileDialogRequestPlanner"/>), the actual <c>.fxp</c> read/write, and the message prompts. Dirty/path
+/// <see cref="OpenFileDialog"/>/<see cref="SaveFileDialog"/> for <c>.pptx</c> plus legacy <c>.fxp</c> compatibility
+/// (via the shared <see cref="FileDialogRequestPlanner"/>), the actual read/write, and the message prompts. Dirty/path
 /// state and lifecycle ceremony live in the shared <see cref="FileCommandWorkflow"/>; recent files in the
 /// shared <see cref="RecentFilesStore"/>. Mirrors FreeW.FileCommands exactly (FreeW already adopted these seams).
 /// </para>
@@ -36,10 +36,14 @@ internal sealed class FileCommands
     private readonly FileCommandWorkflow _workflow;
     private readonly FreePOptions _options;
 
-    // FreeP ships a single .fxp format; the filter/default-extension are composed by the shared I/O
-    // FileDialogFilterBuilder so any future format additions stay a data change, not a string edit.
+    private const string PptxExtension = ".pptx";
+
+    // FreeP's native document format is .pptx. .fxp remains open/save compatible for legacy tests and files.
     private static readonly IReadOnlyList<FileDialogFormatDescriptor> Formats =
-        [new FileDialogFormatDescriptor(FxpFormat.Extension, "FreeP presentations")];
+    [
+        new FileDialogFormatDescriptor(PptxExtension, "PowerPoint presentations"),
+        new FileDialogFormatDescriptor(FxpFormat.Extension, "FreeP legacy presentations"),
+    ];
 
     // Export-only target: PDF is a fixed-layout publish format, not a FreeP document format.
     private static readonly IReadOnlyList<FileDialogFormatDescriptor> PdfFormats =
@@ -97,7 +101,7 @@ internal sealed class FileCommands
     {
         try
         {
-            _loadModel(FxpFormat.Read(path));
+            _loadModel(ReadPresentation(path));
             SetSaved(path, suppressRecentFiles);
             return true;
         }
@@ -124,7 +128,7 @@ internal sealed class FileCommands
 
     /// <summary>
     /// File &gt; Export to PDF. Prompts for a target and writes a fixed-layout PDF (one page per slide) via the
-    /// shared portable PDF tier. Does not change the dirty/saved state (the <c>.fxp</c> is the document of record).
+    /// shared portable PDF tier. Does not change the dirty/saved state (the presentation document is the source of record).
     /// </summary>
     public bool ExportPdf()
     {
@@ -158,9 +162,7 @@ internal sealed class FileCommands
             // Write through a sibling temp file and atomically replace the target, mirroring the
             // ExportPdf path — so a mid-write failure (disk full, serialization error, AV lock)
             // never truncates the previously-saved presentation.
-            var json = FxpFormat.Serialize(_getModel());
-            var bytes = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
-            ExportAtomicWriter.WriteAllBytes(path, bytes);
+            ExportAtomicWriter.WriteAllBytes(path, SerializePresentation(path, _getModel()));
             SetSaved(path, suppressRecentFiles: false);
             return true;
         }
@@ -175,6 +177,27 @@ internal sealed class FileCommands
     {
         _workflow.MarkSavedWithPath(path, suppressRecentFiles);
     }
+
+    private static Presentation ReadPresentation(string path) =>
+        IsLegacyFxpPath(path)
+            ? FxpFormat.Read(path)
+            : PptxPackageReader.Read(path);
+
+    private static byte[] SerializePresentation(string path, Presentation presentation)
+    {
+        if (IsLegacyFxpPath(path))
+        {
+            var json = FxpFormat.Serialize(presentation);
+            return new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
+        }
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        return stream.ToArray();
+    }
+
+    private static bool IsLegacyFxpPath(string path) =>
+        string.Equals(Path.GetExtension(path), FxpFormat.Extension, StringComparison.OrdinalIgnoreCase);
 
     private string? PromptOpenPath()
     {

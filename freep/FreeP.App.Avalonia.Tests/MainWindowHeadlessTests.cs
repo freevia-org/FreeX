@@ -6,6 +6,8 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Themes.Fluent;
 using Free.Shared.AppServices;
+using Free.Shared.Drawing;
+using Free.Shared.Ribbon;
 using FreeP.App.Avalonia;
 using FreeP.App.Avalonia.Smoke;
 using FreeP.Core.IO;
@@ -161,6 +163,24 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain("freep.redo", "Redo command required");
     }
 
+    [Fact]
+    public void RibbonDefinition_insert_tab_has_text_and_shape_commands()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var insert = definition.Tabs.Single(t => t.Id == "insert");
+        insert.Groups.Should().Contain(g => g.Id == "text", "Text group required");
+        insert.Groups.Should().Contain(g => g.Id == "illustrations", "Illustrations group required");
+
+        var textIds = insert.Groups.Single(g => g.Id == "text")
+            .Controls.Select(i => i.CommandId.Value).ToList();
+        var illustrationIds = insert.Groups.Single(g => g.Id == "illustrations")
+            .Controls.Select(i => i.CommandId.Value).ToList();
+
+        textIds.Should().Contain("freep.text-box", "Text Box command required");
+        illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
+        illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
+    }
+
     // ── Slide management ────────────────────────────────────────────────────────
 
     [Fact]
@@ -250,6 +270,45 @@ public sealed class MainWindowHeadlessTests
 
         if (!ran) return;
         after.Should().Be(before, "Undo must restore the original slide count");
+    }
+
+    // ── Insert commands ─────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("freep.text-box",        DrawingShapeKind.Rectangle, true)]
+    [InlineData("freep.shape-rectangle", DrawingShapeKind.Rectangle, false)]
+    [InlineData("freep.shape-ellipse",   DrawingShapeKind.Ellipse,   false)]
+    public async Task Ribbon_insert_shape_commands_add_expected_shape(
+        string commandId,
+        DrawingShapeKind expectedShape,
+        bool expectsTextBody)
+    {
+        var found = false;
+        var before = -1;
+        var after = -1;
+        SlideShape? added = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue($"{commandId} must be registered");
+
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            command!.Execute(RibbonCommandContext.Empty);
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+            added = window.Editor.CurrentSlide!.Shapes.Last();
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+        after.Should().Be(before + 1, $"{commandId} must insert one shape");
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.AutoShape);
+        added.AutoShapeKind.Should().Be(expectedShape);
+        (added.TextBody is not null).Should().Be(expectsTextBody,
+            $"{commandId} must create the expected text-editing surface");
     }
 
     // ── Packaging smoke ─────────────────────────────────────────────────────────

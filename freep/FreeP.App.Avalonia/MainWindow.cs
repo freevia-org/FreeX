@@ -33,13 +33,14 @@ namespace FreeP.App.Avalonia;
 ///   └──────────────────────────────────────────┘
 ///
 /// Commands wired (v1):
-///   File:  New, Open, Save, Save As
-///   Slide: New Slide, Duplicate, Delete
-///   Edit:  Undo, Redo
+///   File:   New, Open, Save, Save As
+///   Slide:  New Slide, Duplicate, Delete
+///   Insert: Text Box, Rectangle, Ellipse
+///   Edit:   Undo, Redo
 ///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
 ///
-/// Deferred to Wave 14C: shape editing, text in-canvas, transitions, animations,
-///   font/format ribbon, find/replace, clipboard (full), drag-reorder thumbnails.
+/// Deferred to later Avalonia parity: transitions, animations, font/format ribbon,
+///   find/replace, clipboard (full), drag-reorder thumbnails.
 /// </summary>
 public sealed class MainWindow : Window
 {
@@ -339,7 +340,7 @@ public sealed class MainWindow : Window
         };
     }
 
-    private RibbonCommandRegistry BuildCommandRegistry()
+    internal RibbonCommandRegistry BuildCommandRegistry()
     {
         var r = new RibbonCommandRegistry();
 
@@ -353,6 +354,11 @@ public sealed class MainWindow : Window
         r.Register("freep.new-slide",       new RelayCommand(() => Editor.InsertSlide()));
         r.Register("freep.duplicate-slide", new RelayCommand(() => Editor.DuplicateCurrentSlide()));
         r.Register("freep.delete-slide",    new RelayCommand(() => Editor.DeleteCurrentSlide()));
+
+        // Insert shapes/text
+        r.Register("freep.text-box",        new RelayCommand(() => Editor.InsertDefaultTextBox()));
+        r.Register("freep.shape-rectangle", new RelayCommand(() => Editor.InsertDefaultRectangle()));
+        r.Register("freep.shape-ellipse",   new RelayCommand(() => Editor.InsertDefaultEllipse()));
 
         // Undo / Redo
         r.Register("freep.undo", new RelayCommand(() => Editor.Undo()));
