@@ -7,6 +7,7 @@ using OxyPlot.Axes;
 using OxyPlot.Legends;
 using OxyPlot.Series;
 using OxyPlot.Wpf;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -15,9 +16,6 @@ namespace FreeX.App.UI;
 public static partial class ChartRenderer
 {
     private const string SecondaryYAxisKey = "SecondaryY";
-
-    // Accent tint schedule: round 0 = base, round 1 = +0.4, round 2 = -0.25, round 3 = +0.6, round 4 = -0.5
-    private static readonly double[] AccentTintSchedule = [0.0, 0.4, -0.25, 0.6, -0.5];
 
     public static ImageSource? Render(ChartModel chart, ViewportModel viewport) =>
         Render(chart, viewport, WorkbookTheme.Office);
@@ -811,24 +809,11 @@ public static partial class ChartRenderer
     /// </summary>
     private static IList<OxyColor> BuildExcelSeriesPalette(WorkbookTheme theme)
     {
-        var accentSlots = new[]
+        var colors = ChartStylePlanner.BuildExcelSeriesPalette(theme);
+        var palette = new List<OxyColor>(colors.Length);
+        foreach (var color in colors)
         {
-            WorkbookThemeColorSlot.Accent1,
-            WorkbookThemeColorSlot.Accent2,
-            WorkbookThemeColorSlot.Accent3,
-            WorkbookThemeColorSlot.Accent4,
-            WorkbookThemeColorSlot.Accent5,
-            WorkbookThemeColorSlot.Accent6
-        };
-
-        var palette = new List<OxyColor>(accentSlots.Length * AccentTintSchedule.Length);
-        foreach (var tint in AccentTintSchedule)
-        {
-            foreach (var slot in accentSlots)
-            {
-                var color = theme.ResolveColor(slot, tint);
-                palette.Add(OxyColor.FromRgb(color.R, color.G, color.B));
-            }
+            palette.Add(OxyColor.FromRgb(color.R, color.G, color.B));
         }
 
         return palette;

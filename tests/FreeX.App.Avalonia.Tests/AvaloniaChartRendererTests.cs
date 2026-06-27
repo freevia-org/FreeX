@@ -1,4 +1,5 @@
 using FreeX.App.Avalonia.Charts;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 using FluentAssertions;
@@ -62,26 +63,13 @@ public sealed class AvaloniaChartRendererTests
     }
 
     [Fact]
-    public void BuildThemePalette_AllEntriesHaveSameRgbAsWpfAlgorithm()
+    public void BuildThemePalette_AllEntriesComeFromSharedStylePlanner()
     {
-        // Cross-check the full 30-entry palette against the same algorithm expressed
-        // inline here (mirrors WPF BuildExcelSeriesPalette, slot × tint-round order).
         var theme = WorkbookTheme.Office;
-        double[] tints = [0.0, 0.4, -0.25, 0.6, -0.5];
-        var slots = new[]
-        {
-            WorkbookThemeColorSlot.Accent1, WorkbookThemeColorSlot.Accent2,
-            WorkbookThemeColorSlot.Accent3, WorkbookThemeColorSlot.Accent4,
-            WorkbookThemeColorSlot.Accent5, WorkbookThemeColorSlot.Accent6,
-        };
-
-        var expected = new List<CellColor>(30);
-        foreach (var tint in tints)
-            foreach (var slot in slots)
-                expected.Add(theme.ResolveColor(slot, tint));
+        var expected = ChartStylePlanner.BuildExcelSeriesPalette(theme);
 
         var actual = AvaloniaChartRenderer.BuildThemePalette(theme);
-        actual.Should().Equal(expected.ToArray(), "palette must match WPF BuildExcelSeriesPalette");
+        actual.Should().Equal(expected, "Avalonia should consume the shared chart style planner");
     }
 
     // ── Area-fill resolution ──────────────────────────────────────────────────

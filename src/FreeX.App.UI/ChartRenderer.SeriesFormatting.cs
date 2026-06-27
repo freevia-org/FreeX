@@ -4,6 +4,7 @@ using OxyPlot.Annotations;
 using OxyPlot.Axes;
 using OxyPlot.Legends;
 using OxyPlot.Series;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -180,18 +181,8 @@ public static partial class ChartRenderer
         return (int)(col - dataStartCol - (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories ? 1 : 0));
     }
 
-    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex)
-    {
-        var formats = chart.SeriesFormats;
-        for (var i = formats.Count - 1; i >= 0; i--)
-        {
-            var format = formats[i];
-            if (format.SeriesIndex == seriesIndex)
-                return format;
-        }
-
-        return null;
-    }
+    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex) =>
+        ChartStylePlanner.FindSeriesFormat(chart, seriesIndex);
 
     /// <summary>
     /// Returns true when the series with chart-XML index <paramref name="seriesIndex"/> has its
@@ -231,18 +222,8 @@ public static partial class ChartRenderer
     /// resolved against the workbook theme. Returns null when no per-point
     /// override exists (caller should fall back to series-level or palette color).
     /// </summary>
-    private static CellColor? GetPointFillColor(ChartModel chart, int seriesIndex, int pointIndex, WorkbookTheme theme)
-    {
-        var formats = chart.PointFillColors;
-        for (var i = formats.Count - 1; i >= 0; i--)
-        {
-            var format = formats[i];
-            if (format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex)
-                return format.ResolveFillColor(theme);
-        }
-
-        return null;
-    }
+    private static CellColor? GetPointFillColor(ChartModel chart, int seriesIndex, int pointIndex, WorkbookTheme theme) =>
+        ChartStylePlanner.ResolvePointFillColor(chart, seriesIndex, pointIndex, theme);
 
     private static void ApplyLineFormat(LineSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
