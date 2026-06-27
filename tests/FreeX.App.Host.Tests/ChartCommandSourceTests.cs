@@ -63,11 +63,11 @@ public sealed class ChartCommandSourceTests
     }
 
     [Fact]
-    public void ChartQuickFormatHandlers_UseSharedCycler()
+    public void ChartQuickFormatHandlers_UseSharedCyclers()
     {
         var chartSource = ReadHostSourceFile("MainWindow.ChartCommands.cs");
         var axisSource = ReadHostSourceFile("MainWindow.ChartAxisCommands.cs");
-        var cyclerSource = ReadHostSourceFile("ChartOptionCycler.cs");
+        var cyclerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartOptionCycler.cs");
 
         chartSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
         chartSource.Should().Contain("ChartQuickFormatCycler.NextChartTitleFontSize(");
@@ -90,6 +90,9 @@ public sealed class ChartCommandSourceTests
 
         axisSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
         axisSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
+        axisSource.Should().Contain("ChartOptionCycler.NextAxisTickState(");
+        axisSource.Should().Contain("ChartOptionCycler.TryGetAxisBounds(");
+        chartSource.Should().Contain("ChartOptionCycler.GetNextSecondaryAxisSeries(");
         cyclerSource.Should().NotContain("public static CellColor NextSeriesColor(");
         cyclerSource.Should().NotContain("NextDataLabelPosition(");
         cyclerSource.Should().NotContain("NextGridlineState(");

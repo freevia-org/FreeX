@@ -95,6 +95,21 @@ public sealed class PresentationPortabilityGuardTests
     }
 
     [Fact]
+    public void ChartOptionCycler_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "Charts", "Editing", "ChartOptionCycler.cs"))
+            .Should()
+            .BeTrue("chart command cycling should be shared by WPF and portable chart flows");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ChartOptionCycler.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared chart command cycler instead of carrying a renderer-local copy");
+    }
+
+    [Fact]
     public void WorkbookRangeTextCodec_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");

@@ -1,7 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.Charts;
 
 public sealed class ChartOptionCyclerTests
 {
@@ -89,6 +90,7 @@ public sealed class ChartOptionCyclerTests
     {
         ChartOptionCycler.ParseChartType(text).Should().Be(expected);
     }
+
     [Fact]
     public void TryGetAxisBounds_UsesNumericChartDataAndExpandsSingleValueRanges()
     {

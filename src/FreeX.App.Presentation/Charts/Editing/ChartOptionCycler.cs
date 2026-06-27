@@ -1,7 +1,12 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Charts.Editing;
 
+/// <summary>
+/// Portable chart command cycling helpers for contextual chart commands that step through predefined
+/// model values without opening a dialog. The WPF host consumes these helpers directly; other shells can
+/// reuse the same sequences without depending on WPF.
+/// </summary>
 public static class ChartOptionCycler
 {
     public static ChartDataLabelNumberFormat NextDataLabelNumberFormat(ChartDataLabelNumberFormat current) =>
@@ -112,6 +117,7 @@ public static class ChartOptionCycler
             _ => ChartType.Column
         };
     }
+
     public static bool TryGetAxisBounds(Sheet sheet, ChartModel chart, bool useXAxis, out double minimum, out double maximum)
     {
         minimum = 0;
@@ -176,5 +182,4 @@ public static class ChartOptionCycler
 
         return (true, []);
     }
-
 }
