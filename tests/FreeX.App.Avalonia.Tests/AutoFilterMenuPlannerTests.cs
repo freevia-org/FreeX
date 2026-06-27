@@ -56,6 +56,31 @@ public sealed class AutoFilterMenuPlannerTests
         checklist.Should().Equal(("Shown", "stored"), ("(Blanks)", ""));
     }
 
+    [Fact]
+    public void Build_FromSharedPlan_PreservesEntryKindsLabelsValuesAndEnablement()
+    {
+        var plan = new AutoFilterMenuPlan(
+            "Region",
+            AutoFilterMenuFilterKind.Text,
+            [
+                new("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
+                new("Clear Filter from Region", AutoFilterMenuEntryKind.ClearFilter, isEnabled: false),
+                new("Text Filters", AutoFilterMenuEntryKind.FilterFamily, ["contains:"], "Text Filters"),
+                new(new AutoFilterChecklistItem("West", "west"))
+            ]);
+
+        var model = AutoFilterMenuPlanner.Build(plan);
+
+        model.Header.Should().Be("Region");
+        model.Items.Select(item => item.Kind).Should().Equal(
+            AutoFilterMenuItemKind.SortAscending,
+            AutoFilterMenuItemKind.ClearFilter,
+            AutoFilterMenuItemKind.FilterFamily,
+            AutoFilterMenuItemKind.ChecklistItem);
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.ClearFilter).IsEnabled.Should().BeFalse();
+        model.Items.Single(item => item.Kind == AutoFilterMenuItemKind.ChecklistItem).Value.Should().Be("west");
+    }
+
     private static AutoFilterChecklistItem[] Items(params string[] values) =>
         values.Select(value => new AutoFilterChecklistItem(value, value)).ToArray();
 }
