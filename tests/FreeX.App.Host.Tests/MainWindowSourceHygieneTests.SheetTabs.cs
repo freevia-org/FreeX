@@ -463,9 +463,9 @@ public sealed partial class MainWindowSourceHygieneTests
         sheetTabsSource.Should().Contain("Key.End => FocusEdgeVisibleSheetTab(first: false)");
         sheetTabsSource.Should().Contain("FocusSheetTab(nextSheetId.Value);");
         sheetTabsSource.Should().Contain("FocusSheetTab(sheetId.Value);");
-        focusAdjacentSource.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction)");
+        focusAdjacentSource.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction, static tab => tab.Id)");
         focusAdjacentSource.Should().NotContain("_sheetTabs.ToList()");
-        focusEdgeSource.Should().Contain("SheetTabFocusPlanner.EdgeTab(_sheetTabs, first)");
+        focusEdgeSource.Should().Contain("SheetTabFocusPlanner.EdgeTab(_sheetTabs, first, static tab => tab.Id)");
         focusEdgeSource.Should().NotContain("_sheetTabs.ToList()");
     }
 

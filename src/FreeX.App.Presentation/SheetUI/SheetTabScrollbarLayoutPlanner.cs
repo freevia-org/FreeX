@@ -1,4 +1,4 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.SheetUI;
 
 public readonly record struct SheetTabScrollbarLayout(double SheetTabsViewportWidth, double HorizontalScrollbarWidth);
 

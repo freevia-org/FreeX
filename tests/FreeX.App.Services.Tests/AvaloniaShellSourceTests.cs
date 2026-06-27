@@ -4512,8 +4512,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private bool SelectAdjacentVisibleSheetFromKeyboard(int direction, bool selectRange)");
         source.Should().Contain("private void SelectSheetTabFromKeyboard(SheetId sheetId, bool selectRange)");
         source.Should().Contain("private SheetId? GetAdjacentSheetTabId(SheetId sheetId, int direction)");
-        source.Should().Contain("Math.Clamp(targetIndex, 0, _session.SheetTabs.Count - 1)");
+        source.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_session.SheetTabs, sheetId, direction, static tab => tab.Id)");
         source.Should().Contain("private SheetId? GetEdgeSheetTabId(bool first)");
+        source.Should().Contain("SheetTabFocusPlanner.EdgeTab(_session.SheetTabs, first, static tab => tab.Id)");
         source.Should().Contain("private bool FocusActiveSheetTab()");
         source.Should().Contain("private bool FocusSheetTab(SheetId sheetId)");
         source.Should().Contain("private static void SheetTabContextMenu_Opened(object? sender, RoutedEventArgs args)");

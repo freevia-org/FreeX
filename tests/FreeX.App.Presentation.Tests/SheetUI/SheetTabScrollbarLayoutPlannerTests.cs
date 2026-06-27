@@ -1,7 +1,7 @@
 using FluentAssertions;
-using FreeX.App.Host;
+using FreeX.App.Presentation.SheetUI;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.SheetUI;
 
 public sealed class SheetTabScrollbarLayoutPlannerTests
 {
