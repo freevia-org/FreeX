@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -61,12 +62,79 @@ public class RibbonWpfRendererTests
         });
     }
 
+    [Fact]
+    public void AdaptivePanel_CollapseSet_MatchesSharedPolicyForMeasuredWidths()
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("t", "T", "T", tab => tab
+                .Group("g1", "Alpha", "1", priority: 100, g => g
+                    .Large("a1", "A1", RibbonCommandIconKind.Paste).Large("a2", "A2", RibbonCommandIconKind.Copy))
+                .Group("g2", "Beta", "2", priority: 50, g => g
+                    .Large("b1", "B1", RibbonCommandIconKind.Cut).Large("b2", "B2", RibbonCommandIconKind.Font))
+                .Group("g3", "Gamma", "3", priority: 10, g => g
+                    .Large("c1", "C1", RibbonCommandIconKind.Filter).Large("c2", "C2", RibbonCommandIconKind.Sort)))
+            .Build();
+
+        StaTestRunner.Run(() =>
+        {
+            var host = BuildHost();
+            host.Child = RibbonWpfRenderer.BuildTabContent(definition.FindTab("t")!, host);
+
+            Layout(host, 2000);
+            var panel = Descendants(host).OfType<RibbonAdaptivePanel>().Single();
+            var hosts = panel.Children.OfType<RibbonGroupHost>().ToList();
+            var fixedChromeWidth = GetFixedChromeWidth(panel);
+            var groups = hosts
+                .Select(ribbonGroup => new RibbonAdaptiveCollapseGroup(
+                    ribbonGroup.GroupName,
+                    ribbonGroup.FullWidth,
+                    RibbonGroupHost.CollapsedWidth,
+                    ribbonGroup.Priority))
+                .ToList();
+
+            var targetFitWidth = PickPartialCollapseFitWidth(groups, fixedChromeWidth);
+            var expected = RibbonAdaptiveCollapsePolicy.Plan(targetFitWidth, groups, fixedChromeWidth);
+            expected.Any(decision => decision.IsCollapsed).Should().BeTrue();
+            expected.Any(decision => !decision.IsCollapsed).Should().BeTrue();
+
+            Layout(host, targetFitWidth + 4);
+
+            hosts.Select(ribbonGroup => ribbonGroup.Collapsed)
+                .Should()
+                .Equal(expected.Select(decision => decision.IsCollapsed));
+        });
+    }
+
     private static void Layout(FrameworkElement host, double width)
     {
         host.Width = width;
         host.Measure(new Size(width, 130));
         host.Arrange(new Rect(0, 0, width, 130));
         host.UpdateLayout();
+    }
+
+    private static double GetFixedChromeWidth(RibbonAdaptivePanel panel)
+    {
+        var children = panel.Children.Cast<UIElement>().ToList();
+        var spacing = (double)typeof(RibbonAdaptivePanel)
+            .GetField("GroupSpacing", BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetRawConstantValue()!;
+        return children
+            .Where(child => child is not RibbonGroupHost)
+            .Sum(child => child.DesiredSize.Width) +
+            spacing * Math.Max(0, children.Count - 1);
+    }
+
+    private static double PickPartialCollapseFitWidth(
+        IReadOnlyList<RibbonAdaptiveCollapseGroup> groups,
+        double fixedChromeWidth)
+    {
+        var total = groups.Sum(group => group.FullWidth) + fixedChromeWidth;
+        var firstSavings = groups
+            .OrderBy(group => group.Priority)
+            .Select(group => group.FullWidth - group.CollapsedWidth)
+            .First(savings => savings > 0.5);
+        return total - firstSavings / 2;
     }
 
     [Fact]
