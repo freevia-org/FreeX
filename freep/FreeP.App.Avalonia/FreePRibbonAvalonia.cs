@@ -4,10 +4,10 @@ namespace FreeP.App.Avalonia;
 
 /// <summary>
 /// FreeP ribbon definition for the cross-platform Avalonia host.
-/// Exposes a minimal tab set appropriate for v1 (viewer + file + slide navigation):
-/// a single "Home" tab with file, slide navigation, and edit (undo/redo) groups.
+/// Exposes the cross-platform command surface that is currently backed by
+/// the shared presentation editing session.
 ///
-/// Shape/text/transition/animation tabs are deferred to Wave 14C; the full
+/// Transition/animation tabs are deferred to later Avalonia parity work; the full
 /// <c>FreeP.App.Host.FreePRibbon</c> definition (WPF-only namespace) is not reusable here.
 /// </summary>
 internal static class FreePRibbonAvalonia
@@ -41,6 +41,18 @@ internal static class FreePRibbonAvalonia
                         RibbonCommandIconKind.Next, "B");
                     g.Large("freep.slideshow.from-current",   "From Current Slide",
                         RibbonCommandIconKind.Next, "C");
+                });
+            })
+            .Tab("insert", "Insert", "N", tab =>
+            {
+                tab.Group("text", "Text", "T", 100, g =>
+                {
+                    g.Large("freep.text-box", "Text Box", RibbonCommandIconKind.TextBox, "X");
+                });
+                tab.Group("illustrations", "Illustrations", "I", 90, g =>
+                {
+                    g.Medium("freep.shape-rectangle", "Rectangle", RibbonCommandIconKind.Rectangle, "R");
+                    g.Medium("freep.shape-ellipse", "Ellipse", RibbonCommandIconKind.Ellipse, "E");
                 });
             })
             .Build();

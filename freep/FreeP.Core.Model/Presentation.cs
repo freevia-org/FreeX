@@ -36,6 +36,12 @@ public sealed class Presentation
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public PresentationProperties Properties { get; } = new();
 
+    /// <summary>
+    /// Original package entries captured by the PPTX reader so the writer can retain
+    /// non-modeled parts and relationships that FreeP does not edit yet.
+    /// </summary>
+    public PptxPackageSnapshot? PackageSnapshot { get; set; }
+
     // ── Sections ──────────────────────────────────────────────────────────────────
 
     /// <summary>

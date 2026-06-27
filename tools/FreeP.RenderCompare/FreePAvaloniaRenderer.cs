@@ -72,6 +72,13 @@ internal static class FreePAvaloniaRenderer
             {
                 SlideRenderer.RenderToPng(presentation, i, width, height, outPath);
                 Console.WriteLine($"  slide-{i + 1:D2} -> {outPath}");
+                var diversity = PixelDiversity.Analyze(outPath);
+                Console.WriteLine($"    {diversity}");
+                if (!diversity.IsTrustworthy)
+                {
+                    Console.Error.WriteLine($"    UNTRUSTWORTHY: {diversity.FailureReason}");
+                    failCount++;
+                }
             }
             catch (Exception ex)
             {
