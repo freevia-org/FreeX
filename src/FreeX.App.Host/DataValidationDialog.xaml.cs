@@ -1,20 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public enum DataValidationRangeSelectionTarget
-{
-    Formula1,
-    Formula2
-}
-
-public sealed record DataValidationRangeSelectionRequest(
-    DataValidationRangeSelectionTarget Target,
-    string CurrentText,
-    bool CollapseDialog = true);
 
 /// <summary>
 /// Dialog for creating or editing a data validation rule.
@@ -109,14 +99,16 @@ public partial class DataValidationDialog : Window
 
     private void UpdateMessageEditorStates()
     {
-        var inputEnabled = ShowInputMessageBox.IsChecked == true;
-        PromptTitleBox.IsEnabled = inputEnabled;
-        PromptMessageBox.IsEnabled = inputEnabled;
+        var plan = new DvMessageVisibility(
+            ShowInputMessageBox.IsChecked == true,
+            ShowErrorMessageBox.IsChecked == true,
+            SelectedAlertStyle());
 
-        var errorEnabled = ShowErrorMessageBox.IsChecked == true;
-        AlertStyleCombo.IsEnabled = errorEnabled;
-        ErrorTitleBox.IsEnabled = errorEnabled;
-        ErrorMessageBox.IsEnabled = errorEnabled;
+        PromptTitleBox.IsEnabled = plan.InputEditorsEnabled;
+        PromptMessageBox.IsEnabled = plan.InputEditorsEnabled;
+        AlertStyleCombo.IsEnabled = plan.AlertStyleEnabled;
+        ErrorTitleBox.IsEnabled = plan.ErrorEditorsEnabled;
+        ErrorMessageBox.IsEnabled = plan.ErrorEditorsEnabled;
     }
 
     private void TypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -133,161 +125,107 @@ public partial class DataValidationDialog : Window
     {
         if (TypeCombo == null) return;
 
-        var tag = (TypeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Any";
+        var plan = DataValidationDialogPlanner.CreateVisibilityPlan(
+            SelectedType(),
+            SelectedOperator(),
+            !string.IsNullOrWhiteSpace(SelectionSource));
 
-        bool isAny    = tag == "Any";
-        bool isList   = tag == "List";
-        bool isCustom = tag == "Custom";
+        var operatorVisibility = ToVisibility(plan.ShowOperator);
+        OperatorLabel.Visibility = operatorVisibility;
+        OperatorCombo.Visibility = operatorVisibility;
 
-        // Operator row: hide for Any and List
-        var operatorRowVis = (!isAny && !isList && !isCustom) ? Visibility.Visible : Visibility.Collapsed;
-        OperatorLabel.Visibility  = operatorRowVis;
-        OperatorCombo.Visibility  = operatorRowVis;
+        Formula1Label.Content = UiText.Get(Formula1LabelKey(plan.Formula1Label));
+        Formula1Label.Visibility = ToVisibility(plan.ShowFormula1);
+        Formula1Box.Visibility = ToVisibility(plan.ShowFormula1);
+        SourcePickerButton.Visibility = ToVisibility(plan.ShowFormula1RangePicker);
+        UseSelectionButton.Visibility = ToVisibility(plan.ShowFormula1UseSelection);
 
-        // Formula1 label changes by type
-        if (isList)
-            Formula1Label.Content = UiText.Get("DataValidation_Source");
-        else if (isCustom)
-            Formula1Label.Content = UiText.Get("DataValidation_Formula");
-        else
-        {
-            var opTag = (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
-            Formula1Label.Content = (opTag == "Between" || opTag == "NotBetween")
-                ? UiText.Get("DataValidation_Minimum")
-                : UiText.Get("DataValidation_Value");
-        }
+        Formula2Label.Visibility = ToVisibility(plan.ShowFormula2);
+        Formula2Box.Visibility = ToVisibility(plan.ShowFormula2);
+        SourcePicker2Button.Visibility = ToVisibility(plan.ShowFormula2RangePicker);
+        UseSelection2Button.Visibility = ToVisibility(plan.ShowFormula2UseSelection);
 
-        Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;
-        Formula1Box.Visibility   = isAny ? Visibility.Collapsed : Visibility.Visible;
-        SourcePickerButton.Visibility = !isAny
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        UseSelectionButton.Visibility = !isAny && !string.IsNullOrWhiteSpace(SelectionSource)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-
-        // Formula2 only for Between / NotBetween
-        bool showFormula2 = !isAny && !isList && !isCustom &&
-                            (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag is "Between" or "NotBetween";
-        Formula2Label.Visibility = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
-        Formula2Box.Visibility   = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
-        SourcePicker2Button.Visibility = showFormula2
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        UseSelection2Button.Visibility = showFormula2 && !string.IsNullOrWhiteSpace(SelectionSource)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-
-        ShowDropdownBox.Visibility = isList ? Visibility.Visible : Visibility.Collapsed;
+        ShowDropdownBox.Visibility = ToVisibility(plan.ShowDropdown);
     }
+
+    private DvType SelectedType() =>
+        DataValidationDialogPlanner.TypeFromTag((TypeCombo.SelectedItem as ComboBoxItem)?.Tag as string);
+
+    private DvOperator SelectedOperator() =>
+        DataValidationDialogPlanner.OperatorFromTag((OperatorCombo.SelectedItem as ComboBoxItem)?.Tag as string);
+
+    private DvAlertStyle SelectedAlertStyle() =>
+        DataValidationDialogPlanner.AlertStyleFromTag((AlertStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string);
+
+    private static Visibility ToVisibility(bool visible) =>
+        visible ? Visibility.Visible : Visibility.Collapsed;
+
+    private static string Formula1LabelKey(DvFormula1Label label) => label switch
+    {
+        DvFormula1Label.Source => "DataValidation_Source",
+        DvFormula1Label.Formula => "DataValidation_Formula",
+        DvFormula1Label.Value => "DataValidation_Value",
+        _ => "DataValidation_Minimum"
+    };
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        var typeTag = (TypeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Any";
-        var opTag   = (OperatorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
-        var alertTag = (AlertStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Stop";
+        var type = SelectedType();
+        var op = SelectedOperator();
+        var alertStyle = SelectedAlertStyle();
 
-        if (!TryValidateCriteriaInputs(typeTag, opTag, Formula1Box.Text, Formula2Box.Text, out var criteriaError))
+        var validation = DataValidationDialogPlanner.ValidateCriteria(type, op, Formula1Box.Text, Formula2Box.Text);
+        if (!validation.IsValid)
         {
+            var criteriaError = LocalizeValidationError(validation.FirstError);
             LastValidationError = criteriaError;
             DialogMessageHelper.ShowWarning(this, criteriaError, Title);
-            FocusInvalidCriteriaInput(typeTag, opTag);
+            FocusInvalidCriteriaInput(type, op);
             return;
         }
 
-        var dvType = typeTag switch
-        {
-            "List"        => DvType.List,
-            "WholeNumber" => DvType.WholeNumber,
-            "Decimal"     => DvType.Decimal,
-            "Date"        => DvType.Date,
-            "Time"        => DvType.Time,
-            "TextLength"  => DvType.TextLength,
-            "Custom"      => DvType.Custom,
-            _             => DvType.Any
-        };
-
-        var dvOp = opTag switch
-        {
-            "NotBetween"         => DvOperator.NotBetween,
-            "Equal"              => DvOperator.Equal,
-            "NotEqual"           => DvOperator.NotEqual,
-            "GreaterThan"        => DvOperator.GreaterThan,
-            "LessThan"           => DvOperator.LessThan,
-            "GreaterThanOrEqual" => DvOperator.GreaterThanOrEqual,
-            "LessThanOrEqual"    => DvOperator.LessThanOrEqual,
-            _                    => DvOperator.Between
-        };
-
-        var alertStyle = alertTag switch
-        {
-            "Warning" => DvAlertStyle.Warning,
-            "Information" => DvAlertStyle.Information,
-            _ => DvAlertStyle.Stop
-        };
-        var formula1 = NormalizeFormula1(typeTag, Formula1Box.Text);
-        var formula2 = NormalizeFormula2(typeTag, opTag, Formula2Box.Text);
-
-        Result = new DataValidation
-        {
-            Id = _resultId,
-            Type         = dvType,
-            Operator     = dvOp,
-            Formula1     = formula1,
-            Formula2     = formula2,
-            AllowBlank   = AllowBlankBox.IsChecked == true,
-            ShowDropdown = dvType == DvType.List && ShowDropdownBox.IsChecked == true,
-            AlertStyle   = alertStyle,
-            ShowInputMessage = ShowInputMessageBox.IsChecked == true,
-            ShowErrorMessage = ShowErrorMessageBox.IsChecked == true,
-            ErrorTitle = ErrorTitleBox.Text.Trim(),
-            PromptTitle = PromptTitleBox.Text.Trim(),
-            PromptMessage = PromptMessageBox.Text.Trim(),
-            ErrorMessage = ErrorMessageBox.Text.Trim(),
-        };
+        var input = CreateRuleEditorInput(type, op, alertStyle);
+        Result = DataValidationDialogPlanner.CreateRule(input);
         ApplyToSameSettings = SameSettingsBox.IsChecked == true;
-        ClearRequested = ClearRequested && IsClearAllState(typeTag, opTag, alertTag);
+        ClearRequested = ClearRequested && DataValidationDialogPlanner.IsClearAllState(input);
         LastValidationError = null;
 
         CompleteDialog(accepted: true);
     }
 
-    private void FocusInvalidCriteriaInput(string typeTag, string opTag)
+    private DataValidationRuleEditorInput CreateRuleEditorInput(
+        DvType type,
+        DvOperator op,
+        DvAlertStyle alertStyle) =>
+        new()
+        {
+            Id = _resultId,
+            Type = type,
+            Operator = op,
+            AlertStyle = alertStyle,
+            Formula1 = Formula1Box.Text,
+            Formula2 = Formula2Box.Text,
+            AllowBlank = AllowBlankBox.IsChecked == true,
+            ShowDropdown = ShowDropdownBox.IsChecked == true,
+            ApplyToSameSettings = SameSettingsBox.IsChecked == true,
+            ShowInputMessage = ShowInputMessageBox.IsChecked == true,
+            ShowErrorMessage = ShowErrorMessageBox.IsChecked == true,
+            ErrorTitle = ErrorTitleBox.Text,
+            PromptTitle = PromptTitleBox.Text,
+            PromptMessage = PromptMessageBox.Text,
+            ErrorMessage = ErrorMessageBox.Text
+        };
+
+    private void FocusInvalidCriteriaInput(DvType type, DvOperator op)
     {
         ValidationTabs.SelectedItem = SettingsTab;
-        var target = ShouldFocusSecondCriteriaInput(typeTag, opTag, Formula1Box.Text, Formula2Box.Text)
+        var target = ShouldFocusSecondCriteriaInput(type, op, Formula1Box.Text, Formula2Box.Text)
             ? Formula2Box
             : Formula1Box;
         target.Focus();
         Keyboard.Focus(target);
         target.SelectAll();
     }
-
-    private static string NormalizeFormula1(string typeTag, string? formula1) =>
-        string.Equals(typeTag, "Any", StringComparison.Ordinal)
-            ? ""
-            : formula1?.Trim() ?? "";
-
-    private static string NormalizeFormula2(string typeTag, string operatorTag, string? formula2) =>
-        RequiresSecondFormula(typeTag, operatorTag)
-            ? formula2?.Trim() ?? ""
-            : "";
-
-    private bool IsClearAllState(string typeTag, string opTag, string alertTag) =>
-        typeTag == "Any"
-        && opTag == "Between"
-        && alertTag == "Stop"
-        && string.IsNullOrWhiteSpace(Formula1Box.Text)
-        && string.IsNullOrWhiteSpace(Formula2Box.Text)
-        && AllowBlankBox.IsChecked == true
-        && ShowDropdownBox.IsChecked == true
-        && SameSettingsBox.IsChecked != true
-        && ShowInputMessageBox.IsChecked == true
-        && ShowErrorMessageBox.IsChecked == true
-        && string.IsNullOrWhiteSpace(ErrorTitleBox.Text)
-        && string.IsNullOrWhiteSpace(PromptTitleBox.Text)
-        && string.IsNullOrWhiteSpace(PromptMessageBox.Text)
-        && string.IsNullOrWhiteSpace(ErrorMessageBox.Text);
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
