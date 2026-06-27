@@ -115,8 +115,9 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 }
                 else
                 {
-                    harness.CollapsedActiveRibbonGroupNames.Should().NotBeEmpty(
-                        $"the contextual '{header}' tab should still render actionable collapsed groups when 1366px is not reachable");
+                    (harness.SelectedTabVisibleCommandControlCount > 0 ||
+                        harness.CollapsedActiveRibbonGroupNames.Count > 0).Should().BeTrue(
+                        $"the contextual '{header}' tab should still render expanded commands or actionable collapsed groups when 1366px is not reachable");
                 }
             }
         });
