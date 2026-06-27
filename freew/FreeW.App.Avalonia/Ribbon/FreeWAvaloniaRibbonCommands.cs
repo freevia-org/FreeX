@@ -1,6 +1,7 @@
 using System.Globalization;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
+using FreeW.Ribbon.Definitions;
 using Free.Shared.Ribbon;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
 
@@ -358,7 +359,7 @@ internal static class FreeWAvaloniaRibbonCommands
     /// its registry command both use <c>freew.style.&lt;id&gt;</c> (e.g. <c>freew.style.Heading1</c>), so the
     /// ribbon definition and the registry agree on the id.
     /// </summary>
-    internal static string StyleCommandId(string styleId) => $"freew.style.{styleId}";
+    internal static string StyleCommandId(string styleId) => FreeWRibbonDefinitionData.StyleCommandId(styleId);
 
     /// <summary>
     /// Registers one <c>freew.style.&lt;id&gt;</c> command per built-in gallery style (see
@@ -381,28 +382,7 @@ internal static class FreeWAvaloniaRibbonCommands
     /// The set mirrors Word's default "recently used symbols" grid (currency, typography, math, arrows).
     /// </summary>
     internal static readonly IReadOnlyList<(string Id, string Glyph, string Label)> Symbols =
-    [
-        ("freew.symbol.euro",        "€", "Euro Sign"),
-        ("freew.symbol.pound",       "£", "Pound Sign"),
-        ("freew.symbol.yen",         "¥", "Yen Sign"),
-        ("freew.symbol.cent",        "¢", "Cent Sign"),
-        ("freew.symbol.copyright",   "©", "Copyright"),
-        ("freew.symbol.registered",  "®", "Registered"),
-        ("freew.symbol.trademark",   "™", "Trademark"),
-        ("freew.symbol.degree",      "°", "Degree Sign"),
-        ("freew.symbol.plusminus",   "±", "Plus-Minus"),
-        ("freew.symbol.multiply",    "×", "Multiplication"),
-        ("freew.symbol.divide",      "÷", "Division"),
-        ("freew.symbol.notequal",    "≠", "Not Equal"),
-        ("freew.symbol.lessequal",   "≤", "Less-Or-Equal"),
-        ("freew.symbol.greaterequal","≥", "Greater-Or-Equal"),
-        ("freew.symbol.bullet",      "•", "Bullet"),
-        ("freew.symbol.ellipsis",    "…", "Ellipsis"),
-        ("freew.symbol.emdash",      "—", "Em Dash"),
-        ("freew.symbol.endash",      "–", "En Dash"),
-        ("freew.symbol.arrow-right", "→", "Right Arrow"),
-        ("freew.symbol.arrow-left",  "←", "Left Arrow"),
-    ];
+        FreeWRibbonDefinitionData.Symbols;
 
     /// <summary>
     /// Registers the per-glyph sub-commands for the Insert &gt; Symbol palette dropdown. Each command id

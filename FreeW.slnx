@@ -21,6 +21,8 @@
     <Project Path="freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj" />
     <Project Path="freew/FreeW.App.Presentation/FreeW.App.Presentation.csproj" />
     <Project Path="freew/FreeW.App.Presentation.Tests/FreeW.App.Presentation.Tests.csproj" />
+    <Project Path="freew/FreeW.Ribbon.Definitions/FreeW.Ribbon.Definitions.csproj" />
+    <Project Path="freew/FreeW.Ribbon.Definitions.Tests/FreeW.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
     <Project Path="freew/FreeW.App.Host.Tests/FreeW.App.Host.Tests.csproj" />
     <Project Path="freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" />
