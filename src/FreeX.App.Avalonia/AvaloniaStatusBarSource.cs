@@ -44,6 +44,9 @@ internal static class AvaloniaStatusBarSource
                 TextProvider);
     }
 
+    public static string BuildReadyText(Sheet sheet, CellAddress activeCell, string fallbackReadyText) =>
+        StatusBarReadyTextPlanner.BuildReadyText(sheet, activeCell, fallbackReadyText);
+
     /// <summary>
     /// Joins the model's visible aggregate readouts (filtered by <paramref name="optionVisibility"/>)
     /// into the single-line text the Avalonia footer shows, preserving the WPF readout order and the
