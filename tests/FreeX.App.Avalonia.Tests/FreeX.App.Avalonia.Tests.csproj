@@ -4,6 +4,7 @@
     <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
@@ -21,6 +22,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+    <Using Include="Free.Shared.Drawing" />
   </ItemGroup>
 
   <PropertyGroup>

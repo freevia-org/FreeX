@@ -4,6 +4,7 @@
     <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -16,6 +17,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Free.Shared.Drawing" />
   </ItemGroup>
 
   <PropertyGroup>

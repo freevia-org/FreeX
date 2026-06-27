@@ -16,6 +16,13 @@ public sealed class ShapeGeometryBuilderTests
             yield return segment.End;
     }
 
+    [Fact]
+    public void ShapeGeometryBuilder_ComesFromSharedDrawingAssembly()
+    {
+        typeof(ShapeGeometryBuilder).Assembly.FullName.Should().Be(typeof(LayoutRect).Assembly.FullName);
+        typeof(ShapeGeometry).Assembly.FullName.Should().Be(typeof(LayoutPoint).Assembly.FullName);
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.Rectangle)]
     [InlineData(DrawingShapeKind.Triangle)]

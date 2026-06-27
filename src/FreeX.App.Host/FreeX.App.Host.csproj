@@ -6,6 +6,7 @@
     <ProjectReference Include="..\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
     <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
     <ProjectReference Include="..\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
@@ -87,6 +88,7 @@
 
   <ItemGroup>
     <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
+    <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Opc" />
     <Using Include="Free.Shared.Commands" />
     <Using Include="Free.Shared.AppServices" />

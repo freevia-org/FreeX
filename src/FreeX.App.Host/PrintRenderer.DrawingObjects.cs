@@ -276,7 +276,7 @@ public static partial class PrintRenderer
         }
     }
 
-    private static Rect ToRect(FreeX.App.Presentation.Charts.LayoutRect rect) =>
+    private static Rect ToRect(LayoutRect rect) =>
         new(rect.Left, rect.Top, rect.Width, rect.Height);
 
     private static void DrawPrintedTextBoxText(DrawingContext dc, string text, Rect textRect)
