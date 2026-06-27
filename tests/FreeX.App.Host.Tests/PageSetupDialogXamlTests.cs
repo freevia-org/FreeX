@@ -148,36 +148,75 @@ public sealed class PageSetupDialogXamlTests
     {
         var source = ReadPageSetupDialogSource();
 
-        source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
-        source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
+        source.Should().Contain("PopulateChoiceBox(OrientationBox, PageSetupDialogPlanner.OrientationChoices)");
+        source.Should().Contain("PageSetupDialogPlanner.OrientationChoices.IndexOf(fields.Orientation)");
+        source.Should().Contain("PageSetupDialogPlanner.OrientationChoices.ValueAt(OrientationBox.SelectedIndex)");
         source.Should().Contain("PageSetupDialogModel.GetValidationRoute(target)");
         source.Should().Contain("PageSetupDialogModel.HeaderPresetChoices");
         source.Should().Contain("PageSetupDialogModel.FooterPresetChoices");
         source.Should().Contain("PageSetupDialogModel.BuildHeaderFooterPreview(");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceIndex(");
+        source.Should().NotContain("PageSetupDialogModel.ChoiceValue(");
         source.Should().NotContain("((PageOrderBox.SelectedItem as ComboBoxItem)?.Tag as string)");
         source.Should().NotContain("WorksheetPrintErrorValue SelectedPrintErrorValue() =>\r\n        ((PrintErrorValueBox.SelectedItem as ComboBoxItem)");
     }
 
     [Fact]
-    public void PageSetupDialog_ComboOrderMatchesSharedChoiceOrder()
+    public void PageSetupDialog_XamlDefersSharedComboChoicesToPlanner()
     {
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
+        var source = ReadPageSetupDialogSource();
 
-        ComboItemTags(document, "OrientationBox")
-            .Should()
-            .Equal(PageSetupDialogModel.OrientationChoices.Select(choice => choice.Value.ToString()));
-        ComboItemTags(document, "PaperSizeBox")
-            .Should()
-            .Equal(PageSetupDialogModel.PaperSizeChoices.Select(choice => choice.Value.ToString()));
-        ComboItemTags(document, "PageOrderBox")
-            .Should()
-            .Equal(PageSetupDialogModel.PageOrderChoices.Select(choice => choice.Value.ToString()));
-        ComboItemTags(document, "PrintErrorValueBox")
-            .Should()
-            .Equal(PageSetupDialogModel.PrintErrorValueChoices.Select(choice => choice.Value.ToString()));
-        ComboItemTags(document, "PrintCommentsBox")
-            .Should()
-            .Equal(PageSetupDialogModel.PrintCommentChoices.Select(choice => choice.Value.ToString()));
+        foreach (var comboBoxName in new[]
+        {
+            "OrientationBox",
+            "PaperSizeBox",
+            "PageOrderBox",
+            "PrintErrorValueBox",
+            "PrintCommentsBox"
+        })
+        {
+            ComboItemTags(document, comboBoxName)
+                .Should()
+                .BeEmpty($"{comboBoxName} should be populated from PageSetupDialogPlanner instead of XAML literals");
+        }
+
+        source.Should().Contain("PopulateChoiceBox(PaperSizeBox, PageSetupDialogPlanner.PaperSizeChoices)");
+        source.Should().Contain("PopulateChoiceBox(PageOrderBox, PageSetupDialogPlanner.PageOrderChoices)");
+        source.Should().Contain("PopulateChoiceBox(PrintErrorValueBox, PageSetupDialogPlanner.PrintErrorValueChoices)");
+        source.Should().Contain("PopulateChoiceBox(PrintCommentsBox, PageSetupDialogPlanner.PrintCommentChoices)");
+    }
+
+    [Fact]
+    public void PageSetupDialog_RuntimeComboOrderMatchesSharedPlanner()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book1").AddSheet("Sheet1");
+            var dialog = new PageSetupDialog(sheet);
+            try
+            {
+                ComboItemTags((ComboBox)dialog.FindName("OrientationBox"))
+                    .Should()
+                    .Equal(PageSetupDialogPlanner.OrientationChoices.Choices.Select(choice => choice.Value.ToString()));
+                ComboItemTags((ComboBox)dialog.FindName("PaperSizeBox"))
+                    .Should()
+                    .Equal(PageSetupDialogPlanner.PaperSizeChoices.Choices.Select(choice => choice.Value.ToString()));
+                ComboItemTags((ComboBox)dialog.FindName("PageOrderBox"))
+                    .Should()
+                    .Equal(PageSetupDialogPlanner.PageOrderChoices.Choices.Select(choice => choice.Value.ToString()));
+                ComboItemTags((ComboBox)dialog.FindName("PrintErrorValueBox"))
+                    .Should()
+                    .Equal(PageSetupDialogPlanner.PrintErrorValueChoices.Choices.Select(choice => choice.Value.ToString()));
+                ComboItemTags((ComboBox)dialog.FindName("PrintCommentsBox"))
+                    .Should()
+                    .Equal(PageSetupDialogPlanner.PrintCommentChoices.Choices.Select(choice => choice.Value.ToString()));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -556,6 +595,12 @@ public sealed class PageSetupDialogXamlTests
             .Select(element => element.Attribute("Tag")?.Value ?? "")
             .ToList();
     }
+
+    private static IReadOnlyList<string> ComboItemTags(ComboBox comboBox) =>
+        comboBox.Items
+            .OfType<ComboBoxItem>()
+            .Select(item => item.Tag as string ?? "")
+            .ToList();
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
     {

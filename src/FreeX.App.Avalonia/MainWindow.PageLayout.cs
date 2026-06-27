@@ -337,45 +337,36 @@ public sealed partial class MainWindow
         PageSetupDialogFields? result = null;
         var dialog = new Window
         {
-            Title = UiText.Get("PageSetup_Title"),
-            Width = 600,
-            Height = 560,
-            MinWidth = 580,
-            MinHeight = 520,
+            Title = UiText.Get(PageSetupDialogPlanner.TitleResourceKey),
+            Width = PageSetupDialogPlanner.WindowWidth,
+            Height = PageSetupDialogPlanner.WindowHeight,
+            MinWidth = PageSetupDialogPlanner.MinWindowWidth,
+            MinHeight = PageSetupDialogPlanner.MinWindowHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "PageSetupDialog");
-
-        static IReadOnlyList<string> ChoiceLabels<T>(IReadOnlyList<PageSetupChoice<T>> choices) =>
-            choices.Select(choice => UiText.Get(choice.LabelResourceKey)).ToList();
+        AutomationProperties.SetAutomationId(dialog, PageSetupDialogPlanner.DialogAutomationId);
 
         // --- Page tab ---
-        var orientationChoices = PageSetupDialogModel.OrientationChoices;
+        var orientationChoices = PageSetupDialogPlanner.OrientationChoices;
         var orientationBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(orientationChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                orientationChoices,
-                initial.Orientation,
-                WorksheetPageOrientation.Portrait),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(orientationChoices, UiText.Get),
+            SelectedIndex = orientationChoices.IndexOf(initial.Orientation),
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(orientationBox);
-        AutomationProperties.SetAutomationId(orientationBox, "PageSetupOrientationBox");
+        AutomationProperties.SetAutomationId(orientationBox, PageSetupDialogPlanner.OrientationBoxAutomationId);
 
-        var paperSizeChoices = PageSetupDialogModel.PaperSizeChoices;
+        var paperSizeChoices = PageSetupDialogPlanner.PaperSizeChoices;
         var paperBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(paperSizeChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                paperSizeChoices,
-                initial.PaperSize,
-                WorksheetPaperSize.A4),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(paperSizeChoices, UiText.Get),
+            SelectedIndex = paperSizeChoices.IndexOf(initial.PaperSize),
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(paperBox);
-        AutomationProperties.SetAutomationId(paperBox, "PageSetupPaperSizeBox");
+        AutomationProperties.SetAutomationId(paperBox, PageSetupDialogPlanner.PaperSizeBoxAutomationId);
 
         var adjustRadio = new RadioButton
         {
@@ -454,20 +445,20 @@ public sealed partial class MainWindow
         var footerPresetChoices = PageSetupDialogModel.FooterPresetChoices;
         var headerPresetBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(headerPresetChoices),
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(headerPresetChoices, UiText.Get),
             SelectedIndex = PageSetupDialogModel.HeaderFooterPresetIndex(headerPresetChoices, initial.Header.Center),
-            MinWidth = 260,
+            MinWidth = PageSetupDialogPlanner.HeaderFooterPresetMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(headerPresetBox);
-        AutomationProperties.SetAutomationId(headerPresetBox, "PageSetupHeaderPresetBox");
+        AutomationProperties.SetAutomationId(headerPresetBox, PageSetupDialogPlanner.HeaderPresetBoxAutomationId);
         var footerPresetBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(footerPresetChoices),
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(footerPresetChoices, UiText.Get),
             SelectedIndex = PageSetupDialogModel.HeaderFooterPresetIndex(footerPresetChoices, initial.Footer.Center),
-            MinWidth = 260,
+            MinWidth = PageSetupDialogPlanner.HeaderFooterPresetMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(footerPresetBox);
-        AutomationProperties.SetAutomationId(footerPresetBox, "PageSetupFooterPresetBox");
+        AutomationProperties.SetAutomationId(footerPresetBox, PageSetupDialogPlanner.FooterPresetBoxAutomationId);
 
         var headerLeftBox = new TextBox { Text = initial.Header.Left, MinWidth = 120 };
         ApplyPageLayoutTextBoxChrome(headerLeftBox);
@@ -572,44 +563,35 @@ public sealed partial class MainWindow
         ApplyPageLayoutCheckBoxChrome(draftQualityCheck);
         AutomationProperties.SetAutomationId(draftQualityCheck, "PageSetupDraftQualityCheck");
 
-        var pageOrderChoices = PageSetupDialogModel.PageOrderChoices;
+        var pageOrderChoices = PageSetupDialogPlanner.PageOrderChoices;
         var pageOrderBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(pageOrderChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                pageOrderChoices,
-                initial.PageOrder,
-                WorksheetPageOrder.DownThenOver),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(pageOrderChoices, UiText.Get),
+            SelectedIndex = pageOrderChoices.IndexOf(initial.PageOrder),
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(pageOrderBox);
-        AutomationProperties.SetAutomationId(pageOrderBox, "PageSetupPageOrderBox");
+        AutomationProperties.SetAutomationId(pageOrderBox, PageSetupDialogPlanner.PageOrderBoxAutomationId);
 
-        var printErrorValueChoices = PageSetupDialogModel.PrintErrorValueChoices;
+        var printErrorValueChoices = PageSetupDialogPlanner.PrintErrorValueChoices;
         var cellErrorsBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(printErrorValueChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                printErrorValueChoices,
-                initial.PrintErrorValue,
-                WorksheetPrintErrorValue.Displayed),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(printErrorValueChoices, UiText.Get),
+            SelectedIndex = printErrorValueChoices.IndexOf(initial.PrintErrorValue),
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(cellErrorsBox);
-        AutomationProperties.SetAutomationId(cellErrorsBox, "PageSetupCellErrorsBox");
+        AutomationProperties.SetAutomationId(cellErrorsBox, PageSetupDialogPlanner.CellErrorsBoxAutomationId);
 
-        var printCommentChoices = PageSetupDialogModel.PrintCommentChoices;
+        var printCommentChoices = PageSetupDialogPlanner.PrintCommentChoices;
         var commentsBox = new ComboBox
         {
-            ItemsSource = ChoiceLabels(printCommentChoices),
-            SelectedIndex = PageSetupDialogModel.ChoiceIndex(
-                printCommentChoices,
-                initial.PrintComments,
-                WorksheetPrintComments.None),
-            MinWidth = 220,
+            ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(printCommentChoices, UiText.Get),
+            SelectedIndex = printCommentChoices.IndexOf(initial.PrintComments),
+            MinWidth = PageSetupDialogPlanner.FieldMinWidth,
         };
         ApplyPageLayoutComboBoxChrome(commentsBox);
-        AutomationProperties.SetAutomationId(commentsBox, "PageSetupCommentsBox");
+        AutomationProperties.SetAutomationId(commentsBox, PageSetupDialogPlanner.CommentsBoxAutomationId);
 
         var validationText = new TextBlock
         {
@@ -617,25 +599,25 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetAutomationId(validationText, "PageSetupValidationText");
+        AutomationProperties.SetAutomationId(validationText, PageSetupDialogPlanner.ValidationTextAutomationId);
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), MinWidth = 84 };
-        ApplyPageLayoutButtonChrome(okButton, 84, isDefault: true);
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), MinWidth = 84 };
-        ApplyPageLayoutButtonChrome(cancelButton, 84);
-        AutomationProperties.SetAutomationId(okButton, "PageSetupOkButton");
-        AutomationProperties.SetAutomationId(cancelButton, "PageSetupCancelButton");
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        ApplyPageLayoutButtonChrome(okButton, PageSetupDialogPlanner.FooterButtonMinWidth, isDefault: true);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        ApplyPageLayoutButtonChrome(cancelButton, PageSetupDialogPlanner.FooterButtonMinWidth);
+        AutomationProperties.SetAutomationId(okButton, PageSetupDialogPlanner.OkButtonAutomationId);
+        AutomationProperties.SetAutomationId(cancelButton, PageSetupDialogPlanner.CancelButtonAutomationId);
 
         // WPF has [Print...][Print Preview][Options...] on the bottom left
-        var printButton = new Button { Content = UiText.Get("PageSetup_PrintButton"), MinWidth = 84 };
-        ApplyPageLayoutButtonChrome(printButton, 84);
-        AutomationProperties.SetAutomationId(printButton, "PageSetupPrintButton");
-        var printPreviewButton = new Button { Content = UiText.Get("PageSetup_PrintPreviewButton"), MinWidth = 100 };
-        ApplyPageLayoutButtonChrome(printPreviewButton, 100);
-        AutomationProperties.SetAutomationId(printPreviewButton, "PageSetupPrintPreviewButton");
-        var optionsButton = new Button { Content = UiText.Get("PageSetup_OptionsButton"), MinWidth = 84 };
-        ApplyPageLayoutButtonChrome(optionsButton, 84);
-        AutomationProperties.SetAutomationId(optionsButton, "PageSetupOptionsButton");
+        var printButton = new Button { Content = UiText.Get("PageSetup_PrintButton"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        ApplyPageLayoutButtonChrome(printButton, PageSetupDialogPlanner.FooterButtonMinWidth);
+        AutomationProperties.SetAutomationId(printButton, PageSetupDialogPlanner.PrintButtonAutomationId);
+        var printPreviewButton = new Button { Content = UiText.Get("PageSetup_PrintPreviewButton"), MinWidth = PageSetupDialogPlanner.PrintPreviewButtonMinWidth };
+        ApplyPageLayoutButtonChrome(printPreviewButton, PageSetupDialogPlanner.PrintPreviewButtonMinWidth);
+        AutomationProperties.SetAutomationId(printPreviewButton, PageSetupDialogPlanner.PrintPreviewButtonAutomationId);
+        var optionsButton = new Button { Content = UiText.Get("PageSetup_OptionsButton"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        ApplyPageLayoutButtonChrome(optionsButton, PageSetupDialogPlanner.FooterButtonMinWidth);
+        AutomationProperties.SetAutomationId(optionsButton, PageSetupDialogPlanner.OptionsButtonAutomationId);
         // These are stub buttons (print/preview not yet wired in Avalonia shell)
         printButton.IsEnabled = false;
         printPreviewButton.IsEnabled = false;
@@ -643,14 +625,8 @@ public sealed partial class MainWindow
 
         PageSetupDialogFields ReadFields() => initial with
         {
-            Orientation = PageSetupDialogModel.ChoiceValue(
-                orientationChoices,
-                orientationBox.SelectedIndex,
-                WorksheetPageOrientation.Portrait),
-            PaperSize = PageSetupDialogModel.ChoiceValue(
-                paperSizeChoices,
-                paperBox.SelectedIndex,
-                WorksheetPaperSize.A4),
+            Orientation = orientationChoices.ValueAt(orientationBox.SelectedIndex),
+            PaperSize = paperSizeChoices.ValueAt(paperBox.SelectedIndex),
             MarginsText = marginsBox.Text ?? "",
             HeaderMarginText = headerMarginBox.Text ?? "",
             FooterMarginText = footerMarginBox.Text ?? "",
@@ -671,18 +647,9 @@ public sealed partial class MainWindow
             PrintHeadings = headingsCheck.IsChecked == true,
             PrintBlackAndWhite = blackAndWhiteCheck.IsChecked == true,
             PrintDraftQuality = draftQualityCheck.IsChecked == true,
-            PrintErrorValue = PageSetupDialogModel.ChoiceValue(
-                printErrorValueChoices,
-                cellErrorsBox.SelectedIndex,
-                WorksheetPrintErrorValue.Displayed),
-            PrintComments = PageSetupDialogModel.ChoiceValue(
-                printCommentChoices,
-                commentsBox.SelectedIndex,
-                WorksheetPrintComments.None),
-            PageOrder = PageSetupDialogModel.ChoiceValue(
-                pageOrderChoices,
-                pageOrderBox.SelectedIndex,
-                WorksheetPageOrder.DownThenOver),
+            PrintErrorValue = printErrorValueChoices.ValueAt(cellErrorsBox.SelectedIndex),
+            PrintComments = printCommentChoices.ValueAt(commentsBox.SelectedIndex),
+            PageOrder = pageOrderChoices.ValueAt(pageOrderBox.SelectedIndex),
             Header = new WorksheetHeaderFooter(headerLeftBox.Text ?? "", headerCenterBox.Text ?? "", headerRightBox.Text ?? ""),
             Footer = new WorksheetHeaderFooter(footerLeftBox.Text ?? "", footerCenterBox.Text ?? "", footerRightBox.Text ?? ""),
             DifferentFirstPage = differentFirstPageCheck.IsChecked == true,
@@ -866,7 +833,7 @@ public sealed partial class MainWindow
         {
             Items = { pageTab, marginsTab, headerFooterTab, sheetTab },
         };
-        AutomationProperties.SetAutomationId(tabs, "PageSetupTabs");
+        AutomationProperties.SetAutomationId(tabs, PageSetupDialogPlanner.TabsAutomationId);
         ApplyClassicTabChrome(tabs);
 
         void SelectValidationRoute(PageSetupValidationRoute route)
