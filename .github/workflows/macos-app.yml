@@ -3,6 +3,16 @@ name: macOS App Preview
 on:
   workflow_dispatch:
     inputs:
+      app:
+        description: App to package for macOS preview artifacts.
+        required: false
+        type: choice
+        default: freex
+        options:
+          - freex
+          - freew
+          - freep
+          - all
       distribution_candidate:
         description: Require Developer ID signing, accepted notarization, stapled ticket, and Gatekeeper assessment evidence.
         required: false
@@ -1106,6 +1116,221 @@ jobs:
             artifacts/freex-${{ matrix.runtime }}-macos-app-diagnostics/**
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip
             artifacts/freex-${{ matrix.runtime }}-macos-app.zip.sha256
+          if-no-files-found: warn
+          retention-days: 14
+
+  sister-macos-app:
+    name: ${{ matrix.product }} macOS app bundle (${{ matrix.runtime }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: freew
+            product: FreeW
+            runtime: osx-arm64
+            runner: macos-15
+            project_path: freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj
+            bundle_identifier: io.github.tony-xmelon.freew
+            plist_path: freew/FreeW.App.Avalonia/Packaging/macos/Info.plist
+            icon_path: freew/FreeW.App.Avalonia/Packaging/macos/FreeW.icns
+          - app: freew
+            product: FreeW
+            runtime: osx-x64
+            runner: macos-15-intel
+            project_path: freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj
+            bundle_identifier: io.github.tony-xmelon.freew
+            plist_path: freew/FreeW.App.Avalonia/Packaging/macos/Info.plist
+            icon_path: freew/FreeW.App.Avalonia/Packaging/macos/FreeW.icns
+          - app: freep
+            product: FreeP
+            runtime: osx-arm64
+            runner: macos-15
+            project_path: freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj
+            bundle_identifier: io.github.tony-xmelon.freep
+            plist_path: ""
+            icon_path: ""
+          - app: freep
+            product: FreeP
+            runtime: osx-x64
+            runner: macos-15-intel
+            project_path: freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj
+            bundle_identifier: io.github.tony-xmelon.freep
+            plist_path: ""
+            icon_path: ""
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - name: Checkout
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.app == 'all' || inputs.app == matrix.app) }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.app == 'all' || inputs.app == matrix.app) }}
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build sister app project
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.app == 'all' || inputs.app == matrix.app) }}
+        shell: pwsh
+        run: dotnet build "${{ matrix.project_path }}" --configuration Release
+
+      - name: Publish sister app bundle
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.app == 'all' || inputs.app == matrix.app) }}
+        shell: bash
+        env:
+          APP_KEY: ${{ matrix.app }}
+          PRODUCT_NAME: ${{ matrix.product }}
+          PROJECT_PATH: ${{ matrix.project_path }}
+          BUNDLE_IDENTIFIER: ${{ matrix.bundle_identifier }}
+          PLIST_PATH: ${{ matrix.plist_path }}
+          ICON_PATH: ${{ matrix.icon_path }}
+          RUNTIME: ${{ matrix.runtime }}
+        run: |
+          set -euo pipefail
+
+          output_root="$RUNNER_TEMP/$APP_KEY-$RUNTIME"
+          app="$output_root/$PRODUCT_NAME.app"
+          artifact_root="$GITHUB_WORKSPACE/artifacts"
+          zip_name="$APP_KEY-$RUNTIME-macos-app.zip"
+          zip_path="$artifact_root/$zip_name"
+          evidence_path="$artifact_root/$APP_KEY-$RUNTIME-macos-evidence.txt"
+          packaging_log="$artifact_root/$APP_KEY-$RUNTIME-macos-packaging-smoke.log"
+          packaging_report="$artifact_root/$APP_KEY-$RUNTIME-macos-packaging-smoke-report.txt"
+          launch_report="$artifact_root/$APP_KEY-$RUNTIME-macos-launch-smoke.txt"
+          diagnostics_dir="$artifact_root/$APP_KEY-$RUNTIME-macos-app-diagnostics"
+
+          rm -rf "$output_root" "$diagnostics_dir"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$artifact_root" "$diagnostics_dir"
+          {
+            echo "app=$APP_KEY"
+            echo "product=$PRODUCT_NAME"
+            echo "runtime=$RUNTIME"
+            echo "artifact_channel=internal-preview"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "runner_label=${{ matrix.runner }}"
+          } > "$evidence_path"
+
+          dotnet publish "$PROJECT_PATH" \
+            --configuration Release \
+            --framework net10.0 \
+            --runtime "$RUNTIME" \
+            --self-contained true \
+            -p:UseAppHost=true \
+            -p:PublishSingleFile=false \
+            --output "$app/Contents/MacOS"
+
+          if [[ -n "$PLIST_PATH" && -f "$PLIST_PATH" ]]; then
+            cp "$PLIST_PATH" "$app/Contents/Info.plist"
+            echo "info_plist_source=packaging_asset" >> "$evidence_path"
+          else
+            cat > "$app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDisplayName</key>
+            <string>$PRODUCT_NAME</string>
+            <key>CFBundleExecutable</key>
+            <string>$PRODUCT_NAME</string>
+            <key>CFBundleIdentifier</key>
+            <string>$BUNDLE_IDENTIFIER</string>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleName</key>
+            <string>$PRODUCT_NAME</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>0.1.0</string>
+            <key>CFBundleVersion</key>
+            <string>1</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>12.0</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+            echo "info_plist_source=generated_generic" >> "$evidence_path"
+          fi
+
+          if [[ -n "$ICON_PATH" && -f "$ICON_PATH" ]]; then
+            cp "$ICON_PATH" "$app/Contents/Resources/$PRODUCT_NAME.icns"
+          fi
+
+          plutil -lint "$app/Contents/Info.plist"
+          chmod +x "$app/Contents/MacOS/$PRODUCT_NAME"
+          test -x "$app/Contents/MacOS/$PRODUCT_NAME"
+          test -f "$app/Contents/MacOS/$PRODUCT_NAME.dll"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" = "$PRODUCT_NAME"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "$BUNDLE_IDENTIFIER"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$app/Contents/Info.plist")" = "APPL"
+
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+
+          if [[ "$APP_KEY" == "freew" ]]; then
+            "$app/Contents/MacOS/$PRODUCT_NAME" --packaging-smoke | tee "$packaging_log"
+            grep -q "freew_packaging_smoke=passed" "$packaging_log"
+          else
+            "$app/Contents/MacOS/$PRODUCT_NAME" --packaging-smoke "$packaging_report" | tee "$packaging_log"
+            grep -q "freep_packaging_smoke=passed" "$packaging_log"
+          fi
+
+          "$app/Contents/MacOS/$PRODUCT_NAME" \
+            --launch-smoke "$launch_report" \
+            --launch-smoke-diagnostics-dir "$diagnostics_dir" | tee -a "$packaging_log"
+          grep -q "^${APP_KEY}_launch_smoke=passed$" "$launch_report"
+          grep -q "window_shown=true" "$launch_report"
+          grep -q "has_toolbar=true" "$launch_report"
+
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
+          (cd "$artifact_root" && shasum -a 256 "$zip_name" > "$zip_name.sha256")
+          zip_sha256="$(cut -d ' ' -f 1 "$zip_path.sha256")"
+          {
+            echo "bundle_identifier=$BUNDLE_IDENTIFIER"
+            echo "codesign_verified=true"
+            echo "smoke_status=passed"
+            echo "zip_name=$zip_name"
+            echo "zip_sha256=$zip_sha256"
+          } >> "$evidence_path"
+
+          cat > "$artifact_root/$APP_KEY-$RUNTIME-macos-tester-instructions.md" <<EOF
+          # $PRODUCT_NAME macOS App (internal-preview, $RUNTIME)
+
+          Verify the checksum with:
+
+          \`\`\`bash
+          shasum -a 256 -c $zip_name.sha256
+          \`\`\`
+
+          Extract $zip_name, then open $PRODUCT_NAME.app. This is an ad-hoc signed internal preview artifact.
+          EOF
+
+      - name: Upload sister app artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.app == 'all' || inputs.app == matrix.app) }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.app }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.runtime }}-macos-app
+          path: |
+            artifacts/${{ matrix.app }}-${{ matrix.runtime }}-macos-app.zip
+            artifacts/${{ matrix.app }}-${{ matrix.runtime }}-macos-app.zip.sha256
+            artifacts/${{ matrix.app }}-${{ matrix.runtime }}-macos-evidence.txt
+            artifacts/${{ matrix.app }}-${{ matrix.runtime }}-macos-packaging-smoke.log
+            artifacts/${{ matrix.app }}-${{ matrix.runtime }}-macos-packaging-smoke-report.txt
+            artifacts/${{ matrix.app }}-${{ matrix.runtime }}-macos-launch-smoke.txt
+            artifacts/${{ matrix.app }}-${{ matrix.runtime }}-macos-tester-instructions.md
           if-no-files-found: warn
           retention-days: 14
 
