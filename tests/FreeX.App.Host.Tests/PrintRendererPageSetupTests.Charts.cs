@@ -40,10 +40,11 @@ public sealed partial class PrintRendererPageSetupTests
 
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
             var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page).Select(overlay => overlay.Text).ToList();
 
-            CountApproximateRgbPixels(page, 23, 180, 90).Should().BeGreaterThan(100);
-            CountApproximateRgbPixels(page, 210, 20, 90).Should().Be(0);
-            CountApproximateRgbPixels(page, 25, 40, 230).Should().Be(0);
+            overlays.Should().Contain("Printable sales chart");
+            overlays.Should().NotContain("Hidden sales chart");
+            overlays.Should().NotContain("Off-page sales chart");
         });
     }
 

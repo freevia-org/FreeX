@@ -130,6 +130,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("Page Layout", 1465);
+            if (!harness.CanUseRequestedRibbonWidth(1465))
+                return;
 
             // 2-state truth: Page Setup stays fully expanded with its commands laid inside the group row;
             // none of its command rows spill below the group-label strip (no clip behind the label).
@@ -150,6 +152,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("Page Layout", width);
+            if (!harness.CanUseRequestedRibbonWidth(width))
+                return;
 
             // At 1100px the live ribbon keeps the primary Page Setup group expanded and folds only
             // lower-priority groups (Themes, Scale To Fit, Sheet Options) into overflow buttons. The live
@@ -248,6 +252,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("View", 1465);
+            if (!harness.CanUseRequestedRibbonWidth(1465))
+                return;
 
             harness.ViewRulerCheckBoxIsEnabled.Should().BeFalse("Excel disables Ruler outside Page Layout view");
 

@@ -190,8 +190,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             {
                 harness.SelectRibbonTab(tab, 1100);
 
-                harness.ActiveRibbonGroupNames.Should().NotBeEmpty($"{tab} should expose metadata-backed ribbon groups");
-                harness.ActiveRibbonGroupNames.Should().OnlyContain(
+                harness.ActiveRibbonPresentationGroupNames.Should().NotBeEmpty($"{tab} should expose metadata-backed ribbon groups");
+                harness.ActiveRibbonPresentationGroupNames.Should().OnlyContain(
                     name => !string.IsNullOrWhiteSpace(name) && !string.Equals(name, "Commands", StringComparison.Ordinal),
                     $"{tab} group names should be seeded from the existing group captions before adaptive layout runs");
             }
@@ -212,8 +212,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             {
                 harness.SelectRibbonTab(tab, 1100);
 
-                harness.ActiveRibbonGroupNames.Should().NotBeEmpty($"{tab} should participate in static ribbon normalization when contextual tabs become visible");
-                harness.ActiveRibbonGroupNames.Should().OnlyContain(
+                harness.ActiveRibbonPresentationGroupNames.Should().NotBeEmpty($"{tab} should participate in static ribbon normalization when contextual tabs become visible");
+                harness.ActiveRibbonPresentationGroupNames.Should().OnlyContain(
                     name => !string.IsNullOrWhiteSpace(name) && !string.Equals(name, "Commands", StringComparison.Ordinal),
                     $"{tab} group names should be seeded from contextual group captions before adaptive layout runs");
 

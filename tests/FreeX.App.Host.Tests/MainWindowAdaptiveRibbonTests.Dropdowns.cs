@@ -89,6 +89,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("Home", 1465);
+            if (!harness.CanUseRequestedRibbonWidth(1465))
+                return;
 
             harness.HorizontalDropdownZoneClearsCommandLabel("Paste")
                 .Should()

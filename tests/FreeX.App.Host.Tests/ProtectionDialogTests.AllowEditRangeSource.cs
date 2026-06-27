@@ -19,7 +19,7 @@ public sealed partial class ProtectionDialogTests
         source.Should().Contain("public enum AllowEditRangeDialogAction");
         source.Should().Contain("public sealed record AllowEditRangeDialogResult");
         source.Should().Contain("private readonly ListBox _existingRangesBox");
-        source.Should().Contain("new Label { Content = UiText.Get(\"AllowEditRange_ExistingRangesLabel\"), Target = _existingRangesBox");
+        source.Should().Contain("Header = UiText.Get(\"AllowEditRange_ExistingRangesLabel\")");
         source.Should().NotContain("Header = \"Ranges unlocked by password\"");
         source.Should().Contain("Content = UiText.Get(\"AllowEditRange_NewButton\")");
         source.Should().Contain("Content = UiText.Get(\"AllowEditRange_ModifyButton\")");
@@ -74,10 +74,7 @@ public sealed partial class ProtectionDialogTests
         source.Should().Contain("AutomationProperties.SetName(_permissionsButton, UiText.Get(\"AllowEditRange_PermissionsAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_permissionsButton, \"AllowEditRangePermissionsButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_permissionsButton, UiText.Get(\"AllowEditRange_PermissionsHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetName(rangePicker, UiText.Get(\"AllowEditRange_PickerAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(rangePicker, \"AllowEditRangePickerButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(");
-        source.Should().Contain("UiText.Get(\"AllowEditRange_PickerHelpText\"));");
+        source.Should().NotContain("AllowEditRangePickerButton");
     }
 
     [Fact]

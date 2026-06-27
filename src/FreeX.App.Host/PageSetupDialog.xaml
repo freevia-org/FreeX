@@ -39,6 +39,11 @@
                         <ComboBoxItem Content="{local:Loc Key=PageSetup_Letter85X11}" Tag="Letter"/>
                         <ComboBoxItem Content="{local:Loc Key=PageSetup_A4210X297Mm}" Tag="A4"/>
                         <ComboBoxItem Content="{local:Loc Key=PageSetup_Legal85X14}" Tag="Legal"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Tabloid11X17}" Tag="Tabloid"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Executive725X105}" Tag="Executive"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_A3297X420Mm}" Tag="A3"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_A5148X210Mm}" Tag="A5"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_B5176X250Mm}" Tag="B5"/>
                     </ComboBox>
 
                     <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="{local:Loc Key=PageSetup_Scaling}" Margin="0,2,0,8">

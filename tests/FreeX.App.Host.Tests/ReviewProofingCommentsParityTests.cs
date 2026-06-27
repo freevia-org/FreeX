@@ -52,10 +52,10 @@ public sealed class ReviewProofingCommentsParityTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
         var cleanContent = source[
-            source.IndexOf("private StackPanel CreateCleanContent", StringComparison.Ordinal)..
-            source.IndexOf("private StackPanel CreateIssueContent", StringComparison.Ordinal)];
+            source.IndexOf("if (_sections.Count == 0)", StringComparison.Ordinal)..
+            source.IndexOf("// Inspection Results heading", StringComparison.Ordinal)];
 
-        cleanContent.Should().Contain("DialogResult = false");
+        cleanContent.Should().Contain("_goToButton.Visibility = Visibility.Collapsed;");
         cleanContent.Should().NotContain("DialogResult = true");
     }
 }

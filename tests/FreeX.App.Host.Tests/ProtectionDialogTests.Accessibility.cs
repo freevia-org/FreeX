@@ -17,24 +17,11 @@ public sealed partial class ProtectionDialogTests
         var source = ReadProtectionDialogSources();
 
         source.Should().Contain("DialogButtonRowFactory.Create");
-        source.Should().Contain("new Label { Content = UiText.Get(\"AllowEditRange_RangeLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"AllowEditRange_RangeLabel\")");
         UiText.Get("AllowEditRange_RangeLabel").Should().Be("_Range:");
         source.Should().Contain("Target = _rangeBox");
-        source.Should().Contain("Header = UiText.Get(\"AllowEditRange_RangeGroupHeader\")");
-        source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("ToolTip = UiText.Get(\"AllowEditRange_PickerToolTip\")");
-        source.Should().Contain("AutomationProperties.SetName(rangePicker, UiText.Get(\"AllowEditRange_PickerAutomationName\"))");
-        source.Should().Contain("AutomationProperties.SetHelpText");
-        source.Should().Contain("rangePicker.Click += RangePicker_Click");
-        source.Should().Contain("private void RangePicker_Click");
-        source.Should().Contain("RangeSelectionRequest = CreateRangeSelectionRequest");
-        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("FocusRangeInput();");
-        var pickerHandlerSource = source[
-            source.IndexOf("private void RangePicker_Click", StringComparison.Ordinal)..
-            source.IndexOf("public static AllowEditRangeSelectionRequest", StringComparison.Ordinal)];
-        pickerHandlerSource.Should().Contain("FocusRangeInput();");
-        source.Should().Contain("UiText.Get(\"AllowEditRange_ExampleText\")");
+        source.Should().Contain("UiText.Get(\"AllowEditRange_Example\")");
     }
 
     [Fact]

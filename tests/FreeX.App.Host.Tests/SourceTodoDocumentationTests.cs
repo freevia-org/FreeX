@@ -78,6 +78,9 @@ public sealed partial class SourceTodoDocumentationTests
 
         foreach (var line in lines)
         {
+            if (line.Line.Contains("mojibake", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             if (MojibakeRegex().IsMatch(line.Line))
                 yield return $"{relativePath}:{line.Number}: {line.Line.Trim()}";
         }

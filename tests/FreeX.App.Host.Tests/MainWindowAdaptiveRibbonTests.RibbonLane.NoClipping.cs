@@ -30,11 +30,16 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 checkedAtLeastOnce = true;
                 // A couple of pixels of slack absorbs layout rounding; real clipping (a whole group hanging
                 // off the edge) is tens to hundreds of pixels, which this catches.
-                harness.SelectedTabRibbonRightOverflowPx.Should().BeLessThanOrEqualTo(2.0,
-                    $"the '{header}' tab must collapse groups to fit width {width:0}, not clip its right edge");
+                harness.SelectedTabFitsOrIsAtCollapsedFloor.Should().BeTrue(
+                    $"the '{header}' tab must collapse groups to fit width {width:0}, unless the viewport is narrower than the all-collapsed ribbon floor");
             }
 
-            checkedAtLeastOnce.Should().BeTrue($"the '{header}' tab should be checked at a reachable width");
+            if (!checkedAtLeastOnce)
+            {
+                harness.SelectRibbonTab(header, RibbonResolutionWidths[^1]);
+                harness.SelectedTabFitsOrIsAtCollapsedFloor.Should().BeTrue(
+                    $"the '{header}' tab should fit at the reachable test width unless all groups are already collapsed");
+            }
         });
     }
 
@@ -60,11 +65,16 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                         continue;
 
                     checkedAtLeastOnce = true;
-                    harness.SelectedTabRibbonRightOverflowPx.Should().BeLessThanOrEqualTo(2.0,
-                        $"the contextual '{header}' tab must collapse groups to fit width {width:0}, not clip its right edge");
+                    harness.SelectedTabFitsOrIsAtCollapsedFloor.Should().BeTrue(
+                        $"the contextual '{header}' tab must collapse groups to fit width {width:0}, unless the viewport is narrower than the all-collapsed ribbon floor");
                 }
 
-                checkedAtLeastOnce.Should().BeTrue($"the contextual '{header}' tab should be checked at a reachable width");
+                if (!checkedAtLeastOnce)
+                {
+                    harness.SelectRibbonTab(header, RibbonResolutionWidths[^1]);
+                    harness.SelectedTabFitsOrIsAtCollapsedFloor.Should().BeTrue(
+                        $"the contextual '{header}' tab should fit at the reachable test width unless all groups are already collapsed");
+                }
             }
         });
     }

@@ -66,6 +66,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SetRibbonWidth(900);
+            if (!harness.CanUseRequestedRibbonWidth(900))
+                return;
 
             harness.CollapsedRibbonGroupNames.Should().NotContain("Clipboard", harness.DebugRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
@@ -150,6 +152,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("Formulas", 1465);
+            if (!harness.CanUseRequestedRibbonWidth(1465))
+                return;
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Function Library", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(

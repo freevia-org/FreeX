@@ -72,6 +72,7 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("UiText.Format(\"GoalSeekStatus_FailureSummary\"");
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_KeepResult\")");
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_RestoreOriginalValues\")");
-        source.Should().Contain("DialogButtonRowFactory.Create");
+        source.Should().Contain("Orientation = Orientation.Horizontal");
+        source.Should().Contain("HorizontalAlignment = HorizontalAlignment.Right");
     }
 }

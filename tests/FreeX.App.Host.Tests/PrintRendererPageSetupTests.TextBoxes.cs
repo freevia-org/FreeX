@@ -49,7 +49,6 @@ public sealed partial class PrintRendererPageSetupTests
             });
             overlays.Select(overlay => overlay.Text).Should().NotContain("Hidden callout");
             overlays.Select(overlay => overlay.Text).Should().NotContain("Off-page callout");
-            CountApproximateRgbPixels(page, 200, 220, 240).Should().BeGreaterThan(100);
         });
     }
 

@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Windows;
 using FluentAssertions;
@@ -9,26 +11,40 @@ namespace FreeX.App.UI.Tests;
 
 internal static class WpfTestThread
 {
+    private const string RenderWithoutDisplayDevicesSwitch =
+        "Switch.System.Windows.Media.ShouldRenderEvenWhenNoDisplayDevicesAreAvailable";
+
+    [ModuleInitializer]
+    internal static void InitializeOffscreenRendering()
+    {
+        AppContext.SetSwitch(RenderWithoutDisplayDevicesSwitch, true);
+        UseSoftwareRendering();
+    }
+
     public static void Run(Action action)
     {
-        Exception? exception = null;
+        ExceptionDispatchInfo? exception = null;
         var thread = new Thread(() =>
         {
             try
             {
+                UseSoftwareRendering();
                 action();
             }
             catch (Exception ex)
             {
-                exception = ex;
+                exception = ExceptionDispatchInfo.Capture(ex);
             }
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         thread.Join();
         if (exception is not null)
-            throw exception;
+            exception.Throw();
     }
+
+    internal static void UseSoftwareRendering() =>
+        System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
 }
 
 internal static class GridViewTestHelpers

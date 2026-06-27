@@ -674,6 +674,16 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             }
         }
 
+        public bool ActiveRibbonFitsOrIsAtCollapsedFloor =>
+            ActiveRibbonPanelOverflow <= 0.5 ||
+            ActiveRibbonGroupHosts.Count > 0 &&
+            ActiveRibbonGroupHosts.All(host => host.Collapsed);
+
+        public bool SelectedTabFitsOrIsAtCollapsedFloor =>
+            SelectedTabRibbonRightOverflowPx <= 2.0 ||
+            ActiveRibbonGroupHosts.Count > 0 &&
+            ActiveRibbonGroupHosts.All(host => host.Collapsed);
+
         public double ActiveRibbonPanelUnusedWidth
         {
             get

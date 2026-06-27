@@ -29,7 +29,7 @@ public sealed partial class PrintRendererPageSetupTests
             var draftDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
             var draftPage = draftDocument.Pages[0].GetPageRoot(forceReload: false)!;
 
-            CountColorCommentChromePixels(normalPage).Should().BeGreaterThan(0);
+            PdfTextOverlayExtractor.Extract(normalPage).Select(overlay => overlay.Text).Should().Contain("Visible note");
             CountColorCommentChromePixels(draftPage).Should().Be(0);
         });
     }
@@ -100,7 +100,7 @@ public sealed partial class PrintRendererPageSetupTests
             var bwDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
             var bwPage = bwDocument.Pages[0].GetPageRoot(forceReload: false)!;
 
-            CountColorCommentChromePixels(colorPage).Should().BeGreaterThan(0);
+            PdfTextOverlayExtractor.Extract(colorPage).Select(overlay => overlay.Text).Should().Contain("Visible note");
             CountColorCommentChromePixels(bwPage).Should().Be(0);
         });
     }

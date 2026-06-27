@@ -945,6 +945,21 @@
   <data name="PageSetup_Legal85X14" xml:space="preserve">
     <value>Legal (8.5 x 14)</value>
   </data>
+  <data name="PageSetup_Tabloid11X17" xml:space="preserve">
+    <value>Tabloid (11 x 17)</value>
+  </data>
+  <data name="PageSetup_Executive725X105" xml:space="preserve">
+    <value>Executive (7.25 x 10.5)</value>
+  </data>
+  <data name="PageSetup_A3297X420Mm" xml:space="preserve">
+    <value>A3 (297 x 420 mm)</value>
+  </data>
+  <data name="PageSetup_A5148X210Mm" xml:space="preserve">
+    <value>A5 (148 x 210 mm)</value>
+  </data>
+  <data name="PageSetup_B5176X250Mm" xml:space="preserve">
+    <value>B5 (176 x 250 mm)</value>
+  </data>
   <data name="PageSetup_Scaling" xml:space="preserve">
     <value>Scaling</value>
   </data>
@@ -12906,6 +12921,18 @@ Send crash reports for this tester build?</value>
   </data>
   <data name="DataValidation_InputMessage2" xml:space="preserve">
     <value>Input _message:</value>
+  </data>
+  <data name="DataValidation_InputMessageAutomationName" xml:space="preserve">
+    <value>Data validation input message</value>
+  </data>
+  <data name="DataValidation_DropdownAutomationName" xml:space="preserve">
+    <value>Data validation list</value>
+  </data>
+  <data name="DataValidation_DropdownHelpText" xml:space="preserve">
+    <value>Pick a permitted value for the active cell.</value>
+  </data>
+  <data name="DataValidation_DropdownToolTip" xml:space="preserve">
+    <value>Pick from list</value>
   </data>
   <data name="MainWindow_Text_Tables" xml:space="preserve">
     <value>Tables</value>

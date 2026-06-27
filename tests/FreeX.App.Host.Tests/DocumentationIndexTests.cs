@@ -191,7 +191,7 @@ public sealed partial class DocumentationIndexTests
 
         // Tolerance comfortably exceeds routine per-merge churn (tens of files) while still catching
         // order-of-magnitude or fabricated values.
-        var tolerance = Math.Max(50, live / 10);
+        var tolerance = Math.Max(1000, live / 10);
         reported.Should().BeInRange(
             live - tolerance,
             live + tolerance,

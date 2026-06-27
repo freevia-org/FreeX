@@ -1,11 +1,15 @@
 using System.Windows.Threading;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
+using System.Windows.Interop;
+using System.Windows.Media;
 
 namespace FreeX.App.Host.Tests;
 
 internal static class StaTestRunner
 {
+    private const string RenderWithoutDisplayDevicesSwitch =
+        "Switch.System.Windows.Media.ShouldRenderEvenWhenNoDisplayDevicesAreAvailable";
     private static readonly Lazy<Dispatcher> StaDispatcher = new(CreateDispatcher);
     private static readonly object RunLock = new();
     private const int KeyEventKeyUp = 0x0002;
@@ -25,12 +29,14 @@ internal static class StaTestRunner
 
     public static void Run(Action action)
     {
+        InitializeOffscreenRendering();
         var dispatcher = StaDispatcher.Value;
         if (dispatcher.CheckAccess())
         {
             try
             {
                 ReleaseModifierKeys();
+                UseSoftwareRendering();
                 action();
             }
             finally
@@ -49,6 +55,7 @@ internal static class StaTestRunner
                 try
                 {
                     ReleaseModifierKeys();
+                    UseSoftwareRendering();
                     action();
                 }
                 catch (Exception ex)
@@ -68,10 +75,12 @@ internal static class StaTestRunner
 
     private static Dispatcher CreateDispatcher()
     {
+        InitializeOffscreenRendering();
         Dispatcher? dispatcher = null;
         using var ready = new ManualResetEventSlim();
         var thread = new Thread(() =>
         {
+            InitializeOffscreenRendering();
             dispatcher = Dispatcher.CurrentDispatcher;
             ready.Set();
             Dispatcher.Run();
@@ -84,6 +93,15 @@ internal static class StaTestRunner
 
         return dispatcher ?? throw new InvalidOperationException("STA dispatcher was not created.");
     }
+
+    private static void InitializeOffscreenRendering()
+    {
+        AppContext.SetSwitch(RenderWithoutDisplayDevicesSwitch, true);
+        UseSoftwareRendering();
+    }
+
+    private static void UseSoftwareRendering() =>
+        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
 
     private static void ReleaseModifierKeys()
     {

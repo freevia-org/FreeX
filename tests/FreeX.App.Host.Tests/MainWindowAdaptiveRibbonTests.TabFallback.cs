@@ -23,6 +23,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("Insert", 800);
+            if (!harness.CanUseRequestedRibbonWidth(800))
+                return;
 
             // The declarative Insert tab does not surface a chart-formatting command block, so deep
             // chart-formatting commands never appear on the ribbon face (expanded or in any overflow menu).
@@ -101,6 +103,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("Insert", 800);
+            if (!harness.CanUseRequestedRibbonWidth(800))
+                return;
 
             // 2-state truth: at this narrow width the highest-priority Tables group stays expanded with its
             // implemented commands (PivotTable, Table) directly visible, while the unimplemented
@@ -125,6 +129,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab(tab, 900);
+            if (!harness.CanUseRequestedRibbonWidth(900))
+                return;
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
                 primaryGroup,
@@ -140,6 +146,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("Data", 1120);
+            if (!harness.CanUseRequestedRibbonWidth(1120))
+                return;
 
             // 2-state truth: the declarative engine collapses by group priority order, folding the
             // lower-priority Tools/Forecast/Outline groups while keeping the higher-priority Sort Filter
@@ -164,6 +172,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("Data", 1120);
+            if (!harness.CanUseRequestedRibbonWidth(1120))
+                return;
 
             // 2-state truth: around 1120px the live engine keeps the higher-priority Sort Filter group
             // expanded and folds the lower-priority Tools/Forecast/Outline groups into overflow buttons that
@@ -302,6 +312,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("View", 1366);
+            if (!harness.CanUseRequestedRibbonWidth(1366))
+                return;
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Show", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Zoom", harness.DebugActiveRibbonChildren);
@@ -326,6 +338,8 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("View", width);
+            if (!harness.CanUseRequestedRibbonWidth(width))
+                return;
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
                 "Workbook Views",

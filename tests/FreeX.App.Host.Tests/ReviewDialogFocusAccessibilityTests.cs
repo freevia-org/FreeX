@@ -82,12 +82,12 @@ public sealed class ReviewDialogFocusAccessibilityTests
             {
                 ShowAndPump(dialog);
 
-                var issueList = GetField<ListBox>(dialog, "_issueList");
+                var issueList = GetField<TreeView>(dialog, "_resultsTree");
                 var goToButton = GetField<Button>(dialog, "_goToButton");
                 var closeButton = GetField<Button>(dialog, "_closeButton");
-                Keyboard.FocusedElement.Should().BeSameAs(issueList);
-                issueList.SelectedIndex.Should().Be(0);
-                GetIssueText(issueList.Items[0]).Should().Contain("Sheet1!B2").And.Contain("low contrast");
+                Keyboard.FocusedElement.Should().BeAssignableTo<TreeViewItem>();
+                issueList.SelectedItem.Should().BeAssignableTo<TreeViewItem>();
+                issueList.Items.OfType<TreeViewItem>().Should().ContainSingle();
                 AutomationProperties.GetAutomationId(issueList).Should().Be("AccessibilityCheckerIssueList");
                 AutomationProperties.GetHelpText(goToButton).Should().Be("Navigate to the selected accessibility issue.");
                 closeButton.IsCancel.Should().BeTrue();
@@ -176,12 +176,5 @@ public sealed class ReviewDialogFocusAccessibilityTests
     private static T GetField<T>(object instance, string name)
         where T : class
         => DialogSourceTestSupport.GetPrivateField<T>(instance, name);
-
-    private static string GetIssueText(object item)
-    {
-        var property = item.GetType().GetProperty("Text", BindingFlags.Instance | BindingFlags.Public);
-        property.Should().NotBeNull();
-        return property!.GetValue(item).Should().BeOfType<string>().Subject;
-    }
 
 }

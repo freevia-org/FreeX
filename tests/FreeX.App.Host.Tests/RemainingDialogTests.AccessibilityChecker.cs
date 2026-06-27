@@ -30,8 +30,8 @@ public sealed partial class RemainingDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_issueList.Focus();");
-        source.Should().Contain("Keyboard.Focus(_issueList);");
+        source.Should().Contain("_resultsTree.Focus();");
+        source.Should().Contain("Keyboard.Focus(_resultsTree);");
     }
 
     [Fact]
@@ -41,10 +41,10 @@ public sealed partial class RemainingDialogTests
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("public sealed record AccessibilityCheckerDialogResult");
-        source.Should().Contain("private readonly ListBox _issueList");
+        source.Should().Contain("private readonly TreeView _resultsTree");
         source.Should().Contain("private readonly Button _goToButton");
         source.Should().Contain("Content = UiText.Get(\"AccessibilityChecker_GoToButton\")");
-        source.Should().Contain("_issueList.MouseDoubleClick += IssueList_MouseDoubleClick;");
+        source.Should().Contain("_resultsTree.MouseDoubleClick += ResultsTree_MouseDoubleClick;");
         source.Should().Contain("private void GoToSelectedIssue()");
         reviewSource.Should().Contain("if (dialog.ShowDialog() == true)");
         reviewSource.Should().Contain("NavigateToCell(AccessibilityCheckerDialog.GetNavigationTarget(dialog.Result!.Issue));");
@@ -55,10 +55,10 @@ public sealed partial class RemainingDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
         var doubleClick = source[
-            source.IndexOf("private void IssueList_MouseDoubleClick", StringComparison.Ordinal)..
-            source.IndexOf("private void UpdateGoToButtonState", StringComparison.Ordinal)];
+            source.IndexOf("private void ResultsTree_MouseDoubleClick", StringComparison.Ordinal)..
+            source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
 
-        doubleClick.Should().Contain("_issueList.SelectedItem is null");
+        doubleClick.Should().Contain("SelectedItem() is null");
         doubleClick.Should().Contain("GoToSelectedIssue();");
         doubleClick.Should().Contain("e.Handled = true;");
         doubleClick.IndexOf("GoToSelectedIssue();", StringComparison.Ordinal)
@@ -71,8 +71,8 @@ public sealed partial class RemainingDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
 
-        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly");
-        source.Should().NotContain("DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true");
+        source.Should().Contain("_goToButton.Visibility = Visibility.Collapsed;");
+        source.Should().Contain("private readonly Button _closeButton");
     }
 
     [Fact]
@@ -83,9 +83,9 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("AutomationProperties.SetName(_messageBox, UiText.Get(\"AccessibilityChecker_ResultAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_messageBox, \"AccessibilityCheckerResultText\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_messageBox, UiText.Get(\"AccessibilityChecker_ResultHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetName(_issueList, UiText.Get(\"AccessibilityChecker_IssueListAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_issueList, \"AccessibilityCheckerIssueList\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_issueList, UiText.Get(\"AccessibilityChecker_IssueListHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_resultsTree, UiText.Get(\"AccessibilityChecker_IssueListAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_resultsTree, \"AccessibilityCheckerIssueList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_resultsTree, UiText.Get(\"AccessibilityChecker_IssueListHelpText\"));");
         source.Should().Contain("AutomationProperties.SetName(_goToButton, UiText.Get(\"AccessibilityChecker_GoToAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_goToButton, \"AccessibilityCheckerGoToButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_goToButton, UiText.Get(\"AccessibilityChecker_GoToHelpText\"));");

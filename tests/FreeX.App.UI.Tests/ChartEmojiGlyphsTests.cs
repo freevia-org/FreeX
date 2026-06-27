@@ -73,7 +73,11 @@ public sealed class ChartEmojiGlyphsTests
     [Fact]
     public void RenderEmojiPng_ProducesNonEmptyColorBitmap()
     {
-        var result = ChartEmojiGlyphs.RenderEmojiPng("\U0001F44D", fontSize: 14, renderScale: 2.0);
+        EmojiBitmap? result = null;
+        WpfTestThread.Run(() =>
+        {
+            result = ChartEmojiGlyphs.RenderEmojiPng("\U0001F44D", fontSize: 14, renderScale: 2.0);
+        });
 
         result.Should().NotBeNull();
         result!.Value.Png.Should().NotBeEmpty();

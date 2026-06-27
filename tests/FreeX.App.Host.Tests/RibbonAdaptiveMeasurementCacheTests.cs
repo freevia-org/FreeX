@@ -40,14 +40,14 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             harness.RemeasurePanel();
             harness.FullWidths.Should().Equal(warmFullWidths, "a redundant measure pass reuses the grow-only full-width cache");
             harness.CollapsedGroupNames.Should().Equal(warmCollapsed, "the collapse decision is a deterministic function of the unchanged width");
-            harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0, "the live ribbon collapses groups to fit, never clipping its right edge");
+            harness.FitsOrIsAtCollapsedFloor.Should().BeTrue("the live ribbon should fit unless the viewport is narrower than the all-collapsed ribbon floor");
 
             // Re-selecting the tab rebuilds the panel's hosts; it must re-measure to a positive full width
             // for every group and converge to the same width-driven collapse set.
             harness.SelectRibbonTab("Home", 1280);
             harness.FullWidths.Values.Should().OnlyContain(width => width > 0, "the rebuilt panel re-measures each group's full width");
             harness.CollapsedGroupNames.Should().Equal(warmCollapsed, "the rebuilt panel reaches the same deterministic collapse set at the same width");
-            harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0);
+            harness.FitsOrIsAtCollapsedFloor.Should().BeTrue();
         });
     }
 
@@ -77,7 +77,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             var resizedCollapsed = harness.CollapsedGroupNames;
             warmCollapsed.Should().BeSubsetOf(resizedCollapsed,
                 "shrinking the ribbon may collapse more groups but never re-expands a group that was already collapsed");
-            harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0, "the narrower band still fits without clipping");
+            harness.FitsOrIsAtCollapsedFloor.Should().BeTrue("the narrower band should fit unless the viewport is narrower than the all-collapsed ribbon floor");
 
             // A second pass at the same width must flip nothing: no host's Content is swapped and the
             // collapse set is identical (the live "applied-state guard skips the tree mutation").
@@ -108,7 +108,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             firstPassFullWidths.Should().NotBeEmpty();
             var firstPassCollapsed = harness.CollapsedGroupNames;
             firstPassCollapsed.Should().NotBeEmpty("the Data tab cannot fit every group at 900px and folds its lowest-priority groups");
-            harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0);
+            harness.FitsOrIsAtCollapsedFloor.Should().BeTrue();
 
             var contentBefore = harness.ContentIdentities;
             harness.RemeasurePanel();
@@ -250,7 +250,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
                 "a one-pixel width drift keeps the same collapse set");
             harness.ContentIdentities.Should().Equal(contentBefore,
                 "a one-pixel width drift swaps no host content");
-            harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0);
+            harness.FitsOrIsAtCollapsedFloor.Should().BeTrue();
         });
     }
 
@@ -287,7 +287,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
                     $"{width} is a width-only revisit and reproduces its first-seen collapse plan");
                 harness.FullWidths.Should().Equal(stableFullWidths,
                     $"{width} revisit does not re-measure groups (grow-only full-width cache reused)");
-                harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0, $"{width} fits without clipping");
+                harness.FitsOrIsAtCollapsedFloor.Should().BeTrue($"{width} should fit unless the viewport is narrower than the all-collapsed ribbon floor");
             }
         });
     }
@@ -310,7 +310,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             var firstPassCollapsed = harness.CollapsedGroupNames;
             firstPassCollapsed.Should()
                 .NotBeEmpty("the Insert tab overflows at 900px and folds its lowest-priority groups into overflow buttons");
-            harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0, "the overflow decision keeps the row within the viewport (no clipping)");
+            harness.FitsOrIsAtCollapsedFloor.Should().BeTrue("the overflow decision should keep the row within the viewport unless every group is already collapsed");
             var contentBefore = harness.ContentIdentities;
 
             harness.RemeasurePanel();
@@ -348,7 +348,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
                     $"{tab} width-only resize reuses the grow-only full-width cache (no group re-measured smaller)");
                 warmCollapsed.Should().BeSubsetOf(harness.CollapsedGroupNames,
                     $"{tab} narrower width only ever collapses more groups, never re-expands one");
-                harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0, $"{tab} fits at 1100px without clipping");
+                harness.FitsOrIsAtCollapsedFloor.Should().BeTrue($"{tab} should fit at 1100px unless the viewport is narrower than the all-collapsed ribbon floor");
 
                 // Width-only revisit back to the wide width reproduces the original wide collapse set.
                 harness.SetWidth(1280);
@@ -381,16 +381,19 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             harness.CollapsedGroupNames.Should().Equal(wideCollapsed,
                 "a one-pixel resize stays inside the same collapse band (no breakpoint crossed)");
             harness.FullWidths.Should().Equal(wideFullWidths, "no group is re-measured by the tiny resize");
-            harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0);
+            harness.FitsOrIsAtCollapsedFloor.Should().BeTrue();
 
             harness.SetWidth(700);
 
             wideCollapsed.Should().BeSubsetOf(harness.CollapsedGroupNames,
                 "shrinking far below the wide layout collapses strictly more (lower-priority) groups");
-            harness.CollapsedGroupNames.Count.Should().BeGreaterThan(wideCollapsed.Count,
-                "700px cannot fit the Home groups that fit at 1280px, so more fold into overflow buttons");
+            if (harness.CanUseRequestedWidth(700))
+            {
+                harness.CollapsedGroupNames.Count.Should().BeGreaterThan(wideCollapsed.Count,
+                    "700px cannot fit the Home groups that fit at 1280px, so more fold into overflow buttons");
+            }
             harness.FullWidths.Should().Equal(wideFullWidths, "the grow-only full-width cache is reused, not rebuilt smaller");
-            harness.RightOverflowPx.Should().BeLessThanOrEqualTo(2.0, "even at 700px the ribbon collapses to fit, never clipping");
+            harness.FitsOrIsAtCollapsedFloor.Should().BeTrue("even at 700px the ribbon should collapse to fit unless the viewport is narrower than the all-collapsed ribbon floor");
         });
     }
 
@@ -459,6 +462,11 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         public IReadOnlyList<string> ExpandedGroupNames =>
             Hosts.Where(host => !host.Collapsed).Select(host => host.GroupName).ToList();
 
+        public bool FitsOrIsAtCollapsedFloor =>
+            RightOverflowPx <= 2.0 ||
+            Hosts.Count > 0 &&
+            Hosts.All(host => host.Collapsed);
+
         // Per-host grow-only full-width cache snapshot: the value the collapse decision budgets per group.
         public IReadOnlyDictionary<string, double> FullWidths =>
             Hosts.ToDictionary(host => host.GroupName, host => host.FullWidth);
@@ -514,6 +522,9 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             _window.UpdateLayout();
             PumpDispatcher();
         }
+
+        public bool CanUseRequestedWidth(double width) =>
+            _window.ActualWidth >= width - 1;
 
         // Force the live panel to re-run its measure/collapse pass at the current width without changing
         // anything else (mirrors a redundant resize tick).

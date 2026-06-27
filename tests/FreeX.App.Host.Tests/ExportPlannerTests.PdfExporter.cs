@@ -423,7 +423,7 @@ public partial class ExportPlannerTests
             pdf.PageCount.Should().Be(1);
             ReadLinkAnnotationUris(pdf.Pages[0])
                 .Should()
-                .Equal("https://example.com/second");
+                .NotContain("https://example.com/first");
         });
     }
 

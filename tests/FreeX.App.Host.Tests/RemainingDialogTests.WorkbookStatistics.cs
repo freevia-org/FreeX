@@ -52,6 +52,7 @@ public sealed partial class RemainingDialogTests
 
         source.Should().Contain("const string copyContent = \"_Copy to Clipboard\";");
         source.Should().Contain("AutomationProperties.SetAutomationId(copy, \"WorkbookStatisticsCopyButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(copy, copyHelpText);");
         source.Should().Contain("copy.Click += (_, _) => CopyMessageToClipboard(message);");
         source.Should().Contain("Content = UiText.Ok");
         source.Should().Contain("IsDefault = true");
