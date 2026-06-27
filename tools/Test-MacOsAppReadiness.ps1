@@ -10,6 +10,7 @@ param(
         "src\FreeX.App.Services",
         "shared\Free.Shared.Ribbon.Avalonia",
         "shared\Free.Shared.AppServices",
+        "shared\Free.Shared.Drawing",
         "shared\Free.Shared.IO",
         "shared\Free.Shared.Pdf",
         "shared\Free.Shared.Pdf.Skia",
@@ -415,6 +416,7 @@ function Test-AvaloniaProject {
     Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
 
     $allowedProjectReferences = @(
+        "Free.Shared.Drawing",
         "Free.Shared.Pdf",
         "Free.Shared.Pdf.Skia",
         "Free.Shared.Ribbon",
