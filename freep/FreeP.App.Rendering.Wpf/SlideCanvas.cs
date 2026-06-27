@@ -141,14 +141,20 @@ public sealed class SlideCanvas : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+        RenderToDrawingContext(dc, ActualWidth, ActualHeight);
+    }
 
+    /// <summary>
+    /// Renders the current slide into an arbitrary WPF drawing context.
+    /// Used by <see cref="OnRender"/> and by off-screen rasterization.
+    /// </summary>
+    public void RenderToDrawingContext(DrawingContext dc, double renderW, double renderH)
+    {
         EnsureOps();
 
         if (_cachedOps is null || _cachedOps.Count == 0 || _slideWidthDip <= 0)
             return;
 
-        double renderW = ActualWidth;
-        double renderH = ActualHeight;
         if (renderW <= 0 || renderH <= 0) return;
 
         // Scale slide DIP coordinates → actual render pixels (uniform fit).

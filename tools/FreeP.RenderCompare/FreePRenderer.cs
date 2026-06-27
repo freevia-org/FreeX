@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeP.App.Rendering.Wpf;
@@ -52,6 +53,13 @@ internal static class FreePRenderer
             {
                 RenderSlide(presentation, slide, width, height, outPath);
                 Console.WriteLine($"  slide-{i + 1:D2} -> {outPath}");
+                var diversity = PixelDiversity.Analyze(outPath);
+                Console.WriteLine($"    {diversity}");
+                if (!diversity.IsTrustworthy)
+                {
+                    Console.Error.WriteLine($"    UNTRUSTWORTHY: {diversity.FailureReason}");
+                    failCount++;
+                }
             }
             catch (Exception ex)
             {
@@ -74,6 +82,12 @@ internal static class FreePRenderer
     private static void RenderSlide(
         Presentation presentation, Slide slide, int width, int height, string pngPath)
     {
+        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+        {
+            RenderSlideOnSta(presentation, slide, width, height, pngPath);
+            return;
+        }
+
         Exception? threadException = null;
 
         var thread = new Thread(() =>
@@ -98,20 +112,25 @@ internal static class FreePRenderer
     private static void RenderSlideOnSta(
         Presentation presentation, Slide slide, int width, int height, string pngPath)
     {
+        _ = Application.Current ?? new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+
         var canvas = new SlideCanvas
         {
             Presentation = presentation,
             Slide = slide
         };
 
-        // Full layout pass: Measure → Arrange → UpdateLayout so OnRender has correct ActualWidth/Height.
-        canvas.Measure(new Size(width, height));
-        canvas.Arrange(new Rect(0, 0, width, height));
-        canvas.UpdateLayout();
+        // Draw directly into a visual so off-screen output does not depend on WPF layout retention.
+        var visual = new DrawingVisual();
+        using (var drawingContext = visual.RenderOpen())
+        {
+            canvas.RenderToDrawingContext(drawingContext, width, height);
+        }
 
         // Off-screen rasterisation at 96 DPI (device-independent pixels = physical pixels at 96 DPI).
         var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(canvas);
+        rtb.Render(visual);
         rtb.Freeze();
 
         var encoder = new PngBitmapEncoder();
