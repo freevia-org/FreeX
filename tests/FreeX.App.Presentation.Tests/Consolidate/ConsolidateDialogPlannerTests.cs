@@ -1,0 +1,113 @@
+using FluentAssertions;
+using FreeX.App.Presentation.Consolidate;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Presentation.Tests.Consolidate;
+
+public sealed class ConsolidateDialogPlannerTests
+{
+    [Fact]
+    public void TryAddReference_CanRejectDuplicateReferencesForShellsThatRequireUniqueListItems()
+    {
+        var sheetId = SheetId.New();
+
+        var added = ConsolidateDialogPlanner.TryAddReference(
+            ["A1:B2"],
+            "a1:b2",
+            (string input, out IReadOnlyList<GridRange> ranges, out string? invalidPart) =>
+                ConsolidateInputParser.TryParseSourceRanges(input, sheetId, out ranges, out invalidPart),
+            rejectDuplicateReferences: true,
+            out var updated,
+            out var issue);
+
+        added.Should().BeFalse();
+        updated.Should().Equal("A1:B2");
+        issue.Kind.Should().Be(ConsolidateDialogIssueKind.DuplicateSourceReference);
+        issue.InvalidPart.Should().Be("a1:b2");
+    }
+
+    [Fact]
+    public void TryParse_BuildsSharedDialogResultAndRejectsMismatchedSourceSizes()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = ConsolidateDialogPlanner.TryParse(
+            sheetId,
+            sourceRangesText: "A1:B2; D1:E2",
+            destinationCellText: "G5",
+            function: ConsolidateFunction.Average,
+            useTopRowLabels: true,
+            useLeftColumnLabels: false,
+            createLinksToSourceData: true,
+            out var result,
+            out var issue);
+
+        parsed.Should().BeTrue();
+        issue.HasIssue.Should().BeFalse();
+        result.SourceRanges.Should().HaveCount(2);
+        result.DestinationCell.Should().Be(new CellAddress(sheetId, 5, 7));
+        result.Function.Should().Be(ConsolidateFunction.Average);
+        result.UseTopRowLabels.Should().BeTrue();
+        result.CreateLinksToSourceData.Should().BeTrue();
+
+        ConsolidateDialogPlanner.TryParse(
+                sheetId,
+                sourceRangesText: "A1:B2; D1:F2",
+                destinationCellText: "G5",
+                out _,
+                out issue)
+            .Should()
+            .BeFalse();
+        issue.Kind.Should().Be(ConsolidateDialogIssueKind.MismatchedSourceSizes);
+    }
+
+    [Fact]
+    public void TryPlanApply_PlansSharedEditsAndOverwriteTargets()
+    {
+        var workbook = new Workbook("Consolidate");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 4), new TextValue("old"));
+
+        var planned = ConsolidateDialogPlanner.TryPlanApply(
+            workbook,
+            ["A1:B1"],
+            "D5",
+            (string input, out GridRange range) =>
+                WorkbookRangeTextCodec.TryParse(sheet.Id, input, _ => null, out range),
+            new ConsolidateOptions { Function = ConsolidateFunction.Sum },
+            out var plan,
+            out var issue);
+
+        planned.Should().BeTrue();
+        issue.HasIssue.Should().BeFalse();
+        plan.SourceRanges.Should().Equal(new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 2)));
+        plan.DestinationCell.Should().Be(new CellAddress(sheet.Id, 5, 4));
+        plan.Edits.Should().HaveCount(2);
+        plan.OverwriteTargets.Should().Equal(new CellAddress(sheet.Id, 5, 4));
+        plan.Edits.Select(edit => ((NumberValue)edit.NewCell.Value!).Value).Should().Equal(2, 3);
+    }
+
+    [Fact]
+    public void TryPlanApply_RejectsMultiCellDestination()
+    {
+        var workbook = new Workbook("Consolidate");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+
+        var planned = ConsolidateDialogPlanner.TryPlanApply(
+            workbook,
+            ["A1"],
+            "D5:E5",
+            (string input, out GridRange range) =>
+                WorkbookRangeTextCodec.TryParse(sheet.Id, input, _ => null, out range),
+            new ConsolidateOptions(),
+            out _,
+            out var issue);
+
+        planned.Should().BeFalse();
+        issue.Kind.Should().Be(ConsolidateDialogIssueKind.InvalidDestinationCell);
+    }
+}

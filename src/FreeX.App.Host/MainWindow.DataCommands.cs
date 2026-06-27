@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;

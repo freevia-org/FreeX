@@ -8,7 +8,7 @@ using FluentAssertions;
 namespace FreeX.App.Avalonia.Tests;
 
 /// <summary>
-/// Unit tests for the UI-free <see cref="ConsolidateShellPlanner"/>: reading a sheet range into the portable
+/// Unit tests for the UI-free Consolidate planning adapter: reading a sheet range into the portable
 /// <see cref="ConsolidateCellValue"/> grid the planner consumes, mapping a planned <see cref="ConsolidateResult"/>
 /// over a destination anchor into cell edits (by-position and by-labels), and reporting the non-empty cells an
 /// apply would overwrite. No running shell required.
@@ -104,6 +104,27 @@ public sealed class ConsolidateShellPlannerTests
             .Which.Should().Be(new CellAddress(sheet.Id, 5, 3));
     }
 
+    [Fact]
+    public void ConsolidateShellPlanner_DelegatesToPresentationPlanners()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "ConsolidateShellPlanner.cs"));
+
+        source.Should().Contain("SharedApplyPlanner.ReadSource");
+        source.Should().Contain("SharedDialogPlanner.FunctionChoices");
+        source.Should().NotContain("CultureInfo");
+        source.Should().NotContain("new NumberValue");
+    }
+
+    [Fact]
+    public void MainWindowConsolidate_UsesSharedApplyPlanAndCoreCommand()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Consolidate.cs"));
+
+        source.Should().Contain("ConsolidateDialogPlanner.TryPlanApply(");
+        source.Should().Contain("new ConsolidateCommand(");
+        source.Should().NotContain("new EditCellsCommand(sheetId, edits)");
+    }
+
     private static ConsolidateSource Source(double[,] values)
     {
         var rows = values.GetLength(0);
@@ -149,4 +170,18 @@ public sealed class ConsolidateShellPlannerTests
 
     private static GridRange Range(SheetId sheetId, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(new CellAddress(sheetId, startRow, startCol), new CellAddress(sheetId, endRow, endCol));
+
+    private static string RepoFile(params string[] parts)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
 }

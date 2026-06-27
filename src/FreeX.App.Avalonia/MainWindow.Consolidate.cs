@@ -23,9 +23,8 @@ public sealed partial class MainWindow
     /// The compact Consolidate dialog: pick an aggregation function, add one or more source ranges (typed as
     /// <c>Sheet!A1:B5</c>-style references and resolved through <see cref="WorkbookReferenceNavigator"/>),
     /// choose a destination anchor (defaulting to the active selection's top-left), and toggle "Use labels in
-    /// Top row" / "Left column". On Apply each source range is read into a <see cref="ConsolidateSource"/>
-    /// grid, the <see cref="ConsolidatePlanner"/> aggregates them, and the resulting cells are written into the
-    /// destination through the shared session command path (undoable + refreshing). Overwriting non-empty
+    /// Top row" / "Left column". On Apply the shared planner reads the source ranges, plans the output, and
+    /// the result is applied through the shared session command path (undoable + refreshing). Overwriting non-empty
     /// destination cells requires a second Apply click.
     /// </summary>
     private async Task ShowConsolidateDialogAsync()
@@ -130,21 +129,21 @@ public sealed partial class MainWindow
         {
             warningText.IsVisible = false;
             var text = referenceBox.Text?.Trim() ?? string.Empty;
-            if (!TryParseConsolidateReference(text, out _))
+            if (!ConsolidateDialogPlanner.TryAddReference(
+                    references,
+                    text,
+                    TryParseConsolidateSourceRanges,
+                    rejectDuplicateReferences: true,
+                    out var updatedReferences,
+                    out var issue))
             {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateEnterValidSource");
+                warningText.Text = ConsolidateAddWarningText(issue);
                 warningText.IsVisible = true;
                 return;
             }
 
-            if (references.Contains(text, StringComparer.OrdinalIgnoreCase))
-            {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateSourceAlreadyListed");
-                warningText.IsVisible = true;
-                return;
-            }
-
-            references.Add(text);
+            references.Clear();
+            references.AddRange(updatedReferences);
             RefreshReferences();
             referenceBox.Clear();
         };
@@ -169,41 +168,6 @@ public sealed partial class MainWindow
         {
             warningText.IsVisible = false;
 
-            if (references.Count == 0)
-            {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateAddAtLeastOne");
-                warningText.IsVisible = true;
-                return;
-            }
-
-            var sources = new List<ConsolidateSource>(references.Count);
-            foreach (var reference in references)
-            {
-                if (!TryParseConsolidateReference(reference, out var sourceRange))
-                {
-                    warningText.Text = UiText.Format("TableLoc_ConsolidateCannotResolveSource", reference);
-                    warningText.IsVisible = true;
-                    return;
-                }
-
-                var sheet = _session.Workbook.GetSheet(sourceRange.Start.Sheet);
-                if (sheet is null)
-                {
-                    warningText.Text = UiText.Format("TableLoc_ConsolidateCannotResolveSource", reference);
-                    warningText.IsVisible = true;
-                    return;
-                }
-
-                sources.Add(ConsolidateSource.FromGrid(ConsolidateShellPlanner.ReadSource(sheet, sourceRange)));
-            }
-
-            if (!TryParseConsolidateReference(destinationBox.Text?.Trim() ?? string.Empty, out var destinationRange))
-            {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateEnterValidDestination");
-                warningText.IsVisible = true;
-                return;
-            }
-
             var options = new ConsolidateOptions
             {
                 Function = ConsolidateShellPlanner.FunctionChoices[Math.Max(0, functionBox.SelectedIndex)].Function,
@@ -211,33 +175,29 @@ public sealed partial class MainWindow
                 UseLeftColumnLabels = leftColumnBox.IsChecked == true,
             };
 
-            var result = ConsolidatePlanner.Plan(sources, options);
-            if (result.IsEmpty)
+            if (!ConsolidateDialogPlanner.TryPlanApply(
+                    _session.Workbook,
+                    references,
+                    destinationBox.Text?.Trim() ?? string.Empty,
+                    TryParseConsolidateReference,
+                    options,
+                    out var plan,
+                    out var issue))
             {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateNoOutput");
+                warningText.Text = ConsolidateApplyWarningText(issue);
                 warningText.IsVisible = true;
                 return;
             }
 
-            var destinationSheet = _session.Workbook.GetSheet(destinationRange.Start.Sheet) ?? _session.ActiveSheet;
-            var edits = ConsolidateShellPlanner.MapToEdits(destinationSheet.Id, result, destinationRange.Start);
-            if (edits.Count == 0)
-            {
-                warningText.Text = UiText.Get("TableLoc_ConsolidateOutsideBounds");
-                warningText.IsVisible = true;
-                return;
-            }
-
-            var overwrites = ConsolidateShellPlanner.FindOverwriteTargets(destinationSheet, edits);
-            if (overwrites.Count > 0 && !overwriteConfirmed)
+            if (plan.OverwriteTargets.Count > 0 && !overwriteConfirmed)
             {
                 overwriteConfirmed = true;
-                warningText.Text = UiText.Format("TableLoc_ConsolidateOverwriteWarning", overwrites.Count);
+                warningText.Text = UiText.Format("TableLoc_ConsolidateOverwriteWarning", plan.OverwriteTargets.Count);
                 warningText.IsVisible = true;
                 return;
             }
 
-            if (!ApplyConsolidateEdits(destinationSheet.Id, edits, destinationRange.Start))
+            if (!ApplyConsolidatePlan(plan, createLinksBox.IsChecked == true))
                 return;
 
             dialog.Close();
@@ -339,13 +299,50 @@ public sealed partial class MainWindow
             _session.Workbook.NamedRanges,
             out range);
 
-    /// <summary>Applies the consolidated cell edits through the shared session command path and refreshes the shell.</summary>
-    private bool ApplyConsolidateEdits(
-        SheetId sheetId,
-        IReadOnlyList<(CellAddress Address, Cell NewCell)> edits,
-        CellAddress destination)
+    private bool TryParseConsolidateSourceRanges(
+        string text,
+        out IReadOnlyList<GridRange> ranges,
+        out string? invalidPart)
     {
-        var command = new EditCellsCommand(sheetId, edits);
+        if (TryParseConsolidateReference(text, out var range))
+        {
+            ranges = [range];
+            invalidPart = null;
+            return true;
+        }
+
+        ranges = [];
+        invalidPart = text;
+        return false;
+    }
+
+    private static string ConsolidateAddWarningText(ConsolidateDialogIssue issue) =>
+        issue.Kind == ConsolidateDialogIssueKind.DuplicateSourceReference
+            ? UiText.Get("TableLoc_ConsolidateSourceAlreadyListed")
+            : UiText.Get("TableLoc_ConsolidateEnterValidSource");
+
+    private static string ConsolidateApplyWarningText(ConsolidateDialogIssue issue) =>
+        issue.Kind switch
+        {
+            ConsolidateDialogIssueKind.InvalidSourceRange when !string.IsNullOrWhiteSpace(issue.InvalidPart) =>
+                UiText.Format("TableLoc_ConsolidateCannotResolveSource", issue.InvalidPart),
+            ConsolidateDialogIssueKind.MismatchedSourceSizes => UiText.Get("Consolidate_SourceRangesMustBeSameSize"),
+            ConsolidateDialogIssueKind.InvalidDestinationCell => UiText.Get("TableLoc_ConsolidateEnterValidDestination"),
+            ConsolidateDialogIssueKind.NoOutput => UiText.Get("TableLoc_ConsolidateNoOutput"),
+            ConsolidateDialogIssueKind.OutsideWorksheetBounds => UiText.Get("TableLoc_ConsolidateOutsideBounds"),
+            _ => UiText.Get("TableLoc_ConsolidateAddAtLeastOne")
+        };
+
+    /// <summary>Applies the shared Consolidate command through the session command path and refreshes the shell.</summary>
+    private bool ApplyConsolidatePlan(ConsolidateApplyPlan plan, bool createLinksToSourceData)
+    {
+        var command = new ConsolidateCommand(
+            plan.SourceRanges,
+            plan.DestinationCell,
+            plan.Options.Function,
+            plan.Options.UseTopRowLabels,
+            plan.Options.UseLeftColumnLabels,
+            createLinksToSourceData);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -353,7 +350,7 @@ public sealed partial class MainWindow
             return false;
         }
 
-        RefreshShell(UiText.Format("TableLoc_ConsolidatedInto", FormatCellReference(destination)));
+        RefreshShell(UiText.Format("TableLoc_ConsolidatedInto", FormatCellReference(plan.DestinationCell)));
         return true;
     }
 

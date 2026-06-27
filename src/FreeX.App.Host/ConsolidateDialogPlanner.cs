@@ -1,32 +1,20 @@
+using FreeX.App.Presentation.Consolidate;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using SharedConsolidateDialogPlanner = FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner;
 
 namespace FreeX.App.Host;
 
 internal static class ConsolidateDialogPlanner
 {
     public static IReadOnlyList<string> SplitSourceRangeText(string sourceRangesText) =>
-        sourceRangesText
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .ToList();
+        SharedConsolidateDialogPlanner.SplitSourceRangeText(sourceRangesText);
 
     public static string JoinSourceRanges(IEnumerable<string> sourceRanges) =>
-        string.Join("; ", sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0));
+        SharedConsolidateDialogPlanner.JoinSourceRanges(sourceRanges);
 
-    public static bool HasPendingReferenceText(IEnumerable<string> existingReferences, string? referenceText)
-    {
-        var pendingReferences = SplitSourceRangeText(referenceText ?? "");
-        if (pendingReferences.Count == 0)
-            return false;
-
-        var existing = existingReferences
-            .Select(item => item.Trim())
-            .Where(item => item.Length > 0)
-            .ToList();
-        return pendingReferences.Any(pending =>
-            !existing.Contains(pending, StringComparer.OrdinalIgnoreCase));
-    }
+    public static bool HasPendingReferenceText(IEnumerable<string> existingReferences, string? referenceText) =>
+        SharedConsolidateDialogPlanner.HasPendingReferenceText(existingReferences, referenceText);
 
     public static bool TryAddReference(
         SheetId sheetId,
@@ -50,23 +38,20 @@ internal static class ConsolidateDialogPlanner
         out IReadOnlyList<string> updatedReferences,
         out string? error)
     {
-        var references = existingReferences.Select(item => item.Trim()).Where(item => item.Length > 0).ToList();
-        updatedReferences = references;
-        error = null;
-
-        var reference = referenceText.Trim();
-        if (!ConsolidateInputParser.TryParseSourceRanges(reference, sheetId, resolveSheetId, out var ranges, out var invalidPart) ||
-            ranges.Count != 1)
+        if (SharedConsolidateDialogPlanner.TryAddReference(
+                sheetId,
+                resolveSheetId,
+                existingReferences,
+                referenceText,
+                out updatedReferences,
+                out var issue))
         {
-            error = string.IsNullOrWhiteSpace(invalidPart)
-                ? UiText.Get("Consolidate_EnterValidSourceRange")
-                : UiText.Format("Consolidate_EnterValidSourceRangeWithPart", invalidPart);
-            return false;
+            error = null;
+            return true;
         }
 
-        references.Add(reference);
-        updatedReferences = references;
-        return true;
+        error = FormatAddReferenceIssue(issue);
+        return false;
     }
 
     public static ConsolidateDialogResult CreateResult(
@@ -77,29 +62,24 @@ internal static class ConsolidateDialogPlanner
         bool useLeftColumnLabels = false,
         bool createLinksToSourceData = false)
     {
-        var ranges = sourceRanges.ToList();
-        if (ranges.Count == 0)
-            throw new ArgumentException(UiText.Get("Consolidate_AtLeastOneSourceRangeRequired"), nameof(sourceRanges));
-
-        return new ConsolidateDialogResult(
-            ranges,
-            destinationCell,
-            function,
-            useTopRowLabels,
-            useLeftColumnLabels,
-            createLinksToSourceData);
+        try
+        {
+            return SharedConsolidateDialogPlanner.CreateResult(
+                sourceRanges,
+                destinationCell,
+                function,
+                useTopRowLabels,
+                useLeftColumnLabels,
+                createLinksToSourceData);
+        }
+        catch (ArgumentException ex) when (ex.ParamName == nameof(sourceRanges))
+        {
+            throw new ArgumentException(UiText.Get("Consolidate_AtLeastOneSourceRangeRequired"), nameof(sourceRanges), ex);
+        }
     }
 
-    public static bool HaveSameSize(IEnumerable<GridRange> sourceRanges)
-    {
-        var ranges = sourceRanges.ToList();
-        if (ranges.Count < 2)
-            return true;
-
-        var rowCount = ranges[0].RowCount;
-        var colCount = ranges[0].ColCount;
-        return ranges.All(range => range.RowCount == rowCount && range.ColCount == colCount);
-    }
+    public static bool HaveSameSize(IEnumerable<GridRange> sourceRanges) =>
+        SharedConsolidateDialogPlanner.HaveSameSize(sourceRanges);
 
     public static bool TryParse(
         SheetId sheetId,
@@ -172,43 +152,30 @@ internal static class ConsolidateDialogPlanner
         out ConsolidateDialogResult result,
         out string? error)
     {
-        result = default!;
-        error = null;
-
-        if (!ConsolidateInputParser.TryParseSourceRanges(sourceRangesText, sheetId, resolveSheetId, out var ranges, out var invalidPart))
+        if (SharedConsolidateDialogPlanner.TryParse(
+                sheetId,
+                resolveSheetId,
+                sourceRangesText,
+                destinationCellText,
+                function,
+                useTopRowLabels,
+                useLeftColumnLabels,
+                createLinksToSourceData,
+                out result,
+                out var issue))
         {
-            error = string.IsNullOrWhiteSpace(invalidPart)
-                ? UiText.Get("Consolidate_EnterAtLeastOneValidSourceRange")
-                : UiText.Format("Consolidate_EnterValidSourceRangeWithPart", invalidPart);
-            return false;
+            error = null;
+            return true;
         }
 
-        if (!HaveSameSize(ranges))
-        {
-            error = UiText.Get("Consolidate_SourceRangesMustBeSameSize");
-            return false;
-        }
-
-        if (!ConsolidateInputParser.TryParseDestination(destinationCellText, sheetId, resolveSheetId, out var destination))
-        {
-            error = UiText.Get("Consolidate_EnterValidDestinationCell");
-            return false;
-        }
-
-        result = CreateResult(
-            ranges,
-            destination,
-            function,
-            useTopRowLabels,
-            useLeftColumnLabels,
-            createLinksToSourceData);
-        return true;
+        error = FormatFinalValidationIssue(issue);
+        return false;
     }
 
     public static ConsolidateRangeSelectionRequest CreateRangeSelectionRequest(
         ConsolidateRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        SharedConsolidateDialogPlanner.CreateRangeSelectionRequest(target, currentText);
 
     public static string FunctionLabel(ConsolidateFunction function) =>
         function switch
@@ -217,5 +184,21 @@ internal static class ConsolidateDialogPlanner
             ConsolidateFunction.StdDev => UiText.Get("Consolidate_FunctionStdDev"),
             ConsolidateFunction.StdDevp => UiText.Get("Consolidate_FunctionStdDevp"),
             _ => function.ToString()
+        };
+
+    private static string FormatAddReferenceIssue(ConsolidateDialogIssue issue) =>
+        issue.Kind == ConsolidateDialogIssueKind.InvalidSourceRange &&
+        !string.IsNullOrWhiteSpace(issue.InvalidPart)
+            ? UiText.Format("Consolidate_EnterValidSourceRangeWithPart", issue.InvalidPart)
+            : UiText.Get("Consolidate_EnterValidSourceRange");
+
+    private static string FormatFinalValidationIssue(ConsolidateDialogIssue issue) =>
+        issue.Kind switch
+        {
+            ConsolidateDialogIssueKind.InvalidSourceRange when !string.IsNullOrWhiteSpace(issue.InvalidPart) =>
+                UiText.Format("Consolidate_EnterValidSourceRangeWithPart", issue.InvalidPart),
+            ConsolidateDialogIssueKind.MismatchedSourceSizes => UiText.Get("Consolidate_SourceRangesMustBeSameSize"),
+            ConsolidateDialogIssueKind.InvalidDestinationCell => UiText.Get("Consolidate_EnterValidDestinationCell"),
+            _ => UiText.Get("Consolidate_EnterAtLeastOneValidSourceRange")
         };
 }
