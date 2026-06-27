@@ -12,32 +12,24 @@ public sealed class PresentationPortabilityGuardTests
 {
     private const RegexOptions Options = RegexOptions.Compiled | RegexOptions.CultureInvariant;
 
-    private static readonly HashSet<string> SourceExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".cs",
-        ".csproj",
-        ".props",
-        ".targets"
-    };
-
-    private static readonly (string Description, Regex Pattern)[] ForbiddenPatterns =
+    private static readonly PortableBoundaryPattern[] ForbiddenPatterns =
     [
-        ("System.Windows namespace", new(@"(?<![\w.])System\.Windows(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("System.Printing namespace", new(@"(?<![\w.])System\.Printing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("Microsoft.Win32 namespace", new(@"(?<![\w.])Microsoft\.Win32(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("WinRT Windows namespace", new(@"(?<![\w.])Windows\.[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?![\w.])", Options)),
-        ("Avalonia dependency", new(@"(?<![\w.])Avalonia(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("AppKit namespace", new(@"(?<![\w.])AppKit(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
-        ("FreeX.App.Host dependency", new(@"(?<![\w.])FreeX\.App\.Host(?![\w.])", Options)),
-        ("FreeX.App.UI dependency", new(@"(?<![\w.])FreeX\.App\.UI(?![\w.])", Options)),
-        ("FreeX.App.Avalonia dependency", new(@"(?<![\w.])FreeX\.App\.Avalonia(?![\w.])", Options)),
-        ("UseWPF marker", new(@"(?<![\w])UseWPF(?![\w])", Options | RegexOptions.IgnoreCase)),
-        ("UseWindowsForms marker", new(@"(?<![\w])UseWindowsForms(?![\w])", Options | RegexOptions.IgnoreCase)),
-        ("Windows-targeted framework", new(@"(?<![\w.-])net\d+(?:\.\d+)?-windows(?:\d+(?:\.\d+)*)?(?![\w.-])", Options | RegexOptions.IgnoreCase)),
-        ("WPF assembly reference", new(@"(?<![\w.])(?:PresentationCore|PresentationFramework|System\.Xaml|WindowsBase)(?![\w.])", Options)),
-        ("ReachFramework assembly reference", new(@"(?<![\w.])ReachFramework(?![\w.])", Options)),
-        ("System.Drawing dependency", new(@"(?<![\w.])System\.Drawing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options))
+        new("System.Windows namespace", new(@"(?<![\w.])System\.Windows(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("System.Printing namespace", new(@"(?<![\w.])System\.Printing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("Microsoft.Win32 namespace", new(@"(?<![\w.])Microsoft\.Win32(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("WinRT Windows namespace", new(@"(?<![\w.])Windows\.[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?![\w.])", Options)),
+        new("Avalonia dependency", new(@"(?<![\w.])Avalonia(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("AppKit namespace", new(@"(?<![\w.])AppKit(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new("FreeX.App.Host dependency", new(@"(?<![\w.])FreeX\.App\.Host(?![\w.])", Options)),
+        new("FreeX.App.UI dependency", new(@"(?<![\w.])FreeX\.App\.UI(?![\w.])", Options)),
+        new("FreeX.App.Avalonia dependency", new(@"(?<![\w.])FreeX\.App\.Avalonia(?![\w.])", Options)),
+        new("UseWPF marker", new(@"(?<![\w])UseWPF(?![\w])", Options | RegexOptions.IgnoreCase)),
+        new("UseWindowsForms marker", new(@"(?<![\w])UseWindowsForms(?![\w])", Options | RegexOptions.IgnoreCase)),
+        new("Windows-targeted framework", new(@"(?<![\w.-])net\d+(?:\.\d+)?-windows(?:\d+(?:\.\d+)*)?(?![\w.-])", Options | RegexOptions.IgnoreCase)),
+        new("WPF assembly reference", new(@"(?<![\w.])(?:PresentationCore|PresentationFramework|System\.Xaml|WindowsBase)(?![\w.])", Options)),
+        new("ReachFramework assembly reference", new(@"(?<![\w.])ReachFramework(?![\w.])", Options)),
+        new("System.Drawing dependency", new(@"(?<![\w.])System\.Drawing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options))
     ];
 
     [Fact]
@@ -45,11 +37,7 @@ public sealed class PresentationPortabilityGuardTests
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
 
-        var violations = Directory.EnumerateFiles(presentationRoot, "*", SearchOption.AllDirectories)
-            .Where(IsPortableSourceFile)
-            .SelectMany(FindViolations)
-            .OrderBy(v => v.RelativePath, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(v => v.LineNumber)
+        var violations = PortableBoundaryGuard.FindSourceViolations(presentationRoot, presentationRoot, ForbiddenPatterns)
             .Select(v => v.ToString())
             .ToArray();
 
@@ -137,35 +125,5 @@ public sealed class PresentationPortabilityGuardTests
             .NotContain("public enum PageBreakDialogAction")
             .And
             .NotContain("public sealed record PageBreakDialogResult");
-    }
-
-    private static bool IsPortableSourceFile(string path)
-    {
-        if (!SourceExtensions.Contains(Path.GetExtension(path)))
-            return false;
-
-        var segments = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return !segments.Contains("bin", StringComparer.OrdinalIgnoreCase)
-            && !segments.Contains("obj", StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static IEnumerable<Violation> FindViolations(string path)
-    {
-        var relativePath = Path.GetFileName(path);
-        var lineNumber = 0;
-        foreach (var line in File.ReadLines(path))
-        {
-            lineNumber++;
-            foreach (var (description, pattern) in ForbiddenPatterns)
-            {
-                if (pattern.IsMatch(line))
-                    yield return new Violation(relativePath, lineNumber, description, line.Trim());
-            }
-        }
-    }
-
-    private readonly record struct Violation(string RelativePath, int LineNumber, string Description, string Source)
-    {
-        public override string ToString() => $"{RelativePath}:{LineNumber}: {Description}: {Source}";
     }
 }
