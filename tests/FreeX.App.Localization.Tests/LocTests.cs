@@ -1,5 +1,6 @@
 using System.Globalization;
 using FluentAssertions;
+using Free.Shared.Localization;
 using FreeX.App.Localization;
 using Xunit;
 

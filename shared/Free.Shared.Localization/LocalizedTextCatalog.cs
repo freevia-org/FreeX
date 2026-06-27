@@ -1,9 +1,8 @@
 using System.Collections;
 using System.Globalization;
 using System.Resources;
-using Free.Shared.Localization;
 
-namespace FreeX.App.Localization;
+namespace Free.Shared.Localization;
 
 /// <summary>
 /// Shared resource lookup and pseudo-localization behavior for app-specific UI text catalogs.

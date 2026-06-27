@@ -1,4 +1,5 @@
 using System.Resources;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Localization;
 

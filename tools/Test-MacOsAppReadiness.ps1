@@ -14,7 +14,8 @@ param(
         "shared\Free.Shared.IO",
         "shared\Free.Shared.Pdf",
         "shared\Free.Shared.Pdf.Skia",
-        "shared\Free.Shared.Ribbon"
+        "shared\Free.Shared.Ribbon",
+        "shared\Free.Shared.Shell.Avalonia"
     )
 )
 
@@ -420,6 +421,7 @@ function Test-AvaloniaProject {
         "Free.Shared.Pdf",
         "Free.Shared.Pdf.Skia",
         "Free.Shared.Ribbon",
+        "Free.Shared.Shell.Avalonia",
         "Free.Shared.Shell",
         "FreeX.App.Localization",
         "FreeX.App.Presentation",
@@ -1157,7 +1159,9 @@ function Test-SourceWiring {
                 "private readonly ScrollBar _verticalWorksheetScrollBar = new();",
                 "private readonly ScrollBar _horizontalWorksheetScrollBar = new();",
                 "private bool _isUpdatingWorksheetScrollBars;",
-                "root.Children.Add(BuildWorksheetViewportChrome());",
+                "SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(",
+                "WorkArea: BuildWorkbookWorkArea(),",
+                "workArea.Children.Add(BuildWorksheetViewportChrome());",
                 "_sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;",
                 "_sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;",
                 "_verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;",

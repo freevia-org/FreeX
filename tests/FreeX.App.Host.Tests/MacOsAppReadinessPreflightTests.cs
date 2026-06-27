@@ -1976,7 +1976,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 private readonly ScrollBar _verticalWorksheetScrollBar = new();
                 private readonly ScrollBar _horizontalWorksheetScrollBar = new();
                 private bool _isUpdatingWorksheetScrollBars;
-                root.Children.Add(BuildWorksheetViewportChrome());
+                SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+                WorkArea: BuildWorkbookWorkArea(),
+                workArea.Children.Add(BuildWorksheetViewportChrome());
                 _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
                 _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
                 _verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
