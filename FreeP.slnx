@@ -7,6 +7,7 @@
     <Project Path="shared/Free.Shared.Ribbon/Free.Shared.Ribbon.csproj" />
     <Project Path="shared/Free.Shared.Ribbon.Wpf/Free.Shared.Ribbon.Wpf.csproj" />
     <Project Path="shared/Free.Shared.Shell/Free.Shared.Shell.csproj" />
+    <Project Path="shared/Free.Shared.Shell.Avalonia/Free.Shared.Shell.Avalonia.csproj" />
     <Project Path="shared/Free.Shared.Shell.Wpf/Free.Shared.Shell.Wpf.csproj" />
   </Folder>
   <Folder Name="/freep/">
@@ -14,6 +15,8 @@
     <Project Path="freep/FreeP.Core.IO/FreeP.Core.IO.csproj" />
     <Project Path="freep/FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
     <Project Path="freep/FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
+    <Project Path="freep/FreeP.App.Rendering.Avalonia/FreeP.App.Rendering.Avalonia.csproj" />
+    <Project Path="freep/FreeP.App.Rendering.Avalonia.Tests/FreeP.App.Rendering.Avalonia.Tests.csproj" />
     <Project Path="freep/FreeP.App.Host/FreeP.App.Host.csproj" />
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
     <Project Path="freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj" />

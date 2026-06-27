@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Themes.Fluent;
 using Free.Shared.AppServices;
@@ -89,6 +90,44 @@ public sealed class MainWindowHeadlessTests
 
         if (!ran) return;
         hasToolbar.Should().BeTrue("the ribbon must be built and wired during construction");
+    }
+
+    [Fact]
+    public async Task MainWindow_content_uses_shared_client_frame_shape()
+    {
+        int childCount = -1;
+        int bottomDockedCount = -1;
+        int topDockedCount = -1;
+        var lastChildFill = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var root = window.Content.Should().BeOfType<DockPanel>().Subject;
+            childCount = root.Children.Count;
+            bottomDockedCount = root.Children.Count(child => DockPanel.GetDock(child) == Dock.Bottom);
+            topDockedCount = root.Children.Count(child => DockPanel.GetDock(child) == Dock.Top);
+            lastChildFill = root.LastChildFill;
+        });
+
+        if (!ran) return;
+        childCount.Should().Be(3, "FreeP contributes ribbon, status, and workarea to the shared frame");
+        topDockedCount.Should().Be(1, "the shared frame keeps the ribbon docked at the top");
+        bottomDockedCount.Should().Be(1, "the shared frame keeps the status bar docked at the bottom");
+        lastChildFill.Should().BeTrue("the workarea should fill the remaining client frame");
+    }
+
+    [Fact]
+    public void MainWindow_sources_reference_the_shared_avalonia_shell_frame()
+    {
+        var project = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"));
+        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+
+        var mainWindow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        mainWindow.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(");
+        mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
+        mainWindow.Should().Contain("WorkArea: BuildBody()");
     }
 
     [Fact]
@@ -299,5 +338,21 @@ public sealed class MainWindowHeadlessTests
         {
             if (File.Exists(path)) File.Delete(path);
         }
+    }
+
+    private static string FindRepoFile(params string[] parts) =>
+        Path.Combine(FindRepoRoot(), Path.Combine(parts));
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
     }
 }

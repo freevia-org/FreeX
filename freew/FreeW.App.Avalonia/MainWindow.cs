@@ -10,6 +10,7 @@ using Avalonia.Platform.Storage;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
@@ -84,26 +85,14 @@ public sealed class MainWindow : Window
         _reviewingPane = new ReviewingPane(_editor);
         _revealPane = new RevealFormattingPane(_editor);
 
-        var root = new DockPanel();
-
         var ribbon = BuildRibbon();
-        DockPanel.SetDock(ribbon, Dock.Top);
-        root.Children.Add(ribbon);
-
-        var statusBar = new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            Height = 26,
-            Child = BuildStatusContent(),
-        };
-        DockPanel.SetDock(statusBar, Dock.Bottom);
-        root.Children.Add(statusBar);
-
+        var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
+            Background: Brushes.White,
+            LeftContent: _status,
+            RightItems: BuildStatusRightItems(),
+            BorderBrush: new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            BorderThickness: new Thickness(0, 1, 0, 0))).Root;
         var findBar = BuildFindBar();
-        DockPanel.SetDock(findBar, Dock.Bottom);
-        root.Children.Add(findBar);
 
         _scroller = new ScrollViewer
         {
@@ -114,18 +103,20 @@ public sealed class MainWindow : Window
         };
         _navPane.ScrollerRef = _scroller;
 
+        var workArea = new DockPanel { LastChildFill = true };
+
         // Nav pane docked left; reviewing pane docked right; workspace fills the remainder.
         DockPanel.SetDock(_navPane, Dock.Left);
-        root.Children.Add(_navPane);
+        workArea.Children.Add(_navPane);
 
         DockPanel.SetDock(_reviewingPane, Dock.Right);
-        root.Children.Add(_reviewingPane);
+        workArea.Children.Add(_reviewingPane);
 
         DockPanel.SetDock(_revealPane, Dock.Right);
-        root.Children.Add(_revealPane);
+        workArea.Children.Add(_revealPane);
 
         var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
-        root.Children.Add(workspace);
+        workArea.Children.Add(workspace);
 
         _editor.DocumentChanged += OnEditorDocumentChanged;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
@@ -162,7 +153,13 @@ public sealed class MainWindow : Window
         // and let the async flow re-close if the user saves or discards.
         Closing += OnWindowClosing;
 
-        Content = root;
+        var frame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Ribbon: ribbon,
+            WorkArea: workArea,
+            StatusBar: statusBar,
+            BottomPanelsAboveStatus: [findBar]));
+
+        Content = frame.Root;
         UpdateStatus();
     }
 
@@ -592,15 +589,9 @@ public sealed class MainWindow : Window
         return _findBar;
     }
 
-    private Control BuildStatusContent()
+    private IReadOnlyList<Control> BuildStatusRightItems()
     {
         _zoomLabel.Text = "100%";
-        var panel = new DockPanel();
-
-        // Right side: zoom label, then view-mode buttons (right-to-left in DockPanel).
-        DockPanel.SetDock(_zoomLabel, Dock.Right);
-        panel.Children.Add(_zoomLabel);
-
         var viewModeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -608,12 +599,7 @@ public sealed class MainWindow : Window
             Margin = new Thickness(4, 0),
             Children = { _btnPrintLayout, _btnWebLayout, _btnDraftView },
         };
-        DockPanel.SetDock(viewModeRow, Dock.Right);
-        panel.Children.Add(viewModeRow);
-
-        // Left side: status text.
-        panel.Children.Add(_status);
-        return panel;
+        return [_zoomLabel, viewModeRow];
     }
 
     private static Button MakeViewModeButton(string label) => new()
