@@ -23,30 +23,29 @@ public static class TextToColumnsWizardPlanner
 {
     public static TextToColumnsWizardStepPlan CreateStepPlan(int step, bool fixedWidth)
     {
-        var normalizedStep = Math.Clamp(step, 1, 3);
+        var surface = TextToColumnsWizardSurfacePlanner.CreateStepPlan(step, fixedWidth);
+        var normalizedStep = surface.Step;
         return new TextToColumnsWizardStepPlan(
             Header: UiText.Format("TextToColumns_TextWizardStepOf3", normalizedStep),
-            Instruction: normalizedStep switch
-            {
-                1 => UiText.Get("TextToColumns_ChooseFileTypeInstruction"),
-                2 => UiText.Get("TextToColumns_ChooseDelimitersInstruction"),
-                _ => UiText.Get("TextToColumns_SelectColumnFormatAndDestinationInstruction")
-            },
-            ShowOriginalDataTypePanel: normalizedStep == 1,
-            ShowDelimiterPanel: normalizedStep == 2 && !fixedWidth,
-            ShowFixedWidthPanel: normalizedStep == 2 && fixedWidth,
-            ShowColumnFormatPanel: normalizedStep == 3,
-            ShowDestinationPanel: normalizedStep == 3,
-            BackEnabled: normalizedStep > 1,
-            NextEnabled: normalizedStep < 3,
-            NextDefault: normalizedStep < 3,
-            FinishDefault: normalizedStep == 3);
+            Instruction: UiText.Get(surface.InstructionKey),
+            ShowOriginalDataTypePanel: surface.ShowOriginalDataTypePanel,
+            ShowDelimiterPanel: surface.ShowDelimiterPanel,
+            ShowFixedWidthPanel: surface.ShowFixedWidthPanel,
+            ShowColumnFormatPanel: surface.ShowColumnFormatPanel,
+            ShowDestinationPanel: surface.ShowDestinationPanel,
+            BackEnabled: surface.BackEnabled,
+            NextEnabled: surface.NextEnabled,
+            NextDefault: surface.NextDefault,
+            FinishDefault: surface.FinishDefault);
     }
 
-    public static TextToColumnsWizardModePlan CreateModePlan(bool fixedWidth, bool otherDelimiterSelected) =>
-        new(
-            DelimitedControlsEnabled: !fixedWidth,
-            CustomDelimiterEnabled: !fixedWidth && otherDelimiterSelected,
-            FixedWidthControlsEnabled: fixedWidth,
-            FixedWidthRulerOpacity: fixedWidth ? 1.0 : 0.55);
+    public static TextToColumnsWizardModePlan CreateModePlan(bool fixedWidth, bool otherDelimiterSelected)
+    {
+        var surface = TextToColumnsWizardSurfacePlanner.CreateModePlan(fixedWidth, otherDelimiterSelected);
+        return new TextToColumnsWizardModePlan(
+            surface.DelimitedControlsEnabled,
+            surface.CustomDelimiterEnabled,
+            surface.FixedWidthControlsEnabled,
+            surface.FixedWidthRulerOpacity);
+    }
 }
