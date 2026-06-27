@@ -20,6 +20,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using System.Globalization;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
@@ -1821,22 +1822,22 @@ public sealed partial class MainWindow : Window
     {
         _newWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewWorkbook");
         _newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);
-        _newWorkbookMenuItem.Click += async (_, _) => await CreateNewWorkbookAsync();
+        _newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
 
         _openMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Open");
         _openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);
-        _openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();
+        _openMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
 
         _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
 
         _saveMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Save");
         _saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);
-        _saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();
+        _saveMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save);
 
         _saveAsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_SaveAs");
         _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
-        _saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();
+        _saveAsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);
 
         _exportPdfMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ExportPdf");
         _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
@@ -1853,7 +1854,7 @@ public sealed partial class MainWindow : Window
         _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
 
         _shareWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ShareWorkbook");
-        _shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();
+        _shareWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share);
 
         _workbookStatisticsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_WorkbookStatistics");
         _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
@@ -1863,18 +1864,18 @@ public sealed partial class MainWindow : Window
         _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
 
         _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
-        _backstageExportMenuItem.Click += (_, _) => ShowBackstageExport();
+        _backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);
 
         _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
-        _backstageAccountMenuItem.Click += (_, _) => ShowBackstageAccount();
+        _backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);
 
         _optionsMenuItem.Header = UiText.Get("Options_Title");
         _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
-        _optionsMenuItem.Click += (_, _) => ShowOptions();
+        _optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);
 
         _closeWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_CloseWorkbook");
         _closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);
-        _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
+        _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
 
         _newSheetMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewSheet");
         _newSheetMenuItem.Gesture = new KeyGesture(Key.F11, KeyModifiers.Shift);

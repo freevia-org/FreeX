@@ -153,7 +153,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
         source.Should().Contain("_shareWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_ShareWorkbook\");");
-        source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ShareWorkbookAsync();");
+        source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share);");
         source.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
         source.Should().Contain("_shareWorkbookMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_ShareWorkbook\"), requireGesture: false)");
@@ -470,10 +470,11 @@ public sealed class AvaloniaShellSourceTests
         var menuSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var optionsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
 
-        // Wired into the native File menu with an Options entry that calls ShowOptions.
+        // Wired into the native File menu with an Options entry that routes through the shared
+        // Backstage workflow planner before the platform executor calls ShowOptions.
         menuSource.Should().Contain("private readonly NativeMenuItem _optionsMenuItem = new();");
         menuSource.Should().Contain("_optionsMenuItem.Header = UiText.Get(\"Options_Title\");");
-        menuSource.Should().Contain("_optionsMenuItem.Click += (_, _) => ShowOptions();");
+        menuSource.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);");
         menuSource.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
 
         // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
@@ -501,9 +502,11 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.BackstageWorkflow.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("ConfigureNativeMenu();");
+        source.Should().Contain("using FreeX.App.Presentation.Backstage;");
         source.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
         source.Should().Contain("private readonly NativeMenuItem _newWorkbookMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _openMenuItem = new();");
@@ -555,21 +558,37 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _legalNoticesMenuItem = new();");
         source.Should().Contain("_newWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_NewWorkbook\");");
         source.Should().Contain("_newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);");
-        source.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await CreateNewWorkbookAsync();");
+        source.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
         source.Should().Contain("_openMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_Open\");");
         source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
-        source.Should().Contain("_openMenuItem.Click += async (_, _) => await OpenWorkbookAsync();");
+        source.Should().Contain("_openMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);");
         source.Should().Contain("_openRecentMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_OpenRecent\");");
         source.Should().Contain("_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);");
         source.Should().Contain("_saveMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_Save\");");
         source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
-        source.Should().Contain("_saveMenuItem.Click += async (_, _) => await SaveCurrentWorkbookAsync();");
+        source.Should().Contain("_saveMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save);");
         source.Should().Contain("_saveAsMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_SaveAs\");");
         source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
-        source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await SaveWorkbookAsAsync();");
+        source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);");
         source.Should().Contain("_closeWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_CloseWorkbook\");");
         source.Should().Contain("_closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);");
-        source.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
+        source.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);");
+        source.Should().Contain("_backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);");
+        source.Should().Contain("_backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);");
+        source.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);");
+        workflowSource.Should().Contain("private async Task ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId command)");
+        workflowSource.Should().Contain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(command)");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.NewWorkbook:");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.OpenWorkbook:");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.ShareWorkbook:");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.SaveWorkbook:");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.SaveWorkbookAs:");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.ExportWorkbook:");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.CloseWorkbook:");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.Account:");
+        workflowSource.Should().Contain("case FreeXBackstageCommandWorkflowKind.Options:");
+        workflowSource.Should().Contain("await ShowBackstageExportDialogAsync();");
+        workflowSource.Should().Contain("await ShowBackstageAccountDialogAsync();");
         source.Should().Contain("_undoMenuItem.Header = \"Undo\";");
         source.Should().Contain("_undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);");
         source.Should().Contain("_undoMenuItem.Click += (_, _) => UndoLastEdit();");
@@ -2038,6 +2057,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var presetSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationPresetPlanner.cs"));
+        var dialogPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Dialogs", "DataValidationDialogPlanner.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _dataValidationMenuItem = new();");
@@ -2064,9 +2084,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateDataValidationTypeChoices()");
         source.Should().Contain("DataValidationPresetPlanner.GetRuleTypeMetadata()");
         source.Should().Contain(".Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)");
-        source.Should().Contain("CreateDefaultDataValidationRule(initialType, _session.SelectedRange)");
-        source.Should().Contain("DataValidationPresetPlanner.CreateDefaultRule(type, _session.SelectedRange)");
-        source.Should().Contain("DataValidationPresetPlanner.RequiresSecondFormula(type, op)");
+        source.Should().Contain("DataValidationDialogPlanner.CreateDefaultRule(initialType, _session.SelectedRange)");
+        source.Should().Contain("DataValidationDialogPlanner.CreateDefaultRule(type, _session.SelectedRange)");
+        source.Should().Contain("DataValidationDialogPlanner.DefaultOperatorForType(SelectedType())");
+        source.Should().Contain("DataValidationDialogPlanner.CreateVisibilityPlan(");
+        source.Should().Contain("DataValidationDialogPlanner.ValidateCriteria(");
+        source.Should().Contain("DataValidationDialogPlanner.CreateRule(new DataValidationRuleEditorInput");
+        source.Should().NotContain("CreateDefaultDataValidationRule");
+        source.Should().NotContain("GetDefaultDataValidationOperator");
+        source.Should().NotContain("TryValidateDataValidationCriteria");
 
         sessionSource.Should().Contain("public WorkbookDataValidationMutationResult ApplyDataValidationToSelectedRange(DataValidation rule)");
         sessionSource.Should().Contain("public WorkbookDataValidationMutationResult ClearSelectedRangeDataValidation()");
@@ -2074,8 +2100,10 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("new ClearDataValidationCommand(sheetId, sheetRange)");
 
         presetSource.Should().Contain("public static IReadOnlyList<DataValidationRuleTypeMetadata> GetRuleTypeMetadata()");
-        presetSource.Should().Contain("public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)");
         presetSource.Should().Contain("public static DataValidationSelectionSummary CreateSelectionSummary(");
+        dialogPlannerSource.Should().Contain("public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)");
+        dialogPlannerSource.Should().Contain("public static DvValidationResult ValidateCriteria(");
+        dialogPlannerSource.Should().Contain("public static DataValidation CreateRule(DataValidationRuleEditorInput input)");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
