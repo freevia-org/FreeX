@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -21,15 +22,13 @@ public static class SparklineDialogPlanner
     public static SparklineDialogValidationResult ValidateInputs(
         string dataRangeText,
         string locationText,
-        SheetId sheetId)
+        SheetId sheetId) =>
+        SparklinePlanner.ValidateInsert(dataRangeText, locationText, sheetId, out _, out _) switch
     {
-        if (!SparklineInputParser.TryParseDataRange(dataRangeText, sheetId, out _))
-            return SparklineDialogValidationResult.InvalidDataRange;
-
-        return SparklineInputParser.TryParseLocation(locationText, sheetId, out _)
-            ? SparklineDialogValidationResult.Valid
-            : SparklineDialogValidationResult.InvalidLocation;
-    }
+            SparklineInputValidation.InvalidDataRange => SparklineDialogValidationResult.InvalidDataRange,
+            SparklineInputValidation.InvalidLocation => SparklineDialogValidationResult.InvalidLocation,
+            _ => SparklineDialogValidationResult.Valid
+        };
 }
 
 public enum SparklineDialogValidationResult
