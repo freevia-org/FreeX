@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.Core.IO;
@@ -55,6 +57,35 @@ public static class PptxPackageWriter
     private const string DiagramQuickStyleRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
     private const string DiagramColorsRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
     private const string DiagramDrawingRelType   = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
+
+    private static readonly HashSet<string> RegeneratedRelationshipTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        OfficeDocRelType,
+        CorePropsRelType,
+        SlideRelType,
+        SlideMasterRelType,
+        SlideLayoutRelType,
+        ThemeRelType,
+        ImageRelType,
+        PresPropsRelType,
+        ViewPropsRelType,
+        TableStylesRelType,
+        ChartRelType,
+        NotesSlideRelType,
+        NotesMasterRelType,
+        HyperlinkRelType,
+        CommentsRelType,
+        CommentAuthorsRelType,
+        VideoRelType,
+        AudioRelType,
+        OleObjectRelType,
+        PackageRelType,
+        DiagramDataRelType,
+        DiagramLayoutRelType,
+        DiagramQuickStyleRelType,
+        DiagramColorsRelType,
+        DiagramDrawingRelType,
+    };
 
     // ── Content types ─────────────────────────────────────────────────────────────
     private const string PresentationCT  = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
@@ -209,13 +240,15 @@ public static class PptxPackageWriter
         }
 
         // --- 1. [Content_Types].xml ---
-        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions, prvPartCtRemaps);
+        var packageSnapshot = presentation.PackageSnapshot;
+        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions, prvPartCtRemaps, packageSnapshot);
         WriteEntry(archive, "[Content_Types].xml", ctXml);
 
         // --- 2. Root rels ---
         var rootRels = new RelsDoc();
         rootRels.Add("rId1", OfficeDocRelType, "ppt/presentation.xml");
         rootRels.Add("rId2", CorePropsRelType, "docProps/core.xml");
+        MergePreservedRelationships(rootRels, packageSnapshot, "_rels/.rels", string.Empty);
         WriteEntry(archive, "_rels/.rels", rootRels.ToXDocument());
 
         // --- 3. Core properties ---
@@ -262,7 +295,7 @@ public static class PptxPackageWriter
             // Layout rels: -> master
             var layoutRels = new RelsDoc();
             layoutRels.Add("rId1", SlideMasterRelType, $"../{masterPath.Replace("ppt/", "")}");
-            WriteRels(archive, layoutPath, layoutRels);
+            WriteRels(archive, layoutPath, layoutRels, packageSnapshot);
         }
 
         // --- 7. Masters ---
@@ -296,7 +329,7 @@ public static class PptxPackageWriter
                 var relTarget = $"../slideLayouts/{layoutPath.Split('/').Last()}";
                 masterRels.Add(relId, SlideLayoutRelType, relTarget);
             }
-            WriteRels(archive, masterPath, masterRels);
+            WriteRels(archive, masterPath, masterRels, packageSnapshot);
         }
 
         // --- 8. Slides ---
@@ -318,7 +351,7 @@ public static class PptxPackageWriter
             // notesMaster rels: -> theme (reuse the same theme1.xml)
             var nmRels = new RelsDoc();
             nmRels.Add("rId1", ThemeRelType, "../theme/theme1.xml");
-            WriteRels(archive, "ppt/notesMasters/notesMaster1.xml", nmRels);
+            WriteRels(archive, "ppt/notesMasters/notesMaster1.xml", nmRels, packageSnapshot);
         }
 
         int globalChartIndex = 1; // monotonically increasing across all slides
@@ -449,7 +482,7 @@ public static class PptxPackageWriter
                 var notesRels = new RelsDoc();
                 notesRels.Add("rId1", SlideRelType,       $"../slides/slide{si + 1}.xml");
                 notesRels.Add("rId2", NotesMasterRelType, "../notesMasters/notesMaster1.xml");
-                WriteRels(archive, notesPath, notesRels);
+                WriteRels(archive, notesPath, notesRels, packageSnapshot);
 
                 slideRels.Add(notesRelId, NotesSlideRelType, $"../notesSlides/notesSlide{si + 1}.xml");
             }
@@ -463,7 +496,7 @@ public static class PptxPackageWriter
                 slideRels.Add(cmRelId, CommentsRelType, $"../comments/comment{si + 1}.xml");
             }
 
-            WriteRels(archive, slidePath, slideRels);
+            WriteRels(archive, slidePath, slideRels, packageSnapshot);
 
             presRels.Add(slideRelId, SlideRelType, $"slides/slide{si + 1}.xml");
             sldIdElements.Add(new XElement(P + "sldId",
@@ -495,7 +528,7 @@ public static class PptxPackageWriter
         if (hasSomeComments)
             presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", CommentAuthorsRelType, "commentAuthors.xml");
 
-        WriteRels(archive, "ppt/presentation.xml", presRels);
+        WriteRels(archive, "ppt/presentation.xml", presRels, packageSnapshot);
 
         // --- 10. presentation.xml (last, so sldIdElements are complete) ---
         var masterRelIds = Enumerable.Range(0, masters.Count)
@@ -504,6 +537,8 @@ public static class PptxPackageWriter
 
         WriteEntry(archive, "ppt/presentation.xml",
             BuildPresentationXml(presentation, sldIdElements, masterRelIds));
+
+        CopyPreservedPackageEntries(archive, packageSnapshot);
     }
 
     // ── [Content_Types].xml ───────────────────────────────────────────────────────
@@ -538,7 +573,8 @@ public static class PptxPackageWriter
     private static XDocument BuildContentTypesXml(
         Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,
         HashSet<string> mediaExtensions,
-        Dictionary<string, string>? prvPartPathRemaps = null)
+        Dictionary<string, string>? prvPartPathRemaps = null,
+        PptxPackageSnapshot? packageSnapshot = null)
     {
         var CT = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
 
@@ -690,11 +726,14 @@ public static class PptxPackageWriter
             }
         }
 
-        return new XDocument(
+        var doc = new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(CT + "Types",
                 defaults,
                 overrides));
+
+        MergePreservedContentTypes(doc, packageSnapshot);
+        return doc;
     }
 
     private static XElement Override(XNamespace ct, string partName, string contentType) =>
@@ -3781,7 +3820,7 @@ public static class PptxPackageWriter
         doc.Save(writer);
     }
 
-    private static void WriteRels(ZipArchive archive, string partPath, RelsDoc rels)
+    private static void WriteRels(ZipArchive archive, string partPath, RelsDoc rels, PptxPackageSnapshot? packageSnapshot = null)
     {
         var dir = GetDirectory(partPath);
         var file = partPath[(partPath.LastIndexOf('/') + 1)..];
@@ -3789,7 +3828,205 @@ public static class PptxPackageWriter
             ? $"_rels/{file}.rels"
             : $"{dir}/_rels/{file}.rels";
 
+        MergePreservedRelationships(rels, packageSnapshot, relsPath, partPath);
         WriteEntry(archive, relsPath, rels.ToXDocument());
+    }
+
+    private static void MergePreservedContentTypes(XDocument contentTypes, PptxPackageSnapshot? packageSnapshot)
+    {
+        if (packageSnapshot is null || !packageSnapshot.TryGetEntry("[Content_Types].xml", out var bytes))
+            return;
+
+        XDocument sourceTypes;
+        try
+        {
+            using var stream = new MemoryStream(bytes);
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            sourceTypes = XDocument.Load(reader);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (contentTypes.Root is null || sourceTypes.Root is null)
+            return;
+
+        var existingDefaults = new HashSet<string>(
+            contentTypes.Root.Elements(contentTypes.Root.Name.Namespace + "Default")
+                .Select(e => e.Attribute("Extension")?.Value)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v => v!),
+            StringComparer.OrdinalIgnoreCase);
+        var existingOverrides = new HashSet<string>(
+            contentTypes.Root.Elements(contentTypes.Root.Name.Namespace + "Override")
+                .Select(e => e.Attribute("PartName")?.Value)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v => v!),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceDefault in sourceTypes.Root.Elements(sourceTypes.Root.Name.Namespace + "Default"))
+        {
+            var extension = sourceDefault.Attribute("Extension")?.Value;
+            var contentType = sourceDefault.Attribute("ContentType")?.Value;
+            if (string.IsNullOrWhiteSpace(extension) || string.IsNullOrWhiteSpace(contentType))
+                continue;
+            if (!existingDefaults.Add(extension))
+                continue;
+
+            contentTypes.Root.Add(new XElement(contentTypes.Root.Name.Namespace + "Default",
+                new XAttribute("Extension", extension),
+                new XAttribute("ContentType", contentType)));
+        }
+
+        foreach (var sourceOverride in sourceTypes.Root.Elements(sourceTypes.Root.Name.Namespace + "Override"))
+        {
+            var partName = sourceOverride.Attribute("PartName")?.Value;
+            var contentType = sourceOverride.Attribute("ContentType")?.Value;
+            if (string.IsNullOrWhiteSpace(partName) || string.IsNullOrWhiteSpace(contentType))
+                continue;
+            if (IsWriterOwnedPath(partName))
+                continue;
+            if (!existingOverrides.Add(partName))
+                continue;
+
+            contentTypes.Root.Add(new XElement(contentTypes.Root.Name.Namespace + "Override",
+                new XAttribute("PartName", partName),
+                new XAttribute("ContentType", contentType)));
+        }
+    }
+
+    private static void MergePreservedRelationships(
+        RelsDoc rels,
+        PptxPackageSnapshot? packageSnapshot,
+        string relsPath,
+        string sourcePartPath)
+    {
+        if (packageSnapshot is null || !packageSnapshot.TryGetEntry(relsPath, out var bytes))
+            return;
+
+        XDocument sourceRels;
+        try
+        {
+            using var stream = new MemoryStream(bytes);
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            sourceRels = XDocument.Load(reader);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (sourceRels.Root is null)
+            return;
+
+        foreach (var rel in sourceRels.Root.Elements(PkgRels + "Relationship"))
+        {
+            var id = rel.Attribute("Id")?.Value;
+            var type = rel.Attribute("Type")?.Value;
+            var target = rel.Attribute("Target")?.Value;
+            var targetMode = rel.Attribute("TargetMode")?.Value;
+            if (string.IsNullOrWhiteSpace(id) ||
+                string.IsNullOrWhiteSpace(type) ||
+                string.IsNullOrWhiteSpace(target))
+                continue;
+
+            var external = string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase);
+            if (IsWriterOwnedRelationship(sourcePartPath, type, target, external))
+                continue;
+
+            rels.AddUnique(id, type, target, external);
+        }
+    }
+
+    private static void CopyPreservedPackageEntries(ZipArchive archive, PptxPackageSnapshot? packageSnapshot)
+    {
+        if (packageSnapshot is null)
+            return;
+
+        var copied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (path, bytes) in packageSnapshot.Entries)
+        {
+            var normalizedPath = NormalizePackagePath(path);
+            if (copied.Contains(normalizedPath) || IsWriterOwnedPath(normalizedPath))
+                continue;
+
+            var entry = archive.CreateEntry(normalizedPath, CompressionLevel.Optimal);
+            using var stream = entry.Open();
+            stream.Write(bytes, 0, bytes.Length);
+            copied.Add(normalizedPath);
+        }
+    }
+
+    private static bool IsWriterOwnedRelationship(string sourcePartPath, string type, string target, bool external)
+    {
+        if (RegeneratedRelationshipTypes.Contains(type))
+            return true;
+
+        if (external)
+            return false;
+
+        var sourceDir = string.IsNullOrWhiteSpace(sourcePartPath) ? string.Empty : GetDirectory(sourcePartPath);
+        var targetPath = ResolvePackagePath(sourceDir, target);
+        return IsWriterOwnedPath(targetPath);
+    }
+
+    private static bool IsWriterOwnedPath(string path)
+    {
+        var normalized = NormalizePackagePath(path);
+
+        if (string.Equals(normalized, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "ppt/presentation.xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "ppt/_rels/presentation.xml.rels", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "ppt/presProps.xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "ppt/viewProps.xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "ppt/tableStyles.xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "ppt/commentAuthors.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return normalized.StartsWith("ppt/slides/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/slideLayouts/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/slideMasters/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/theme/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/charts/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/comments/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/notesSlides/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/notesMasters/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/embeddings/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("ppt/diagrams/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizePackagePath(string path) =>
+        path.Replace('\\', '/').TrimStart('/');
+
+    private static string ResolvePackagePath(string baseDir, string target)
+    {
+        if (target.StartsWith('/'))
+            return NormalizePackagePath(target);
+
+        var parts = (string.IsNullOrEmpty(baseDir) ? target : $"{baseDir}/{target}").Split('/');
+        var resolved = new List<string>();
+        foreach (var part in parts)
+        {
+            if (part.Length == 0 || part == ".")
+                continue;
+            if (part == "..")
+            {
+                if (resolved.Count > 0)
+                    resolved.RemoveAt(resolved.Count - 1);
+                continue;
+            }
+
+            resolved.Add(part);
+        }
+
+        return string.Join("/", resolved);
     }
 
     private static string GetDirectory(string path)
@@ -3948,6 +4185,36 @@ public static class PptxPackageWriter
 
         public void Add(string id, string type, string target, bool external = false)
             => _rels.Add((id, type, target, external));
+
+        public void AddUnique(string id, string type, string target, bool external = false)
+        {
+            if (_rels.Any(r =>
+                    string.Equals(r.type, type, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(r.target, target, StringComparison.OrdinalIgnoreCase) &&
+                    r.external == external))
+            {
+                return;
+            }
+
+            var uniqueId = id;
+            if (_rels.Any(r => string.Equals(r.id, uniqueId, StringComparison.OrdinalIgnoreCase)))
+                uniqueId = NextRelationshipId();
+
+            _rels.Add((uniqueId, type, target, external));
+        }
+
+        private string NextRelationshipId()
+        {
+            var counter = 1;
+            string id;
+            do
+            {
+                id = $"rIdPreserved{counter++}";
+            }
+            while (_rels.Any(r => string.Equals(r.id, id, StringComparison.OrdinalIgnoreCase)));
+
+            return id;
+        }
 
         public XDocument ToXDocument() =>
             new XDocument(

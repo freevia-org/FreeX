@@ -67,7 +67,10 @@ public static class PptxPackageReader
         ms.Position = 0;
 
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
-        return ReadArchive(archive);
+        var snapshot = CapturePackageSnapshot(archive);
+        var presentation = ReadArchive(archive);
+        presentation.PackageSnapshot = snapshot;
+        return presentation;
     }
 
     // ── Core archive reading ──────────────────────────────────────────────────────
@@ -229,6 +232,30 @@ public static class PptxPackageReader
         }
 
         return presentation;
+    }
+
+    private static PptxPackageSnapshot CapturePackageSnapshot(ZipArchive archive)
+    {
+        var entries = new List<KeyValuePair<string, byte[]>>();
+        foreach (var entry in archive.Entries)
+        {
+            if (string.IsNullOrWhiteSpace(entry.FullName) || entry.FullName.EndsWith('/'))
+                continue;
+
+            try
+            {
+                using var source = entry.Open();
+                using var ms = new MemoryStream();
+                source.CopyTo(ms);
+                entries.Add(new KeyValuePair<string, byte[]>(entry.FullName, ms.ToArray()));
+            }
+            catch
+            {
+                // Preserve-bag capture should not prevent semantic import.
+            }
+        }
+
+        return new PptxPackageSnapshot(entries);
     }
 
     // ── Core properties ──────────────────────────────────────────────────────────
