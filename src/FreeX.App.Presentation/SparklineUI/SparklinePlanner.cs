@@ -98,7 +98,8 @@ public static class SparklinePlanner
     /// <summary>
     /// Validates the Insert Sparkline inputs, returning the resolved data range + anchor cell when both
     /// parse. The data range must be a real range within the supported cell cap; the location must be a
-    /// single cell. Mirrors the Windows host's <c>SparklineInputParser</c> rules.
+    /// single cell. Uses the shared cell-reference parser so absolute A1 and R1C1 inputs behave
+    /// consistently across shells.
     /// </summary>
     public static SparklineInputValidation ValidateInsert(
         string dataRangeText,
@@ -117,6 +118,15 @@ public static class SparklinePlanner
             ? SparklineInputValidation.Valid
             : SparklineInputValidation.InvalidLocation;
     }
+
+    /// <summary>Maps toolbar / command identifiers to the core sparkline kind.</summary>
+    public static SparklineKind ParseKind(string? type) =>
+        (type ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "column" => SparklineKind.Column,
+            "winloss" => SparklineKind.WinLoss,
+            _ => SparklineKind.Line,
+        };
 
     /// <summary>Parses a sparkline data range, rejecting ranges over the supported cell cap.</summary>
     public static bool TryParseDataRange(string? input, SheetId sheetId, out GridRange range)

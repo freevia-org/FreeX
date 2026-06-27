@@ -48,6 +48,28 @@ public sealed class SparklinePlannerTests
             .Should().Be(SparklineInputValidation.InvalidLocation);
     }
 
+    [Theory]
+    [InlineData("$F$1", 1, 6)]
+    [InlineData("F$1", 1, 6)]
+    [InlineData("$F1", 1, 6)]
+    [InlineData("R1C6", 1, 6)]
+    public void ValidateInsert_AcceptsSharedCellReferenceForms(string locationText, uint row, uint column)
+    {
+        SparklinePlanner.ValidateInsert("A1:E1", locationText, Sheet, out _, out var location)
+            .Should().Be(SparklineInputValidation.Valid);
+        location.Should().Be(new CellAddress(Sheet, row, column));
+    }
+
+    [Theory]
+    [InlineData("column", SparklineKind.Column)]
+    [InlineData("winloss", SparklineKind.WinLoss)]
+    [InlineData("line", SparklineKind.Line)]
+    [InlineData("anything", SparklineKind.Line)]
+    public void ParseKind_MapsToolbarKindText(string input, SparklineKind expected)
+    {
+        SparklinePlanner.ParseKind(input).Should().Be(expected);
+    }
+
     [Fact]
     public void TryParseDataRange_RejectsOversizedRange()
     {

@@ -174,8 +174,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var method = ExtractMethodSource(insertSource, "private void InsertSparkline(");
 
         method.Should().Contain("new SparklineDialog(");
-        method.Should().Contain("SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange)");
-        method.Should().Contain("SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location)");
+        method.Should().Contain("SparklinePlanner.ParseKind(type)");
+        method.Should().Contain("SparklinePlanner.ValidateInsert(");
+        method.Should().Contain("SparklineInputValidation.InvalidDataRange");
+        method.Should().Contain("SparklineInputValidation.InvalidLocation");
+        method.Should().Contain("var kind = dialog.Result.Kind;");
+        method.Should().NotContain("SparklineInputParser");
         method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineInvalidDataRange\")");
         method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineInvalidLocation\")");
         method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineTitle\")");

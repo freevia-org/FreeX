@@ -11,9 +11,9 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void SparklineDialog_CreateResult_TrimsRangeAndLocation()
     {
-        SparklineDialogPlanner.CreateResult(" A1:E1 ", " F1 ", SparklineKindChoice.Column)
+        SparklineDialogPlanner.CreateResult(" A1:E1 ", " F1 ", SparklineKind.Column)
             .Should()
-            .Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Column));
+            .Be(new SparklineDialogResult("A1:E1", "F1", SparklineKind.Column));
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed partial class RemainingDialogTests
         StaTestRunner.Run(() =>
         {
             var requests = new List<SparklineRangeSelectionRequest>();
-            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line, requests.Add);
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKind.Line, requests.Add);
 
             DialogSourceTestSupport.ClickButton(GetField<Button>(dialog, "_dataRangePickerButton"));
             DialogSourceTestSupport.ClickButton(GetField<Button>(dialog, "_locationPickerButton"));
@@ -47,7 +47,7 @@ public sealed partial class RemainingDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line);
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKind.Line);
             try
             {
                 dialog.ApplyRangeSelection(SparklineRangeSelectionTarget.DataRange, "Sheet2!A1:D6");
@@ -68,7 +68,7 @@ public sealed partial class RemainingDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line, sheetId: SheetId.New());
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKind.Line, sheetId: SheetId.New());
             try
             {
                 dialog.Show();
@@ -76,7 +76,7 @@ public sealed partial class RemainingDialogTests
                 DialogSourceTestSupport.ClickButton(GetSparklineOkButton(dialog));
 
                 dialog.IsVisible.Should().BeFalse();
-                dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Line));
+                dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKind.Line));
             }
             finally
             {
@@ -91,14 +91,14 @@ public sealed partial class RemainingDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new SparklineDialog(" A1:E1 ", " F1 ", SparklineKindChoice.Column, sheetId: SheetId.New());
+            var dialog = new SparklineDialog(" A1:E1 ", " F1 ", SparklineKind.Column, sheetId: SheetId.New());
             dialog.Loaded += (_, _) =>
                 dialog.Dispatcher.BeginInvoke(
                     () => DialogSourceTestSupport.ClickButton(GetSparklineOkButton(dialog)),
                     DispatcherPriority.Background);
 
             dialog.ShowDialog().Should().BeTrue();
-            dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKindChoice.Column));
+            dialog.Result.Should().Be(new SparklineDialogResult("A1:E1", "F1", SparklineKind.Column));
         });
     }
 
@@ -168,7 +168,7 @@ public sealed partial class RemainingDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line);
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKind.Line);
             try
             {
                 dialog.SizeToContent.Should().Be(SizeToContent.Height);
@@ -194,9 +194,9 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void SparklineDialog_UsesExcelWinLossLabel()
     {
-        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
-        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.Column).Should().Be("Column");
-        SparklineDialogPlanner.GetKindLabel(SparklineKindChoice.WinLoss).Should().Be("Win/Loss");
+        SparklineDialogPlanner.GetKindLabel(SparklineKind.Line).Should().Be("Line");
+        SparklineDialogPlanner.GetKindLabel(SparklineKind.Column).Should().Be("Column");
+        SparklineDialogPlanner.GetKindLabel(SparklineKind.WinLoss).Should().Be("Win/Loss");
 
         var source = ReadRemainingDialogSources();
         source.Should().Contain("GetKindLabel(choice)");

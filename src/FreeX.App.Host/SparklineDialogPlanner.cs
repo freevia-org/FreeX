@@ -8,7 +8,7 @@ public static class SparklineDialogPlanner
     public static SparklineDialogResult CreateResult(
         string dataRangeText,
         string locationText,
-        SparklineKindChoice kind) =>
+        SparklineKind kind) =>
         new(dataRangeText.Trim(), locationText.Trim(), kind);
 
     public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
@@ -16,8 +16,8 @@ public static class SparklineDialogPlanner
         string currentText) =>
         new(target, currentText.Trim(), CollapseDialog: true);
 
-    public static string GetKindLabel(SparklineKindChoice kind) =>
-        kind == SparklineKindChoice.WinLoss ? UiText.Get("Sparkline_KindWinLoss") : kind.ToString();
+    public static string GetKindLabel(SparklineKind kind) =>
+        kind == SparklineKind.WinLoss ? UiText.Get("Sparkline_KindWinLoss") : SparklinePlanner.KindKey(kind);
 
     public static SparklineDialogValidationResult ValidateInputs(
         string dataRangeText,

@@ -487,7 +487,8 @@ public sealed partial class MainWindowSourceHygieneTests
         insertSource.Should().Contain("private void InsertLinkBtn_Click(");
         insertSource.Should().Contain("private void HeaderFooterBtn_Click(");
         insertSource.Should().Contain("private void SymbolPickerBtn_Click(");
-        insertSource.Should().Contain("SparklineInputParser");
+        insertSource.Should().Contain("SparklinePlanner");
+        insertSource.Should().NotContain("SparklineInputParser");
     }
 
     [Fact]

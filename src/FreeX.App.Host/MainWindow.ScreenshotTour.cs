@@ -8839,7 +8839,7 @@ public partial class MainWindow
             openDialog = new SparklineDialog(
                 "B2:C2",
                 context.SparklineLocation.ToA1(),
-                SparklineKindChoice.Line,
+                SparklineKind.Line,
                 sheetId: context.Sheet.Id)
             {
                 Owner = this
