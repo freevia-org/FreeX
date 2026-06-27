@@ -60,7 +60,9 @@ public sealed partial class MainWindowSourceHygieneTests
         buildMethod.Should().NotContain("BackstageAccountButton");
 
         frameSource.Should().Contain("ResolveBackstageCommand(FreeXBackstageCommandId command)");
+        frameSource.Should().Contain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(command)");
         frameSource.Should().Contain("ResolveBackstagePane(FreeXBackstagePaneId pane)");
+        frameSource.Should().Contain("FreeXBackstageFlowPlanner.BuildPaneFlow(pane)");
 
         plannerSource.Should().Contain("BackstageSaveAsButton");
         plannerSource.Should().Contain("BackstageAccountButton");
@@ -139,8 +141,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var keyboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
 
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
-        newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
-        newMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
+        newMethod.Should().Contain("CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
         // File > New advances the session name sequence (Book2, Book3, …) via InitializeNewWorkbook
         // rather than re-creating Book1 through CreateNewWorkbook() (Issue 121). (Also de-brittled for P2b:
         // the dirty-gate now routes through PlanDirtyGate/ResolveDirtyGate — asserted below.)
@@ -148,12 +149,11 @@ public sealed partial class MainWindowSourceHygieneTests
         newMethod.Should().Contain("HideStartScreen();");
 
         var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
-        openMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeOpeningWorkbook\"))");
-        openMethod.Should().Contain("== SaveChangesConfirmation.Cancel");
-        openMethod.IndexOf("ConfirmSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
+        openMethod.Should().Contain("CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeOpeningWorkbook\"))");
+        openMethod.IndexOf("CanProceedAfterSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
             .Should()
             .BeLessThan(openMethod.IndexOf("var loader = new OpenWorkbookLoader", StringComparison.Ordinal));
-        openMethod.IndexOf("ConfirmSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
+        openMethod.IndexOf("CanProceedAfterSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
             .Should()
             .BeLessThan(openMethod.IndexOf("_workbook = result.Workbook;", StringComparison.Ordinal));
 
@@ -194,6 +194,12 @@ public sealed partial class MainWindowSourceHygieneTests
         confirmMethod.Should().Contain("_workbookDirty");
         confirmMethod.Should().Contain("PromptSaveChangesBeforeDestructiveAction(message)");
         confirmMethod.Should().Contain("SaveResolvedAsync");
+
+        var canProceedMethod = ExtractMethodSource(lifecycleSource, "private Task<bool> CanProceedAfterSaveBeforeDestructiveActionAsync(");
+        canProceedMethod.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateAsync(");
+        canProceedMethod.Should().Contain("_workbookDirty");
+        canProceedMethod.Should().Contain("PromptSaveChangesBeforeDestructiveAction(message)");
+        canProceedMethod.Should().Contain("SaveResolvedAsync");
 
         var promptMethod = ExtractMethodSource(lifecycleSource, "private SaveChangesPrompt PromptSaveChangesBeforeDestructiveAction(");
         promptMethod.Should().Contain("ShowOwnedMessage(");

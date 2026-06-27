@@ -30,6 +30,33 @@ public static class WorkbookFileLifecycleCoordinator
         };
     }
 
+    public static async Task<bool> CanProceedAfterDirtyGateAsync(
+        bool isDirty,
+        Func<Task<SaveChangesPrompt>> promptSaveChangesAsync,
+        Func<Task<bool>> saveCurrentAsync)
+    {
+        var confirmation = await ConfirmBeforeDestructiveActionAsync(
+            isDirty,
+            promptSaveChangesAsync,
+            saveCurrentAsync);
+        return confirmation != SaveChangesConfirmation.Cancel;
+    }
+
+    public static async Task<bool> RunAfterDirtyGateAsync(
+        bool isDirty,
+        Func<Task<SaveChangesPrompt>> promptSaveChangesAsync,
+        Func<Task<bool>> saveCurrentAsync,
+        Func<Task> runActionAsync)
+    {
+        ArgumentNullException.ThrowIfNull(runActionAsync);
+
+        if (!await CanProceedAfterDirtyGateAsync(isDirty, promptSaveChangesAsync, saveCurrentAsync))
+            return false;
+
+        await runActionAsync();
+        return true;
+    }
+
     public static Task<bool> SaveResolvedAsync(
         bool isDirty,
         string? currentFilePath,
