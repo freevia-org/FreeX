@@ -113,7 +113,7 @@ public static class SparklinePlanner
         if (!TryParseDataRange(dataRangeText, sheetId, out dataRange))
             return SparklineInputValidation.InvalidDataRange;
 
-        return CellAddress.TryParse((locationText ?? string.Empty).Trim(), sheetId, out location)
+        return CellReferenceInputParser.TryParseCell((locationText ?? string.Empty).Trim(), sheetId, out location)
             ? SparklineInputValidation.Valid
             : SparklineInputValidation.InvalidLocation;
     }

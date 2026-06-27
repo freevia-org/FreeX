@@ -234,8 +234,9 @@ public sealed partial class RemainingDialogTests
 
         source.Should().Contain("if (!ValidateInputs())");
         source.Should().Contain("SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId)");
-        plannerSource.Should().Contain("SparklineInputParser.TryParseDataRange(dataRangeText, sheetId, out _)");
-        plannerSource.Should().Contain("SparklineInputParser.TryParseLocation(locationText, sheetId, out _)");
+        plannerSource.Should().Contain("SparklinePlanner.ValidateInsert(dataRangeText, locationText, sheetId, out _, out _)");
+        plannerSource.Should().Contain("SparklineInputValidation.InvalidDataRange => SparklineDialogValidationResult.InvalidDataRange");
+        plannerSource.Should().Contain("SparklineInputValidation.InvalidLocation => SparklineDialogValidationResult.InvalidLocation");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Sparkline_InvalidDataRange\"), _dataRangeBox)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Sparkline_InvalidLocationCell\"), _locationBox)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
