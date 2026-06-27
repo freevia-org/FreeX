@@ -1,4 +1,4 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.FormulaBar;
 
 public static class FormulaEditInteractionPlanner
 {

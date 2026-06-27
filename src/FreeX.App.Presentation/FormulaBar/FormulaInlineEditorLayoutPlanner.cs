@@ -1,8 +1,6 @@
-using System.Windows;
+namespace FreeX.App.Presentation.FormulaBar;
 
-namespace FreeX.App.Host;
-
-public sealed record FormulaInlineEditorLayout(Rect EditorRect, Rect TextOverlayRect);
+public sealed record FormulaInlineEditorLayout(FormulaEditorRect EditorRect, FormulaEditorRect TextOverlayRect);
 public readonly record struct FormulaInlineEditorOverflow(bool Left, bool Right)
 {
     public static FormulaInlineEditorOverflow None => new(false, false);
@@ -23,7 +21,7 @@ public static class FormulaInlineEditorLayoutPlanner
         double desiredTextWidth = 0,
         double availableRight = double.PositiveInfinity)
     {
-        var editorRect = new Rect(
+        var editorRect = new FormulaEditorRect(
             cellLeft,
             cellTop,
             cellWidth,
@@ -37,7 +35,7 @@ public static class FormulaInlineEditorLayoutPlanner
         if (double.IsFinite(availableRight))
             textWidth = Math.Min(textWidth, Math.Max(0, availableRight - textLeft));
 
-        var textOverlayRect = new Rect(
+        var textOverlayRect = new FormulaEditorRect(
             textLeft,
             editorRect.Top,
             textWidth,
@@ -46,7 +44,7 @@ public static class FormulaInlineEditorLayoutPlanner
         return new FormulaInlineEditorLayout(editorRect, textOverlayRect);
     }
 
-    public static Rect GetChromeRect(Rect editorRect, FormulaInlineEditorOverflow overflow)
+    public static FormulaEditorRect GetChromeRect(FormulaEditorRect editorRect, FormulaInlineEditorOverflow overflow)
     {
         var left = editorRect.Left;
         var width = editorRect.Width;
@@ -60,10 +58,10 @@ public static class FormulaInlineEditorLayoutPlanner
         if (overflow.Right)
             width += HiddenBorderCover;
 
-        return new Rect(left, editorRect.Top, width, editorRect.Height);
+        return new FormulaEditorRect(left, editorRect.Top, width, editorRect.Height);
     }
 
-    public static Thickness GetChromeBorderThickness(FormulaInlineEditorOverflow overflow) =>
+    public static FormulaEditorThickness GetChromeBorderThickness(FormulaInlineEditorOverflow overflow) =>
         new(
             overflow.Left ? 0 : SelectionLikeBorderThickness,
             SelectionLikeBorderThickness,

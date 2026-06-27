@@ -8,7 +8,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     [Fact]
     public void GetIntent_MapsAltEnterToLineBreakInsertion()
     {
-        var intent = ExcelEditKeyPlanner.GetIntent(Key.Enter, ModifierKeys.Alt, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
+        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Enter, FormulaEditorModifiers.Alt, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
 
         intent.Action.Should().Be(ExcelEditKeyAction.InsertLineBreak);
         intent.Target.Should().BeNull();
@@ -18,12 +18,12 @@ public sealed partial class ExcelEditKeyPlannerTests
     public void GetIntent_MapsSystemAltEnterToLineBreakInsertion()
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
-            Key.System,
-            ModifierKeys.Alt,
+            FormulaEditorKey.System,
+            FormulaEditorModifiers.Alt,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
-            systemKey: Key.Enter);
+            systemKey: FormulaEditorKey.Enter);
 
         intent.Action.Should().Be(ExcelEditKeyAction.InsertLineBreak);
         intent.Target.Should().BeNull();
@@ -32,7 +32,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     [Fact]
     public void GetIntent_MapsCtrlEnterToCommitSelection()
     {
-        var intent = ExcelEditKeyPlanner.GetIntent(Key.Enter, ModifierKeys.Control, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
+        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Enter, FormulaEditorModifiers.Control, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
 
         intent.Action.Should().Be(ExcelEditKeyAction.CommitSelection);
         intent.Target.Should().BeNull();
@@ -42,25 +42,25 @@ public sealed partial class ExcelEditKeyPlannerTests
     public void GetIntent_MapsSystemCtrlEnterToCommitSelection()
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
-            Key.System,
-            ModifierKeys.Control,
+            FormulaEditorKey.System,
+            FormulaEditorModifiers.Control,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
-            systemKey: Key.Enter);
+            systemKey: FormulaEditorKey.Enter);
 
         intent.Action.Should().Be(ExcelEditKeyAction.CommitSelection);
         intent.Target.Should().BeNull();
     }
 
     [Theory]
-    [InlineData(ModifierKeys.Control | ModifierKeys.Shift)]
-    [InlineData(ModifierKeys.Control | ModifierKeys.Alt)]
-    [InlineData(ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
-    public void GetIntent_DoesNotTreatExtraModifiedEnterAsCommitSelection(ModifierKeys modifiers)
+    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift)]
+    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Alt)]
+    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift | FormulaEditorModifiers.Alt)]
+    public void GetIntent_DoesNotTreatExtraModifiedEnterAsCommitSelection(FormulaEditorModifiers modifiers)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
-            Key.Enter,
+            FormulaEditorKey.Enter,
             modifiers,
             Current,
             pageSize: 20,
@@ -71,18 +71,18 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(ModifierKeys.Shift | ModifierKeys.Alt)]
-    [InlineData(ModifierKeys.Control | ModifierKeys.Alt)]
-    [InlineData(ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
-    public void GetIntent_DoesNotTreatExtraModifiedEnterAsLineBreakInsertion(ModifierKeys modifiers)
+    [InlineData(FormulaEditorModifiers.Shift | FormulaEditorModifiers.Alt)]
+    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Alt)]
+    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift | FormulaEditorModifiers.Alt)]
+    public void GetIntent_DoesNotTreatExtraModifiedEnterAsLineBreakInsertion(FormulaEditorModifiers modifiers)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
-            Key.System,
+            FormulaEditorKey.System,
             modifiers,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
-            systemKey: Key.Enter);
+            systemKey: FormulaEditorKey.Enter);
 
         intent.Action.Should().Be(ExcelEditKeyAction.None);
         intent.Target.Should().BeNull();
@@ -92,8 +92,8 @@ public sealed partial class ExcelEditKeyPlannerTests
     public void GetIntent_DoesNotTreatDirectAltShiftEnterAsLineBreakInsertion()
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
-            Key.Enter,
-            ModifierKeys.Alt | ModifierKeys.Shift,
+            FormulaEditorKey.Enter,
+            FormulaEditorModifiers.Alt | FormulaEditorModifiers.Shift,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false);

@@ -18,6 +18,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="Free.Shared.Drawing" />
+    <Using Include="FreeX.App.Presentation.FormulaBar" />
   </ItemGroup>
 
   <PropertyGroup>

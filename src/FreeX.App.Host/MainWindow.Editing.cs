@@ -267,7 +267,8 @@ public partial class MainWindow
         System.Windows.Controls.Canvas.SetTop(_inlineEditorChrome, chromeRect.Top);
         _inlineEditorChrome.Width = chromeRect.Width;
         _inlineEditorChrome.Height = chromeRect.Height;
-        _inlineEditorChrome.BorderThickness = FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(overflow);
+        _inlineEditorChrome.BorderThickness = FormulaBarWpfInputAdapter.ToWpfThickness(
+            FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(overflow));
     }
 
     private static FormulaInlineEditorOverflow GetInlineEditorTextOverflow(System.Windows.Controls.TextBox editor, double chromeWidth)
@@ -332,7 +333,10 @@ public partial class MainWindow
             return;
         }
 
-        if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(e.Key, Keyboard.Modifiers, e.SystemKey) &&
+        if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
+                FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
+                FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(Keyboard.Modifiers),
+                FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey)) &&
             _inlineEditor is not null)
         {
             if (TryCycleFormulaReference(_inlineEditor))
@@ -371,14 +375,15 @@ public partial class MainWindow
             ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
             : selectedRange.Value.Start;
         var editNavigationCurrent = _formulaEditCell ?? selectedRange.Value.Start;
-        var modifiers = Keyboard.Modifiers;
+        var wpfModifiers = Keyboard.Modifiers;
+        var modifiers = FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(wpfModifiers);
         var pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
         var colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
 
         if (formulaRangeEntryActive &&
             FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
-                e.Key,
-                e.SystemKey,
+                FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
+                FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey),
                 modifiers,
                 formulaReferenceCurrent,
                 _workbook.GetSheet(_currentSheetId),
@@ -387,7 +392,7 @@ public partial class MainWindow
         {
             if (TryApplyFormulaRangeSelection(
                     formulaReferenceShortcutTarget,
-                    extendSelection: modifiers.HasFlag(ModifierKeys.Shift)))
+                    extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
             {
                 EnsureCellVisible(formulaReferenceShortcutTarget);
                 e.Handled = true;
@@ -396,7 +401,7 @@ public partial class MainWindow
         }
 
         var intent = ExcelEditKeyPlanner.GetIntent(
-            e.Key,
+            FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
             modifiers,
             editNavigationCurrent,
             pageSize: pageSize,
@@ -404,8 +409,8 @@ public partial class MainWindow
             formulaRangeEntryActive: formulaRangeEntryActive,
             inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
             moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-            enterDirection: _options.AfterEnterDirection,
-            systemKey: e.SystemKey);
+            enterDirection: FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection),
+            systemKey: FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey));
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -429,7 +434,7 @@ public partial class MainWindow
 
         if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
         {
-            if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)))
+            if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
             {
                 EnsureCellVisible(referenceTarget);
                 e.Handled = true;
@@ -596,9 +601,9 @@ public partial class MainWindow
             e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
         }
         else if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
-                     e.Key,
-                     e.KeyboardDevice.Modifiers,
-                     e.SystemKey))
+                     FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
+                     FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(e.KeyboardDevice.Modifiers),
+                     FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey)))
         {
             if (TryCycleFormulaReference(FormulaBar))
                 e.Handled = true;
@@ -629,11 +634,12 @@ public partial class MainWindow
             var editNavigationCurrent = _formulaEditCell ?? selectedRange.Start;
             int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
             int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
-            var modifiers = e.KeyboardDevice.Modifiers;
+            var wpfModifiers = e.KeyboardDevice.Modifiers;
+            var modifiers = FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(wpfModifiers);
             if (formulaRangeEntryActive &&
                 FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
-                    e.Key,
-                    e.SystemKey,
+                    FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
+                    FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey),
                     modifiers,
                     formulaReferenceCurrent,
                     _workbook.GetSheet(_currentSheetId),
@@ -642,7 +648,7 @@ public partial class MainWindow
             {
                 if (TryApplyFormulaRangeSelection(
                         formulaReferenceShortcutTarget,
-                        extendSelection: modifiers.HasFlag(ModifierKeys.Shift)))
+                        extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
                 {
                     EnsureCellVisible(formulaReferenceShortcutTarget);
                     e.Handled = true;
@@ -651,15 +657,15 @@ public partial class MainWindow
             }
 
             var intent = ExcelEditKeyPlanner.GetIntent(
-                e.Key,
+                FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
                 modifiers,
                 editNavigationCurrent,
                 pageSize,
                 allowFormulaBarNavigationKeys: !formulaTextActive,
                 formulaRangeEntryActive: formulaRangeEntryActive,
                 moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-                enterDirection: _options.AfterEnterDirection,
-                systemKey: e.SystemKey);
+                enterDirection: FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection),
+                systemKey: FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey));
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
@@ -677,7 +683,7 @@ public partial class MainWindow
             }
             else if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
             {
-                if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Shift)))
+                if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: wpfModifiers.HasFlag(ModifierKeys.Shift)))
                 {
                     EnsureCellVisible(referenceTarget);
                     e.Handled = true;

@@ -1,7 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.FormulaBar;
 
 public sealed record ExcelTextEdit(string Text, int SelectionStart, int SelectionLength);
 

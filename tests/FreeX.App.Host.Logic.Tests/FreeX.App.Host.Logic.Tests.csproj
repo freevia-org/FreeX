@@ -22,6 +22,7 @@
     <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Ribbon" />
     <Using Include="FreeX.App.Services.Ribbon" />
+    <Using Include="FreeX.App.Presentation.FormulaBar" />
     <Using Include="FreeX.App.Presentation.TextToColumns" />
   </ItemGroup>
 

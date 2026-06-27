@@ -94,6 +94,7 @@
     <Using Include="Free.Shared.AppServices" />
     <Using Include="Free.Shared.Shell" />
     <Using Include="FreeX.App.Presentation" />
+    <Using Include="FreeX.App.Presentation.FormulaBar" />
     <Using Include="FreeX.App.Presentation.Charts" />
     <Using Include="FreeX.App.Presentation.PageLayout" />
     <Using Include="FreeX.App.Presentation.DrawingInteraction" />

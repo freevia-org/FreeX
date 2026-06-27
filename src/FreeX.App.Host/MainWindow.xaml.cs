@@ -209,7 +209,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     ];
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.Border? _inlineEditorChrome;
-    private System.Windows.Rect? _inlineEditorChromeBaseRect;
+    private FormulaEditorRect? _inlineEditorChromeBaseRect;
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
     private System.Windows.Controls.TextBox? _textBoxInlineEditor;
     private System.Windows.Controls.Border? _textBoxInlineEditorChrome;

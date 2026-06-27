@@ -6587,14 +6587,30 @@ public sealed partial class MainWindow : Window
         };
         editor.KeyDown += (_, args) =>
         {
-            if (args.Key == Key.Enter || args.Key == Key.Tab)
+            var intent = ExcelEditKeyPlanner.GetIntent(
+                FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(args.Key),
+                FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
+                address,
+                pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
+                allowFormulaBarNavigationKeys: false);
+
+            if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
-                var rowDelta = args.Key == Key.Enter
-                    ? args.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1
-                    : 0;
-                var colDelta = args.Key == Key.Tab
-                    ? args.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1
-                    : 0;
+                ApplyTextBoxEdit(
+                    editor,
+                    ExcelTextEditorPlanner.InsertLineBreak(
+                        editor.Text ?? "",
+                        Math.Min(editor.SelectionStart, editor.SelectionEnd),
+                        Math.Abs(editor.SelectionEnd - editor.SelectionStart),
+                        Environment.NewLine));
+                _inlineCellEditText = editor.Text ?? "";
+                _formulaBox.Text = _inlineCellEditText;
+                args.Handled = true;
+            }
+            else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
+            {
+                var rowDelta = GetCellIndexDelta(address.Row, target.Row);
+                var colDelta = GetCellIndexDelta(address.Col, target.Col);
                 CommitInlineCellEdit(rowDelta, colDelta);
                 args.Handled = true;
             }
@@ -13215,16 +13231,46 @@ public sealed partial class MainWindow : Window
 
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter)
+        if (e.Key == Key.Escape)
         {
-            var rowDelta = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1;
+            _session.CancelFormulaEdit();
+            _formulaBoxEditOriginalText = null;
+            RefreshShell("Ready");
+            FocusShellRegion(ShellFocusRegion.Worksheet);
+            e.Handled = true;
+            return;
+        }
+
+        var current = _session.FormulaEditAddress ?? _session.ActiveCell;
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key),
+            FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers),
+            current,
+            pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
+            allowFormulaBarNavigationKeys: false);
+
+        if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
+        {
+            var text = _formulaBox.Text ?? "";
+            ApplyFormulaBoxTextEdit(
+                ExcelTextEditorPlanner.InsertLineBreak(
+                    text,
+                    Math.Min(_formulaBox.SelectionStart, _formulaBox.SelectionEnd),
+                    Math.Abs(_formulaBox.SelectionEnd - _formulaBox.SelectionStart),
+                    Environment.NewLine));
+            e.Handled = true;
+        }
+        else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
+        {
             if (_isOpening || _isSaving)
             {
                 ShowSaveIssue("Finish saving before editing cells.");
             }
             else if (CommitFormulaBox())
             {
-                _session.MoveActiveCell(rowDelta, 0);
+                var rowDelta = GetCellIndexDelta(current.Row, target.Row);
+                var colDelta = GetCellIndexDelta(current.Col, target.Col);
+                _session.MoveActiveCell(rowDelta, colDelta);
                 RefreshShell("Ready");
                 FocusShellRegion(ShellFocusRegion.Worksheet);
             }
@@ -13235,26 +13281,38 @@ public sealed partial class MainWindow : Window
 
             e.Handled = true;
         }
-        else if (e.Key == Key.Tab)
-        {
-            var colDelta = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1;
-            if (CommitFormulaBox())
-            {
-                _session.MoveActiveCell(0, colDelta);
-                RefreshShell("Ready");
-                FocusShellRegion(ShellFocusRegion.Worksheet);
-            }
+    }
 
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Escape)
+    private void ApplyFormulaBoxTextEdit(ExcelTextEdit edit)
+    {
+        _isApplyingFormulaBoxText = true;
+        try
         {
-            _session.CancelFormulaEdit();
-            _formulaBoxEditOriginalText = null;
-            RefreshShell("Ready");
-            FocusShellRegion(ShellFocusRegion.Worksheet);
-            e.Handled = true;
+            ApplyTextBoxEdit(_formulaBox, edit);
         }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
+        }
+    }
+
+    private static void ApplyTextBoxEdit(TextBox editor, ExcelTextEdit edit)
+    {
+        editor.Text = edit.Text;
+        editor.CaretIndex = Math.Clamp(edit.SelectionStart, 0, edit.Text.Length);
+        editor.SelectionStart = editor.CaretIndex;
+        editor.SelectionEnd = Math.Clamp(
+            editor.CaretIndex + Math.Max(0, edit.SelectionLength),
+            editor.CaretIndex,
+            edit.Text.Length);
+    }
+
+    private static int GetCellIndexDelta(uint current, uint target)
+    {
+        var delta = (long)target - current;
+        return delta >= 0
+            ? (int)Math.Min(int.MaxValue, delta)
+            : -(int)Math.Min(int.MaxValue, -delta);
     }
 
     private bool CommitFormulaBox()
