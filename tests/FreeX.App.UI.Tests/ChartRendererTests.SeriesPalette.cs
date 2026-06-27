@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Charts;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using OxyPlot;
@@ -39,6 +40,28 @@ public sealed partial class ChartRendererTests
         model.DefaultColors[4].Should().Be(OxyColor.FromRgb(160, 43, 147), "Accent5 is purple");
         model.DefaultColors[5].Should().Be(OxyColor.FromRgb(78, 167, 46),  "Accent6 is green");
         model.DefaultColors.Should().HaveCountGreaterThanOrEqualTo(30, "palette extends past 6 for many-series charts");
+    }
+
+    [Fact]
+    public void ColumnRenderer_DefaultColorsComeFromSharedStylePlanner()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [Cell(1, 1, "A"), Cell(1, 2, "10"), Cell(2, 1, "B"), Cell(2, 2, "20")],
+            [],
+            []),
+            WorkbookTheme.Office);
+
+        var expected = ChartStylePlanner.BuildExcelSeriesPalette(WorkbookTheme.Office)
+            .Select(color => OxyColor.FromRgb(color.R, color.G, color.B));
+
+        model.DefaultColors.Take(30).Should().Equal(expected, "WPF should consume the shared chart style planner");
     }
 
     [Fact]
