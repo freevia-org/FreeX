@@ -30,6 +30,7 @@ using FreeX.App.Services.Updates;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon;
+using Free.Shared.Shell.Avalonia;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -813,8 +814,6 @@ public sealed partial class MainWindow : Window
 
     private Control BuildContent()
     {
-        var root = new DockPanel();
-
         var ribbonCallbacks = new FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHostCallbacks
             {
                 OpenTextToColumns = TextToColumns,
@@ -1407,29 +1406,32 @@ public sealed partial class MainWindow : Window
             ribbonCallbacks,
             _ribbonContextSource);
         _refreshRibbonToggleStates = refreshRibbonToggleStates;
-        DockPanel.SetDock(ribbon, Dock.Top);
-        root.Children.Add(ribbon);
 
         var formulaBar = BuildToolbar();
-        DockPanel.SetDock(formulaBar, Dock.Top);
-        root.Children.Add(formulaBar);
 
-        // Status bar at absolute bottom (added first among Dock.Bottom children → lowest position).
         var statusBar = BuildStatusBar();
-        DockPanel.SetDock(statusBar, Dock.Bottom);
-        root.Children.Add(statusBar);
 
         var sheetTabs = BuildSheetTabsChrome();
-        DockPanel.SetDock(sheetTabs, Dock.Bottom);
-        root.Children.Add(sheetTabs);
+        var frame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Ribbon: ribbon,
+            WorkArea: BuildWorkbookWorkArea(),
+            StatusBar: statusBar,
+            BottomPanelsAboveStatus: [sheetTabs],
+            TopPanelsBelowRibbon: [formulaBar]));
 
+        return frame.Root;
+    }
+
+    private Control BuildWorkbookWorkArea()
+    {
+        var workArea = new DockPanel { LastChildFill = true };
         var pivotFieldPane = BuildPivotFieldPaneChrome();
         DockPanel.SetDock(pivotFieldPane, Dock.Right);
-        root.Children.Add(pivotFieldPane);
+        workArea.Children.Add(pivotFieldPane);
 
-        root.Children.Add(BuildWorksheetViewportChrome());
+        workArea.Children.Add(BuildWorksheetViewportChrome());
 
-        return root;
+        return workArea;
     }
 
     private Control BuildWorksheetViewportChrome()
@@ -3412,19 +3414,6 @@ public sealed partial class MainWindow : Window
         rightPanel.Children.Add(viewButtons);
         rightPanel.Children.Add(zoomPanel);
 
-        var grid = new AvaloniaGrid
-        {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = GridLength.Auto },
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = GridLength.Auto },
-            },
-        };
-        AddGridChild(grid, leftPanel, 0, 0);
-        AddGridChild(grid, statsViewport, 0, 1);
-        AddGridChild(grid, rightPanel, 0, 2);
-
         // Resolve the status-bar background from the registered token brush (FreeXStatusSurfaceBrush),
         // falling back to the hardcoded surface color so tests and unstyled environments are safe.
         // When FREEX_THEME=midnight the token brush carries the midnight StatusSurface value;
@@ -3432,14 +3421,14 @@ public sealed partial class MainWindow : Window
         var statusBarBackground = ResolveTokenBrush("FreeXStatusSurfaceBrush") ?? StatusBarSurface;
         // Resolve height from token (FreeXStatusBarHeight = 28); falls back to captured literal.
         var statusBarHeight = ResolveTokenDouble("FreeXStatusBarHeight", 28.0);
-        return new Border
-        {
-            Background = statusBarBackground,
-            BorderThickness = new Thickness(0),
-            Height = statusBarHeight,
-            Padding = new Thickness(8, 3),
-            Child = grid,
-        };
+        return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
+            Background: statusBarBackground,
+            LeftContent: leftPanel,
+            RightItems: [rightPanel],
+            Height: statusBarHeight,
+            BorderThickness: new Thickness(0),
+            CenterContent: statsViewport,
+            Padding: new Thickness(8, 3))).Root;
     }
 
     /// <summary>

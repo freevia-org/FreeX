@@ -11,7 +11,9 @@ public sealed record SisterAppStatusBarSpec(
     IReadOnlyList<Control>? RightItems = null,
     double Height = 26,
     IBrush? BorderBrush = null,
-    Thickness BorderThickness = default);
+    Thickness BorderThickness = default,
+    Control? CenterContent = null,
+    Thickness Padding = default);
 
 public sealed record SisterAppStatusBarBuildResult(
     Border Root,
@@ -42,7 +44,16 @@ public static class SisterAppStatusBarChrome
             layout.Children.Add(item);
         }
 
-        layout.Children.Add(spec.LeftContent);
+        if (spec.CenterContent is { } centerContent)
+        {
+            DockPanel.SetDock(spec.LeftContent, Dock.Left);
+            layout.Children.Add(spec.LeftContent);
+            layout.Children.Add(centerContent);
+        }
+        else
+        {
+            layout.Children.Add(spec.LeftContent);
+        }
 
         var root = new Border
         {
@@ -50,6 +61,7 @@ public static class SisterAppStatusBarChrome
             BorderBrush = spec.BorderBrush,
             BorderThickness = spec.BorderThickness,
             Height = spec.Height,
+            Padding = spec.Padding,
             Child = layout,
         };
 

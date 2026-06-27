@@ -104,6 +104,44 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void MainWindow_UsesSharedAvaloniaShellFrameAndStatusChrome()
+    {
+        var project = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"));
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var buildContentBlock = ExtractSourceBlock(
+            normalizedSource,
+            "private Control BuildContent()",
+            "private Control BuildWorkbookWorkArea()");
+        var statusBarBlock = ExtractSourceBlock(
+            normalizedSource,
+            "private Control BuildStatusBar()",
+            "/// <summary>\n    /// Looks up a named brush");
+
+        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+
+        buildContentBlock.Should().Contain("SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(");
+        buildContentBlock.Should().Contain("Ribbon: ribbon,");
+        buildContentBlock.Should().Contain("WorkArea: BuildWorkbookWorkArea(),");
+        buildContentBlock.Should().Contain("StatusBar: statusBar,");
+        buildContentBlock.Should().Contain("BottomPanelsAboveStatus: [sheetTabs],");
+        buildContentBlock.Should().Contain("TopPanelsBelowRibbon: [formulaBar]");
+        buildContentBlock.Should().NotContain("var root = new DockPanel();");
+        buildContentBlock.Should().NotContain("root.Children.Add(");
+
+        statusBarBlock.Should().Contain("SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(");
+        statusBarBlock.Should().Contain("LeftContent: leftPanel,");
+        statusBarBlock.Should().Contain("RightItems: [rightPanel],");
+        statusBarBlock.Should().Contain("CenterContent: statsViewport,");
+        statusBarBlock.Should().Contain("Padding: new Thickness(8, 3)");
+        statusBarBlock.Should().NotContain("var grid = new AvaloniaGrid");
+        statusBarBlock.Should().NotContain("AddGridChild(grid, leftPanel");
+        statusBarBlock.Should().NotContain("Child = grid");
+    }
+
+    [Fact]
     public void FormulaBarToggle_HidesTheWholeFormulaBarRow()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

@@ -6,7 +6,8 @@ public sealed record SisterAppClientFrameSpec(
     Control Ribbon,
     Control WorkArea,
     Control StatusBar,
-    IReadOnlyList<Control>? BottomPanelsAboveStatus = null);
+    IReadOnlyList<Control>? BottomPanelsAboveStatus = null,
+    IReadOnlyList<Control>? TopPanelsBelowRibbon = null);
 
 public sealed record SisterAppClientFrameBuildResult(
     DockPanel Root);
@@ -28,6 +29,13 @@ public static class SisterAppClientFrameBuilder
 
         DockPanel.SetDock(spec.Ribbon, Dock.Top);
         root.Children.Add(spec.Ribbon);
+
+        foreach (var panel in spec.TopPanelsBelowRibbon ?? [])
+        {
+            ArgumentNullException.ThrowIfNull(panel);
+            DockPanel.SetDock(panel, Dock.Top);
+            root.Children.Add(panel);
+        }
 
         DockPanel.SetDock(spec.StatusBar, Dock.Bottom);
         root.Children.Add(spec.StatusBar);
