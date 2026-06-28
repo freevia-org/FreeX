@@ -1650,7 +1650,7 @@ public static class PptxPackageReader
         {
             XDocument layoutDoc;
             using (var ms = new MemoryStream(layoutEntry.Bytes))
-                layoutDoc = XDocument.Load(ms);
+                layoutDoc = OpcXml.LoadXml(ms);
 
             layoutUniqueId = layoutDoc.Root?.Attribute("uniqueId")?.Value ?? string.Empty;
             family = ClassifySmartArtFamily(layoutUniqueId);
@@ -1659,7 +1659,7 @@ public static class PptxPackageReader
         // ── Parse data1.xml → node tree ────────────────────────────────────────
         XDocument dataDoc;
         using (var ms2 = new MemoryStream(dataEntry.Bytes))
-            dataDoc = XDocument.Load(ms2);
+            dataDoc = OpcXml.LoadXml(ms2);
 
         var data = new SmartArtData
         {
@@ -1808,7 +1808,7 @@ public static class PptxPackageReader
     {
         XDocument doc;
         using (var ms = new MemoryStream(bytes))
-            doc = XDocument.Load(ms);
+            doc = OpcXml.LoadXml(ms);
 
         var root = doc.Root;
         if (root is null) return;
