@@ -22,6 +22,7 @@ using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
@@ -5076,16 +5077,24 @@ public sealed partial class MainWindow : Window
         top = 0;
         width = 0;
         height = 0;
-        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, drawingObject.AnchorCol, zoomFactor, out var columnLeft) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, drawingObject.AnchorRow, zoomFactor, out var rowTop))
+        // drawingObject.AnchorRow/drawingObject.AnchorCol identify the source anchor; Left/Top
+        // carry the projected viewport offsets, including preserved sub-cell positioning.
+        var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
+        var columnHeaderHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        if (!DrawingObjectViewportPlanner.TryCreateDisplayedObjectRect(
+                drawingObject,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                zoomFactor,
+                out var rect))
         {
             return false;
         }
 
-        left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
-        top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
-        width = Math.Max(1, drawingObject.Width * zoomFactor);
-        height = Math.Max(1, drawingObject.Height * zoomFactor);
+        left = rect.Left;
+        top = rect.Top;
+        width = rect.Width;
+        height = rect.Height;
         return true;
     }
 

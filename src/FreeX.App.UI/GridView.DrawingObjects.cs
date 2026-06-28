@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Shapes;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
@@ -52,75 +53,37 @@ public partial class GridView
     private (uint LastRow, uint LastColumn) GetRenderableDrawingAnchorBounds(double visibleRight, double visibleBottom)
     {
         var viewport = Viewport!;
-        return (
-            FindLastRenderableDrawingRow(viewport.RowMetrics, EffectiveColHeaderHeight, visibleBottom),
-            FindLastRenderableDrawingColumn(viewport.ColMetrics, ActualRowHeaderWidth, visibleRight));
-    }
-
-    private static uint FindLastRenderableDrawingRow(
-        IReadOnlyList<RowMetric> rows,
-        double columnHeaderHeight,
-        double visibleBottom)
-    {
-        uint lastRow = 0;
-        foreach (var row in rows)
-        {
-            if (columnHeaderHeight + row.TopOffset >= visibleBottom)
-                break;
-            if (row.Row > lastRow)
-                lastRow = row.Row;
-        }
-
-        return lastRow;
-    }
-
-    private static uint FindLastRenderableDrawingColumn(
-        IReadOnlyList<ColMetric> columns,
-        double rowHeaderWidth,
-        double visibleRight)
-    {
-        uint lastColumn = 0;
-        foreach (var column in columns)
-        {
-            if (rowHeaderWidth + column.LeftOffset >= visibleRight)
-                break;
-            if (column.Col > lastColumn)
-                lastColumn = column.Col;
-        }
-
-        return lastColumn;
+        var bounds = DrawingObjectViewportPlanner.GetRenderableAnchorBounds(
+            viewport,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            visibleRight,
+            visibleBottom);
+        return (bounds.LastRow, bounds.LastColumn);
     }
 
     private static bool CanAnchoredObjectReachDrawingViewport(
         CellAddress anchor,
         uint lastRenderableRow,
         uint lastRenderableColumn) =>
-        lastRenderableRow > 0 &&
-        lastRenderableColumn > 0 &&
-        anchor.Row <= lastRenderableRow &&
-        anchor.Col <= lastRenderableColumn;
+        DrawingObjectViewportPlanner.CanAnchoredObjectReachViewport(
+            anchor,
+            new DrawingViewportAnchorBounds(lastRenderableRow, lastRenderableColumn));
 
     private static bool CanAnchoredObjectReachDrawingViewport(
         DrawingAnchorRange anchor,
         uint lastRenderableRow,
         uint lastRenderableColumn) =>
-        lastRenderableRow > 0 &&
-        lastRenderableColumn > 0 &&
-        anchor.From.Row != uint.MaxValue &&
-        anchor.From.Column != uint.MaxValue &&
-        anchor.From.Row < lastRenderableRow &&
-        anchor.From.Column < lastRenderableColumn;
+        DrawingObjectViewportPlanner.CanAnchorRangeReachViewport(
+            anchor,
+            new DrawingViewportAnchorBounds(lastRenderableRow, lastRenderableColumn));
 
     private static bool NeedsDrawingViewportCull(
         Rect rect,
         double rotationDegrees,
         double visibleRight,
         double visibleBottom) =>
-        Math.Abs(rotationDegrees % 360) > 0.0001 ||
-        rect.Left < 0 ||
-        rect.Top < 0 ||
-        rect.Left >= visibleRight ||
-        rect.Top >= visibleBottom;
+        GridDrawingObjectPlanner.NeedsViewportCull(rect, rotationDegrees, visibleRight, visibleBottom);
 
     private bool IntersectsDrawingViewport(Rect rect) =>
         IntersectsDrawingViewport(rect, 0);
@@ -139,51 +102,10 @@ public partial class GridView
         double rotationDegrees,
         double visibleRight,
         double visibleBottom)
-    {
-        if (rect.Width <= 0 || rect.Height <= 0)
-            return false;
+        => GridDrawingObjectPlanner.IntersectsViewport(rect, rotationDegrees, visibleRight, visibleBottom);
 
-        if (visibleRight <= 0 || visibleBottom <= 0)
-            return false;
-
-        var cullRect = Math.Abs(rotationDegrees % 360) <= 0.0001
-            ? rect
-            : CalculateRotatedBounds(rect, rotationDegrees);
-        return IntersectsVisibleGrid(cullRect, 0, 0, visibleRight, visibleBottom);
-    }
-
-    private static Rect CalculateRotatedBounds(Rect rect, double rotationDegrees)
-    {
-        var radians = rotationDegrees * Math.PI / 180.0;
-        var cos = Math.Cos(radians);
-        var sin = Math.Sin(radians);
-        var centerX = rect.Left + rect.Width / 2.0;
-        var centerY = rect.Top + rect.Height / 2.0;
-
-        var minX = double.PositiveInfinity;
-        var minY = double.PositiveInfinity;
-        var maxX = double.NegativeInfinity;
-        var maxY = double.NegativeInfinity;
-
-        IncludeRotatedCorner(rect.Left, rect.Top);
-        IncludeRotatedCorner(rect.Right, rect.Top);
-        IncludeRotatedCorner(rect.Right, rect.Bottom);
-        IncludeRotatedCorner(rect.Left, rect.Bottom);
-
-        return new Rect(new Point(minX, minY), new Point(maxX, maxY));
-
-        void IncludeRotatedCorner(double x, double y)
-        {
-            var dx = x - centerX;
-            var dy = y - centerY;
-            var rotatedX = centerX + dx * cos - dy * sin;
-            var rotatedY = centerY + dx * sin + dy * cos;
-            minX = Math.Min(minX, rotatedX);
-            minY = Math.Min(minY, rotatedY);
-            maxX = Math.Max(maxX, rotatedX);
-            maxY = Math.Max(maxY, rotatedY);
-        }
-    }
+    private static Rect CalculateRotatedBounds(Rect rect, double rotationDegrees) =>
+        GridDrawingObjectPlanner.CalculateRotatedBounds(rect, rotationDegrees);
 
     private void RenderCharts(DrawingContext dc)
     {
