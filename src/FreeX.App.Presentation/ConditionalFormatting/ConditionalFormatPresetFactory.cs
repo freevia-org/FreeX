@@ -1,9 +1,8 @@
-using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Dialogs;
+namespace FreeX.App.Presentation.ConditionalFormatting;
 
 /// <summary>The quick conditional-format presets the ribbon dropdown / Format menu offers.</summary>
 public enum ConditionalFormatPreset

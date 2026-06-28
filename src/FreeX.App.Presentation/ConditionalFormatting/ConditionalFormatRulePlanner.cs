@@ -1,6 +1,6 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Presentation.ConditionalFormatting;
 
 /// <summary>
 /// Portable selection of the conditional-format rules that apply to a single cell, in the order the

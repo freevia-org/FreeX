@@ -1,19 +1,17 @@
 using System.Globalization;
 
-using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Dialogs;
+namespace FreeX.App.Presentation.ConditionalFormatting;
 
 /// <summary>
-/// Non-UI glue backing the Avalonia conditional-format rule editor. Builds a Core
+/// Non-UI glue backing conditional-format rule editors. Builds a Core
 /// <see cref="ConditionalFormat"/> from the portable <see cref="CfRuleInput"/> the editor collects
 /// (validated by <see cref="ConditionalFormatRuleSchema"/>), and maps it to the Core.Commands
-/// add/replace command. Mirrors the fidelity of the Windows WPF dialog's commit path
-/// (<c>ConditionalFormatDialog.Result</c>) without depending on any running UI, so it is unit
-/// testable. Rendering of the applied rule is already handled by the grid.
+/// add/replace command without depending on any running UI, so it is unit testable. Rendering of the
+/// applied rule is already handled by the grid.
 /// </summary>
 public static class ConditionalFormatRuleBuilder
 {
@@ -172,8 +170,8 @@ public sealed record CfRuleCommandResult
 
 /// <summary>
 /// A fill/font appearance applied when a highlight-style rule's condition is true. Mirrors the named
-/// presets the Windows dialog's format-preset combo offers (and an arbitrary custom fill/font), kept
-/// portable so the Avalonia editor and its tests share one definition.
+/// presets the format-preset combo offers (and an arbitrary custom fill/font), kept portable so
+/// editor surfaces and their tests share one definition.
 /// </summary>
 public sealed record ConditionalFormatHighlightPreset(
     string Label,

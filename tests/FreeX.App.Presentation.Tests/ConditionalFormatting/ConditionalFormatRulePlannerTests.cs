@@ -1,8 +1,8 @@
 using FluentAssertions;
-using FreeX.App.Avalonia;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Tests;
+namespace FreeX.App.Presentation.Tests.ConditionalFormatting;
 
 /// <summary>
 /// Tests for conditional-format rule applicability and ordering: which rules apply to a cell, in

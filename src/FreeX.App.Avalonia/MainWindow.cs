@@ -1017,10 +1017,10 @@ public sealed partial class MainWindow : Window
                     // Icon-Set variants stay NoOp until their presets exist.
                     ["New Rule"] = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
                     ["Clear Rules"] = ClearConditionalFormatsFromSelection,
-                    ["Data Bars"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.DataBar),
-                    ["Color Scales"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.ColorScale),
-                    ["Greater Than"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightGreaterThan),
-                    ["Top 10 Items"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Top10),
+                    ["Data Bars"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.DataBar),
+                    ["Color Scales"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.ColorScale),
+                    ["Greater Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightGreaterThan),
+                    ["Top 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10),
                     // Insert tab (Links / Text groups).
                     ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).
@@ -1159,19 +1159,19 @@ public sealed partial class MainWindow : Window
                     ["More Accounting Formats"] = () => _ = ShowFormatCellsDialogAsync(),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Highlight Cells Rules detail items.
-                    ["Less Than"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightLessThan),
-                    ["Between"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightBetween),
-                    ["Equal To"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightEqualTo),
-                    ["Text that Contains"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightTextContains),
-                    ["A Date Occurring"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightDateOccurring),
-                    ["Duplicate Values"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.HighlightDuplicateValues),
+                    ["Less Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightLessThan),
+                    ["Between"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightBetween),
+                    ["Equal To"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightEqualTo),
+                    ["Text that Contains"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightTextContains),
+                    ["A Date Occurring"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightDateOccurring),
+                    ["Duplicate Values"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightDuplicateValues),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Top/Bottom Rules detail items.
-                    ["Top 10%"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Top10Percent),
-                    ["Bottom 10 Items"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Bottom10Items),
-                    ["Bottom 10%"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.Bottom10Percent),
-                    ["Above Average"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.AboveAverage),
-                    ["Below Average"] = () => ApplyConditionalFormatPreset(Dialogs.ConditionalFormatPreset.BelowAverage),
+                    ["Top 10%"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10Percent),
+                    ["Bottom 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Bottom10Items),
+                    ["Bottom 10%"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Bottom10Percent),
+                    ["Above Average"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.AboveAverage),
+                    ["Below Average"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.BelowAverage),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Icon Sets submenu.
                     ["3 Arrows"] = () => ApplyConditionalFormatIconSet("3Arrows"),

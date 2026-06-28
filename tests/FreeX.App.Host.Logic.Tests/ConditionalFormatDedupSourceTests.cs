@@ -27,4 +27,43 @@ public sealed class ConditionalFormatDedupSourceTests
         presentationSource.Should().Contain("FindRuleIndex");
         presentationSource.Should().Contain("src.Clone(id)");
     }
+
+    [Fact]
+    public void ConditionalFormatPresetGalleryPlanner_StaysHostLocalizationFacade()
+    {
+        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("ConditionalFormatPresetGalleryPlanner.cs");
+        var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
+            "ConditionalFormatting",
+            "ConditionalFormatPresetGalleryPlanner.cs");
+
+        hostSource.Should().Contain(
+            "using PresentationPlanner = FreeX.App.Presentation.ConditionalFormatting.ConditionalFormatPresetGalleryPlanner;");
+        hostSource.Should().Contain("UiText.Get(option.LabelKey)");
+        hostSource.Should().Contain("PresentationPlanner.CreateDataBarRule(style, range)");
+        hostSource.Should().Contain("PresentationPlanner.CreateColorScaleRule(style, range)");
+
+        hostSource.Should().NotContain("DataBar(\"GradientBlue\"");
+        hostSource.Should().NotContain("ColorScale(\"GreenYellowRed\"");
+        presentationSource.Should().Contain("DataBar(\"GradientBlue\"");
+        presentationSource.Should().Contain("ColorScale(\"GreenYellowRed\"");
+        presentationSource.Should().NotContain("UiText.Get(");
+    }
+
+    [Fact]
+    public void ConditionalFormatDialogPlanner_StaysHostFacadeOverPresentationPlanner()
+    {
+        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("ConditionalFormatDialogPlanner.cs");
+        var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
+            "ConditionalFormatting",
+            "ConditionalFormatDialogPlanner.cs");
+
+        hostSource.Should().Contain(
+            "using PresentationPlanner = FreeX.App.Presentation.ConditionalFormatting.ConditionalFormatDialogPlanner;");
+        hostSource.Should().Contain("PresentationPlanner.CloneRule(source)");
+        hostSource.Should().Contain("PresentationPlanner.RuleTypeLabel(cf)");
+
+        hostSource.Should().NotContain("CfRuleType.Formula =>");
+        presentationSource.Should().Contain("CfRuleType.Formula =>");
+        presentationSource.Should().Contain("ManageConditionalFormatsPlanner.CloneWithPriority");
+    }
 }
