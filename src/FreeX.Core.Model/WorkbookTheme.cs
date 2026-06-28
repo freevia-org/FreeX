@@ -59,13 +59,7 @@ public sealed record WorkbookTheme(
     public CellColor ResolveColor(WorkbookThemeColorSlot slot, double tint = 0)
     {
         var color = GetColor(slot);
-        if (Math.Abs(tint) < 0.000001)
-            return color;
-
-        return new CellColor(
-            ApplyTint(color.R, tint),
-            ApplyTint(color.G, tint),
-            ApplyTint(color.B, tint));
+        return WorkbookThemeTint.Apply(color, tint);
     }
 
     public WorkbookTheme WithName(string name) =>
@@ -134,14 +128,6 @@ public sealed record WorkbookTheme(
             [slot] = color
         };
         return this with { Colors = colors, NativeColorSchemeXml = null };
-    }
-
-    private static byte ApplyTint(byte channel, double tint)
-    {
-        var value = tint < 0
-            ? channel * (1.0 + tint)
-            : channel + ((255 - channel) * tint);
-        return (byte)Math.Clamp(Math.Round(value), 0, 255);
     }
 
     private static string? RenameNativeFormatScheme(string? formatSchemeXml, string effectsName)

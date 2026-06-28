@@ -614,10 +614,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
             new XElement(drawingNs + "gsLst",
                 new XElement(drawingNs + "gs",
                     new XAttribute("pos", "0"),
-                    ToRgbColorElement(startColor, drawingNs)),
+                    XlsxDrawingColorWriter.ToRgbColorElement(startColor, drawingNs)),
                 new XElement(drawingNs + "gs",
                     new XAttribute("pos", "100000"),
-                    ToRgbColorElement(endColor, drawingNs))),
+                    XlsxDrawingColorWriter.ToRgbColorElement(endColor, drawingNs))),
             new XElement(drawingNs + "lin",
                 new XAttribute("ang", ToGradientFillAngle(direction)),
                 new XAttribute("scaled", "1")));
@@ -637,7 +637,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute("blurRad", "40000"),
                 new XAttribute("dist", "20000"),
                 new XAttribute("dir", "5400000"),
-                ToRgbColorElement(new CellColor(128, 128, 128), drawingNs)));
+                XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(128, 128, 128), drawingNs)));
 
     private static XElement ToInnerShadowEffect(XNamespace drawingNs) =>
         new(drawingNs + "effectLst",
@@ -669,7 +669,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
             DrawingShapeEffectPreset.Glow => new XElement(drawingNs + "effectLst",
                 new XElement(drawingNs + "glow",
                     new XAttribute("rad", "50000"),
-                    ToRgbColorElement(new CellColor(91, 155, 213), drawingNs))),
+                    XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(91, 155, 213), drawingNs))),
             DrawingShapeEffectPreset.SoftEdges => new XElement(drawingNs + "effectLst",
                 new XElement(drawingNs + "softEdge", new XAttribute("rad", "30000"))),
             _ => null
@@ -691,9 +691,6 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XAttribute("rig", "threePt"),
                     new XAttribute("dir", "t")))
             : null;
-
-    private static XElement ToRgbColorElement(CellColor color, XNamespace drawingNs) =>
-        new(drawingNs + "srgbClr", new XAttribute("val", FormatColor(color)));
 
     private static XElement? ToLineProperties(
         WorkbookThemeColorReference? outlineThemeColor,
@@ -779,23 +776,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         WorkbookThemeColorReference? themeColor,
         CellColor? color)
     {
-        XElement colorElement;
-        if (themeColor is { } theme)
-        {
-            colorElement = new XElement(drawingNs + "schemeClr",
-                new XAttribute("val", ToDrawingSchemeColor(theme.Slot)));
-            ApplyTint(colorElement, theme.Tint, drawingNs);
-        }
-        else if (color is { } concrete)
-        {
-            colorElement = new XElement(drawingNs + "srgbClr",
-                new XAttribute("val", FormatColor(concrete)));
-        }
-        else
-        {
+        var colorElement = XlsxDrawingColorWriter.ToColorElement(themeColor, color, drawingNs)
             // Fallback: transparent white.
-            colorElement = new XElement(drawingNs + "srgbClr", new XAttribute("val", "FFFFFF"));
-        }
+            ?? XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(255, 255, 255), drawingNs);
 
         return new XElement(drawingNs + "gs",
             new XAttribute("pos", position),
@@ -805,40 +788,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static XElement? ToSolidFill(
         WorkbookThemeColorReference? themeColor,
         CellColor? color,
-        XNamespace drawingNs)
-    {
-        XElement? colorElement = null;
-        if (themeColor is { } theme)
-        {
-            colorElement = new XElement(drawingNs + "schemeClr",
-                new XAttribute("val", ToDrawingSchemeColor(theme.Slot)));
-            ApplyTint(colorElement, theme.Tint, drawingNs);
-        }
-        else if (color is { } concrete)
-        {
-            colorElement = new XElement(drawingNs + "srgbClr",
-                new XAttribute("val", FormatColor(concrete)));
-        }
-
-        return colorElement is null
-            ? null
-            : new XElement(drawingNs + "solidFill", colorElement);
-    }
-
-    private static void ApplyTint(XElement colorElement, double tint, XNamespace drawingNs)
-    {
-        if (tint > 0)
-        {
-            colorElement.Add(
-                new XElement(drawingNs + "lumMod", new XAttribute("val", Math.Clamp((int)Math.Round((1 - tint) * 100000), 0, 100000))),
-                new XElement(drawingNs + "lumOff", new XAttribute("val", Math.Clamp((int)Math.Round(tint * 100000), 0, 100000))));
-        }
-        else if (tint < 0)
-        {
-            colorElement.Add(new XElement(drawingNs + "lumMod",
-                new XAttribute("val", Math.Clamp((int)Math.Round((1 + tint) * 100000), 0, 100000))));
-        }
-    }
+        XNamespace drawingNs) =>
+        XlsxDrawingColorWriter.ToSolidFill(themeColor, color, drawingNs);
 
     private static string ToDrawingPreset(DrawingShapeKind kind) =>
         kind switch
@@ -924,27 +875,6 @@ internal static class XlsxWorksheetDrawingObjectWriter
 
     private static string DrawingName(string? name, string fallback) =>
         string.IsNullOrWhiteSpace(name) ? fallback : name;
-
-    private static string FormatColor(CellColor color) =>
-        $"{color.R:X2}{color.G:X2}{color.B:X2}";
-
-    private static string ToDrawingSchemeColor(WorkbookThemeColorSlot slot) =>
-        slot switch
-        {
-            WorkbookThemeColorSlot.Dark1 => "dk1",
-            WorkbookThemeColorSlot.Light1 => "lt1",
-            WorkbookThemeColorSlot.Dark2 => "dk2",
-            WorkbookThemeColorSlot.Light2 => "lt2",
-            WorkbookThemeColorSlot.Accent1 => "accent1",
-            WorkbookThemeColorSlot.Accent2 => "accent2",
-            WorkbookThemeColorSlot.Accent3 => "accent3",
-            WorkbookThemeColorSlot.Accent4 => "accent4",
-            WorkbookThemeColorSlot.Accent5 => "accent5",
-            WorkbookThemeColorSlot.Accent6 => "accent6",
-            WorkbookThemeColorSlot.Hyperlink => "hlink",
-            WorkbookThemeColorSlot.FollowedHyperlink => "folHlink",
-            _ => "accent1"
-        };
 
     private static long PixelsToEmus(double pixels) =>
         (long)Math.Round(Math.Max(0, pixels) * 9525.0);
