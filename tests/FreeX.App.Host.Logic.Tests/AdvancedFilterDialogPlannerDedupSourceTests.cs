@@ -15,6 +15,7 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
         var dialogSource = DialogSourceTestSupport.ReadHostSources(
             "AdvancedFilterDialog.cs",
             "AdvancedFilterDialog.Planning.cs");
+        var inputParserSource = DialogSourceTestSupport.ReadHostSources("AdvancedFilterInputParser.cs");
         var servicesSource = DialogSourceTestSupport.ReadAppServicesSource("AdvancedFilterPlanner.cs");
 
         File.Exists(hostPlannerPath)
@@ -28,6 +29,7 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
         dialogSource.Should().Contain(
             "using ServicesAdvancedFilterPlanner = FreeX.App.Services.AdvancedFilterPlanner;");
         dialogSource.Should().Contain("ServicesAdvancedFilterPlanner.CreatePlan(");
+        dialogSource.Should().Contain("ServicesAdvancedFilterPlanner.CreateRangeSelectionRequest(");
         dialogSource.Should().Contain("FormatAdvancedFilterPlanError(");
         dialogSource.Should().Contain("UiText.Get(\"AdvancedFilter_EnterValidListRange\")");
         dialogSource.Should().Contain("UiText.Get(\"AdvancedFilter_EnterValidCriteriaRange\")");
@@ -40,10 +42,19 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
         dialogSource.Should().NotContain("AdvancedFilterCommand.IsCriteriaRangeWithinSupportedBounds");
         dialogSource.Should().NotContain("AdvancedFilterCommand.IsCopyOutputWithinSupportedBounds");
 
+        inputParserSource.Should().Contain("FreeX.App.Services.AdvancedFilterPlanner.TryParseRange(");
+        inputParserSource.Should().Contain("FreeX.App.Services.AdvancedFilterPlanner.TryParseCopyDestination(");
+        inputParserSource.Should().Contain("FreeX.App.Services.AdvancedFilterPlanner.TryParseCopyDestinationRange(");
+        inputParserSource.Should().Contain("FreeX.App.Services.AdvancedFilterPlanner.ParseUniqueRecordsOnly(");
+        inputParserSource.Should().NotContain("WorkbookRangeTextCodec");
+        inputParserSource.Should().NotContain("WorkbookReferenceNavigator");
+        inputParserSource.Should().NotContain("CellAddress.TryParse");
+
         servicesSource.Should().Contain("AdvancedFilterPlanError");
         servicesSource.Should().Contain("AdvancedFilterCommand.IsListRangeWithinSupportedBounds");
         servicesSource.Should().Contain("AdvancedFilterCommand.IsCriteriaRangeWithinSupportedBounds");
         servicesSource.Should().Contain("AdvancedFilterCommand.MaxListColumns");
+        servicesSource.Should().Contain("CreateRangeSelectionRequest(");
         servicesSource.Should().NotContain("UiText.Get(");
     }
 }

@@ -303,6 +303,65 @@ public sealed class AdvancedFilterPlannerTests
     }
 
     [Theory]
+    [InlineData("A1:C10", true, "A1", "C10")]
+    [InlineData(" B2 ", true, "B2", "B2")]
+    [InlineData("$D$4:$F$6", true, "D4", "F6")]
+    [InlineData("R4C4:R4C6", true, "D4", "F4")]
+    [InlineData("Missing!A1:B2", false, "", "")]
+    [InlineData("A1:B2:C3", false, "", "")]
+    public void TryParseRange_ParsesAdvancedFilterReferences(
+        string input,
+        bool expected,
+        string expectedStart,
+        string expectedEnd)
+    {
+        var result = AdvancedFilterPlanner.TryParseRange(
+            SheetId,
+            input,
+            sheetName => string.Equals(sheetName, "Sheet1", StringComparison.OrdinalIgnoreCase) ? SheetId : null,
+            out var range);
+
+        result.Should().Be(expected);
+        if (expected)
+        {
+            range.Start.ToA1().Should().Be(expectedStart);
+            range.End.ToA1().Should().Be(expectedEnd);
+        }
+    }
+
+    [Fact]
+    public void TryParseRange_ParsesSheetQualifiedRange()
+    {
+        AdvancedFilterPlanner.TryParseRange(
+            SheetId.New(),
+            "Sheet1!A1:B2",
+            sheetName => string.Equals(sheetName, "Sheet1", StringComparison.OrdinalIgnoreCase) ? SheetId : null,
+            out var range).Should().BeTrue();
+
+        range.Start.Sheet.Should().Be(SheetId);
+        range.Start.ToA1().Should().Be("A1");
+        range.End.ToA1().Should().Be("B2");
+    }
+
+    [Theory]
+    [InlineData("", true, null)]
+    [InlineData("   ", true, null)]
+    [InlineData("$D$4", true, "D4")]
+    [InlineData("R4C4", true, "D4")]
+    [InlineData("A1:B2", false, null)]
+    [InlineData("bad", false, null)]
+    public void TryParseCopyDestination_AllowsBlankOrSingleCellAddress(
+        string input,
+        bool expected,
+        string? expectedAddress)
+    {
+        var result = AdvancedFilterPlanner.TryParseCopyDestination(input, SheetId, out var address);
+
+        result.Should().Be(expected);
+        address?.ToA1().Should().Be(expectedAddress);
+    }
+
+    [Theory]
     [InlineData("", true, null)]
     [InlineData("   ", true, null)]
     [InlineData("$D$4", true, "D4")]

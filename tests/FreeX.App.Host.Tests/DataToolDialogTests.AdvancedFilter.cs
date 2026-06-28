@@ -534,6 +534,10 @@ public sealed partial class DataToolDialogTests
                 AdvancedFilterRangeSelectionTarget.CriteriaRange,
                 "E1:F4",
                 CollapseDialog: true));
+
+        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.Planning.cs");
+        source.Should().Contain("ServicesAdvancedFilterPlanner.CreateRangeSelectionRequest(");
+        source.Should().Contain("ToServicesRangeSelectionTarget(target)");
     }
 
     [Theory]
