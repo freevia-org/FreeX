@@ -1473,6 +1473,166 @@ public sealed class ChartEditingPlannerTests
         ChartStockFormatPlanner.Validate(new ChartStockFormatInput(100, null, null, null, null, null, 50)).Should().NotBeNull();
     }
 
+    // ---- ChartQuickCommandPlanner -------------------------------------------------------------------
+
+    [Fact]
+    public void QuickCommand_PieCommands_GateAndCycleLayoutOptions()
+    {
+        var doughnut = MakeChartWithSeries(ChartType.Doughnut, columns: 2);
+        doughnut.FirstSliceAngle = 270;
+        doughnut.DoughnutHoleSize = 0.4;
+        doughnut.ExplodedSliceIndex = -1;
+        doughnut.ExplodedSliceDistance = 0.1;
+
+        ChartQuickCommandPlanner.CanApply(new ChartModel { Type = ChartType.Column }, ChartQuickCommand.FirstSliceAngle)
+            .Should().BeFalse();
+        ChartQuickCommandPlanner.CanApply(doughnut, ChartQuickCommand.FirstSliceAngle).Should().BeTrue();
+        ChartQuickCommandPlanner.CanApply(doughnut, ChartQuickCommand.DoughnutHoleSize).Should().BeTrue();
+        ChartQuickCommandPlanner.CanApply(doughnut, ChartQuickCommand.ExplodedSlice).Should().BeTrue();
+
+        ChartQuickCommandPlanner.Plan(doughnut, ChartQuickCommand.FirstSliceAngle)
+            .FirstSliceAngle.Should().Be(0);
+        ChartQuickCommandPlanner.Plan(doughnut, ChartQuickCommand.DoughnutHoleSize)
+            .DoughnutHoleSize.Should().Be(0.55);
+        var exploded = ChartQuickCommandPlanner.Plan(doughnut, ChartQuickCommand.ExplodedSlice);
+        exploded.ExplodedSliceIndex.Should().Be(0);
+        exploded.ExplodedSliceDistance.Should().BeApproximately(0.16, 0.0001);
+    }
+
+    [Fact]
+    public void QuickCommand_DataLabelCommands_ProjectLabelAndPointOptions()
+    {
+        var chart = MakeChartWithSeries(ChartType.Column, columns: 3);
+        chart.DataLabelSeparator = ChartDataLabelSeparator.Comma;
+        chart.DataLabelBorderThickness = 3;
+        chart.DataLabelFontSize = 16;
+
+        var category = ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.DataLabelCategoryName);
+        category.ShowDataLabels.Should().BeTrue();
+        category.ShowDataLabelCategoryName.Should().BeTrue();
+
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.DataLabelSeparator)
+            .DataLabelSeparator.Should().Be(ChartDataLabelSeparator.Semicolon);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.DataLabelBorder)
+            .DataLabelBorderThickness.Should().Be(0.75);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.DataLabelFontSize)
+            .DataLabelFontSize.Should().Be(9);
+
+        var point = ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.PointDataLabel);
+        point.ShowDataLabels.Should().BeTrue();
+        var format = point.PointDataLabelFormats.Should().ContainSingle().Which;
+        format.SeriesIndex.Should().Be(0);
+        format.PointIndex.Should().Be(0);
+        format.FillColor.Should().Be(ChartQuickFormatCycler.DefaultSeriesColor);
+        format.BorderThickness.Should().Be(0.75);
+        format.FontSize.Should().Be(9);
+    }
+
+    [Fact]
+    public void QuickCommand_TextPlotAndLegendCommands_ProjectStyleOptions()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            ChartTitleFontSize = 24,
+            AxisTitleFontSize = 18,
+            PlotAreaBorderThickness = 3,
+            LegendBorderThickness = 3,
+            LegendOverlay = false,
+        };
+
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.ChartAreaFill)
+            .ChartAreaFillColor.Should().Be(ChartQuickFormatCycler.DefaultSeriesColor);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.ChartTitleFontSize)
+            .ChartTitleFontSize.Should().Be(12);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.AxisTitleFontSize)
+            .AxisTitleFontSize.Should().Be(9);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.PlotAreaBorder)
+            .PlotAreaBorderThickness.Should().Be(1);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.LegendBorder)
+            .LegendBorderThickness.Should().Be(0.75);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.LegendOverlay)
+            .LegendOverlay.Should().BeTrue();
+    }
+
+    [Fact]
+    public void QuickCommand_TrendlineCommands_HonorSupportAndCycleOptions()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            TrendlinePeriod = 6,
+            TrendlineOrder = 6,
+            ShowTrendlineEquation = false,
+            TrendlineDashStyle = ChartLineDashStyle.Dash,
+            TrendlineThickness = 3,
+        };
+
+        ChartQuickCommandPlanner.CanApply(new ChartModel { Type = ChartType.Pie }, ChartQuickCommand.TrendlineEquation)
+            .Should().BeFalse();
+        ChartQuickCommandPlanner.CanApply(chart, ChartQuickCommand.TrendlineEquation).Should().BeTrue();
+
+        var period = ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.TrendlineMovingAveragePeriod);
+        period.ShowLinearTrendline.Should().BeTrue();
+        period.TrendlineType.Should().Be(ChartTrendlineType.MovingAverage);
+        period.TrendlinePeriod.Should().Be(2);
+
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.TrendlinePolynomialOrder)
+            .TrendlineOrder.Should().Be(2);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.TrendlineEquation)
+            .ShowTrendlineEquation.Should().BeTrue();
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.TrendlineDash)
+            .TrendlineDashStyle.Should().Be(ChartLineDashStyle.Dot);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.TrendlineThickness)
+            .TrendlineThickness.Should().Be(1.5);
+    }
+
+    [Fact]
+    public void QuickCommand_SecondaryComboAndSeriesCommands_ReuseSharedPolicy()
+    {
+        var chart = MakeChartWithSeries(ChartType.Column, columns: 4);
+        ChartQuickCommandPlanner.CanApply(chart, ChartQuickCommand.SecondaryAxisSeries).Should().BeTrue();
+        ChartQuickCommandPlanner.CanApply(chart, ChartQuickCommand.ComboSeries).Should().BeTrue();
+
+        var secondary = ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.SecondaryAxisSeries);
+        secondary.ShowSecondaryAxis.Should().BeTrue();
+        secondary.SecondaryAxisSeriesIndexes.Should().Equal(1);
+
+        var combo = ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.ComboSeries);
+        combo.UseComboLineForSecondarySeries.Should().BeTrue();
+        combo.ComboLineSeriesIndexes.Should().Equal(1);
+
+        chart.SeriesFormats.Add(new ChartSeriesFormat(0)
+        {
+            StrokeThickness = 4,
+            DashStyle = ChartLineDashStyle.Solid,
+        });
+
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.SeriesWidth)
+            .SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0 && format.StrokeThickness == 1.5);
+        ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.SeriesDash)
+            .SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0 && format.DashStyle == null);
+
+        var line = MakeChartWithSeries(ChartType.Line, columns: 3);
+        ChartQuickCommandPlanner.CanApply(chart, ChartQuickCommand.SeriesMarkerSize).Should().BeFalse();
+        ChartQuickCommandPlanner.CanApply(line, ChartQuickCommand.SeriesMarkerSize).Should().BeTrue();
+        ChartQuickCommandPlanner.Plan(line, ChartQuickCommand.SeriesMarkerSize)
+            .SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0 && format.MarkerSize == 5);
+    }
+
+    [Fact]
+    public void QuickCommand_RoundTripsThroughSetChartLayoutCommand()
+    {
+        var chart = MakeChartWithSeries(ChartType.Line, columns: 3);
+
+        ApplyLayout(chart, ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.SeriesDash));
+        ApplyLayout(chart, ChartQuickCommandPlanner.Plan(chart, ChartQuickCommand.LegendOverlay));
+
+        chart.SeriesFormats.Single(format => format.SeriesIndex == 0).DashStyle.Should().Be(ChartLineDashStyle.Dash);
+        chart.ShowLegend.Should().BeTrue();
+        chart.LegendOverlay.Should().BeTrue();
+    }
+
     // ---- ChartQuickFormatCycler ----------------------------------------------------------------------
 
     [Fact]
