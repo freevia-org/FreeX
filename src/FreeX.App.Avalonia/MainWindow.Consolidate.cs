@@ -45,7 +45,7 @@ public sealed partial class MainWindow
 
         var functionBox = new ComboBox
         {
-            ItemsSource = ConsolidateShellPlanner.FunctionChoices.Select(c => c.Label).ToList(),
+            ItemsSource = ConsolidateDialogPlanner.FunctionChoices.Select(c => c.Label).ToList(),
             SelectedIndex = 0,
             MinWidth = 160,
         };
@@ -170,7 +170,7 @@ public sealed partial class MainWindow
 
             var options = new ConsolidateOptions
             {
-                Function = ConsolidateShellPlanner.FunctionChoices[Math.Max(0, functionBox.SelectedIndex)].Function,
+                Function = ConsolidateDialogPlanner.FunctionChoices[Math.Max(0, functionBox.SelectedIndex)].Function,
                 UseTopRowLabels = topRowBox.IsChecked == true,
                 UseLeftColumnLabels = leftColumnBox.IsChecked == true,
             };

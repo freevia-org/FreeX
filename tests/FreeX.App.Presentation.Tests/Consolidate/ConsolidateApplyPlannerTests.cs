@@ -1,19 +1,18 @@
-using FreeX.App.Avalonia;
 using FreeX.App.Presentation.Consolidate;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using FluentAssertions;
 
-namespace FreeX.App.Avalonia.Tests;
+namespace FreeX.App.Presentation.Tests.Consolidate;
 
 /// <summary>
-/// Unit tests for the UI-free Consolidate planning adapter: reading a sheet range into the portable
+/// Unit tests for the UI-free Consolidate apply planner: reading a sheet range into the portable
 /// <see cref="ConsolidateCellValue"/> grid the planner consumes, mapping a planned <see cref="ConsolidateResult"/>
 /// over a destination anchor into cell edits (by-position and by-labels), and reporting the non-empty cells an
 /// apply would overwrite. No running shell required.
 /// </summary>
-public sealed class ConsolidateShellPlannerTests
+public sealed class ConsolidateApplyPlannerTests
 {
     [Fact]
     public void ReadSource_ClassifiesNumbersLabelsAndBlanks()
@@ -24,7 +23,7 @@ public sealed class ConsolidateShellPlannerTests
         // (1,2)/(2,1) populated, (2,2) left blank.
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("South"));
 
-        var grid = ConsolidateShellPlanner.ReadSource(sheet, Range(sheet.Id, 1, 1, 2, 2));
+        var grid = ConsolidateApplyPlanner.ReadSource(sheet, Range(sheet.Id, 1, 1, 2, 2));
 
         grid.GetLength(0).Should().Be(2);
         grid.GetLength(1).Should().Be(2);
@@ -38,10 +37,10 @@ public sealed class ConsolidateShellPlannerTests
     [Fact]
     public void ToCellValue_MapsScalarKinds()
     {
-        ConsolidateShellPlanner.ToCellValue(new NumberValue(3.5)).IsNumber.Should().BeTrue();
-        ConsolidateShellPlanner.ToCellValue(new TextValue("x")).LabelText().Should().Be("x");
-        ConsolidateShellPlanner.ToCellValue(new BoolValue(true)).LabelText().Should().Be("TRUE");
-        ConsolidateShellPlanner.ToCellValue(null).IsBlank.Should().BeTrue();
+        ConsolidateApplyPlanner.ToCellValue(new NumberValue(3.5)).IsNumber.Should().BeTrue();
+        ConsolidateApplyPlanner.ToCellValue(new TextValue("x")).LabelText().Should().Be("x");
+        ConsolidateApplyPlanner.ToCellValue(new BoolValue(true)).LabelText().Should().Be("TRUE");
+        ConsolidateApplyPlanner.ToCellValue(null).IsBlank.Should().BeTrue();
     }
 
     [Fact]
@@ -55,7 +54,7 @@ public sealed class ConsolidateShellPlannerTests
         var result = ConsolidatePlanner.Plan([sourceA, sourceB], options);
 
         var destination = new CellAddress(sheet.Id, 5, 3); // C5
-        var edits = ConsolidateShellPlanner.MapToEdits(sheet.Id, result, destination);
+        var edits = ConsolidateApplyPlanner.MapToEdits(sheet.Id, result, destination);
 
         NumberAt(edits, sheet.Id, 5, 3).Should().Be(11);
         NumberAt(edits, sheet.Id, 5, 4).Should().Be(22);
@@ -79,7 +78,7 @@ public sealed class ConsolidateShellPlannerTests
         var result = ConsolidatePlanner.Plan([sourceA, sourceB], options);
 
         var destination = new CellAddress(sheet.Id, 1, 1);
-        var edits = ConsolidateShellPlanner.MapToEdits(sheet.Id, result, destination);
+        var edits = ConsolidateApplyPlanner.MapToEdits(sheet.Id, result, destination);
 
         // The column/row labels are emitted as label cells, and the aligned body sums to 12.
         var labels = edits.Select(e => Label(e.NewCell)).ToList();
@@ -96,33 +95,12 @@ public sealed class ConsolidateShellPlannerTests
         var source = Source(new double[,] { { 1 } });
         var result = ConsolidatePlanner.Plan([source], new ConsolidateOptions { Function = ConsolidateFunction.Sum });
         var destination = new CellAddress(sheet.Id, 5, 3);
-        var edits = ConsolidateShellPlanner.MapToEdits(sheet.Id, result, destination);
+        var edits = ConsolidateApplyPlanner.MapToEdits(sheet.Id, result, destination);
 
-        var overwrites = ConsolidateShellPlanner.FindOverwriteTargets(sheet, edits);
+        var overwrites = ConsolidateApplyPlanner.FindOverwriteTargets(sheet, edits);
 
         overwrites.Should().ContainSingle()
             .Which.Should().Be(new CellAddress(sheet.Id, 5, 3));
-    }
-
-    [Fact]
-    public void ConsolidateShellPlanner_DelegatesToPresentationPlanners()
-    {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "ConsolidateShellPlanner.cs"));
-
-        source.Should().Contain("SharedApplyPlanner.ReadSource");
-        source.Should().Contain("SharedDialogPlanner.FunctionChoices");
-        source.Should().NotContain("CultureInfo");
-        source.Should().NotContain("new NumberValue");
-    }
-
-    [Fact]
-    public void MainWindowConsolidate_UsesSharedApplyPlanAndCoreCommand()
-    {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Consolidate.cs"));
-
-        source.Should().Contain("ConsolidateDialogPlanner.TryPlanApply(");
-        source.Should().Contain("new ConsolidateCommand(");
-        source.Should().NotContain("new EditCellsCommand(sheetId, edits)");
     }
 
     private static ConsolidateSource Source(double[,] values)
@@ -170,18 +148,4 @@ public sealed class ConsolidateShellPlannerTests
 
     private static GridRange Range(SheetId sheetId, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(new CellAddress(sheetId, startRow, startCol), new CellAddress(sheetId, endRow, endCol));
-
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
 }
