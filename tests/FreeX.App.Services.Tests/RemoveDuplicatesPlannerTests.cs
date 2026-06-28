@@ -135,6 +135,19 @@ public sealed class RemoveDuplicatesPlannerTests
             new RemoveDuplicateColumnChoice(1, "Rep", false));
     }
 
+    [Fact]
+    public void GetSelectedColumnOffsets_ReturnsSelectedOffsetsInDisplayOrder()
+    {
+        RemoveDuplicatesPlanner.GetSelectedColumnOffsets(
+            [
+                new RemoveDuplicateColumnChoice(2, "Amount", true),
+                new RemoveDuplicateColumnChoice(0, "Region", false),
+                new RemoveDuplicateColumnChoice(1, "Rep", true),
+            ])
+            .Should()
+            .Equal(2u, 1u);
+    }
+
     private static Workbook CreateWorkbook()
     {
         var workbook = new Workbook("Book");

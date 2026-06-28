@@ -84,6 +84,16 @@ public static class RemoveDuplicatesPlanner
     public static IReadOnlyList<RemoveDuplicateColumnChoice> ClearAll(IEnumerable<RemoveDuplicateColumnChoice> columns) =>
         columns.Select(static column => column with { IsSelected = false }).ToArray();
 
+    public static IReadOnlyList<uint> GetSelectedColumnOffsets(IEnumerable<RemoveDuplicateColumnChoice> columns)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+
+        return columns
+            .Where(static column => column.IsSelected)
+            .Select(static column => column.Offset)
+            .ToArray();
+    }
+
     public static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(
         int columnCount,
         bool isSelected = true,
