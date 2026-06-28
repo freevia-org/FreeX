@@ -385,6 +385,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         source.Should().Contain("var homeMenu = CreateNativeMenu(NativeMenuTopLevelId.Home);");
         source.Should().Contain("var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);");
+        source.Should().Contain("var pageLayoutMenu = CreateNativeMenu(NativeMenuTopLevelId.PageLayout);");
+        source.Should().Contain("var formulasMenu = CreateNativeMenu(NativeMenuTopLevelId.Formulas);");
         source.Should().Contain("var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);");
         source.Should().Contain("var reviewMenu = CreateNativeMenu(NativeMenuTopLevelId.Review);");
         source.Should().Contain("var viewMenu = CreateNativeMenu(NativeMenuTopLevelId.View);");
@@ -402,16 +404,36 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.Clear)");
         homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.Find)");
 
-        var pageLayoutMenuBlock = ExtractSourceBlock(
-            normalizedSource,
-            "var pageLayoutMenu = new NativeMenu();",
-            "pageLayoutMenu.Items.Add(_printHeadingsMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_themesMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageMarginsMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_printAreaMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageBreaksMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_sheetBackgroundMenuItem);");
-        pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageSetupMenuItem);");
+        var pageLayoutMenuCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeMenuEntryPlan> PageLayoutMenuEntries",
+            "    ];");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.Themes)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.PageMargins)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.PrintArea)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.PageBreaks)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.SheetBackground)");
+        pageLayoutMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.PageSetup)");
+        AssertBefore(pageLayoutMenuCatalogBlock, "NativeMenuItemId.Themes", "NativeMenuItemId.PageMargins");
+        AssertBefore(pageLayoutMenuCatalogBlock, "NativeMenuItemId.PageMargins", "NativeMenuItemId.PageSetup");
+        AssertBefore(pageLayoutMenuCatalogBlock, "NativeMenuItemId.PageSetup", "NativeMenuItemId.PrintGridlines");
+
+        var formulasMenuCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeMenuEntryPlan> FormulasMenuEntries",
+            "    ];");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.AutoSum)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.InsertFunction)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.NameManager)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.DefineName)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.CreateNamesFromSelection)");
+        formulasMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.ShowFormulas)");
+        AssertBefore(formulasMenuCatalogBlock, "NativeMenuItemId.AutoSum", "NativeMenuItemId.InsertFunction");
+        AssertBefore(formulasMenuCatalogBlock, "NativeMenuItemId.InsertFunction", "NativeMenuItemId.NameManager");
+        AssertBefore(formulasMenuCatalogBlock, "NativeMenuItemId.CreateNamesFromSelection", "NativeMenuItemId.ShowFormulas");
+        source.Should().NotContain("var pageLayoutMenu = new NativeMenu();");
+        source.Should().NotContain("pageLayoutMenu.Items.Add(");
+        source.Should().NotContain("formulasMenu.Items.Add(");
 
         smokeSource.Should().Contain("NativeTopLevelMenuOrder");
         smokeSource.Should().Contain("NativeDockTopLevelMenuOrder");
@@ -435,7 +457,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         duplicates.Should().BeEmpty("Avalonia NativeMenuItem instances can only have one NativeMenu parent");
         source.Should().Contain("ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);");
-        source.Should().Contain("ConfigurePageSetupNativeMenuItem(_pageSetupMenuItem);");
+        source.Should().Contain("_pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();");
     }
 
     [Fact]

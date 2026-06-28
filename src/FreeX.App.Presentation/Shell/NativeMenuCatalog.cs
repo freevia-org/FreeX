@@ -149,6 +149,45 @@ public enum NativeMenuItemId
     PreviousNote,
     NextComment,
     PreviousComment,
+    Themes,
+    ThemeColors,
+    ThemeFonts,
+    ThemeEffects,
+    PageMargins,
+    PageMarginsNormal,
+    PageMarginsWide,
+    PageMarginsNarrow,
+    PageMarginsCustom,
+    PageOrientation,
+    PageOrientationPortrait,
+    PageOrientationLandscape,
+    PaperSize,
+    PaperSizeLetter,
+    PaperSizeLegal,
+    PaperSizeA4,
+    PaperSizeMore,
+    PrintArea,
+    SetPrintArea,
+    ClearPrintArea,
+    PageBreaks,
+    SheetBackground,
+    ChooseSheetBackground,
+    DeleteSheetBackground,
+    PageSetup,
+    PrintGridlines,
+    PrintHeadings,
+    InsertFunction,
+    NameManager,
+    DefineName,
+    CreateNamesFromSelection,
+    AutoSum,
+    AutoSumSum,
+    AutoSumAverage,
+    AutoSumCountNumbers,
+    AutoSumCountAll,
+    AutoSumMax,
+    AutoSumMin,
+    ShowFormulas,
     ShowGridlines,
     ShowHeadings,
     ZoomIn,
@@ -347,7 +386,8 @@ public sealed record NativeMenuAvailabilityContext(
     bool IsShowingHeadings,
     bool CanZoomIn,
     bool CanZoomOut,
-    bool IsPageBreakPreview);
+    bool IsPageBreakPreview,
+    bool IsShowingFormulas);
 
 public sealed record NativeMenuAvailabilityItem(
     NativeMenuItemId Id,
@@ -565,6 +605,45 @@ public static class NativeMenuCatalog
         new(NativeMenuItemId.PreviousNote, "Previous Note", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.NextComment, "Next Comment", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.PreviousComment, "Previous Comment", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.Themes, "Themes", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.ThemeColors, "Theme Colors", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.ThemeFonts, "Theme Fonts", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.ThemeEffects, "Theme Effects", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageMargins, "Margins", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageMarginsNormal, "Normal", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageMarginsWide, "Wide", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageMarginsNarrow, "Narrow", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageMarginsCustom, "Custom Margins...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageOrientation, "Page Orientation", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageOrientationPortrait, "Portrait", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageOrientationLandscape, "Landscape", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PaperSize, "Paper Size", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PaperSizeLetter, "Letter", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PaperSizeLegal, "Legal", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PaperSizeA4, "A4", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PaperSizeMore, "More Paper Sizes...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PrintArea, "Print Area", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.SetPrintArea, "Set Print Area", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.ClearPrintArea, "Clear Print Area", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageBreaks, "Breaks...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.SheetBackground, "Background", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.ChooseSheetBackground, "Choose Background...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.DeleteSheetBackground, "Delete Background", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PageSetup, "AvaloniaNativeMenu_PageSetup", UsesResourceKey: true, RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PrintGridlines, "Gridlines...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.PrintHeadings, "Headings...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.InsertFunction, "Insert Function...", new NativeMenuGesturePlan(NativeMenuGestureKey.F3, NativeMenuGestureModifiers.Shift)),
+        new(NativeMenuItemId.NameManager, "Name Manager...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.DefineName, "Define Name...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.CreateNamesFromSelection, "Create from Selection...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.AutoSum, "AutoSum", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.AutoSumSum, "Sum", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Alt)),
+        new(NativeMenuItemId.AutoSumAverage, "Average", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.AutoSumCountNumbers, "Count Numbers", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.AutoSumCountAll, "Count All", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.AutoSumMax, "Max", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.AutoSumMin, "Min", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.ShowFormulas, "Show Formulas", new NativeMenuGesturePlan(NativeMenuGestureKey.Oem3, NativeMenuGestureModifiers.Control)),
         new(NativeMenuItemId.ShowGridlines, "Gridlines", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.ShowHeadings, "Headings", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.ZoomIn, "Zoom In", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Meta)),
@@ -709,6 +788,37 @@ public static class NativeMenuCatalog
         Item(NativeMenuItemId.InsertTextBox)
     ];
 
+    public static IReadOnlyList<NativeMenuEntryPlan> PageLayoutMenuEntries { get; } =
+    [
+        Item(NativeMenuItemId.Themes),
+        Item(NativeMenuItemId.ThemeColors),
+        Item(NativeMenuItemId.ThemeFonts),
+        Item(NativeMenuItemId.ThemeEffects),
+        NativeMenuEntryPlan.Separator,
+        Item(NativeMenuItemId.PageMargins),
+        Item(NativeMenuItemId.PageOrientation),
+        Item(NativeMenuItemId.PaperSize),
+        Item(NativeMenuItemId.PrintArea),
+        Item(NativeMenuItemId.PageBreaks),
+        Item(NativeMenuItemId.SheetBackground),
+        Item(NativeMenuItemId.PageSetup),
+        NativeMenuEntryPlan.Separator,
+        Item(NativeMenuItemId.PrintGridlines),
+        Item(NativeMenuItemId.PrintHeadings)
+    ];
+
+    public static IReadOnlyList<NativeMenuEntryPlan> FormulasMenuEntries { get; } =
+    [
+        Item(NativeMenuItemId.AutoSum),
+        Item(NativeMenuItemId.InsertFunction),
+        NativeMenuEntryPlan.Separator,
+        Item(NativeMenuItemId.NameManager),
+        Item(NativeMenuItemId.DefineName),
+        Item(NativeMenuItemId.CreateNamesFromSelection),
+        NativeMenuEntryPlan.Separator,
+        Item(NativeMenuItemId.ShowFormulas)
+    ];
+
     public static IReadOnlyList<NativeMenuEntryPlan> DataMenuEntries { get; } =
     [
         Item(NativeMenuItemId.SortAscending),
@@ -818,6 +928,52 @@ public static class NativeMenuCatalog
         Item(NativeMenuItemId.ClearHyperlinks)
     ];
 
+    public static IReadOnlyList<NativeMenuEntryPlan> PageMarginsMenuEntries { get; } =
+    [
+        Item(NativeMenuItemId.PageMarginsNormal),
+        Item(NativeMenuItemId.PageMarginsWide),
+        Item(NativeMenuItemId.PageMarginsNarrow),
+        NativeMenuEntryPlan.Separator,
+        Item(NativeMenuItemId.PageMarginsCustom)
+    ];
+
+    public static IReadOnlyList<NativeMenuEntryPlan> PageOrientationMenuEntries { get; } =
+    [
+        Item(NativeMenuItemId.PageOrientationPortrait),
+        Item(NativeMenuItemId.PageOrientationLandscape)
+    ];
+
+    public static IReadOnlyList<NativeMenuEntryPlan> PaperSizeMenuEntries { get; } =
+    [
+        Item(NativeMenuItemId.PaperSizeLetter),
+        Item(NativeMenuItemId.PaperSizeLegal),
+        Item(NativeMenuItemId.PaperSizeA4),
+        NativeMenuEntryPlan.Separator,
+        Item(NativeMenuItemId.PaperSizeMore)
+    ];
+
+    public static IReadOnlyList<NativeMenuEntryPlan> PrintAreaMenuEntries { get; } =
+    [
+        Item(NativeMenuItemId.SetPrintArea),
+        Item(NativeMenuItemId.ClearPrintArea)
+    ];
+
+    public static IReadOnlyList<NativeMenuEntryPlan> SheetBackgroundMenuEntries { get; } =
+    [
+        Item(NativeMenuItemId.ChooseSheetBackground),
+        Item(NativeMenuItemId.DeleteSheetBackground)
+    ];
+
+    public static IReadOnlyList<NativeMenuEntryPlan> AutoSumMenuEntries { get; } =
+    [
+        Item(NativeMenuItemId.AutoSumSum),
+        Item(NativeMenuItemId.AutoSumAverage),
+        Item(NativeMenuItemId.AutoSumCountNumbers),
+        Item(NativeMenuItemId.AutoSumCountAll),
+        Item(NativeMenuItemId.AutoSumMax),
+        Item(NativeMenuItemId.AutoSumMin)
+    ];
+
     public static IReadOnlyList<NativeMenuEntryPlan> WhatIfAnalysisMenuEntries { get; } =
     [
         Item(NativeMenuItemId.GoalSeek),
@@ -830,6 +986,8 @@ public static class NativeMenuCatalog
         {
             NativeMenuTopLevelId.Home => HomeMenuEntries,
             NativeMenuTopLevelId.Insert => InsertMenuEntries,
+            NativeMenuTopLevelId.PageLayout => PageLayoutMenuEntries,
+            NativeMenuTopLevelId.Formulas => FormulasMenuEntries,
             NativeMenuTopLevelId.Data => DataMenuEntries,
             NativeMenuTopLevelId.Review => ReviewMenuEntries,
             NativeMenuTopLevelId.View => ViewMenuEntries,
@@ -947,6 +1105,45 @@ public static class NativeMenuCatalog
             new(NativeMenuItemId.PreviousNote, context.IsIdle),
             new(NativeMenuItemId.NextComment, context.IsIdle),
             new(NativeMenuItemId.PreviousComment, context.IsIdle),
+            new(NativeMenuItemId.Themes, context.IsIdle),
+            new(NativeMenuItemId.ThemeColors, context.IsIdle),
+            new(NativeMenuItemId.ThemeFonts, context.IsIdle),
+            new(NativeMenuItemId.ThemeEffects, context.IsIdle),
+            new(NativeMenuItemId.PageMargins, context.IsIdle),
+            new(NativeMenuItemId.PageMarginsNormal, context.IsIdle),
+            new(NativeMenuItemId.PageMarginsWide, context.IsIdle),
+            new(NativeMenuItemId.PageMarginsNarrow, context.IsIdle),
+            new(NativeMenuItemId.PageMarginsCustom, context.IsIdle),
+            new(NativeMenuItemId.PageOrientation, context.IsIdle),
+            new(NativeMenuItemId.PageOrientationPortrait, context.IsIdle),
+            new(NativeMenuItemId.PageOrientationLandscape, context.IsIdle),
+            new(NativeMenuItemId.PaperSize, context.IsIdle),
+            new(NativeMenuItemId.PaperSizeLetter, context.IsIdle),
+            new(NativeMenuItemId.PaperSizeLegal, context.IsIdle),
+            new(NativeMenuItemId.PaperSizeA4, context.IsIdle),
+            new(NativeMenuItemId.PaperSizeMore, context.IsIdle),
+            new(NativeMenuItemId.PrintArea, context.IsIdle),
+            new(NativeMenuItemId.SetPrintArea, context.IsIdle),
+            new(NativeMenuItemId.ClearPrintArea, context.IsIdle),
+            new(NativeMenuItemId.PageBreaks, context.IsIdle),
+            new(NativeMenuItemId.SheetBackground, context.IsIdle),
+            new(NativeMenuItemId.ChooseSheetBackground, context.IsIdle),
+            new(NativeMenuItemId.DeleteSheetBackground, context.IsIdle),
+            new(NativeMenuItemId.PageSetup, context.IsIdle),
+            new(NativeMenuItemId.PrintGridlines, context.IsIdle),
+            new(NativeMenuItemId.PrintHeadings, context.IsIdle),
+            new(NativeMenuItemId.InsertFunction, context.IsIdle),
+            new(NativeMenuItemId.NameManager, context.IsIdle),
+            new(NativeMenuItemId.DefineName, context.IsIdle),
+            new(NativeMenuItemId.CreateNamesFromSelection, context.IsIdle),
+            new(NativeMenuItemId.AutoSum, context.IsIdle),
+            new(NativeMenuItemId.AutoSumSum, context.IsIdle),
+            new(NativeMenuItemId.AutoSumAverage, context.IsIdle),
+            new(NativeMenuItemId.AutoSumCountNumbers, context.IsIdle),
+            new(NativeMenuItemId.AutoSumCountAll, context.IsIdle),
+            new(NativeMenuItemId.AutoSumMax, context.IsIdle),
+            new(NativeMenuItemId.AutoSumMin, context.IsIdle),
+            new(NativeMenuItemId.ShowFormulas, context.IsIdle, context.IsShowingFormulas),
             new(NativeMenuItemId.Bold, context.CanBold),
             new(NativeMenuItemId.Italic, context.CanItalic),
             new(NativeMenuItemId.Underline, context.CanUnderline),

@@ -664,11 +664,25 @@ public sealed partial class MainWindow : Window
     private readonly NativeMenuItem _themeFontsMenuItem = new();
     private readonly NativeMenuItem _themeEffectsMenuItem = new();
     private readonly NativeMenuItem _pageMarginsMenuItem = new();
+    private readonly NativeMenuItem _pageMarginsNormalMenuItem = new();
+    private readonly NativeMenuItem _pageMarginsWideMenuItem = new();
+    private readonly NativeMenuItem _pageMarginsNarrowMenuItem = new();
+    private readonly NativeMenuItem _pageMarginsCustomMenuItem = new();
     private readonly NativeMenuItem _pageOrientationMenuItem = new();
+    private readonly NativeMenuItem _pageOrientationPortraitMenuItem = new();
+    private readonly NativeMenuItem _pageOrientationLandscapeMenuItem = new();
     private readonly NativeMenuItem _paperSizeMenuItem = new();
+    private readonly NativeMenuItem _paperSizeLetterMenuItem = new();
+    private readonly NativeMenuItem _paperSizeLegalMenuItem = new();
+    private readonly NativeMenuItem _paperSizeA4MenuItem = new();
+    private readonly NativeMenuItem _paperSizeMoreMenuItem = new();
     private readonly NativeMenuItem _printAreaMenuItem = new();
+    private readonly NativeMenuItem _setPrintAreaMenuItem = new();
+    private readonly NativeMenuItem _clearPrintAreaMenuItem = new();
     private readonly NativeMenuItem _pageBreaksMenuItem = new();
     private readonly NativeMenuItem _sheetBackgroundMenuItem = new();
+    private readonly NativeMenuItem _chooseSheetBackgroundMenuItem = new();
+    private readonly NativeMenuItem _deleteSheetBackgroundMenuItem = new();
     private readonly NativeMenuItem _printGridlinesMenuItem = new();
     private readonly NativeMenuItem _printHeadingsMenuItem = new();
     private readonly NativeMenuItem _showGridlinesMenuItem = new();
@@ -1846,7 +1860,7 @@ public sealed partial class MainWindow : Window
         _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
 
         ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);
-        ConfigurePageSetupNativeMenuItem(_pageSetupMenuItem);
+        _pageSetupMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
 
         ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
         _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
@@ -1993,39 +2007,26 @@ public sealed partial class MainWindow : Window
 
         _previousCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: true);
 
-        _insertFunctionMenuItem.Header = "Insert Function...";
-        _insertFunctionMenuItem.Gesture = new KeyGesture(Key.F3, KeyModifiers.Shift);
         _insertFunctionMenuItem.Click += (_, _) => InsertFunction();
 
-        _nameManagerMenuItem.Header = "Name Manager...";
         _nameManagerMenuItem.Click += (_, _) => NameManager();
 
-        _defineNameMenuItem.Header = "Define Name...";
         _defineNameMenuItem.Click += (_, _) => DefineName();
 
-        _createNamesFromSelectionMenuItem.Header = "Create from Selection...";
         _createNamesFromSelectionMenuItem.Click += (_, _) => CreateNamesFromSelection();
 
-        _autoSumMenuItem.Header = "AutoSum";
         _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
 
-        _autoSumSumMenuItem.Header = "Sum";
-        _autoSumSumMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Alt);
         _autoSumSumMenuItem.Click += (_, _) => InsertAutoSumFormula("SUM");
 
-        _autoSumAverageMenuItem.Header = "Average";
         _autoSumAverageMenuItem.Click += (_, _) => InsertAutoSumFormula("AVERAGE");
 
-        _autoSumCountNumbersMenuItem.Header = "Count Numbers";
         _autoSumCountNumbersMenuItem.Click += (_, _) => InsertAutoSumFormula("COUNT");
 
-        _autoSumCountAllMenuItem.Header = "Count All";
         _autoSumCountAllMenuItem.Click += (_, _) => InsertAutoSumFormula("COUNTA");
 
-        _autoSumMaxMenuItem.Header = "Max";
         _autoSumMaxMenuItem.Click += (_, _) => InsertAutoSumFormula("MAX");
 
-        _autoSumMinMenuItem.Header = "Min";
         _autoSumMinMenuItem.Click += (_, _) => InsertAutoSumFormula("MIN");
 
         _fillCellsMenuItem.Menu = CreateNativeFillCellsMenu();
@@ -2128,40 +2129,42 @@ public sealed partial class MainWindow : Window
 
         _alignRightMenuItem.Click += (_, _) => ApplySelectedRangeHorizontalAlignment(CellHAlign.Right);
 
-        _themesMenuItem.Header = "Themes";
         _themesMenuItem.Click += async (_, _) => await ShowThemesGalleryAsync();
 
-        _themeColorsMenuItem.Header = "Theme Colors";
         _themeColorsMenuItem.Click += async (_, _) => await ShowThemeColorsGalleryAsync();
 
-        _themeFontsMenuItem.Header = "Theme Fonts";
         _themeFontsMenuItem.Click += async (_, _) => await ShowThemeFontsGalleryAsync();
 
-        _themeEffectsMenuItem.Header = "Theme Effects";
         _themeEffectsMenuItem.Click += async (_, _) => await ShowThemeEffectsGalleryAsync();
 
-        _pageMarginsMenuItem.Header = "Margins";
         _pageMarginsMenuItem.Menu = CreateNativeMarginsMenu();
+        _pageMarginsNormalMenuItem.Click += (_, _) => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal");
+        _pageMarginsWideMenuItem.Click += (_, _) => ApplyPageMargins(WorksheetPageMargins.Wide, "RibbonWire_MarginsWide");
+        _pageMarginsNarrowMenuItem.Click += (_, _) => ApplyPageMargins(WorksheetPageMargins.Narrow, "RibbonWire_MarginsNarrow");
+        _pageMarginsCustomMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
 
-        _pageOrientationMenuItem.Header = "Page Orientation";
         _pageOrientationMenuItem.Menu = CreateNativePageOrientationMenu();
+        _pageOrientationPortraitMenuItem.Click += (_, _) => ApplyPageOrientation(WorksheetPageOrientation.Portrait, "RibbonWire_OrientationPortrait");
+        _pageOrientationLandscapeMenuItem.Click += (_, _) => ApplyPageOrientation(WorksheetPageOrientation.Landscape, "RibbonWire_OrientationLandscape");
 
-        _paperSizeMenuItem.Header = "Paper Size";
         _paperSizeMenuItem.Menu = CreateNativePaperSizeMenu();
+        _paperSizeLetterMenuItem.Click += (_, _) => ApplyPaperSize(WorksheetPaperSize.Letter, "RibbonWire_PaperLetter");
+        _paperSizeLegalMenuItem.Click += (_, _) => ApplyPaperSize(WorksheetPaperSize.Legal, "RibbonWire_PaperLegal");
+        _paperSizeA4MenuItem.Click += (_, _) => ApplyPaperSize(WorksheetPaperSize.A4, "RibbonWire_PaperA4");
+        _paperSizeMoreMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
 
-        _printAreaMenuItem.Header = "Print Area";
         _printAreaMenuItem.Menu = CreateNativePrintAreaMenu();
+        _setPrintAreaMenuItem.Click += (_, _) => SetPrintAreaFromSelection();
+        _clearPrintAreaMenuItem.Click += (_, _) => ClearPrintArea();
 
-        _pageBreaksMenuItem.Header = "Breaks...";
         _pageBreaksMenuItem.Click += (_, _) => ShowPageBreaksMenu();
 
-        _sheetBackgroundMenuItem.Header = "Background";
         _sheetBackgroundMenuItem.Menu = CreateNativeSheetBackgroundMenu();
+        _chooseSheetBackgroundMenuItem.Click += (_, _) => ChooseSheetBackground();
+        _deleteSheetBackgroundMenuItem.Click += (_, _) => DeleteSheetBackground();
 
-        _printGridlinesMenuItem.Header = "Gridlines...";
         _printGridlinesMenuItem.Click += async (_, _) => await ShowGridlinesSheetOptionsAsync();
 
-        _printHeadingsMenuItem.Header = "Headings...";
         _printHeadingsMenuItem.Click += async (_, _) => await ShowHeadingsSheetOptionsAsync();
 
         _showGridlinesMenuItem.ToggleType = MenuItemToggleType.CheckBox;
@@ -2186,8 +2189,6 @@ public sealed partial class MainWindow : Window
 
         _unfreezePanesMenuItem.Click += (_, _) => UnfreezePanes();
 
-        _showFormulasMenuItem.Header = "Show Formulas";
-        _showFormulasMenuItem.Gesture = new KeyGesture(Key.Oem3, KeyModifiers.Control);
         _showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
 
@@ -2224,35 +2225,10 @@ public sealed partial class MainWindow : Window
 
         _conditionalFormattingMenuItem.Menu = CreateNativeConditionalFormatMenu();
 
-        var pageLayoutMenu = new NativeMenu();
-        pageLayoutMenu.Items.Add(_themesMenuItem);
-        pageLayoutMenu.Items.Add(_themeColorsMenuItem);
-        pageLayoutMenu.Items.Add(_themeFontsMenuItem);
-        pageLayoutMenu.Items.Add(_themeEffectsMenuItem);
-        pageLayoutMenu.Items.Add(new NativeMenuItemSeparator());
-        pageLayoutMenu.Items.Add(_pageMarginsMenuItem);
-        pageLayoutMenu.Items.Add(_pageOrientationMenuItem);
-        pageLayoutMenu.Items.Add(_paperSizeMenuItem);
-        pageLayoutMenu.Items.Add(_printAreaMenuItem);
-        pageLayoutMenu.Items.Add(_pageBreaksMenuItem);
-        pageLayoutMenu.Items.Add(_sheetBackgroundMenuItem);
-        pageLayoutMenu.Items.Add(_pageSetupMenuItem);
-        pageLayoutMenu.Items.Add(new NativeMenuItemSeparator());
-        pageLayoutMenu.Items.Add(_printGridlinesMenuItem);
-        pageLayoutMenu.Items.Add(_printHeadingsMenuItem);
-
-        var formulasMenu = new NativeMenu();
-        formulasMenu.Items.Add(_autoSumMenuItem);
-        formulasMenu.Items.Add(_insertFunctionMenuItem);
-        formulasMenu.Items.Add(new NativeMenuItemSeparator());
-        formulasMenu.Items.Add(_nameManagerMenuItem);
-        formulasMenu.Items.Add(_defineNameMenuItem);
-        formulasMenu.Items.Add(_createNamesFromSelectionMenuItem);
-        formulasMenu.Items.Add(new NativeMenuItemSeparator());
-        formulasMenu.Items.Add(_showFormulasMenuItem);
-
         var homeMenu = CreateNativeMenu(NativeMenuTopLevelId.Home);
         var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);
+        var pageLayoutMenu = CreateNativeMenu(NativeMenuTopLevelId.PageLayout);
+        var formulasMenu = CreateNativeMenu(NativeMenuTopLevelId.Formulas);
         var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);
         var reviewMenu = CreateNativeMenu(NativeMenuTopLevelId.Review);
         var viewMenu = CreateNativeMenu(NativeMenuTopLevelId.View);
@@ -2460,6 +2436,45 @@ public sealed partial class MainWindow : Window
             NativeMenuItemId.PreviousNote => _previousNoteMenuItem,
             NativeMenuItemId.NextComment => _nextCommentMenuItem,
             NativeMenuItemId.PreviousComment => _previousCommentMenuItem,
+            NativeMenuItemId.Themes => _themesMenuItem,
+            NativeMenuItemId.ThemeColors => _themeColorsMenuItem,
+            NativeMenuItemId.ThemeFonts => _themeFontsMenuItem,
+            NativeMenuItemId.ThemeEffects => _themeEffectsMenuItem,
+            NativeMenuItemId.PageMargins => _pageMarginsMenuItem,
+            NativeMenuItemId.PageMarginsNormal => _pageMarginsNormalMenuItem,
+            NativeMenuItemId.PageMarginsWide => _pageMarginsWideMenuItem,
+            NativeMenuItemId.PageMarginsNarrow => _pageMarginsNarrowMenuItem,
+            NativeMenuItemId.PageMarginsCustom => _pageMarginsCustomMenuItem,
+            NativeMenuItemId.PageOrientation => _pageOrientationMenuItem,
+            NativeMenuItemId.PageOrientationPortrait => _pageOrientationPortraitMenuItem,
+            NativeMenuItemId.PageOrientationLandscape => _pageOrientationLandscapeMenuItem,
+            NativeMenuItemId.PaperSize => _paperSizeMenuItem,
+            NativeMenuItemId.PaperSizeLetter => _paperSizeLetterMenuItem,
+            NativeMenuItemId.PaperSizeLegal => _paperSizeLegalMenuItem,
+            NativeMenuItemId.PaperSizeA4 => _paperSizeA4MenuItem,
+            NativeMenuItemId.PaperSizeMore => _paperSizeMoreMenuItem,
+            NativeMenuItemId.PrintArea => _printAreaMenuItem,
+            NativeMenuItemId.SetPrintArea => _setPrintAreaMenuItem,
+            NativeMenuItemId.ClearPrintArea => _clearPrintAreaMenuItem,
+            NativeMenuItemId.PageBreaks => _pageBreaksMenuItem,
+            NativeMenuItemId.SheetBackground => _sheetBackgroundMenuItem,
+            NativeMenuItemId.ChooseSheetBackground => _chooseSheetBackgroundMenuItem,
+            NativeMenuItemId.DeleteSheetBackground => _deleteSheetBackgroundMenuItem,
+            NativeMenuItemId.PageSetup => _pageSetupMenuItem,
+            NativeMenuItemId.PrintGridlines => _printGridlinesMenuItem,
+            NativeMenuItemId.PrintHeadings => _printHeadingsMenuItem,
+            NativeMenuItemId.InsertFunction => _insertFunctionMenuItem,
+            NativeMenuItemId.NameManager => _nameManagerMenuItem,
+            NativeMenuItemId.DefineName => _defineNameMenuItem,
+            NativeMenuItemId.CreateNamesFromSelection => _createNamesFromSelectionMenuItem,
+            NativeMenuItemId.AutoSum => _autoSumMenuItem,
+            NativeMenuItemId.AutoSumSum => _autoSumSumMenuItem,
+            NativeMenuItemId.AutoSumAverage => _autoSumAverageMenuItem,
+            NativeMenuItemId.AutoSumCountNumbers => _autoSumCountNumbersMenuItem,
+            NativeMenuItemId.AutoSumCountAll => _autoSumCountAllMenuItem,
+            NativeMenuItemId.AutoSumMax => _autoSumMaxMenuItem,
+            NativeMenuItemId.AutoSumMin => _autoSumMinMenuItem,
+            NativeMenuItemId.ShowFormulas => _showFormulasMenuItem,
             NativeMenuItemId.ShowGridlines => _showGridlinesMenuItem,
             NativeMenuItemId.ShowHeadings => _showHeadingsMenuItem,
             NativeMenuItemId.ZoomIn => _zoomInMenuItem,
@@ -2596,57 +2611,19 @@ public sealed partial class MainWindow : Window
     }
 
     private NativeMenu CreateNativeMarginsMenu()
-    {
-        var menu = new NativeMenu();
-        menu.Items.Add(CreateNativeMenuItem("Normal", () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal")));
-        menu.Items.Add(CreateNativeMenuItem("Wide", () => ApplyPageMargins(WorksheetPageMargins.Wide, "RibbonWire_MarginsWide")));
-        menu.Items.Add(CreateNativeMenuItem("Narrow", () => ApplyPageMargins(WorksheetPageMargins.Narrow, "RibbonWire_MarginsNarrow")));
-        menu.Items.Add(new NativeMenuItemSeparator());
-        menu.Items.Add(CreateNativeMenuItem("Custom Margins...", async () => await ShowPageSetupDialogAsync()));
-        return menu;
-    }
+        => CreateNativeMenu(NativeMenuCatalog.PageMarginsMenuEntries);
 
     private NativeMenu CreateNativePageOrientationMenu()
-    {
-        var menu = new NativeMenu();
-        menu.Items.Add(CreateNativeMenuItem("Portrait", () => ApplyPageOrientation(WorksheetPageOrientation.Portrait, "RibbonWire_OrientationPortrait")));
-        menu.Items.Add(CreateNativeMenuItem("Landscape", () => ApplyPageOrientation(WorksheetPageOrientation.Landscape, "RibbonWire_OrientationLandscape")));
-        return menu;
-    }
+        => CreateNativeMenu(NativeMenuCatalog.PageOrientationMenuEntries);
 
     private NativeMenu CreateNativePaperSizeMenu()
-    {
-        var menu = new NativeMenu();
-        menu.Items.Add(CreateNativeMenuItem("Letter", () => ApplyPaperSize(WorksheetPaperSize.Letter, "RibbonWire_PaperLetter")));
-        menu.Items.Add(CreateNativeMenuItem("Legal", () => ApplyPaperSize(WorksheetPaperSize.Legal, "RibbonWire_PaperLegal")));
-        menu.Items.Add(CreateNativeMenuItem("A4", () => ApplyPaperSize(WorksheetPaperSize.A4, "RibbonWire_PaperA4")));
-        menu.Items.Add(new NativeMenuItemSeparator());
-        menu.Items.Add(CreateNativeMenuItem("More Paper Sizes...", async () => await ShowPageSetupDialogAsync()));
-        return menu;
-    }
+        => CreateNativeMenu(NativeMenuCatalog.PaperSizeMenuEntries);
 
     private NativeMenu CreateNativePrintAreaMenu()
-    {
-        var menu = new NativeMenu();
-        menu.Items.Add(CreateNativeMenuItem("Set Print Area", SetPrintAreaFromSelection));
-        menu.Items.Add(CreateNativeMenuItem("Clear Print Area", ClearPrintArea));
-        return menu;
-    }
+        => CreateNativeMenu(NativeMenuCatalog.PrintAreaMenuEntries);
 
     private NativeMenu CreateNativeSheetBackgroundMenu()
-    {
-        var menu = new NativeMenu();
-        menu.Items.Add(CreateNativeMenuItem("Choose Background...", ChooseSheetBackground));
-        menu.Items.Add(CreateNativeMenuItem("Delete Background", DeleteSheetBackground));
-        return menu;
-    }
-
-    private static NativeMenuItem CreateNativeMenuItem(string header, Action action)
-    {
-        var item = new NativeMenuItem { Header = header };
-        item.Click += (_, _) => action();
-        return item;
-    }
+        => CreateNativeMenu(NativeMenuCatalog.SheetBackgroundMenuEntries);
 
     private void InstallNativeMenu(NativeMenu menu)
     {
@@ -3759,32 +3736,6 @@ public sealed partial class MainWindow : Window
         ApplyNativeFileMenuAvailability(isIdle);
         RefreshNativeOpenRecentMenu(isIdle);
         ApplyNativeMenuAvailability(isIdle);
-        _insertFunctionMenuItem.IsEnabled = isIdle;
-        _nameManagerMenuItem.IsEnabled = isIdle;
-        _defineNameMenuItem.IsEnabled = isIdle;
-        _createNamesFromSelectionMenuItem.IsEnabled = isIdle;
-        _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
-        _autoSumSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
-        _autoSumAverageMenuItem.IsEnabled = _autoSumButton.IsEnabled;
-        _autoSumCountNumbersMenuItem.IsEnabled = _autoSumButton.IsEnabled;
-        _autoSumCountAllMenuItem.IsEnabled = _autoSumButton.IsEnabled;
-        _autoSumMaxMenuItem.IsEnabled = _autoSumButton.IsEnabled;
-        _autoSumMinMenuItem.IsEnabled = _autoSumButton.IsEnabled;
-        _themesMenuItem.IsEnabled = isIdle;
-        _themeColorsMenuItem.IsEnabled = isIdle;
-        _themeFontsMenuItem.IsEnabled = isIdle;
-        _themeEffectsMenuItem.IsEnabled = isIdle;
-        _pageMarginsMenuItem.IsEnabled = isIdle;
-        _pageOrientationMenuItem.IsEnabled = isIdle;
-        _paperSizeMenuItem.IsEnabled = isIdle;
-        _printAreaMenuItem.IsEnabled = isIdle;
-        _pageBreaksMenuItem.IsEnabled = isIdle;
-        _sheetBackgroundMenuItem.IsEnabled = isIdle;
-        _printGridlinesMenuItem.IsEnabled = isIdle;
-        _printHeadingsMenuItem.IsEnabled = isIdle;
-        _showFormulasMenuItem.IsEnabled = isIdle;
-        _showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;
-        _pageSetupMenuItem.IsEnabled = isIdle;
     }
 
     private void ApplyNativeFileMenuAvailability(bool isIdle)
@@ -3864,7 +3815,8 @@ public sealed partial class MainWindow : Window
                 IsShowingHeadings: _session.IsShowingHeadings,
                 CanZoomIn: _session.ZoomPercent < SetWorksheetZoomCommand.MaxZoomPercent,
                 CanZoomOut: _session.ZoomPercent > SetWorksheetZoomCommand.MinZoomPercent,
-                IsPageBreakPreview: WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).PageBreakPreviewChecked));
+                IsPageBreakPreview: WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).PageBreakPreviewChecked,
+                IsShowingFormulas: _session.IsShowingFormulas));
 
         foreach (var item in plan.Items)
         {
@@ -7444,16 +7396,7 @@ public sealed partial class MainWindow : Window
         };
 
     private NativeMenu CreateNativeAutoSumMenu()
-    {
-        var menu = new NativeMenu();
-        menu.Items.Add(_autoSumSumMenuItem);
-        menu.Items.Add(_autoSumAverageMenuItem);
-        menu.Items.Add(_autoSumCountNumbersMenuItem);
-        menu.Items.Add(_autoSumCountAllMenuItem);
-        menu.Items.Add(_autoSumMaxMenuItem);
-        menu.Items.Add(_autoSumMinMenuItem);
-        return menu;
-    }
+        => CreateNativeMenu(NativeMenuCatalog.AutoSumMenuEntries);
 
     private NativeMenu CreateNativeWhatIfAnalysisMenu()
         => CreateNativeMenu(NativeMenuCatalog.WhatIfAnalysisMenuEntries);
@@ -19642,13 +19585,13 @@ public sealed partial class MainWindow : Window
             HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, NativeMenuItemId.NextComment),
             HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, NativeMenuItemId.PreviousComment),
             HasNativeFormatCellsMenuItem: HasNativeMenuItem(_formatCellsMenuItem, NativeMenuItemId.FormatCells),
-            HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false),
-            HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Sum"),
-            HasNativeAutoSumAverageMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Average"),
-            HasNativeAutoSumCountNumbersMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Count Numbers"),
-            HasNativeAutoSumCountAllMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Count All"),
-            HasNativeAutoSumMaxMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Max"),
-            HasNativeAutoSumMinMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, "Min"),
+            HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, NativeMenuItemId.AutoSum),
+            HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumSum),
+            HasNativeAutoSumAverageMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumAverage),
+            HasNativeAutoSumCountNumbersMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumCountNumbers),
+            HasNativeAutoSumCountAllMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumCountAll),
+            HasNativeAutoSumMaxMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumMax),
+            HasNativeAutoSumMinMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumMin),
             HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, NativeMenuItemId.FillCells),
             HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillDown),
             HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillRight),
@@ -19708,7 +19651,7 @@ public sealed partial class MainWindow : Window
             HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, NativeMenuItemId.AlignLeft),
             HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, NativeMenuItemId.AlignCenter),
             HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, NativeMenuItemId.AlignRight),
-            HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, "Show Formulas"),
+            HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, NativeMenuItemId.ShowFormulas),
             HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, NativeMenuItemId.MinimizeWindow),
             HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, NativeMenuItemId.ZoomWindow),
             HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, NativeMenuItemId.BringAllToFront),
