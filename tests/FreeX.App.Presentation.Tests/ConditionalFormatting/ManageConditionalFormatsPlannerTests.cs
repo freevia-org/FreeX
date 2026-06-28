@@ -7,6 +7,136 @@ namespace FreeX.App.Presentation.Tests.ConditionalFormatting;
 public sealed class ManageConditionalFormatsPlannerTests
 {
     [Fact]
+    public void CreateDialogPlan_DefaultsToSelectionAndIncludesIntersectingTableScope()
+    {
+        var sheet = new Workbook("Book").AddSheet("Sheet1");
+        var tableRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 6, 4));
+        var selection = new GridRange(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 3));
+        sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "Sales", DisplayName = "Sales", Range = tableRange });
+
+        var plan = ManageConditionalFormatsPlanner.CreateDialogPlan(sheet, selection);
+
+        plan.DefaultScope.Should().Be(ManageConditionalFormatScope.Selection);
+        plan.ScopeOptions.Select(option => option.Scope).Should().Equal(
+            ManageConditionalFormatScope.Sheet,
+            ManageConditionalFormatScope.Table,
+            ManageConditionalFormatScope.Selection);
+        plan.ScopeOptions.Single(option => option.Scope == ManageConditionalFormatScope.Table).Range.Should().Be(tableRange);
+        plan.DefaultScopeOption.LabelKey.Should().Be(ManageConditionalFormatsPlanner.ScopeCurrentSelectionKey);
+        plan.DefaultNewRuleRange.Should().Be(selection);
+    }
+
+    [Fact]
+    public void DefaultNewRuleRange_UsesFirstRuleThenA1WhenNoSelectionExists()
+    {
+        var sheet = new Workbook("Book").AddSheet("Sheet1");
+        var firstRule = CreateRule(sheet.Id, 4, 3, 1);
+        sheet.ConditionalFormats.Add(firstRule);
+
+        ManageConditionalFormatsPlanner.DefaultNewRuleRange(sheet, selection: null)
+            .Should().Be(firstRule.AppliesTo);
+
+        var emptySheet = new Workbook("Book").AddSheet("Sheet1");
+        ManageConditionalFormatsPlanner.DefaultNewRuleRange(emptySheet, selection: null)
+            .Should().Be(new GridRange(new CellAddress(emptySheet.Id, 1, 1), new CellAddress(emptySheet.Id, 1, 1)));
+    }
+
+    [Fact]
+    public void AppliesToRangeText_RoundTripsExcelAbsoluteReferencesAndRequestText()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 5, 4));
+        var ruleId = Guid.NewGuid();
+
+        ManageConditionalFormatsPlanner.FormatAppliesToRange(range).Should().Be("$B$2:$D$5");
+        ManageConditionalFormatsPlanner.TryParseAppliesToText(" $B$2:$D$5 ", sheetId, out var parsed)
+            .Should().BeTrue();
+        parsed.Should().Be(range);
+        ManageConditionalFormatsPlanner.CreateAppliesToRangeSelectionRequest(ruleId, " $B$2:$D$5 ")
+            .Should().Be(new ConditionalFormatAppliesToRangeSelectionRequest(ruleId, "$B$2:$D$5", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void DescribeRule_ReturnsResourcePlanForIconSetFlags()
+    {
+        var rule = new ConditionalFormat
+        {
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "5Arrows",
+            IconSetShowValue = false,
+            IconSetReverse = true
+        };
+        rule.IconOverrides.Add(new CfIconOverride("3TrafficLights1", 0));
+
+        var description = ManageConditionalFormatsPlanner.DescribeRule(rule);
+
+        description.ResourceKey.Should().Be("ManageConditionalFormats_RuleIconSetWithFlags");
+        description.Arguments[0].Should().Be(new LiteralDescriptionArgument("5Arrows"));
+        description.Arguments[1]
+            .Should().BeOfType<ResourceListDescriptionArgument>()
+            .Which.ResourceKeys.Should().Equal(
+                "ManageConditionalFormats_IconFlagReverse",
+                "ManageConditionalFormats_IconFlagIconsOnly",
+                "ManageConditionalFormats_IconFlagCustomIcons");
+    }
+
+    [Fact]
+    public void DescribeRule_UsesResourceArgumentForLocalizedDatePeriod()
+    {
+        var description = ManageConditionalFormatsPlanner.DescribeRule(new ConditionalFormat
+        {
+            RuleType = CfRuleType.DateOccurring,
+            DateOccurringPeriod = "last7Days"
+        });
+
+        description.ResourceKey.Should().Be("ManageConditionalFormats_RuleDateOccurring");
+        description.Arguments.Should().ContainSingle()
+            .Which.Should().Be(new ResourceDescriptionArgument("ManageConditionalFormats_DateLast7Days"));
+    }
+
+    [Fact]
+    public void CreatePreviewPlan_UsesPortableFillAndTextStyle()
+    {
+        var rule = new ConditionalFormat
+        {
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinColor = new RgbColor(99, 190, 123),
+            MidColor = new RgbColor(255, 235, 132),
+            MaxColor = new RgbColor(248, 105, 107),
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(12, 34, 56),
+                Bold = true,
+                Underline = true
+            }
+        };
+
+        var preview = ManageConditionalFormatsPlanner.CreatePreviewPlan(rule);
+
+        preview.SampleTextKey.Should().Be(ManageConditionalFormatsPlanner.FormatPreviewSampleKey);
+        preview.Fill.IsGradient.Should().BeTrue();
+        preview.Fill.Stops.Should().Equal(
+            new PresentationRgb(99, 190, 123),
+            new PresentationRgb(255, 235, 132),
+            new PresentationRgb(248, 105, 107));
+        preview.Foreground.Should().Be(new PresentationRgb(12, 34, 56));
+        preview.Bold.Should().BeTrue();
+        preview.Underline.Should().BeTrue();
+        preview.Italic.Should().BeFalse();
+        preview.Strikethrough.Should().BeFalse();
+    }
+
+    [Fact]
+    public void StopIfTrueTextKey_ReturnsResourceKeyOnlyForEnabledRules()
+    {
+        ManageConditionalFormatsPlanner.StopIfTrueTextKey(new ConditionalFormat { StopIfTrue = true })
+            .Should().Be(ManageConditionalFormatsPlanner.StopIfTrueEnabledKey);
+        ManageConditionalFormatsPlanner.StopIfTrueTextKey(new ConditionalFormat())
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void DuplicateRule_InsertsDeepCopyBelowSelectedRuleWithNewIdentity()
     {
         var sheetId = SheetId.New();

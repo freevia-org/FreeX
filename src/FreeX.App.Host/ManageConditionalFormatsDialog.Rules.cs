@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 using ManageConditionalFormatsPlanner = FreeX.App.Presentation.ConditionalFormatting.ManageConditionalFormatsPlanner;
 
@@ -24,5 +25,5 @@ public sealed partial class ManageConditionalFormatsDialog
     public static ConditionalFormatAppliesToRangeSelectionRequest CreateAppliesToRangeSelectionRequest(
         Guid ruleId,
         string currentText) =>
-        new(ruleId, currentText.Trim(), CollapseDialog: true);
+        ManageConditionalFormatsPlanner.CreateAppliesToRangeSelectionRequest(ruleId, currentText);
 }
