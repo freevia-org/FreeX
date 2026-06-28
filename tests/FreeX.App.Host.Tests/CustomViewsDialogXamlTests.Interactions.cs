@@ -116,9 +116,10 @@ public sealed partial class CustomViewsDialogXamlTests
 
         source.Should().Contain("dialog.Result.IncludePrintSettings");
         source.Should().Contain("dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings");
-        source.Should().Contain("new SaveCustomViewCommand(");
-        source.Should().Contain("GetIncludedIndicator(view.IncludePrintSettings)");
-        source.Should().Contain("GetIncludedIndicator(view.IncludeHiddenRowsColumnsAndFilterSettings)");
+        source.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");
+        source.Should().Contain("CustomViewsPlanner.BuildDialogRows(");
+        source.Should().Contain("UiText.Get(\"CustomViews_Included\")");
+        source.Should().Contain("UiText.Get(\"CustomViews_NotIncluded\")");
     }
 }
 
