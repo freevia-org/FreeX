@@ -1,5 +1,5 @@
 using FluentAssertions;
-using FreeX.App.Services;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host.Tests;
 
@@ -14,7 +14,7 @@ public sealed partial class SymbolPickerDialogSourceTests
 
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("SymbolsBySubset");
+        source.Should().Contain("SymbolPickerCatalogPlanner.GetSymbolEntriesForSubset(subset)");
         source.Should().Contain("subsetBox.SelectionChanged");
         source.Should().Contain("RefreshSymbols()");
     }
@@ -67,6 +67,23 @@ public sealed partial class SymbolPickerDialogSourceTests
             .Select(entry => entry.Symbol)
             .Should()
             .Contain("\u20ac");
+    }
+
+    [Fact]
+    public void Dialog_CatalogPolicyDelegatesToSharedPresentationPlanner()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("using FreeX.App.Presentation.Dialogs;");
+        source.Should().Contain("SymbolPickerCatalogPlanner.GetSubsetNames()");
+        source.Should().Contain("SymbolPickerCatalogPlanner.PlanSymbolList(");
+        source.Should().Contain("SymbolPickerCatalogPlanner.DefaultRecentSymbols");
+        source.Should().Contain("SymbolCatalogEntry.FromPresentation");
+        source.Should().Contain("SpecialCharacter.FromPresentation");
+        source.Should().NotContain("FriendlySymbolNames");
+        source.Should().NotContain("BuildSymbolsBySubset");
+        source.Should().NotContain("UnicodeSubsetDefinition");
+        source.Should().NotContain("new(\"Latin-1 Supplement\"");
     }
 
     [Fact]
@@ -131,8 +148,8 @@ public sealed partial class SymbolPickerDialogSourceTests
     [InlineData("", '\0', "")]
     public void SelectionPlanner_FormatsSelectedSymbolState(string symbol, char selectedChar, string codeText)
     {
-        SymbolPickerSelectionPlanner.CreateSelection(symbol)
+        SymbolPickerCatalogPlanner.CreateSelection(symbol)
             .Should()
-            .Be(new SymbolPickerSelection(symbol, selectedChar, codeText));
+            .Be(new SymbolPickerSelectionPlan(symbol, selectedChar, codeText));
     }
 }

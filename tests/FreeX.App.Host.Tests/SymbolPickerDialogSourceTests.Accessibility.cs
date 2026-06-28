@@ -21,7 +21,7 @@ public sealed partial class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("ApplySelection(SymbolPickerSelectionPlanner.CreateInitialSelection(GetSymbolsForSubset(SubsetChoices[0])))");
+        source.Should().Contain("ApplySelection(SymbolPickerCatalogPlanner.CreateDefaultSelection())");
         source.Should().NotContain("specialList.SelectedIndex = 0;");
     }
 
