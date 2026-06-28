@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -5,27 +6,31 @@ namespace FreeX.App.Host.Tests;
 public sealed class ConditionalFormatDedupSourceTests
 {
     [Fact]
-    public void ManageConditionalFormatsPlanner_StaysHostFacadeOverPresentationPlanner()
+    public void ManageConditionalFormatsPlanner_HostFacadeIsRemovedAndDialogUsesPresentationPlannerDirectly()
     {
-        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("ManageConditionalFormatsPlanner.cs");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var hostFacadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ManageConditionalFormatsPlanner.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources(
+            "ManageConditionalFormatsDialog.cs",
+            "ManageConditionalFormatsDialog.Rules.cs");
         var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
             "ConditionalFormatting",
             "ManageConditionalFormatsPlanner.cs");
 
-        hostSource.Should().Contain(
-            "using PresentationPlanner = FreeX.App.Presentation.ConditionalFormatting.ManageConditionalFormatsPlanner;");
-        hostSource.Should().Contain("PresentationPlanner.BuildResultRules(");
-        hostSource.Should().Contain("PresentationPlanner.DuplicateRule(");
-        hostSource.Should().Contain("PresentationPlanner.RangesOverlap(");
-
-        hostSource.Should().NotContain("matchingRuleCount--");
-        hostSource.Should().NotContain("FindRuleIndex");
-        hostSource.Should().NotContain("src.Clone(id)");
-        hostSource.Should().NotContain("result.Insert(index + 1");
+        File.Exists(hostFacadePath)
+            .Should().BeFalse("the WPF host should call the shared manage planner directly instead of keeping a pass-through facade");
+        dialogSource.Should().Contain(
+            "using ManageConditionalFormatsPlanner = FreeX.App.Presentation.ConditionalFormatting.ManageConditionalFormatsPlanner;");
+        dialogSource.Should().Contain("ManageConditionalFormatsPlanner.BuildResultRules(");
+        dialogSource.Should().Contain("ManageConditionalFormatsPlanner.DuplicateRule(");
+        dialogSource.Should().Contain("ManageConditionalFormatsPlanner.RangesOverlap(");
+        dialogSource.Should().Contain("ConditionalFormatRuleMoveDirection.Up");
+        dialogSource.Should().Contain("ConditionalFormatRuleMoveDirection.Down");
 
         presentationSource.Should().Contain("matchingRuleCount--");
         presentationSource.Should().Contain("FindRuleIndex");
         presentationSource.Should().Contain("src.Clone(id)");
+        presentationSource.Should().Contain("result.Insert(index + 1");
     }
 
     [Fact]

@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
+using ManageConditionalFormatsPlanner = FreeX.App.Presentation.ConditionalFormatting.ManageConditionalFormatsPlanner;
 
 namespace FreeX.App.Host;
 
