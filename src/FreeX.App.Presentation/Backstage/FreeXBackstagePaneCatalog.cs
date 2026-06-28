@@ -1,6 +1,6 @@
 using Free.Shared.Ribbon;
 
-namespace FreeX.App.Services;
+namespace FreeX.App.Presentation.Backstage;
 
 public enum FreeXBackstageInfoSurface
 {
@@ -49,6 +49,19 @@ public sealed record FreeXBackstageInfoDetailDefinition(
     FreeXBackstageInfoDetailId Id,
     string LabelKey,
     string ValueAutomationId);
+
+public enum FreeXBackstageExportScopeId
+{
+    ActiveSheet,
+    SelectedRange,
+    VisibleWorkbook
+}
+
+public enum FreeXBackstageExportOutputKindId
+{
+    Pdf,
+    Xps
+}
 
 public enum FreeXBackstageAccountDetailId
 {
@@ -114,29 +127,29 @@ public static class FreeXBackstagePaneCatalog
             _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, null)
         };
 
-    public static string GetExportScopeLabelKey(WorkbookExportPrintScope scope, bool isAvailable) =>
+    public static string GetExportScopeLabelKey(FreeXBackstageExportScopeId scope, bool isAvailable) =>
         scope switch
         {
-            WorkbookExportPrintScope.SelectedRange => isAvailable
+            FreeXBackstageExportScopeId.SelectedRange => isAvailable
                 ? "Backstage_Export_ScopeSelection"
                 : "Backstage_Export_ScopeSelectionUnavailable",
-            WorkbookExportPrintScope.VisibleWorkbook => "Backstage_Export_ScopeWorkbook",
-            WorkbookExportPrintScope.ActiveSheet => "Backstage_Export_ScopeActiveSheet",
+            FreeXBackstageExportScopeId.VisibleWorkbook => "Backstage_Export_ScopeWorkbook",
+            FreeXBackstageExportScopeId.ActiveSheet => "Backstage_Export_ScopeActiveSheet",
             _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
         };
 
-    public static string GetExportScopeAutomationId(WorkbookExportPrintScope scope) =>
+    public static string GetExportScopeAutomationId(FreeXBackstageExportScopeId scope) =>
         "BackstageExportScope_" + scope;
 
-    public static string GetExportOutputKindLabelKey(WorkbookExportPrintOutputKind outputKind) =>
+    public static string GetExportOutputKindLabelKey(FreeXBackstageExportOutputKindId outputKind) =>
         outputKind switch
         {
-            WorkbookExportPrintOutputKind.Xps => "Backstage_Export_FormatXps",
-            WorkbookExportPrintOutputKind.Pdf => "Backstage_Export_FormatPdf",
+            FreeXBackstageExportOutputKindId.Xps => "Backstage_Export_FormatXps",
+            FreeXBackstageExportOutputKindId.Pdf => "Backstage_Export_FormatPdf",
             _ => throw new ArgumentOutOfRangeException(nameof(outputKind), outputKind, null)
         };
 
-    public static string GetExportOutputKindAutomationId(WorkbookExportPrintOutputKind outputKind) =>
+    public static string GetExportOutputKindAutomationId(FreeXBackstageExportOutputKindId outputKind) =>
         "BackstageExportFormat_" + outputKind;
 
     public static IReadOnlyList<FreeXBackstageAccountDetailDefinition> BuildAccountDetails() =>
@@ -242,10 +255,9 @@ public static class FreeXBackstagePaneCatalog
 
     private static readonly FreeXBackstageInfoDetailDefinition[] ParityInfoDetails = WpfInfoDetails;
 
-    // Mirrors the Windows backstage Account page ("Local account information"): the local app/OS
-    // identity, version, and local workbook/sharing/export readiness rows (no cloud account). The WPF
-    // host pane (ParityCapture.CreateBackstageAccountPane) and the Avalonia parity-capture pane render
-    // the same row set; this catalog is the single source the interactive Avalonia dialog renders from.
+    // Mirrors the File > Account page ("Local account information"): local app/OS identity,
+    // version, and local workbook/sharing/export readiness rows (no cloud account). Interactive
+    // and parity-capture renderers share this row set through the catalog.
     private static readonly FreeXBackstageAccountDetailDefinition[] AccountDetails =
     [
         new(FreeXBackstageAccountDetailId.FreeXUserName, "Backstage_Account_FreeXUserNameLabel", "BackstageAccountFreeXUserName"),

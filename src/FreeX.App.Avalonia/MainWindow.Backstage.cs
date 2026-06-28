@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -221,15 +222,16 @@ public sealed partial class MainWindow
         var selectedScope = scopePlan.DefaultScope;
         foreach (var option in scopePlan.Scopes)
         {
+            var backstageScope = ToBackstageExportScopeId(option.Scope);
             var radio = new RadioButton
             {
                 GroupName = "BackstageExportScope",
-                Content = UiText.Get(FreeXBackstagePaneCatalog.GetExportScopeLabelKey(option.Scope, option.IsAvailable)),
+                Content = UiText.Get(FreeXBackstagePaneCatalog.GetExportScopeLabelKey(backstageScope, option.IsAvailable)),
                 IsEnabled = option.IsAvailable,
                 IsChecked = option.IsDefault,
                 Margin = new Thickness(0, 2),
             };
-            AutomationProperties.SetAutomationId(radio, FreeXBackstagePaneCatalog.GetExportScopeAutomationId(option.Scope));
+            AutomationProperties.SetAutomationId(radio, FreeXBackstagePaneCatalog.GetExportScopeAutomationId(backstageScope));
             var capturedScope = option.Scope;
             radio.IsCheckedChanged += (_, _) =>
             {
@@ -244,14 +246,15 @@ public sealed partial class MainWindow
         var selectedFormat = scopePlan.DefaultOutputKind;
         foreach (var outputKind in scopePlan.SupportedOutputKinds)
         {
+            var backstageOutputKind = ToBackstageExportOutputKindId(outputKind);
             var formatRadio = new RadioButton
             {
                 GroupName = "BackstageExportFormat",
-                Content = UiText.Get(FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(outputKind)),
+                Content = UiText.Get(FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(backstageOutputKind)),
                 IsChecked = outputKind == scopePlan.DefaultOutputKind,
                 Margin = new Thickness(0, 2),
             };
-            AutomationProperties.SetAutomationId(formatRadio, FreeXBackstagePaneCatalog.GetExportOutputKindAutomationId(outputKind));
+            AutomationProperties.SetAutomationId(formatRadio, FreeXBackstagePaneCatalog.GetExportOutputKindAutomationId(backstageOutputKind));
             var capturedKind = outputKind;
             formatRadio.IsCheckedChanged += (_, _) =>
             {
@@ -317,6 +320,25 @@ public sealed partial class MainWindow
     }
 
     // ── File ▸ Account ────────────────────────────────────────────────────────────
+    // Export dialog service-plan to Presentation-catalog adapters.
+    private static FreeXBackstageExportScopeId ToBackstageExportScopeId(WorkbookExportPrintScope scope) =>
+        scope switch
+        {
+            WorkbookExportPrintScope.SelectedRange => FreeXBackstageExportScopeId.SelectedRange,
+            WorkbookExportPrintScope.VisibleWorkbook => FreeXBackstageExportScopeId.VisibleWorkbook,
+            WorkbookExportPrintScope.ActiveSheet => FreeXBackstageExportScopeId.ActiveSheet,
+            _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
+        };
+
+    private static FreeXBackstageExportOutputKindId ToBackstageExportOutputKindId(
+        WorkbookExportPrintOutputKind outputKind) =>
+        outputKind switch
+        {
+            WorkbookExportPrintOutputKind.Xps => FreeXBackstageExportOutputKindId.Xps,
+            WorkbookExportPrintOutputKind.Pdf => FreeXBackstageExportOutputKindId.Pdf,
+            _ => throw new ArgumentOutOfRangeException(nameof(outputKind), outputKind, null)
+        };
+
     private void ShowBackstageAccount() => _ = ShowBackstageAccountDialogAsync();
 
     private async Task ShowBackstageAccountDialogAsync()

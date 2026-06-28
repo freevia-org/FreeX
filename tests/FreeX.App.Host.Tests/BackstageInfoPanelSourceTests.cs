@@ -75,7 +75,7 @@ public sealed class BackstageInfoPanelSourceTests
     public void BackstageCodeBehind_WiresInfoPanelActionsWithAutomationMetadata()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
-        var catalogSource = DialogSourceTestSupport.ReadAppServicesSource("FreeXBackstagePaneCatalog.cs");
+        var catalogSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstagePaneCatalog.cs");
         var constructorSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         constructorSource.Should().Contain("ConfigureBackstageInfoActionButtons();");

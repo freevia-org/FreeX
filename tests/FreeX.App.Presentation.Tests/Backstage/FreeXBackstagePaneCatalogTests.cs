@@ -1,6 +1,7 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Backstage;
 
-namespace FreeX.App.Services.Tests;
+namespace FreeX.App.Presentation.Tests.Backstage;
 
 public sealed class FreeXBackstagePaneCatalogTests
 {
@@ -64,29 +65,29 @@ public sealed class FreeXBackstagePaneCatalogTests
     public void ExportCatalog_MapsLabelsAndAutomationIds()
     {
         FreeXBackstagePaneCatalog.GetExportScopeLabelKey(
-                WorkbookExportPrintScope.SelectedRange,
+                FreeXBackstageExportScopeId.SelectedRange,
                 isAvailable: true)
             .Should().Be("Backstage_Export_ScopeSelection");
         FreeXBackstagePaneCatalog.GetExportScopeLabelKey(
-                WorkbookExportPrintScope.SelectedRange,
+                FreeXBackstageExportScopeId.SelectedRange,
                 isAvailable: false)
             .Should().Be("Backstage_Export_ScopeSelectionUnavailable");
         FreeXBackstagePaneCatalog.GetExportScopeLabelKey(
-                WorkbookExportPrintScope.ActiveSheet,
+                FreeXBackstageExportScopeId.ActiveSheet,
                 isAvailable: true)
             .Should().Be("Backstage_Export_ScopeActiveSheet");
         FreeXBackstagePaneCatalog.GetExportScopeLabelKey(
-                WorkbookExportPrintScope.VisibleWorkbook,
+                FreeXBackstageExportScopeId.VisibleWorkbook,
                 isAvailable: true)
             .Should().Be("Backstage_Export_ScopeWorkbook");
 
-        FreeXBackstagePaneCatalog.GetExportScopeAutomationId(WorkbookExportPrintScope.ActiveSheet)
+        FreeXBackstagePaneCatalog.GetExportScopeAutomationId(FreeXBackstageExportScopeId.ActiveSheet)
             .Should().Be("BackstageExportScope_ActiveSheet");
-        FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(WorkbookExportPrintOutputKind.Pdf)
+        FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(FreeXBackstageExportOutputKindId.Pdf)
             .Should().Be("Backstage_Export_FormatPdf");
-        FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(WorkbookExportPrintOutputKind.Xps)
+        FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(FreeXBackstageExportOutputKindId.Xps)
             .Should().Be("Backstage_Export_FormatXps");
-        FreeXBackstagePaneCatalog.GetExportOutputKindAutomationId(WorkbookExportPrintOutputKind.Pdf)
+        FreeXBackstagePaneCatalog.GetExportOutputKindAutomationId(FreeXBackstageExportOutputKindId.Pdf)
             .Should().Be("BackstageExportFormat_Pdf");
     }
 
