@@ -1,15 +1,14 @@
 using System.Globalization;
 
 using FreeX.App.Presentation.Charts;
-using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Presentation.SlicerTimeline;
 
 /// <summary>
 /// Pure, UI-free glue that turns a pointer hit on a laid-out slicer or timeline into the matching
-/// Core.Commands mutation. No Avalonia types: the shell supplies the portable layout model plus the
+/// Core.Commands mutation. No renderer types: the shell supplies the portable layout model plus the
 /// hit point (in the same pixel space the layout was built in) and consumes the returned
 /// <see cref="IWorkbookCommand"/> through the session's command path. The tests exercise the
 /// tile-toggle and range-hit mappings without a running UI.
@@ -73,7 +72,7 @@ public static class SlicerTimelineInteractionPlanner
         TimelineHitKind kind,
         DateOnly date)
     {
-        // Delegate to the shared Presentation-layer resolver so WPF and Avalonia use the same math.
+        // Delegate to the shared Presentation-layer resolver so every renderer uses the same math.
         var (start, end) = SlicerTimelineHitDateResolver.ResolveRange(layout, kind, date);
         // The resolver can return null only when hitDate was null — we pass a concrete date, so
         // both are always non-null here. Fall back to (date, date) as a defensive guard.

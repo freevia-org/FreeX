@@ -2,12 +2,12 @@ using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Presentation.SparklineUI;
 
 /// <summary>
 /// One sparkline ready to draw in a cell: its location, kind, the numeric series read from the
 /// source range, and the cell-local rectangle the geometry is laid out inside. Produced by
-/// <see cref="SparklineRenderPlanner"/> from the active sheet, with no Avalonia types, so the
+/// <see cref="SparklineRenderPlanner"/> from the active sheet, with no renderer types, so the
 /// non-UI glue (sheet -&gt; series -&gt; layout) is unit-testable without a running shell.
 /// </summary>
 public readonly record struct SparklineRenderInstruction(
@@ -18,11 +18,11 @@ public readonly record struct SparklineRenderInstruction(
     LayoutRect CellRect);
 
 /// <summary>
-/// Pure, UI-free glue that mirrors the Windows host's sparkline pipeline for the Avalonia shell:
+/// Pure, UI-free glue that mirrors the Windows host's sparkline pipeline for shared shell renderers:
 /// reads each <see cref="SparklineModel"/>'s data range off the sheet into a numeric series
 /// (number / date / bool, hidden rows and columns skipped), then dispatches the series through the
-/// portable <see cref="SparklineLayoutEngine"/>. The shell turns the returned geometry into
-/// Avalonia primitives; the tests exercise the value read + layout selection without any UI.
+/// portable <see cref="SparklineLayoutEngine"/>. The renderer turns the returned geometry into
+/// platform primitives; the tests exercise the value read + layout selection without any UI.
 /// </summary>
 public static class SparklineRenderPlanner
 {
@@ -48,7 +48,7 @@ public static class SparklineRenderPlanner
     /// Builds the cell-local draw instructions for every sparkline whose <see cref="SparklineModel.Location"/>
     /// resolves to a rectangle via <paramref name="cellRectLookup"/> and whose series is non-empty.
     /// The lookup hands back the cell's pixel rectangle in shell coordinates; the inset is applied
-    /// here so the geometry sits inside the cell exactly as the Windows renderer draws it.
+    /// here so the geometry sits inside the cell consistently across renderers.
     /// </summary>
     public static IReadOnlyList<SparklineRenderInstruction> Plan(
         Sheet sheet,

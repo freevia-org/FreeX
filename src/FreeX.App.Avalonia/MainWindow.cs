@@ -28,6 +28,7 @@ using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
