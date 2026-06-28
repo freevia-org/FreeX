@@ -2,7 +2,7 @@ using System.Globalization;
 using FluentAssertions;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Services.Tests;
 
 public sealed class InfoPanelSummaryPlannerTests
 {
