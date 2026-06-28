@@ -1,6 +1,6 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.TextToColumns;
 
-internal static class TextToColumnsFixedWidthBreakPlanner
+public static class TextToColumnsFixedWidthBreakPlanner
 {
     private const int FirstBreakPosition = 1;
 
