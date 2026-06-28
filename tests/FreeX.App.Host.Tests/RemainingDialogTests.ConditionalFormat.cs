@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host.Tests;
 
@@ -35,10 +36,12 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void ConditionalFormatThresholdDialog_AcceptWarnsAndRefocusesBlankThreshold()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed class RowHeightDialog");
 
         source.Should().Contain("if (!TryCreateResult(_thresholdBox.Text, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Remaining_EnterThresholdValue\"));");
+        source.Should().Contain("ConditionalFormatThresholdDialogPlanner.TryCreateResult(thresholdText, out result)");
+        source.Should().NotContain("string.IsNullOrWhiteSpace(result.ThresholdText)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("_thresholdBox.Focus();");
         source.Should().Contain("_thresholdBox.SelectAll();");
@@ -48,7 +51,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void ConditionalFormatThresholdDialogOpenedFromKeyboard_FocusesThresholdBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed class RowHeightDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -58,7 +61,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void ConditionalFormatThresholdDialog_FieldExposesAutomationMetadata()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed class RowHeightDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_thresholdBox, UiText.Get(\"Remaining_ConditionalFormatThreshold\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_thresholdBox, \"ConditionalFormatThresholdBox\");");
