@@ -2272,39 +2272,11 @@ public sealed class WorkbookSession
     /// <summary>
     /// Toggles the active sheet's AutoFilter over the effective range: the existing AutoFilter range when one
     /// is set (to disable it), the current region around a single-cell selection, or the selected range.
-    /// Mirrors the desktop host's <c>AutoFilterToggleRangePlanner</c>.
     /// </summary>
     public WorkbookCellEditResult ToggleSelectedRangeAutoFilter() =>
-        ExecuteReviewCommand(new ToggleWorksheetAutoFilterCommand(ActiveSheet.Id, ResolveAutoFilterToggleRange()));
-
-    private GridRange ResolveAutoFilterToggleRange()
-    {
-        var sheet = ActiveSheet;
-        if (sheet.AutoFilter?.Reference is { } reference && !string.IsNullOrWhiteSpace(reference))
-        {
-            try
-            {
-                return GridRange.Parse(reference, sheet.Id);
-            }
-            catch (FormatException)
-            {
-                // Fall through to selection-based resolution below.
-            }
-            catch (ArgumentException)
-            {
-                // Fall through to selection-based resolution below.
-            }
-        }
-
-        var selection = SelectedRange;
-        if (selection.RowCount == 1 && selection.ColCount == 1 &&
-            SelectionRangeService.GetCurrentRegion(sheet, ActiveCell) is { RowCount: > 1 } region)
-        {
-            return region;
-        }
-
-        return selection;
-    }
+        ExecuteReviewCommand(new ToggleWorksheetAutoFilterCommand(
+            ActiveSheet.Id,
+            AutoFilterToggleRangePlanner.Create(ActiveSheet, SelectedRange)));
 
     public WorkbookCellEditResult SortSelectedRange(bool ascending)
     {

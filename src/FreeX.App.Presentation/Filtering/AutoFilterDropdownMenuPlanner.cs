@@ -1,4 +1,4 @@
-using FreeX.App.Presentation.AutoFilter;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Filtering;
@@ -6,7 +6,7 @@ namespace FreeX.App.Presentation.Filtering;
 public static class AutoFilterDropdownMenuPlanner
 {
     public static bool TryGetAutoFilterRange(Sheet sheet, out GridRange range) =>
-        AutoFilterRangeResolver.TryGetAutoFilterRange(sheet, out range);
+        AutoFilterRangeResolver.TryGetEffectiveAutoFilterRange(sheet, out range);
 
     public static bool TryPlan(GridRange currentRegion, CellAddress activeCell, out AutoFilterDropdownPlan plan)
     {
