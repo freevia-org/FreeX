@@ -145,7 +145,7 @@ public partial class MainWindow
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         var currentRange = SheetGrid.SelectedRange ?? range;
-        if (TextToColumnsCommandPlanner.FindOverwriteTargets(_workbook, targetSheetIds, currentRange, dialog.Result).Count > 0 &&
+        if (TextToColumnsApplyPlanner.FindOverwriteTargets(_workbook, targetSheetIds, currentRange, dialog.Result).Count > 0 &&
             !_messageService.AskYesNo(
                 UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt"),
                 UiText.Get("MainWindowMessage_TextToColumnsTitle")))

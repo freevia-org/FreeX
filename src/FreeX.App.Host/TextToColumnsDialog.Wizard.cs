@@ -108,9 +108,10 @@ public sealed partial class TextToColumnsDialog
 
     private void UpdateWizardStep()
     {
-        var plan = TextToColumnsWizardPlanner.CreateStepPlan(_wizardStep, _fixedWidthButton.IsChecked == true);
-        _wizardHeader.Text = plan.Header;
-        _wizardInstruction.Text = plan.Instruction;
+        var plan = TextToColumnsWizardSurfacePlanner.CreateStepPlan(_wizardStep, _fixedWidthButton.IsChecked == true);
+        var normalizedStep = plan.Step;
+        _wizardHeader.Text = UiText.Format(TextToColumnsWizardSurfacePlanner.HeaderFormatKey, normalizedStep);
+        _wizardInstruction.Text = UiText.Get(plan.InstructionKey);
 
         SetVisible(_originalDataTypePanel, plan.ShowOriginalDataTypePanel);
         SetVisible(_delimiterPanel, plan.ShowDelimiterPanel);
@@ -143,7 +144,7 @@ public sealed partial class TextToColumnsDialog
         if (_fixedWidthButton.IsChecked != true)
             CancelFixedWidthRulerDrag();
 
-        var plan = TextToColumnsWizardPlanner.CreateModePlan(
+        var plan = TextToColumnsWizardSurfacePlanner.CreateModePlan(
             _fixedWidthButton.IsChecked == true,
             _otherBox.IsChecked == true);
         _tabBox.IsEnabled = plan.DelimitedControlsEnabled;

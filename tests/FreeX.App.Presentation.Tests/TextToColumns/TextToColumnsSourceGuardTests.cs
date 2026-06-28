@@ -24,5 +24,18 @@ public sealed class TextToColumnsSourceGuardTests
         File.Exists(Path.Combine(hostRoot, "TextToColumnsFixedWidthRulerPlanner.cs"))
             .Should()
             .BeFalse("WPF host should use the shared fixed-width ruler planner instead of carrying a renderer-local facade");
+        File.Exists(Path.Combine(hostRoot, "TextToColumnsPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should call the shared Text-to-Columns apply planner directly instead of carrying a pure facade");
+        File.Exists(Path.Combine(hostRoot, "TextToColumnsWizardPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should localize the shared wizard surface plan at the dialog edge instead of carrying a duplicate planner");
+
+        var commandPlannerSource = File.ReadAllText(Path.Combine(hostRoot, "TextToColumnsCommandPlanner.cs"));
+        commandPlannerSource.Should().Contain("TextToColumnsApplyPlanner.BuildSheetPlans(");
+        commandPlannerSource.Should().NotContain("FindOverwriteTargets(");
+        commandPlannerSource.Should().NotContain(
+            "TextToColumnsSheetApplyPlan> BuildSheetPlans(",
+            "sheet planning should stay in the shared Presentation apply planner");
     }
 }

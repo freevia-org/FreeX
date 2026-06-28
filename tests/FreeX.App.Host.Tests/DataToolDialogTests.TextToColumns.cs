@@ -12,8 +12,7 @@ public sealed partial class DataToolDialogTests
             "TextToColumnsDialog.FixedWidth.cs",
             "TextToColumnsDialog.ColumnFormats.cs",
             "TextToColumnsDialog.Delimiters.cs",
-            "TextToColumnsDialog.Wizard.cs",
-            "TextToColumnsWizardPlanner.cs");
+            "TextToColumnsDialog.Wizard.cs");
 
     private static T GetTextToColumnsField<T>(TextToColumnsDialog dialog, string fieldName)
         where T : class

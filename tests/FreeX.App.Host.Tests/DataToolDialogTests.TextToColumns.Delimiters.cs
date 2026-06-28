@@ -83,7 +83,7 @@ public sealed partial class DataToolDialogTests
 
         source.Should().Contain("_previewGrid");
         source.Should().Contain("RefreshPreview");
-        source.Should().Contain("TextToColumnsPlanner.SplitText");
+        source.Should().Contain("TextToColumnsApplyPlanner.SplitText");
         source.Should().Contain("_textQualifierBox");
         source.Should().Contain("SelectedTextQualifier");
         source.Should().Contain("TreatConsecutiveDelimitersAsOne");

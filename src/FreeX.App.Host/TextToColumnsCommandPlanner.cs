@@ -12,7 +12,7 @@ internal static class TextToColumnsCommandPlanner
         GridRange sourceRange,
         TextToColumnsDialogResult result)
     {
-        var plans = BuildSheetPlans(workbook, targetSheetIds, sourceRange, result);
+        var plans = TextToColumnsApplyPlanner.BuildSheetPlans(workbook, targetSheetIds, sourceRange, result);
         if (plans.Count <= 1)
         {
             var plan = plans.Count == 0 ? null : plans[0];
@@ -25,18 +25,4 @@ internal static class TextToColumnsCommandPlanner
                 .Select(plan => (IWorkbookCommand)new EditCellsCommand(plan.SheetId, plan.Edits))
                 .ToList());
     }
-
-    public static IReadOnlyList<CellAddress> FindOverwriteTargets(
-        Workbook workbook,
-        IReadOnlyList<SheetId> targetSheetIds,
-        GridRange sourceRange,
-        TextToColumnsDialogResult result) =>
-        TextToColumnsApplyPlanner.FindOverwriteTargets(workbook, targetSheetIds, sourceRange, result);
-
-    internal static IReadOnlyList<TextToColumnsSheetApplyPlan> BuildSheetPlans(
-        Workbook workbook,
-        IReadOnlyList<SheetId> targetSheetIds,
-        GridRange sourceRange,
-        TextToColumnsDialogResult result) =>
-        TextToColumnsApplyPlanner.BuildSheetPlans(workbook, targetSheetIds, sourceRange, result);
 }
