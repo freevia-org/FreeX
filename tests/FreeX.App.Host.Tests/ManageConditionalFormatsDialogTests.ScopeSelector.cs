@@ -11,9 +11,11 @@ public sealed partial class ManageConditionalFormatsDialogTests
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
-        source.Should().Contain("CreateScopeItem(ConditionalFormatScope.Sheet, UiText.Get(\"ManageConditionalFormats_ScopeThisWorksheet\"))");
-        source.Should().Contain("CreateScopeItem(ConditionalFormatScope.Selection, UiText.Get(\"ManageConditionalFormats_ScopeCurrentSelection\"))");
-        source.Should().Contain("_scopeBox.SelectedItem = selection.HasValue ? selectionScope : sheetScope");
+        source.Should().Contain("ManageConditionalFormatsPlanner.CreateDialogPlan(sheet, selection)");
+        source.Should().Contain("foreach (var option in _dialogPlan.ScopeOptions)");
+        source.Should().Contain("CreateScopeItem(option)");
+        source.Should().Contain("UiText.Get(option.LabelKey)");
+        source.Should().Contain("_scopeBox.SelectedItem = defaultScopeItem");
     }
 
     [Fact]
