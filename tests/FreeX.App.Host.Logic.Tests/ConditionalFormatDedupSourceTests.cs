@@ -44,7 +44,9 @@ public sealed class ConditionalFormatDedupSourceTests
             "ConditionalFormatDialog.Catalog.cs",
             "ConditionalFormatDialog.IconSets.cs",
             "ConditionalFormatDialog.Result.cs");
-        var runtimeCatalogSource = DialogSourceTestSupport.ReadHostSourceFile("RibbonRuntimeCatalogPlanner.cs");
+        var runtimeCatalogSource = DialogSourceTestSupport.ReadPresentationSources(
+            "Ribbon",
+            "RibbonRuntimeCatalogPlanner.cs");
         var presetPresentationSource = DialogSourceTestSupport.ReadPresentationSources(
             "ConditionalFormatting",
             "ConditionalFormatPresetGalleryPlanner.cs");
@@ -71,8 +73,8 @@ public sealed class ConditionalFormatDedupSourceTests
         dialogSource.Should().Contain("UiText.Get(option.LabelKey)");
 
         runtimeCatalogSource.Should().Contain("nameof(ConditionalFormatIconSetCatalog)");
-        runtimeCatalogSource.Should().Contain("UiText.Get(group.CategoryKey)");
-        runtimeCatalogSource.Should().Contain("UiText.Get(option.LabelKey)");
+        runtimeCatalogSource.Should().Contain("textProvider(group.CategoryKey)");
+        runtimeCatalogSource.Should().Contain("textProvider(option.LabelKey)");
 
         presetPresentationSource.Should().Contain("DataBar(\"GradientBlue\"");
         presetPresentationSource.Should().Contain("ColorScale(\"GreenYellowRed\"");
