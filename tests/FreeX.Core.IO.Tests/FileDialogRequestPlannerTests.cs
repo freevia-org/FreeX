@@ -86,6 +86,27 @@ public sealed class FileDialogRequestPlannerTests
             .Should().Be("Document.docx");
     }
 
+    [Fact]
+    public void FileFormatDialogDescriptorAdapter_FiltersOpenAndSaveDescriptors()
+    {
+        var formats = new[]
+        {
+            new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
+            new FileFormatDescriptor(".xlsm", "Macro Workbook", CanOpen: true, CanSave: false),
+            new FileFormatDescriptor(".pdf", "PDF", CanOpen: false, CanSave: true)
+        };
+
+        FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(formats)
+            .Select(format => format.Extension)
+            .Should()
+            .Equal(".xlsx", ".xlsm");
+
+        FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(formats)
+            .Select(format => format.Extension)
+            .Should()
+            .Equal(".xlsx", ".pdf");
+    }
+
     private static FileDialogFormatDescriptor[] Formats() =>
     [
         new(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
