@@ -535,6 +535,31 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void DrawingObjectOverlay_DelegatesDisplayBoundsToSharedViewportPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var sharedPlanner = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "DrawingUI",
+            "DrawingObjectViewportPlanner.cs"));
+        var displayBoundsBlock = ExtractSourceBlock(
+            normalizedSource,
+            "private static bool TryGetDisplayedDrawingObjectBounds(",
+            "private static bool TryGetDisplayedCellBounds(");
+
+        source.Should().Contain("using FreeX.App.Presentation.DrawingUI;");
+        displayBoundsBlock.Should().Contain("DrawingObjectViewportPlanner.TryCreateDisplayedObjectRect(");
+        displayBoundsBlock.Should().Contain("var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;");
+        displayBoundsBlock.Should().Contain("var columnHeaderHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;");
+        displayBoundsBlock.Should().NotContain("TryGetDisplayedColumnLeft(viewport.ColMetrics, drawingObject.AnchorCol");
+        displayBoundsBlock.Should().NotContain("TryGetDisplayedRowTop(viewport.RowMetrics, drawingObject.AnchorRow");
+        sharedPlanner.Should().Contain("rowHeaderWidth + (drawingObject.Left * zoomFactor)");
+        sharedPlanner.Should().Contain("columnHeaderHeight + (drawingObject.Top * zoomFactor)");
+    }
+
+    [Fact]
     public void TableDesign_DelegatesCommandCompositionToSharedPlanner()
     {
         var tableTabSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableDesignTab.cs"));

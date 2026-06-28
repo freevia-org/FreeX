@@ -16,6 +16,12 @@ public sealed partial class GridViewRenderPerformanceTests
         var pictures = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.Pictures.cs");
         var objectDrag = AppUiSourceTestSupport.ReadAppUiSources("GridView.ObjectDrag.cs");
         var planner = AppUiSourceTestSupport.ReadAppUiSources("GridDrawingObjectPlanner.cs");
+        var sharedPlanner = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate workspace file",
+            "src",
+            "FreeX.App.Presentation",
+            "DrawingUI",
+            "DrawingObjectViewportPlanner.cs");
 
         drawingObjects.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
         pictures.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
@@ -24,21 +30,29 @@ public sealed partial class GridViewRenderPerformanceTests
         pictures.Should().Contain("metricLookups,");
         objectDrag.Should().Contain("metricLookups,");
         planner.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
-        planner.Should().Contain("rows.TryGetValue(anchor.Row");
-        planner.Should().Contain("columns.TryGetValue(anchor.Col");
+        planner.Should().Contain("DrawingObjectViewportPlanner.TryCreateAnchoredObjectRect(");
+        sharedPlanner.Should().Contain("rows.TryGetValue(anchor.Row");
+        sharedPlanner.Should().Contain("columns.TryGetValue(anchor.Col");
     }
 
     [Fact]
     public void DrawingObjectRenderableBounds_StopAtFirstMetricPastViewport()
     {
         var drawingObjects = AppUiSourceTestSupport.ReadAppUiSources("GridView.DrawingObjects.cs");
-        var rowMethod = drawingObjects[
-            drawingObjects.IndexOf("private static uint FindLastRenderableDrawingRow", StringComparison.Ordinal)..
-            drawingObjects.IndexOf("private static uint FindLastRenderableDrawingColumn", StringComparison.Ordinal)];
-        var columnMethod = drawingObjects[
-            drawingObjects.IndexOf("private static uint FindLastRenderableDrawingColumn", StringComparison.Ordinal)..
-            drawingObjects.IndexOf("private static bool CanAnchoredObjectReachDrawingViewport", StringComparison.Ordinal)];
+        var planner = WorkspaceFileLocator.ReadAllTextWithFailureMessage(
+            "Unable to locate workspace file",
+            "src",
+            "FreeX.App.Presentation",
+            "DrawingUI",
+            "DrawingObjectViewportPlanner.cs");
+        var rowMethod = planner[
+            planner.IndexOf("private static uint FindLastRenderableRow", StringComparison.Ordinal)..
+            planner.IndexOf("private static uint FindLastRenderableColumn", StringComparison.Ordinal)];
+        var columnMethod = planner[
+            planner.IndexOf("private static uint FindLastRenderableColumn", StringComparison.Ordinal)..
+            planner.IndexOf("private static bool HasInvalidAnchorPoint", StringComparison.Ordinal)];
 
+        drawingObjects.Should().Contain("DrawingObjectViewportPlanner.GetRenderableAnchorBounds(");
         rowMethod.Should().Contain("if (columnHeaderHeight + row.TopOffset >= visibleBottom)");
         rowMethod.Should().Contain("break;");
         rowMethod.Should().NotContain("columnHeaderHeight + row.TopOffset < visibleBottom && row.Row > lastRow");
