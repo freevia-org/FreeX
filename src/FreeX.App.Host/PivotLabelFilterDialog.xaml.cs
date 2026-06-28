@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -8,19 +9,9 @@ namespace FreeX.App.Host;
 public partial class PivotLabelFilterDialog : Window
 {
     private static readonly (string Label, PivotLabelFilterKind Kind)[] Options =
-    [
-        (UiText.Get("PivotLabelFilter_Equals"), PivotLabelFilterKind.Equals),
-        (UiText.Get("PivotLabelFilter_DoesNotEqual"), PivotLabelFilterKind.DoesNotEqual),
-        (UiText.Get("PivotLabelFilter_BeginsWith"), PivotLabelFilterKind.BeginsWith),
-        (UiText.Get("PivotLabelFilter_EndsWith"), PivotLabelFilterKind.EndsWith),
-        (UiText.Get("PivotLabelFilter_Contains"), PivotLabelFilterKind.Contains),
-        (UiText.Get("PivotLabelFilter_DoesNotContain"), PivotLabelFilterKind.DoesNotContain),
-        (UiText.Get("PivotLabelFilter_GreaterThan"), PivotLabelFilterKind.GreaterThan),
-        (UiText.Get("PivotLabelFilter_GreaterThanOrEqualTo"), PivotLabelFilterKind.GreaterThanOrEqual),
-        (UiText.Get("PivotLabelFilter_LessThan"), PivotLabelFilterKind.LessThan),
-        (UiText.Get("PivotLabelFilter_LessThanOrEqualTo"), PivotLabelFilterKind.LessThanOrEqual),
-        (UiText.Get("PivotLabelFilter_Between"), PivotLabelFilterKind.Between)
-    ];
+        PivotFieldFilterPlanner.LabelFilterKinds
+            .Select(option => (UiText.Get(option.ResourceKey), option.Kind))
+            .ToArray();
 
     private readonly int _sourceFieldIndex;
 
@@ -40,56 +31,48 @@ public partial class PivotLabelFilterDialog : Window
     {
         if (filter is null)
         {
-            LabelFilterKindBox.SelectedIndex = 4;
+            LabelFilterKindBox.SelectedIndex = PivotFieldFilterPlanner.DefaultLabelKindIndex;
             return;
         }
 
-        LabelFilterKindBox.SelectedIndex = 4;
-        for (var index = 0; index < Options.Length; index++)
-        {
-            if (Options[index].Kind == filter.Kind)
-            {
-                LabelFilterKindBox.SelectedIndex = index;
-                break;
-            }
-        }
-
+        LabelFilterKindBox.SelectedIndex = PivotFieldFilterPlanner.FindLabelKindIndex(filter.Kind);
         LabelFilterValueBox.Text = filter.Value;
         LabelFilterValue2Box.Text = filter.Value2 ?? "";
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        var value = LabelFilterValueBox.Text.Trim();
-        if (value.Length == 0)
-        {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("PivotLabelFilter_ValueRequiredMessage"), UiText.Get("PivotLabelFilter_LabelFilter"));
-            FocusInvalidLabelValue(LabelFilterValueBox);
-            return;
-        }
-
         var kind = GetSelectedKind();
-        var value2 = kind == PivotLabelFilterKind.Between ? LabelFilterValue2Box.Text.Trim() : "";
-        if (kind == PivotLabelFilterKind.Between && value2.Length == 0)
+        if (!PivotFieldFilterPlanner.TryCreateLabelFilterWithValidationError(
+                _sourceFieldIndex,
+                kind,
+                LabelFilterValueBox.Text,
+                LabelFilterValue2Box.Text,
+                out var filter,
+                out var error))
         {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("PivotLabelFilter_EndingValueRequiredMessage"), UiText.Get("PivotLabelFilter_LabelFilter"));
-            FocusInvalidLabelValue(LabelFilterValue2Box);
+            var errorPlan = PivotFieldFilterPlanner.DescribeLabelFilterValidationError(error);
+            DialogMessageHelper.ShowWarning(
+                this,
+                errorPlan is null ? UiText.Get("PivotLabelFilter_ValueRequiredMessage") : UiText.Get(errorPlan.ResourceKey),
+                UiText.Get("PivotLabelFilter_LabelFilter"));
+            FocusInvalidLabelValue(error);
             return;
         }
 
-        ResultFilter = new PivotLabelFilterModel(_sourceFieldIndex, kind, value, string.IsNullOrWhiteSpace(value2) ? null : value2);
+        ResultFilter = filter!;
         DialogResult = true;
     }
 
     private PivotLabelFilterKind GetSelectedKind() =>
-        Options[Math.Max(0, LabelFilterKindBox.SelectedIndex)].Kind;
+        PivotFieldFilterPlanner.LabelKindFromIndex(LabelFilterKindBox.SelectedIndex);
 
     private void LabelFilterKindBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
         UpdateSecondValueState();
 
     private void UpdateSecondValueState()
     {
-        var usesSecondValue = GetSelectedKind() == PivotLabelFilterKind.Between;
+        var usesSecondValue = PivotFieldFilterPlanner.LabelKindNeedsSecondValue(GetSelectedKind());
         var visibility = usesSecondValue ? Visibility.Visible : Visibility.Collapsed;
         LabelFilterValue2Label.Visibility = visibility;
         LabelFilterValue2Box.Visibility = visibility;
@@ -102,8 +85,11 @@ public partial class PivotLabelFilterDialog : Window
         Keyboard.Focus(LabelFilterKindBox);
     }
 
-    private void FocusInvalidLabelValue(TextBox target)
+    private void FocusInvalidLabelValue(PivotLabelFilterValidationError error)
     {
+        var target = error == PivotLabelFilterValidationError.SecondValueRequired
+            ? LabelFilterValue2Box
+            : LabelFilterValueBox;
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);
