@@ -1,9 +1,19 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.SheetUI;
 
-public sealed record SheetTabListPlan(SheetId CurrentSheetId, IReadOnlyList<SheetTabViewModel> Tabs);
+public sealed record SheetTabListPlan(SheetId CurrentSheetId, IReadOnlyList<SheetTabListEntry> Tabs);
+
+public sealed record SheetTabListEntry(
+    SheetId Id,
+    string Name,
+    CellColor? TabColor,
+    bool IsProtected,
+    bool IsActive,
+    bool IsGrouped,
+    bool IsLeftSideCoveredByActive,
+    bool IsRightSideCoveredByActive);
 
 public sealed record SheetKeyboardGroupSelectionPlan(
     SheetId CurrentSheetId,
@@ -53,7 +63,7 @@ public static class SheetTabListPlanner
             visibleSheetCount++;
         }
 
-        var tabs = new List<SheetTabViewModel>(visibleSheetCount);
+        var tabs = new List<SheetTabListEntry>(visibleSheetCount);
         var visibleIndex = 0;
         for (var index = 0; index < sheets.Count; index++)
         {
@@ -64,13 +74,15 @@ public static class SheetTabListPlanner
             if (groupedSheetIds.Count == 0 && sheet.Id == currentSheetId)
                 groupedSheetIds.Add(sheet.Id);
 
-            tabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name, sheet.TabColor, sheet.IsProtected)
-            {
-                IsActive = sheet.Id == currentSheetId,
-                IsGrouped = groupedSheetIds.Contains(sheet.Id),
-                IsLeftSideCoveredByActive = activeVisibleIndex >= 0 && visibleIndex == activeVisibleIndex + 1,
-                IsRightSideCoveredByActive = activeVisibleIndex >= 0 && visibleIndex == activeVisibleIndex - 1
-            });
+            tabs.Add(new SheetTabListEntry(
+                sheet.Id,
+                sheet.Name,
+                sheet.TabColor,
+                sheet.IsProtected,
+                sheet.Id == currentSheetId,
+                groupedSheetIds.Contains(sheet.Id),
+                activeVisibleIndex >= 0 && visibleIndex == activeVisibleIndex + 1,
+                activeVisibleIndex >= 0 && visibleIndex == activeVisibleIndex - 1));
 
             visibleIndex++;
         }

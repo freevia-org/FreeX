@@ -27,7 +27,7 @@ public partial class MainWindow
         _currentSheetId = plan.CurrentSheetId;
         _sheetTabs.Clear();
         foreach (var tab in plan.Tabs)
-            _sheetTabs.Add(tab);
+            _sheetTabs.Add(MapSheetTabListEntry(tab));
         UpdateSheetTabNavigation();
         Dispatcher.BeginInvoke(() =>
         {
@@ -41,6 +41,15 @@ public partial class MainWindow
 
     private string GenerateUniqueSheetName()
         => SheetTabListPlanner.GenerateUniqueSheetName(_workbook);
+
+    private static SheetTabViewModel MapSheetTabListEntry(SheetTabListEntry entry) =>
+        new(entry.Id, entry.Name, entry.TabColor, entry.IsProtected)
+        {
+            IsActive = entry.IsActive,
+            IsGrouped = entry.IsGrouped,
+            IsLeftSideCoveredByActive = entry.IsLeftSideCoveredByActive,
+            IsRightSideCoveredByActive = entry.IsRightSideCoveredByActive
+        };
 
     private int FindWorkbookSheetIndex(SheetId sheetId)
     {

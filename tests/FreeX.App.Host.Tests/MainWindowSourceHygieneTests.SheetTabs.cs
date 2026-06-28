@@ -25,6 +25,31 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SheetTabListPlanning_LivesInPresentationWithHostMappingOnly()
+    {
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.SheetTabs.cs");
+        var sheetTabsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
+        var refreshSource = ExtractMethodSource(sheetTabsSource, "private void RefreshSheetTabs()");
+        var mapperSource = ExtractMethodSource(sheetTabsSource, "private static SheetTabViewModel MapSheetTabListEntry(");
+        var presentationSource = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Presentation",
+            "SheetUI",
+            "SheetTabListPlanner.cs"));
+
+        File.Exists(Path.Combine(hostDirectory, "SheetTabListPlanner.cs")).Should().BeFalse();
+        presentationSource.Should().Contain("public sealed record SheetTabListEntry");
+        presentationSource.Should().Contain("public static class SheetTabListPlanner");
+        presentationSource.Should().NotContain("SheetTabViewModel");
+        refreshSource.Should().Contain("SheetTabListPlanner.Build(_workbook, _currentSheetId, _groupedSheetIds)");
+        refreshSource.Should().Contain("MapSheetTabListEntry(tab)");
+        refreshSource.Should().NotContain("_workbook.Sheets");
+        refreshSource.Should().NotContain("workbook.Sheets");
+        refreshSource.Should().NotContain("new SheetTabViewModel(");
+        mapperSource.Should().Contain("new(entry.Id, entry.Name, entry.TabColor, entry.IsProtected)");
+    }
+
+    [Fact]
     public void WorksheetContextMenuController_LivesOutsideMainWindowCodeBehind()
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
