@@ -2,10 +2,9 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.SheetUI;
 
 namespace FreeX.App.Host;
-
-public sealed record UnhideSheetDialogResult(string SheetName);
 
 public sealed class UnhideSheetDialog : Window
 {
@@ -17,7 +16,7 @@ public sealed class UnhideSheetDialog : Window
 
     public UnhideSheetDialog(IEnumerable<string> hiddenSheetNames)
     {
-        var names = hiddenSheetNames.ToList();
+        var names = SheetDialogPlanner.BuildUnhideSheetTargets(hiddenSheetNames);
         var selected = names.Count == 0 ? "" : names[0];
         Result = CreateResult(selected);
         Title = UiText.Get("UnhideSheet_UnhideSheet");
@@ -54,7 +53,8 @@ public sealed class UnhideSheetDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static UnhideSheetDialogResult CreateResult(string sheetName) => new(sheetName.Trim());
+    public static UnhideSheetDialogResult CreateResult(string sheetName) =>
+        SheetDialogPlanner.CreateUnhideSheetResult(sheetName);
 
     private void FocusInitialKeyboardTarget()
     {
@@ -76,7 +76,8 @@ public sealed class UnhideSheetDialog : Window
 
     private void UpdateButtonState()
     {
-        _okButton.IsEnabled = _sheetBox.SelectedItem is string sheetName && !string.IsNullOrWhiteSpace(sheetName);
+        _okButton.IsEnabled = _sheetBox.SelectedItem is string sheetName &&
+            SheetDialogPlanner.CanAcceptUnhideSheetTarget(sheetName);
     }
 
     private bool Accept()
