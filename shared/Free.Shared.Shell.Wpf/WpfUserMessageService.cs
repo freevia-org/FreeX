@@ -30,5 +30,5 @@ public sealed class WpfUserMessageService : IUserMessageService
         string title,
         UserMessageButtons buttons,
         UserMessageIcon icon)
-        => WpfMessageBoxRealizer.Show(Application.Current.MainWindow, message, title, buttons, icon);
+        => WpfMessageBoxRealizer.Show(Application.Current?.MainWindow, message, title, buttons, icon);
 }

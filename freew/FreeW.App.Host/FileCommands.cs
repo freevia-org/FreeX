@@ -32,6 +32,7 @@ internal sealed class FileCommands
     private readonly Window _window;
     private readonly DocumentView _editor;
     private readonly Action _onChanged;
+    private readonly IUserMessageService _messageService;
     private readonly FileCommandWorkflow _workflow;
 
     // FreeW's persisted settings (shared JsonSettingsStore under %APPDATA%\FreeW). The recent-files cap
@@ -52,11 +53,13 @@ internal sealed class FileCommands
         Action onChanged,
         FreeWOptions? options = null,
         IReadOnlyList<IDocumentFileAdapter>? adapters = null,
-        Func<RecentFilesStore>? loadRecentFilesStore = null)
+        Func<RecentFilesStore>? loadRecentFilesStore = null,
+        IUserMessageService? messageService = null)
     {
         _window = window;
         _editor = editor;
         _onChanged = onChanged;
+        _messageService = messageService ?? new WpfUserMessageService();
         _options = options ?? new FreeWOptions();
         _adapters = adapters ?? DocumentFileAdapterCatalog.CreateDefaultAdapters();
         _workflow = new FileCommandWorkflow(
@@ -369,9 +372,9 @@ internal sealed class FileCommands
     // The planner decides; these execute the I/O effects on the WPF host. Any other platform would
     // supply its own implementations (e.g. Avalonia pickers / message dialogs).
 
-    private SaveChangesPrompt PromptSaveChanges(string action)
-        => FileCommandMessageBox.PromptSaveChanges(_window, DisplayName, action, "FreeW");
+    private SaveChangesPrompt PromptSaveChanges(string action) =>
+        _messageService.PromptSaveChanges(DisplayName, action, "FreeW");
 
     private void ShowError(string summary, Exception ex) =>
-        FileCommandMessageBox.ShowError(_window, summary, ex, "FreeW");
+        _messageService.ShowFileCommandError(summary, ex, "FreeW");
 }

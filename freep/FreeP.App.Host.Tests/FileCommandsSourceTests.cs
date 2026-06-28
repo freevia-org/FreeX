@@ -17,8 +17,16 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
+        source.Should().Contain("IUserMessageService? messageService = null");
+        source.Should().Contain("_messageService = messageService ?? new WpfUserMessageService();");
+        source.Should().Contain("_messageService.PromptSaveChanges(DisplayName, action");
+        source.Should().Contain("_messageService.ShowFileCommandError(summary, ex");
         source.Should().NotContain("FileDialogFilterBuilder.BuildPerFormatFilter(Formats)");
         source.Should().NotContain("FileDialogFilterBuilder.GetDefaultExtension(Formats)");
+        source.Should().NotContain("FileCommandMessageBox.PromptSaveChanges(");
+        source.Should().NotContain("FileCommandMessageBox.ShowError(");
+        source.Should().NotContain("UserMessageButtons.YesNoCancel");
+        source.Should().NotContain("UserMessageButtons.Ok");
         source.Should().NotContain("new OpenFileDialog");
         source.Should().NotContain("new SaveFileDialog");
     }
