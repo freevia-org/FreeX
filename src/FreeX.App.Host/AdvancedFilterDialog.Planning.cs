@@ -4,6 +4,8 @@ using ServicesAdvancedFilterOutputMode = FreeX.App.Services.AdvancedFilterOutput
 using ServicesAdvancedFilterPlanError = FreeX.App.Services.AdvancedFilterPlanError;
 using ServicesAdvancedFilterPlanner = FreeX.App.Services.AdvancedFilterPlanner;
 using ServicesAdvancedFilterPlanResult = FreeX.App.Services.AdvancedFilterPlanResult;
+using ServicesAdvancedFilterRangeSelectionRequest = FreeX.App.Services.AdvancedFilterRangeSelectionRequest;
+using ServicesAdvancedFilterRangeSelectionTarget = FreeX.App.Services.AdvancedFilterRangeSelectionTarget;
 
 namespace FreeX.App.Host;
 
@@ -100,8 +102,14 @@ public sealed partial class AdvancedFilterDialog
 
     public static AdvancedFilterRangeSelectionRequest CreateRangeSelectionRequest(
         AdvancedFilterRangeSelectionTarget target,
-        string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        string currentText)
+    {
+        var request = ServicesAdvancedFilterPlanner.CreateRangeSelectionRequest(
+            ToServicesRangeSelectionTarget(target),
+            currentText);
+
+        return ToHostRangeSelectionRequest(request);
+    }
 
     private static ServicesAdvancedFilterPlanResult CreateAdvancedFilterPlan(
         SheetId currentSheetId,
@@ -192,4 +200,26 @@ public sealed partial class AdvancedFilterDialog
             ServicesAdvancedFilterPlanError.InvalidCopyDestinationRange or
             ServicesAdvancedFilterPlanError.CopyDestinationRangeTooLarge or
             ServicesAdvancedFilterPlanError.CopyDestinationMustBeOnListSheet;
+
+    private static ServicesAdvancedFilterRangeSelectionTarget ToServicesRangeSelectionTarget(
+        AdvancedFilterRangeSelectionTarget target) =>
+        target switch
+        {
+            AdvancedFilterRangeSelectionTarget.CriteriaRange => ServicesAdvancedFilterRangeSelectionTarget.CriteriaRange,
+            AdvancedFilterRangeSelectionTarget.CopyTo => ServicesAdvancedFilterRangeSelectionTarget.CopyTo,
+            _ => ServicesAdvancedFilterRangeSelectionTarget.ListRange
+        };
+
+    private static AdvancedFilterRangeSelectionRequest ToHostRangeSelectionRequest(
+        ServicesAdvancedFilterRangeSelectionRequest request) =>
+        new(ToHostRangeSelectionTarget(request.Target), request.CurrentText, request.CollapseDialog);
+
+    private static AdvancedFilterRangeSelectionTarget ToHostRangeSelectionTarget(
+        ServicesAdvancedFilterRangeSelectionTarget target) =>
+        target switch
+        {
+            ServicesAdvancedFilterRangeSelectionTarget.CriteriaRange => AdvancedFilterRangeSelectionTarget.CriteriaRange,
+            ServicesAdvancedFilterRangeSelectionTarget.CopyTo => AdvancedFilterRangeSelectionTarget.CopyTo,
+            _ => AdvancedFilterRangeSelectionTarget.ListRange
+        };
 }
