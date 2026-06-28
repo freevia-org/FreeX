@@ -94,6 +94,85 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void TypePicker_SupportedOptions_CarryLocalizationKeysAndRecommendationFlags()
+    {
+        var options = ChartTypePickerPlanner.GetSupportedOptions();
+
+        options.Should().NotBeEmpty();
+        options.Should().OnlyContain(option => ChartTypeSupport.IsAuthorable(option.Type));
+
+        var percentStackedColumn = options.Single(option => option.Type == ChartType.PercentStackedColumn);
+        percentStackedColumn.DisplayNameKey.Should().Be("ChartType_PercentStackedColumn");
+        percentStackedColumn.FallbackDisplayName.Should().Be("100% Stacked Column");
+
+        options.Single(option => option.Type == ChartType.Column).IsRecommended.Should().BeTrue();
+        options.Single(option => option.Type == ChartType.Stock).IsRecommended.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TypePicker_GroupsOptionsIntoResourceKeyedExcelCategories()
+    {
+        var categories = ChartTypePickerPlanner.GetCategories();
+
+        categories.Select(category => category.NameKey).Should().ContainInOrder(
+            "ChartTypeCategory_Column",
+            "ChartTypeCategory_Line",
+            "ChartTypeCategory_Pie",
+            "ChartTypeCategory_Bar",
+            "ChartTypeCategory_Area",
+            "ChartTypeCategory_Scatter",
+            "ChartTypeCategory_Stock",
+            "ChartTypeCategory_Radar",
+            "ChartTypeCategory_Surface",
+            "MainWindow_Content_Treemap",
+            "MainWindow_Content_Sunburst",
+            "MainWindow_Content_Histogram",
+            "MainWindow_TooltipTitle_BoxAndWhiskerChart",
+            "MainWindow_Content_Waterfall",
+            "MainWindow_Content_Funnel");
+        categories.Should().OnlyContain(category => category.Options.All(option => ChartTypeSupport.IsAuthorable(option.Type)));
+        categories.Single(category => category.NameKey == "ChartTypeCategory_Column").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Column,
+            ChartType.StackedColumn,
+            ChartType.PercentStackedColumn,
+            ChartType.ThreeDColumn);
+        categories.Single(category => category.NameKey == "MainWindow_Content_Histogram").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Histogram,
+            ChartType.Pareto);
+    }
+
+    [Fact]
+    public void TypePicker_GalleryChoices_CarrySubtypeAndPreviewResourceKeys()
+    {
+        var choices = ChartTypePickerPlanner.GetGalleryChoices("ChartTypeCategory_Bar");
+
+        choices.Select(choice => choice.SubtypeNameKey).Should().ContainInOrder(
+            "ChartType_ClusteredBar",
+            "ChartType_StackedBar",
+            "ChartType_PercentStackedBar");
+        choices.Should().OnlyContain(choice => choice.CategoryNameKey == "ChartTypeCategory_Bar");
+        choices.Should().OnlyContain(choice => choice.PreviewTextFormatKey == ChartTypePickerPlanner.PreviewTextFormatKey);
+        choices.Single(choice => choice.Type == ChartType.Bar).IsRecommended.Should().BeTrue();
+        choices.Single(choice => choice.Type == ChartType.StackedBar).IsRecommended.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TypePicker_RecommendedGalleryChoices_CarryRecommendedCategoryAndPreviewKeys()
+    {
+        var choices = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
+
+        choices.Select(choice => choice.Type).Should().Equal(
+            ChartType.Column,
+            ChartType.Line,
+            ChartType.Bar,
+            ChartType.Pie,
+            ChartType.Scatter);
+        choices.Should().OnlyContain(choice => choice.CategoryNameKey == ChartTypePickerPlanner.RecommendedCategoryKey);
+        choices.Should().OnlyContain(choice => choice.PreviewTextFormatKey == ChartTypePickerPlanner.PreviewTextFormatKey);
+        choices.Should().OnlyContain(choice => choice.IsRecommended);
+    }
+
+    [Fact]
     public void TypeChange_Plan_ReturnsRequestedType_WhenDifferentAndAuthorable()
     {
         var plan = ChartTypeChangePlanner.Plan(ChartType.Column, ChartType.Line);

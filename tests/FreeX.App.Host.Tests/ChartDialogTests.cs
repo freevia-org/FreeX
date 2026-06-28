@@ -158,15 +158,23 @@ public sealed partial class ChartDialogTests
     public void ChartTypePickerPlanner_DelegatesCatalogToPresentationAndKeepsHostLocalized()
     {
         var hostSource = DialogSourceTestSupport.ReadHostSourceFile("ChartTypeDialogs.Planner.cs");
-        var sharedSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartTypeChangePlanner.cs");
+        var sharedSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartTypePickerPlanner.cs");
 
-        hostSource.Should().Contain("ChartTypeChangePlanner.GetSupportedChoices()");
-        hostSource.Should().Contain("ChartTypeChangePlanner.GetCategories()");
-        hostSource.Should().Contain("ChartTypeChangePlanner.GetRecommendedTypes()");
-        hostSource.Should().Contain("UiText.Get(ChartTypeChangePlanner.DisplayNameKey(type))");
+        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetSupportedOptions()");
+        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetCategories()");
+        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetRecommendedOptions()");
+        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetRecommendedGalleryChoices()");
+        hostSource.Should().Contain("PresentationChartTypePickerPlanner.GetGalleryChoices(category.NameKey)");
+        hostSource.Should().Contain("UiText.Get(plan.DisplayNameKey)");
+        hostSource.Should().Contain("UiText.Get(plan.CategoryNameKey)");
+        hostSource.Should().Contain("UiText.Format(plan.PreviewTextFormatKey, subtypeName)");
+        hostSource.Should().NotContain("ChartTypeChangePlanner.GetSupportedChoices()");
+        hostSource.Should().NotContain("ChartTypeChangePlanner.GetCategories()");
+        hostSource.Should().NotContain("ChartTypeChangePlanner.GetRecommendedTypes()");
         hostSource.Should().NotContain("new(ChartType.Column, UiText.Get(\"ChartType_ClusteredColumn\")");
-        sharedSource.Should().Contain("public static IReadOnlyList<ChartType> GetRecommendedTypes()");
-        sharedSource.Should().Contain("public static string DisplayNameKey(ChartType type)");
+        sharedSource.Should().Contain("public sealed record ChartTypePickerOptionPlan");
+        sharedSource.Should().Contain("public static IReadOnlyList<ChartTypeGalleryChoicePlan> GetGalleryChoices");
+        sharedSource.Should().Contain("PreviewTextFormatKey");
     }
 
     [Fact]
