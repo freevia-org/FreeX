@@ -1,7 +1,7 @@
 using System.Linq;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.PivotUI;
 
 /// <summary>
 /// Resolves a pivot table's source field names (headers).

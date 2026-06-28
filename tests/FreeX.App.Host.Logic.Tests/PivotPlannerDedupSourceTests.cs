@@ -30,6 +30,33 @@ public sealed class PivotPlannerDedupSourceTests
     }
 
     [Fact]
+    public void GetPivotDataFormulaPlanner_LivesInPresentationPivotUi()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "GetPivotDataFormulaPlanner.cs");
+        var hostResolverPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "PivotSourceHeaderResolver.cs");
+        var formulaEditingSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.FormulaReferenceEditing.cs");
+        var pivotCommandsSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotCommands.cs");
+        var presentationSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "GetPivotDataFormulaPlanner.cs");
+        var resolverSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotSourceHeaderResolver.cs");
+
+        File.Exists(hostPlannerPath)
+            .Should()
+            .BeFalse("GETPIVOTDATA composition is model-driven pivot UI planning, not WPF Host rendering");
+        File.Exists(hostResolverPath)
+            .Should()
+            .BeFalse("pivot cache header fallback is shared PivotUI metadata resolution, not WPF Host rendering");
+
+        formulaEditingSource.Should().Contain("GetPivotDataFormulaPlanner.Create(");
+        pivotCommandsSource.Should().Contain("PivotSourceHeaderResolver.Resolve(");
+        presentationSource.Should().Contain("public sealed record GetPivotDataFormulaPlan");
+        presentationSource.Should().Contain("public static class GetPivotDataFormulaPlanner");
+        presentationSource.Should().Contain("PivotSourceHeaderResolver.Resolve");
+        resolverSource.Should().Contain("public static class PivotSourceHeaderResolver");
+        resolverSource.Should().Contain("cache.CacheId == pivotTable.CacheId");
+    }
+
+    [Fact]
     public void PivotHostPlannerFacades_DelegateToPresentationPivotUi()
     {
         var hostPivotUiSource = DialogSourceTestSupport.ReadHostSourceFile("PivotUiPlanner.cs");

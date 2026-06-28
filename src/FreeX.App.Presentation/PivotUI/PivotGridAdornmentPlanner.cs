@@ -491,10 +491,6 @@ public static class PivotGridAdornmentPlanner
             ? lastRenderedRange
             : pivotTable.TargetRange;
 
-    // -----------------------------------------------------------------------
-    // Source header resolution (mirrors PivotSourceHeaderResolver in App.Host)
-    // -----------------------------------------------------------------------
-
     private static List<string> ReadHeaders(Workbook workbook, PivotTableModel pivotTable)
     {
         var headers = new List<string>();
@@ -510,27 +506,6 @@ public static class PivotGridAdornmentPlanner
             }
         }
 
-        // Fall back to pivot cache field names when the source range did not resolve (xlsx pivots
-        // with a cache-only source range produce blanks above). Mirrors PivotSourceHeaderResolver.
-        var cacheFields = workbook.PivotCaches
-            .FirstOrDefault(cache => cache.CacheId == pivotTable.CacheId)?.Fields;
-        if (cacheFields is null || cacheFields.Count == 0)
-            return headers;
-
-        var sourceUsable = headers.Count >= cacheFields.Count &&
-                           headers.Where((h, i) => !IsGenericCaption(h, i)).Any();
-        if (sourceUsable)
-            return headers;
-
-        return cacheFields
-            .Select((field, index) => string.IsNullOrWhiteSpace(field.Name)
-                ? $"Column {index + 1}"
-                : field.Name)
-            .ToList();
+        return PivotSourceHeaderResolver.Resolve(workbook, pivotTable, headers);
     }
-
-    private static bool IsGenericCaption(string caption, int index) =>
-        string.IsNullOrWhiteSpace(caption) ||
-        string.Equals(caption, $"Column {index + 1}", StringComparison.Ordinal) ||
-        string.Equals(caption, $"Field{index + 1}", StringComparison.Ordinal);
 }
