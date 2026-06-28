@@ -1,12 +1,12 @@
+using System.IO;
 using System.Windows;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
 using Free.Shared.Drawing;
-// Disambiguate: this test file exercises the WPF-project ShapeHitTester.
-// The shared one lives in FreeP.App.Compositor (added by Theme 15).
+// Disambiguate: this test file exercises the WPF ShapeHitTester compatibility facade.
+// The implementation lives in FreeP.App.Compositor.
 using ShapeHitTester = FreeP.App.Rendering.Wpf.ShapeHitTester;
-using ShapeBoundsDip = FreeP.App.Rendering.Wpf.ShapeBoundsDip;
 
 namespace FreeP.App.Host.Tests;
 
@@ -170,6 +170,41 @@ public sealed class CanvasEditingTests
         b.Top.Should().BeApproximately(192.0,  1e-6);
         b.Width.Should().BeApproximately(288.0, 1e-6);
         b.Height.Should().BeApproximately(192.0, 1e-6);
+    }
+
+    [Fact]
+    public void ShapeHitTester_WpfFacadeDelegatesToCompositorImplementation()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "ShapeHitTester.cs");
+
+        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.HitTest");
+        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.MarqueeHitTest");
+        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip");
+        source.Should().NotContain("PlaceholderResolver.ResolveAnchor");
+        source.Should().NotContain("SlideTransformCore.UnRotatePoint");
+        source.Should().NotContain("private const double EmuPerDip");
+        source.Should().NotContain("private static bool HitTestShape");
+    }
+
+    private static string ReadWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate workspace file.",
+            Path.Combine(relativeParts));
     }
 
     // ── SelectionAdorner handle positions ────────────────────────────────────────
