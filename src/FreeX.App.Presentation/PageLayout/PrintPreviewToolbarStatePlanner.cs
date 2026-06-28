@@ -9,6 +9,15 @@ public enum PrintPreviewSidesMode
     TwoSidedShortEdge
 }
 
+public enum PrintPreviewPageRangeMode
+{
+    AllPages,
+    CurrentPage,
+    Pages
+}
+
+public readonly record struct PrintPreviewPageRangePlan(int FromPage, int ToPage);
+
 public static class PrintPreviewToolbarStatePlanner
 {
     public static PrintPreviewNavigationState CreateNavigationState(int currentPage, int totalPages) =>
@@ -28,6 +37,18 @@ public static class PrintPreviewToolbarStatePlanner
             PrintPreviewSidesMode.TwoSidedLongEdge => 1,
             PrintPreviewSidesMode.TwoSidedShortEdge => 2,
             _ => 0
+        };
+
+    public static PrintPreviewPageRangePlan? ResolvePageRange(
+        PrintPreviewPageRangeMode mode,
+        int currentPage,
+        int? fromPage = null,
+        int? toPage = null) =>
+        mode switch
+        {
+            PrintPreviewPageRangeMode.CurrentPage => new PrintPreviewPageRangePlan(currentPage, currentPage),
+            PrintPreviewPageRangeMode.Pages when fromPage is { } from && toPage is { } to => new PrintPreviewPageRangePlan(from, to),
+            _ => null
         };
 
     public static string CreateStatusText(string? printerName, int? copies, int totalPages)

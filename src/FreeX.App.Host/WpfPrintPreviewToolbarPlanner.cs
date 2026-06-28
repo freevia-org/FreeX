@@ -11,17 +11,20 @@ internal static class WpfPrintPreviewToolbarPlanner
         FixedDocument document,
         PrintPreviewPageRangeMode pageRangeMode,
         int currentPage,
-        ExportPageRange? pageRange = null) =>
-        pageRangeMode switch
-        {
-            PrintPreviewPageRangeMode.CurrentPage => new PageRangeDocumentPaginator(
+        ExportPageRange? pageRange = null)
+    {
+        var range = PrintPreviewToolbarStatePlanner.ResolvePageRange(
+            pageRangeMode,
+            currentPage,
+            pageRange?.FromPage,
+            pageRange?.ToPage);
+
+        return range is { } plan
+            ? new PageRangeDocumentPaginator(
                 document.DocumentPaginator,
-                new ExportPageRange(currentPage, currentPage)),
-            PrintPreviewPageRangeMode.Pages when pageRange is not null => new PageRangeDocumentPaginator(
-                document.DocumentPaginator,
-                pageRange),
-            _ => document.DocumentPaginator
-        };
+                new ExportPageRange(plan.FromPage, plan.ToPage))
+            : document.DocumentPaginator;
+    }
 
     public static Duplexing ResolvePrintTicketDuplexing(PrintPreviewSidesMode mode) =>
         mode switch

@@ -25,6 +25,30 @@ public sealed class PrintPreviewToolbarStatePlannerTests
     }
 
     [Theory]
+    [InlineData(PrintPreviewPageRangeMode.AllPages, 2, null, null, null, null)]
+    [InlineData(PrintPreviewPageRangeMode.CurrentPage, 2, null, null, 2, 2)]
+    [InlineData(PrintPreviewPageRangeMode.Pages, 1, 3, 5, 3, 5)]
+    [InlineData(PrintPreviewPageRangeMode.Pages, 1, 3, null, null, null)]
+    public void ResolvePageRange_MapsToolbarSelectionToOptionalOneBasedRange(
+        PrintPreviewPageRangeMode mode,
+        int currentPage,
+        int? fromPage,
+        int? toPage,
+        int? expectedFrom,
+        int? expectedTo)
+    {
+        var plan = PrintPreviewToolbarStatePlanner.ResolvePageRange(mode, currentPage, fromPage, toPage);
+
+        if (expectedFrom is null || expectedTo is null)
+        {
+            plan.Should().BeNull();
+            return;
+        }
+
+        plan.Should().Be(new PrintPreviewPageRangePlan(expectedFrom.Value, expectedTo.Value));
+    }
+
+    [Theory]
     [InlineData(null, 1, 1, "Ready: Windows print dialog; 1 copy; 1 page")]
     [InlineData("", 2, 3, "Ready: Windows print dialog; 2 copies; 3 pages")]
     [InlineData("Office Printer", null, 4, "Ready: Office Printer; invalid copies; 4 pages")]

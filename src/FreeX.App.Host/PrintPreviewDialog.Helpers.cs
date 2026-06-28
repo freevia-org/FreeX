@@ -10,13 +10,6 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
-internal enum PrintPreviewPageRangeMode
-{
-    AllPages,
-    CurrentPage,
-    Pages
-}
-
 public sealed partial class PrintPreviewDialog
 {
     public static string CreateTitle(string workbookName) =>
