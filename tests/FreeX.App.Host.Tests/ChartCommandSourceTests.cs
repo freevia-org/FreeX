@@ -63,31 +63,44 @@ public sealed class ChartCommandSourceTests
     }
 
     [Fact]
-    public void ChartQuickFormatHandlers_UseSharedCyclers()
+    public void ChartQuickFormatHandlers_UseSharedQuickCommandPlanner()
     {
         var chartSource = ReadHostSourceFile("MainWindow.ChartCommands.cs");
         var axisSource = ReadHostSourceFile("MainWindow.ChartAxisCommands.cs");
         var cyclerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartOptionCycler.cs");
         var axisPlannerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartAxisPlanner.cs");
+        var quickPlannerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartQuickCommandPlanner.cs");
 
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextChartTitleFontSize(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextAxisTitleFontSize(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextLegendFontSize(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelBorderThickness(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextPointDataLabelBorderThickness(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextLegendBorderThickness(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextTrendlineThickness(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextComboLineSeries(chart)");
-        chartSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart)");
-        chartSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated)");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextSeriesDash(");
-        chartSource.Should().Contain("ChartQuickFormatCycler.NextMarkerSize(");
+        chartSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command)");
+        chartSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command)");
+        chartSource.Should().Contain("ChartQuickCommand.DataLabelCategoryName");
+        chartSource.Should().Contain("ChartQuickCommand.TrendlineMovingAveragePeriod");
+        chartSource.Should().Contain("ChartQuickCommand.ComboSeries");
+        chartSource.Should().Contain("ChartQuickCommand.SeriesMarkerSize");
+        chartSource.Should().NotContain("ChartQuickFormatCycler.");
+        chartSource.Should().NotContain("ChartOptionCycler.GetNextSecondaryAxisSeries(");
         chartSource.Should().NotContain("IndexOfSeriesFormat");
+        chartSource.Should().NotContain("IndexOfPointDataLabelFormat");
+        chartSource.Should().NotContain("Func<ChartModel, ChartLayoutOptions>");
         chartSource.Should().NotContain("PlotAreaBorderThickness: chart.PlotAreaBorderThickness >= 3");
         chartSource.Should().NotContain("LegendBorderThickness: chart.LegendBorderThickness >= 3");
         chartSource.Should().NotContain("TrendlineThickness: chart.TrendlineThickness >= 3");
+
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextChartTitleFontSize(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextAxisTitleFontSize(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextLegendFontSize(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelBorderThickness(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextPointDataLabelBorderThickness(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextLegendBorderThickness(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextTrendlineThickness(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextComboLineSeries(chart)");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart)");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated)");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextSeriesDash(");
+        quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextMarkerSize(");
+        quickPlannerSource.Should().Contain("ChartOptionCycler.GetNextSecondaryAxisSeries(");
 
         axisSource.Should().Contain("ChartAxisPlanner.PlanQuickCommand(");
         axisSource.Should().Contain("ChartAxisPlanner.PlanLogScaleToggle");
@@ -98,7 +111,6 @@ public sealed class ChartCommandSourceTests
         axisPlannerSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
         axisPlannerSource.Should().Contain("ChartOptionCycler.NextAxisTickState(");
         axisPlannerSource.Should().Contain("ChartOptionCycler.TryGetAxisBounds(");
-        chartSource.Should().Contain("ChartOptionCycler.GetNextSecondaryAxisSeries(");
         cyclerSource.Should().NotContain("public static CellColor NextSeriesColor(");
         cyclerSource.Should().NotContain("NextDataLabelPosition(");
         cyclerSource.Should().NotContain("NextGridlineState(");
