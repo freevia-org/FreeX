@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;

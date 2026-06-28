@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using FluentAssertions;
 using FreeX.App.Host;
+using WorkbookWindowSelectionTarget = FreeX.App.Presentation.Shell.WorkbookWindowSelectionTarget<FreeX.App.Host.IWorkbookWindow>;
 
 namespace FreeX.App.Host.Tests;
 

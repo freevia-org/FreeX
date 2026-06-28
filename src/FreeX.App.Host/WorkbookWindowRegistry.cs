@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;

@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 
 namespace FreeX.App.Host;

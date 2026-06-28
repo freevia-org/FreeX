@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using WorkbookWindowSelectionTarget = FreeX.App.Presentation.Shell.WorkbookWindowSelectionTarget<FreeX.App.Host.IWorkbookWindow>;
 
 namespace FreeX.App.Host;
 

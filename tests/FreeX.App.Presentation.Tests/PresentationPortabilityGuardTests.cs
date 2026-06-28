@@ -125,6 +125,33 @@ public sealed class PresentationPortabilityGuardTests
     }
 
     [Fact]
+    public void ShellWindowPlanners_AreSingleSharedPresentationImplementations()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        var sharedShellFiles = new[]
+        {
+            "ArrangeAllMenuPlanner.cs",
+            "ShellFocusCyclePlanner.cs",
+            "WorkbookTitleFormatter.cs",
+            "WorkbookWindowOrdering.cs",
+            "WorkbookWindowSelectionPlanner.cs"
+        };
+
+        foreach (var fileName in sharedShellFiles)
+        {
+            File.Exists(Path.Combine(presentationRoot, "Shell", fileName))
+                .Should()
+                .BeTrue($"{fileName} should live in the shared Presentation shell layer");
+            File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", fileName))
+                .Should()
+                .BeFalse($"WPF host should use the shared {fileName} instead of carrying a renderer-local copy");
+        }
+    }
+
+    [Fact]
     public void PageBreakDialogPlanner_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
