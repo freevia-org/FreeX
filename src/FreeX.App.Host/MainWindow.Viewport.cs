@@ -5,6 +5,7 @@ using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -482,7 +483,7 @@ public partial class MainWindow
             : _sparklineValueCache.GetOrCreate(
                 sheet,
                 _navigationCacheRevision,
-                () => SparklineValuePlanner.BuildValues(sheet));
+                () => SparklineSeriesReader.BuildValues(sheet));
         SheetGrid.MergedRegions = sheet?.MergedRegions;
         SheetGrid.WorksheetViewMode = sheet?.ViewMode ?? WorksheetViewMode.Normal;
         SheetGrid.ShowGridLines = sheet?.ShowGridlines ?? true;

@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.UI;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
@@ -495,7 +496,7 @@ internal static class Program
             NativeTimelines = nativeVisualFilters.Timelines,
             Sparklines      = sheet.Sparklines,
             SparklineValues = sheet.Sparklines.Count > 0
-                ? FreeX.App.Host.SparklineValuePlanner.BuildValues(sheet)
+                ? SparklineSeriesReader.BuildValues(sheet)
                 : null,
             MergedRegions   = sheet.MergedRegions,
             WorksheetBackground = null,
