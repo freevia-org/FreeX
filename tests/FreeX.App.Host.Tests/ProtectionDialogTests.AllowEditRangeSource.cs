@@ -16,10 +16,10 @@ public sealed partial class ProtectionDialogTests
     {
         var source = ReadProtectionDialogSources();
 
-        source.Should().Contain("public enum AllowEditRangeDialogAction");
-        source.Should().Contain("public sealed record AllowEditRangeDialogResult");
+        source.Should().Contain("public sealed record AllowEditRangeSelectionRequest");
+        source.Should().Contain("AllowEditRangeResult Result");
         source.Should().Contain("private readonly ListBox _existingRangesBox");
-        source.Should().Contain("new Label { Content = UiText.Get(\"AllowEditRange_ExistingRangesLabel\"), Target = _existingRangesBox");
+        source.Should().Contain("Header = UiText.Get(\"AllowEditRange_ExistingRangesLabel\")");
         source.Should().NotContain("Header = \"Ranges unlocked by password\"");
         source.Should().Contain("Content = UiText.Get(\"AllowEditRange_NewButton\")");
         source.Should().Contain("Content = UiText.Get(\"AllowEditRange_ModifyButton\")");
@@ -74,10 +74,7 @@ public sealed partial class ProtectionDialogTests
         source.Should().Contain("AutomationProperties.SetName(_permissionsButton, UiText.Get(\"AllowEditRange_PermissionsAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_permissionsButton, \"AllowEditRangePermissionsButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_permissionsButton, UiText.Get(\"AllowEditRange_PermissionsHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetName(rangePicker, UiText.Get(\"AllowEditRange_PickerAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(rangePicker, \"AllowEditRangePickerButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(");
-        source.Should().Contain("UiText.Get(\"AllowEditRange_PickerHelpText\"));");
+        source.Should().NotContain("rangePicker");
     }
 
     [Fact]
@@ -86,15 +83,15 @@ public sealed partial class ProtectionDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("new AllowEditRangeDialog(");
-        source.Should().Contain("AllowEditRangeDialogAction.Add");
+        source.Should().Contain("AllowEditRangeAction.Add");
         source.Should().Contain("new AllowEditRangeCommand(_currentSheetId, range)");
-        source.Should().Contain("AllowEditRangeDialogAction.Modify");
+        source.Should().Contain("AllowEditRangeAction.Modify");
         source.Should().Contain("new CompositeWorkbookCommand(");
         source.Should().Contain("new RemoveAllowEditRangeCommand(_currentSheetId, previousRange)");
         source.Should().Contain("UiText.Format(\"MainWindowMessage_AllowEditRangeModified\", range)");
-        source.Should().Contain("AllowEditRangeDialogAction.Remove");
+        source.Should().Contain("AllowEditRangeAction.Remove");
         source.Should().Contain("new RemoveAllowEditRangeCommand(_currentSheetId, range)");
-        source.Should().Contain("AllowEditRangeDialogAction.Clear");
+        source.Should().Contain("AllowEditRangeAction.Clear");
         source.Should().Contain("new ClearAllowEditRangesCommand(_currentSheetId)");
     }
 

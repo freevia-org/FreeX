@@ -23,7 +23,10 @@ public static class SheetProtectionWorkflow
 
     public static SheetProtectionAction CreateCommand(Sheet sheet, string? password)
     {
-        var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password);
+        var result = ProtectionDialogPlanner.CreateSheetResult(
+            sheet.IsProtected,
+            password,
+            SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions());
         return CreateCommand(sheet, result);
     }
 
@@ -42,7 +45,7 @@ public static class SheetProtectionWorkflow
             new ProtectSheetCommand(
                 sheet.Id,
                 result.Password,
-                ProtectionDialogPlanner.ParseSheetPermissions(result.SelectedSheetPermissions)),
+                SheetProtectionPermissionLabels.ParseSheetPermissions(result.SelectedSheetPermissions)),
             UiText.Get("MainWindowMessage_ProtectSheetTitle"),
             UiText.Get("Protection_SheetProtectedMessage"),
             result.SelectedSheetPermissions);

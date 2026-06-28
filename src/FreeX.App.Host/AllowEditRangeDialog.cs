@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Protection;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -9,16 +10,6 @@ namespace FreeX.App.Host;
 public sealed record AllowEditRangeSelectionRequest(
     string CurrentText,
     bool CollapseDialog = true);
-
-public enum AllowEditRangeDialogAction
-{
-    Add,
-    Modify,
-    Remove,
-    Clear
-}
-
-public sealed record AllowEditRangeDialogResult(AllowEditRangeDialogAction Action, GridRange? Range, GridRange? PreviousRange = null);
 
 public sealed class AllowEditRangeDialog : Window
 {
@@ -33,7 +24,7 @@ public sealed class AllowEditRangeDialog : Window
     private GridRange? _rangeBeingModified;
 
     public GridRange Range { get; private set; }
-    public AllowEditRangeDialogResult Result { get; private set; } = CreateClearResult();
+    public AllowEditRangeResult Result { get; private set; } = CreateClearResult();
     public AllowEditRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     public AllowEditRangeDialog(
@@ -70,7 +61,7 @@ public sealed class AllowEditRangeDialog : Window
             Margin = new Thickness(0, 0, 0, 10)
         });
 
-        _existingRangesBox.ItemsSource = AllowEditRangeDialogPlanner.BuildExistingRangeItems(existingRanges);
+        _existingRangesBox.ItemsSource = AllowEditRangePlanner.BuildExistingRangeItems(existingRanges);
         AutomationProperties.SetName(_existingRangesBox, UiText.Get("AllowEditRange_ExistingRangesAutomationName"));
         AutomationProperties.SetAutomationId(_existingRangesBox, "AllowEditRangeExistingRangesList");
         AutomationProperties.SetHelpText(_existingRangesBox, UiText.Get("AllowEditRange_ExistingRangesHelpText"));
@@ -154,7 +145,7 @@ public sealed class AllowEditRangeDialog : Window
     }
 
     public static AllowEditRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
-        AllowEditRangeDialogPlanner.CreateRangeSelectionRequest(currentText);
+        new(currentText.Trim(), CollapseDialog: true);
 
     public void ApplyRangeSelection(string rangeText)
     {
@@ -162,21 +153,21 @@ public sealed class AllowEditRangeDialog : Window
         FocusRangeInput();
     }
 
-    public static AllowEditRangeDialogResult CreateAddResult(GridRange range) =>
-        AllowEditRangeDialogPlanner.CreateAddResult(range);
+    public static AllowEditRangeResult CreateAddResult(GridRange range) =>
+        AllowEditRangePlanner.CreateAddResult(range);
 
-    public static AllowEditRangeDialogResult CreateModifyResult(GridRange originalRange, GridRange updatedRange) =>
-        AllowEditRangeDialogPlanner.CreateModifyResult(originalRange, updatedRange);
+    public static AllowEditRangeResult CreateModifyResult(GridRange originalRange, GridRange updatedRange) =>
+        AllowEditRangePlanner.CreateModifyResult(originalRange, updatedRange);
 
-    public static AllowEditRangeDialogResult CreateRemoveResult(GridRange range) =>
-        AllowEditRangeDialogPlanner.CreateRemoveResult(range);
+    public static AllowEditRangeResult CreateRemoveResult(GridRange range) =>
+        AllowEditRangePlanner.CreateRemoveResult(range);
 
-    public static AllowEditRangeDialogResult CreateClearResult() =>
-        AllowEditRangeDialogPlanner.CreateClearResult();
+    public static AllowEditRangeResult CreateClearResult() =>
+        AllowEditRangePlanner.CreateClearResult();
 
     private void Accept()
     {
-        if (!ProtectionDialogPlanner.TryParseAllowEditRange(_rangeBox.Text, _sheetId, out var range))
+        if (!AllowEditRangePlanner.TryParseRange(_rangeBox.Text, _sheetId, out var range))
         {
             DialogMessageHelper.ShowWarning(this, UiText.Get("AllowEditRange_InvalidRangeMessage"), Title);
             FocusRangeInput();
@@ -206,7 +197,7 @@ public sealed class AllowEditRangeDialog : Window
     private bool TryLoadSelectedRangeForModification()
     {
         if (_existingRangesBox.SelectedItem is not string selected ||
-            !ProtectionDialogPlanner.TryParseAllowEditRange(selected, _sheetId, out var range))
+            !AllowEditRangePlanner.TryParseRange(selected, _sheetId, out var range))
             return false;
 
         _rangeBeingModified = range;
@@ -218,7 +209,7 @@ public sealed class AllowEditRangeDialog : Window
     private bool TryDeleteSelectedRange()
     {
         if (_existingRangesBox.SelectedItem is not string selected ||
-            !ProtectionDialogPlanner.TryParseAllowEditRange(selected, _sheetId, out var range))
+            !AllowEditRangePlanner.TryParseRange(selected, _sheetId, out var range))
             return false;
 
         Range = range;
@@ -237,7 +228,7 @@ public sealed class AllowEditRangeDialog : Window
     {
         if (_rangeBeingModified is not null &&
             (_existingRangesBox.SelectedItem is not string selected ||
-             !ProtectionDialogPlanner.TryParseAllowEditRange(selected, _sheetId, out var selectedRange) ||
+             !AllowEditRangePlanner.TryParseRange(selected, _sheetId, out var selectedRange) ||
              selectedRange != _rangeBeingModified))
         {
             _rangeBeingModified = null;
@@ -248,7 +239,7 @@ public sealed class AllowEditRangeDialog : Window
 
     private void UpdateRangeButtons()
     {
-        var state = AllowEditRangeDialogPlanner.BuildButtonState(
+        var state = AllowEditRangePlanner.BuildButtonState(
             _existingRangesBox.Items.Count,
             _existingRangesBox.SelectedItem is not null);
         _modifyRangeButton.IsEnabled = state.CanModifySelectedRange;

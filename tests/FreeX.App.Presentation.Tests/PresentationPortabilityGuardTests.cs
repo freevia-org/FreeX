@@ -232,7 +232,6 @@ public sealed class PresentationPortabilityGuardTests
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
         var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
             ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
-        var hostProtectionPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionDialogPlanner.cs");
         var hostProtectionDialogsPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionDialogs.cs");
 
         File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionInputParser.cs"))
@@ -244,9 +243,12 @@ public sealed class PresentationPortabilityGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionInputParser.cs"))
             .Should()
             .BeFalse("WPF host should use the shared protection parser instead of carrying a renderer-local copy");
-        File.ReadAllText(hostProtectionPlannerPath)
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionDialogPlanner.cs"))
             .Should()
-            .NotContain("new ProtectionDialogResult");
+            .BeFalse("WPF host should call the shared protection dialog planner directly");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AllowEditRangeDialogPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared allow-edit-range planner instead of carrying a renderer-local copy");
         File.ReadAllText(hostProtectionDialogsPath)
             .Should()
             .NotContain("public enum ProtectionDialogMode")

@@ -15,7 +15,7 @@ public sealed class PasswordProtectionDialog : Window
 
     public string? Password { get; private set; }
     public IReadOnlyList<string> SelectedSheetPermissions { get; private set; } =
-        ProtectionDialogPlanner.GetDefaultSelectedSheetPermissions();
+        SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions();
 
     public PasswordProtectionDialog(string title, string prompt)
     {
@@ -82,8 +82,8 @@ public sealed class PasswordProtectionDialog : Window
         };
         root.Children.Add(group);
 
-        var defaultSelectedPermissions = ProtectionDialogPlanner.GetDefaultSelectedSheetPermissions().ToHashSet(StringComparer.Ordinal);
-        foreach (var permission in ProtectionDialogPlanner.GetDefaultSheetPermissions())
+        var defaultSelectedPermissions = SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions().ToHashSet(StringComparer.Ordinal);
+        foreach (var permission in SheetProtectionPermissionLabels.GetDefaultSheetPermissions())
         {
             var box = new CheckBox
             {
