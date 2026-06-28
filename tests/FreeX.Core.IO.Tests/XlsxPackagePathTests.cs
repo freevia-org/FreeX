@@ -110,10 +110,10 @@ public sealed class XlsxPackagePathTests
     [Fact]
     public void ImageMediaMapping_AvoidsLowercaseStringAllocations()
     {
-        var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxPackagePath.cs");
+        var source = TestWorkspaceFiles.ReadWorkspaceText("shared", "Free.Shared.Opc", "OpcMediaTypes.cs");
         var mediaMapping = source[
             source.IndexOf("public static string GetImageContentType", StringComparison.Ordinal)..
-            source.IndexOf("public static string GetWorksheetBackgroundMediaFileName", StringComparison.Ordinal)];
+            source.IndexOf("public static string GetImageExtension", StringComparison.Ordinal)];
 
         mediaMapping.Should().Contain("Path.GetExtension(path.AsSpan())");
         mediaMapping.Should().Contain("StringComparison.OrdinalIgnoreCase");

@@ -22,8 +22,8 @@ internal static class Ooxml
     /// Declared on the document root so inline equations serialise and parse like any other run feature.
     /// </summary>
     public static readonly XNamespace M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
-    public static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
-    public static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
+    public static readonly XNamespace Ct = OpcMediaTypes.ContentTypesNamespace;
+    public static readonly XNamespace Rel = OpcRelationships.Namespace;
 
     // DrawingML namespaces used by inline pictures (w:drawing/wp:inline/.../a:blip).
     public static readonly XNamespace Wp = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";

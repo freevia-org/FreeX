@@ -1,6 +1,5 @@
 ﻿using System.IO;
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Opc;
 using FreeW.Core.Model;
@@ -1031,10 +1030,8 @@ public static class DocxReader
     private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string partPath)
     {
         var map = new Dictionary<string, string>();
-        var lastSlash = partPath.LastIndexOf('/');
-        var dir = lastSlash >= 0 ? partPath[..lastSlash] : string.Empty;
-        var file = lastSlash >= 0 ? partPath[(lastSlash + 1)..] : partPath;
-        var relsPath = (dir.Length > 0 ? dir + "/" : string.Empty) + "_rels/" + file + ".rels";
+        var dir = OpcPathHelper.GetDirectoryName(partPath);
+        var relsPath = OpcPathHelper.GetRelationshipPartPath(partPath);
 
         var relsXml = LoadPart(archive, relsPath);
         var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
@@ -1051,7 +1048,7 @@ public static class DocxReader
             if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
                 continue;
             // Targets are relative to the part's directory (e.g. "media/header3_image1.png" under word/).
-            map[id] = (dir.Length > 0 ? dir + "/" : string.Empty) + target.TrimStart('/');
+            map[id] = OpcPathHelper.ResolveRelativeZipPath(dir, target);
         }
         return map;
     }
@@ -1079,14 +1076,7 @@ public static class DocxReader
     }
 
     private static XDocument? LoadPart(ZipArchive archive, string entryPath)
-    {
-        var entry = archive.GetEntry(entryPath);
-        if (entry is null)
-            return null;
-        using var entryStream = entry.Open();
-        using var reader = XmlReader.Create(entryStream, SecureXmlReaderSettings.Create());
-        return XDocument.Load(reader);
-    }
+        => OpcXml.LoadXmlOrNull(archive, entryPath);
 
     private static Paragraph ReadParagraph(
         XElement p,
@@ -3610,45 +3600,17 @@ public static class DocxReader
     /// is already absolute (starts with <c>/</c>) is returned as-is. Returns null when the path escapes the root.
     /// </summary>
     private static string? ResolveRelativePartName(string baseFolder, string target)
-    {
-        if (target.StartsWith('/'))
-            return target;
-        var segments = new List<string>(baseFolder.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries));
-        foreach (var segment in target.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (segment == ".")
-                continue;
-            if (segment == "..")
-            {
-                if (segments.Count == 0)
-                    return null;
-                segments.RemoveAt(segments.Count - 1);
-            }
-            else
-            {
-                segments.Add(segment);
-            }
-        }
-        return "/" + string.Join('/', segments);
-    }
+        => OpcPathHelper.ResolveAbsolutePartName(baseFolder, target);
 
     /// <summary>The absolute folder (no trailing slash) containing <paramref name="partName"/>, e.g.
     /// <c>/word/charts/chart1.xml</c> → <c>/word/charts</c>.</summary>
     private static string FolderOf(string partName)
-    {
-        var slash = partName.LastIndexOf('/');
-        return slash <= 0 ? "/" : partName[..slash];
-    }
+        => OpcPathHelper.GetPartDirectoryName(partName);
 
     /// <summary>The conventional <c>_rels</c> part name for a part, e.g. <c>/word/charts/chart1.xml</c> →
     /// <c>/word/charts/_rels/chart1.xml.rels</c>.</summary>
     private static string RelsPartNameFor(string partName)
-    {
-        var slash = partName.LastIndexOf('/');
-        var folder = slash <= 0 ? string.Empty : partName[..slash];
-        var file = slash < 0 ? partName : partName[(slash + 1)..];
-        return $"{folder}/_rels/{file}.rels";
-    }
+        => OpcPathHelper.GetRelationshipPartName(partName);
 
     /// <summary>
     /// Finds the plot area's single chart-type element and maps it to a <see cref="ChartKind"/>:

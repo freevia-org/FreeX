@@ -14,14 +14,7 @@ public static class XlsxPackagePath
     }
 
     public static string GetRelationshipPartPath(string sourcePath)
-    {
-        var normalized = sourcePath.Replace('\\', '/');
-        var slash = normalized.LastIndexOf('/');
-        if (slash < 0)
-            return $"_rels/{normalized}.rels";
-
-        return $"{normalized[..slash]}/_rels/{normalized[(slash + 1)..]}.rels";
-    }
+        => OpcPathHelper.GetRelationshipPartPath(sourcePath);
 
     public static string ResolveRelationshipTarget(string sourcePath, string target)
     {
@@ -95,33 +88,16 @@ public static class XlsxPackagePath
     }
 
     public static string NormalizeZipPath(string path)
-    {
-        var parts = new List<string>();
-        foreach (var part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (part == ".")
-                continue;
-            if (part == "..")
-            {
-                if (parts.Count > 0)
-                    parts.RemoveAt(parts.Count - 1);
-                continue;
-            }
-
-            parts.Add(part);
-        }
-
-        return string.Join('/', parts);
-    }
+        => OpcPathHelper.NormalizeZipEntryPath(path);
 
     public static bool IsWorksheetXmlEntry(ZipArchiveEntry entry) =>
         IsXmlEntryInDirectory(entry, "xl/worksheets/");
 
     public static string NormalizeEntryPath(ZipArchiveEntry entry) =>
-        NormalizeZipPath(entry.FullName.Replace('\\', '/'));
+        OpcPathHelper.NormalizeEntryPath(entry);
 
     public static string NormalizePackagePath(string path) =>
-        NormalizeZipPath(path.Replace('\\', '/').TrimStart('/'));
+        OpcPathHelper.NormalizeZipEntryPath(path);
 
     public static bool IsXmlEntryInDirectory(ZipArchiveEntry entry, string directory)
     {
@@ -132,34 +108,10 @@ public static class XlsxPackagePath
     }
 
     public static string GetImageContentType(string path)
-    {
-        var extension = Path.GetExtension(path.AsSpan());
-        if (extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase))
-            return "image/jpeg";
-
-        if (extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase))
-            return "image/bmp";
-
-        if (extension.Equals(".gif", StringComparison.OrdinalIgnoreCase))
-            return "image/gif";
-
-        return "image/png";
-    }
+        => OpcMediaTypes.GetImageContentType(path);
 
     public static string GetImageExtension(string contentType)
-    {
-        if (string.Equals(contentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
-            return ".jpg";
-
-        if (string.Equals(contentType, "image/bmp", StringComparison.OrdinalIgnoreCase))
-            return ".bmp";
-
-        if (string.Equals(contentType, "image/gif", StringComparison.OrdinalIgnoreCase))
-            return ".gif";
-
-        return ".png";
-    }
+        => OpcMediaTypes.GetImageExtension(contentType, includeDot: true);
 
     public static string GetWorksheetBackgroundMediaFileName(string? fileName, int backgroundIndex, string extension)
     {
