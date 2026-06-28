@@ -37,4 +37,22 @@ public sealed class ConsolidateSourceGuardTests
         source.Should().NotContain("ConsolidateShellPlanner");
         source.Should().NotContain("new EditCellsCommand(sheetId, edits)");
     }
+
+    [Fact]
+    public void WpfConsolidateDialog_ConsumesSharedPresentationPlannerDirectly()
+    {
+        var repoRoot = RepositoryFileLocator.FindDirectory("src");
+        var hostRoot = Path.Combine(repoRoot, "FreeX.App.Host");
+        var planningSource = File.ReadAllText(Path.Combine(hostRoot, "ConsolidateDialog.Planning.cs"));
+
+        File.Exists(Path.Combine(hostRoot, "ConsolidateDialogPlanner.cs"))
+            .Should()
+            .BeFalse("WPF should consume the shared consolidate planner directly instead of keeping a pass-through facade");
+        planningSource.Should().Contain(
+            "SharedConsolidateDialogPlanner = FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner");
+        planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryAddReference(");
+        planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryParse(");
+        planningSource.Should().Contain("ConsolidateDialogIssue");
+        planningSource.Should().Contain("UiText.Get(\"Consolidate_EnterValidDestinationCell\")");
+    }
 }
