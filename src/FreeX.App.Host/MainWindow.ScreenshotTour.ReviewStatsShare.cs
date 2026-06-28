@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Free.Shared.AppServices;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -160,12 +161,12 @@ public partial class MainWindow
         UpdateLayout();
 
         var statistics = WorkbookStatisticsService.GetStatistics(_workbook);
-        var unsavedSharePlan = ShareWorkbookPlanner.CreatePlan(null);
+        var unsavedSharePlan = WorkbookShareReadinessPlanner.CreatePlan(null, WorkbookShareSurface.WindowsShare);
         return new ReviewStatsShareTourContext(
             SheetName: sheet.Name,
             ActiveRange: selection.ToString(),
             StatisticsSummary: WorkbookStatisticsDialog.CreateMessage(statistics),
-            UnsavedShareStatus: ShareWorkbookPlanner.FormatStatus(unsavedSharePlan),
+            UnsavedShareStatus: WorkbookShareReadinessPlanner.FormatStatus(unsavedSharePlan),
             SavedShareStatus: string.Empty,
             SavedWorkbookOutputFileName: ReviewStatsShareTourSavedWorkbookFileName,
             SavedWorkbookRetained: false);
@@ -185,10 +186,10 @@ public partial class MainWindow
         if (!saved)
             throw new InvalidOperationException("Review statistics/share tour could not save the share-ready workbook.");
 
-        var savedSharePlan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
+        var savedSharePlan = WorkbookShareReadinessPlanner.CreatePlan(_currentFilePath, WorkbookShareSurface.WindowsShare);
         return context with
         {
-            SavedShareStatus = ShareWorkbookPlanner.FormatStatus(savedSharePlan),
+            SavedShareStatus = WorkbookShareReadinessPlanner.FormatStatus(savedSharePlan),
             SavedWorkbookRetained = File.Exists(savedWorkbookPath)
         };
     }
@@ -272,7 +273,7 @@ public partial class MainWindow
         double captureLogicalHeight,
         string evidenceSummary)
     {
-        var sharePlan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
+        var sharePlan = WorkbookShareReadinessPlanner.CreatePlan(_currentFilePath, WorkbookShareSurface.WindowsShare);
         var focusedAutomationId = Keyboard.FocusedElement is DependencyObject focusedElement
             ? AutomationProperties.GetAutomationId(focusedElement)
             : null;
@@ -292,7 +293,7 @@ public partial class MainWindow
             CurrentFilePath: _currentFilePath,
             FocusedElementAutomationId: focusedAutomationId,
             SharePlanKind: sharePlan.Kind.ToString(),
-            ShareStatus: ShareWorkbookPlanner.FormatStatus(sharePlan),
+            ShareStatus: WorkbookShareReadinessPlanner.FormatStatus(sharePlan),
             StatisticsSummary: WorkbookStatisticsDialog.CreateMessage(WorkbookStatisticsService.GetStatistics(_workbook)),
             EvidenceSummary: evidenceSummary);
     }

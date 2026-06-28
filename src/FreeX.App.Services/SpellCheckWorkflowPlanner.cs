@@ -1,7 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public readonly record struct SpellingIssueKey(
     CellAddress Address,
@@ -17,33 +17,44 @@ public sealed record SpellCheckScanResult(IReadOnlyList<SpellingIssue> Issues)
 
 public static class SpellCheckWorkflowPlanner
 {
-    public static HashSet<string> CreateCustomDictionary(FreeXOptions options) =>
+    public static HashSet<string> CreateCustomDictionary(IEnumerable<string>? persistedWords) =>
         new(
-            FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(options.SpellCheckCustomDictionaryWords),
+            AppOptions.NormalizeSpellCheckCustomDictionaryWords(persistedWords),
             StringComparer.OrdinalIgnoreCase);
 
     public static bool AddCustomDictionaryWord(
-        FreeXOptions options,
+        IList<string> persistedWords,
         ISet<string> customDictionary,
         string word)
     {
-        var normalizedWord = FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(word);
+        ArgumentNullException.ThrowIfNull(persistedWords);
+
+        var normalizedWord = AppOptions.NormalizeSpellCheckCustomDictionaryWord(word);
         if (normalizedWord is null)
             return false;
 
         customDictionary.Add(normalizedWord);
 
-        var persistedWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(options.SpellCheckCustomDictionaryWords);
-        if (persistedWords.Contains(normalizedWord, StringComparer.OrdinalIgnoreCase))
+        var normalizedPersistedWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(persistedWords);
+        if (normalizedPersistedWords.Contains(normalizedWord, StringComparer.OrdinalIgnoreCase))
         {
-            options.SpellCheckCustomDictionaryWords = persistedWords;
+            ReplacePersistedWords(persistedWords, normalizedPersistedWords);
             return false;
         }
 
-        persistedWords.Add(normalizedWord);
-        persistedWords.Sort(StringComparer.OrdinalIgnoreCase);
-        options.SpellCheckCustomDictionaryWords = persistedWords;
+        normalizedPersistedWords.Add(normalizedWord);
+        normalizedPersistedWords.Sort(StringComparer.OrdinalIgnoreCase);
+        ReplacePersistedWords(persistedWords, normalizedPersistedWords);
         return true;
+    }
+
+    private static void ReplacePersistedWords(
+        IList<string> persistedWords,
+        IReadOnlyList<string> normalizedPersistedWords)
+    {
+        persistedWords.Clear();
+        foreach (var persistedWord in normalizedPersistedWords)
+            persistedWords.Add(persistedWord);
     }
 
     public static IReadOnlyList<SpellingIssue> FilterIssues(

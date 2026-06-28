@@ -1,9 +1,9 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
-internal static class FindReplaceDialogPlanner
+public static class FindReplaceDialogPlanner
 {
     public static IReadOnlyList<FindResultRow> BuildFindResultRows(Workbook workbook, IReadOnlyList<FindResult> results) =>
         results
@@ -118,7 +118,7 @@ internal static class FindReplaceDialogPlanner
     };
 }
 
-internal sealed record FindResultRow(
+public sealed record FindResultRow(
     string Book,
     string Sheet,
     string Name,
@@ -127,4 +127,4 @@ internal sealed record FindResultRow(
     string Value,
     string Formula);
 
-internal sealed record ReplaceSingleMatchResult(bool Replaced, CommandOutcome? Failure);
+public sealed record ReplaceSingleMatchResult(bool Replaced, CommandOutcome? Failure);

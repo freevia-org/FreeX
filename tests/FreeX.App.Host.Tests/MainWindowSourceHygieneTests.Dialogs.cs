@@ -13,8 +13,9 @@ public sealed partial class MainWindowSourceHygieneTests
 
         method.Should().Contain("try");
         method.Should().Contain("if (dialog.ShowDialog() != true)");
-        method.Should().Contain("var zoomPercent = ZoomSelectionPlanner.CalculateDialogZoomPercent(");
-        method.Should().Contain("dialog.Result,");
+        method.Should().Contain("var zoomPercent = ZoomSelectionPlanner.CalculateZoomPercent(");
+        method.Should().Contain("dialog.Result.ZoomPercent,");
+        method.Should().Contain("dialog.Result.FitSelection,");
         method.Should().Contain("SheetGrid.SelectedRange?.ColCount ?? 1,");
         method.Should().Contain("ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);");
         method.Should().Contain("finally");
@@ -246,7 +247,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteCommand(command, \"Spell Check\")");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
 
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("SpellCheckWorkflowPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckWorkflowPlanner.cs");
         plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
         plannerSource.Should().Contain("ignoredIssues.Contains(CreateIssueKey(issue))");
         plannerSource.Should().Contain("new(FilterIssues(");

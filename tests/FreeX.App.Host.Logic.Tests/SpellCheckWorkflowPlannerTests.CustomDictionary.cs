@@ -14,7 +14,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
             SpellCheckCustomDictionaryWords = ["  TeH  ", "", "teh", "the the"]
         };
 
-        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(options);
+        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(options.SpellCheckCustomDictionaryWords);
 
         customDictionary.Should().Equal("TeH", "the the");
         customDictionary.Contains("teh").Should().BeTrue();
@@ -27,9 +27,12 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         {
             SpellCheckCustomDictionaryWords = ["recieve"]
         };
-        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(options);
+        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(options.SpellCheckCustomDictionaryWords);
 
-        var added = SpellCheckWorkflowPlanner.AddCustomDictionaryWord(options, customDictionary, "  TeH  ");
+        var added = SpellCheckWorkflowPlanner.AddCustomDictionaryWord(
+            options.SpellCheckCustomDictionaryWords,
+            customDictionary,
+            "  TeH  ");
 
         added.Should().BeTrue();
         customDictionary.Contains("teh").Should().BeTrue();
@@ -43,12 +46,12 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         {
             SpellCheckCustomDictionaryWords = ["TeH"]
         };
-        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(options);
+        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(options.SpellCheckCustomDictionaryWords);
 
-        SpellCheckWorkflowPlanner.AddCustomDictionaryWord(options, customDictionary, " teh ")
+        SpellCheckWorkflowPlanner.AddCustomDictionaryWord(options.SpellCheckCustomDictionaryWords, customDictionary, " teh ")
             .Should()
             .BeFalse();
-        SpellCheckWorkflowPlanner.AddCustomDictionaryWord(options, customDictionary, " ")
+        SpellCheckWorkflowPlanner.AddCustomDictionaryWord(options.SpellCheckCustomDictionaryWords, customDictionary, " ")
             .Should()
             .BeFalse();
 
@@ -70,7 +73,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
         var issues = SpellCheckService.FindIssues(
             workbook,
             sheet.Id,
-            SpellCheckWorkflowPlanner.CreateCustomDictionary(options));
+            SpellCheckWorkflowPlanner.CreateCustomDictionary(options.SpellCheckCustomDictionaryWords));
 
         issues.Select(issue => issue.Word).Should().Equal("adn");
     }
@@ -80,11 +83,12 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        source.Should().Contain("var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options);");
+        source.Should().Contain("var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options.SpellCheckCustomDictionaryWords);");
         source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
         source.Should().Contain("customDictionary,");
         source.Should().Contain("dialog.Result.Action == SpellCheckDialogAction.Add");
-        source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(_options, customDictionary, issue.Word)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(");
+        source.Should().Contain("_options.SpellCheckCustomDictionaryWords,");
         source.Should().Contain("_options.Save();");
     }
 }

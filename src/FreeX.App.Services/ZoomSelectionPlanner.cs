@@ -1,6 +1,4 @@
-using FreeX.App.Services;
-
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public static class ZoomSelectionPlanner
 {
@@ -8,15 +6,30 @@ public static class ZoomSelectionPlanner
     private const double DefaultRowHeightPixels = 20d;
     private const double PercentScale = 100d;
 
-    public static double CalculateDialogZoomPercent(
-        ZoomDialogResult result,
+    public static double CalculateZoomPercent(
+        int requestedZoomPercent,
+        bool fitSelection,
         double gridWidth,
         double gridHeight,
         uint selectedColumns,
         uint selectedRows) =>
-        result.FitSelection
+        fitSelection
             ? CalculateFitPercent(gridWidth, gridHeight, selectedColumns, selectedRows)
-            : result.ZoomPercent;
+            : requestedZoomPercent;
+
+    public static double CalculateDialogZoomPercent(
+        ZoomDialogSelection result,
+        double gridWidth,
+        double gridHeight,
+        uint selectedColumns,
+        uint selectedRows) =>
+        CalculateZoomPercent(
+            result.ZoomPercent,
+            result.FitSelection,
+            gridWidth,
+            gridHeight,
+            selectedColumns,
+            selectedRows);
 
     public static double CalculateFitPercent(
         double gridWidth,

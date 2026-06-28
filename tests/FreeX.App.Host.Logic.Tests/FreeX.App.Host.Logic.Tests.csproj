@@ -23,6 +23,8 @@
     <Using Include="Free.Shared.Ribbon" />
     <Using Include="FreeX.Ribbon.Definitions" />
     <Using Include="FreeX.App.Services.Ribbon" />
+    <Using Include="FreeX.App.Services" />
+    <Using Include="FreeX.App.Presentation" />
     <Using Include="FreeX.App.Presentation.FormulaBar" />
     <Using Include="FreeX.App.Presentation.TextToColumns" />
     <Using Include="FreeX.App.Presentation.NamedRanges" />

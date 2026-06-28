@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;

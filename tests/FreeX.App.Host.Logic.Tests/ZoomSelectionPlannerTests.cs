@@ -34,8 +34,9 @@ public sealed class ZoomSelectionPlannerTests
     [Fact]
     public void CalculateDialogZoomPercent_UsesFitPercentWhenDialogRequestsFitSelection()
     {
-        ZoomSelectionPlanner.CalculateDialogZoomPercent(
-                new ZoomDialogResult(125, FitSelection: true),
+        ZoomSelectionPlanner.CalculateZoomPercent(
+                requestedZoomPercent: 125,
+                fitSelection: true,
                 gridWidth: 800,
                 gridHeight: 300,
                 selectedColumns: 5,

@@ -1,6 +1,6 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation;
 
 public sealed record FormulaAuditSelectionPlan(
     SheetId TargetSheetId,
