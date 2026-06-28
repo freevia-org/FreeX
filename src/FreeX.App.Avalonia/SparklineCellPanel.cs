@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Model;
 

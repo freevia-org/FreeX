@@ -1,11 +1,10 @@
 using FluentAssertions;
-using FreeX.App.Avalonia;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Tests;
+namespace FreeX.App.Presentation.Tests.SlicerTimeline;
 
 /// <summary>
 /// Tests for the non-UI slicer/timeline interaction glue: turning a pointer hit on a laid-out
