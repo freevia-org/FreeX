@@ -1,0 +1,83 @@
+using System.Globalization;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Presentation.Dialogs;
+
+public sealed record LineNumberOptionsInitialState(
+    string StartAtText,
+    string CountByText,
+    int ModeIndex);
+
+public sealed record LineNumberOptionsDialogInput(
+    string? StartAtText,
+    string? CountByText,
+    int ModeIndex);
+
+public sealed record LineNumberOptionsDialogResult(
+    int StartAt,
+    int CountBy,
+    LineNumberMode Mode);
+
+public static class LineNumberOptionsDialogPlanner
+{
+    public const string StartAtValidationMessage = "Start At must be a whole number of 1 or greater.";
+    public const string CountByValidationMessage = "Count By must be a whole number of 1 or greater.";
+
+    private static readonly string[] ModeLabelValues = ["Continuous", "Restart Each Page"];
+
+    public static IReadOnlyList<string> ModeLabels => ModeLabelValues;
+
+    public static LineNumberOptionsInitialState BuildInitialState(
+        int startAt,
+        int countBy,
+        LineNumberMode mode,
+        CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
+        return new LineNumberOptionsInitialState(
+            StartAtText: startAt.ToString(culture),
+            CountByText: countBy.ToString(culture),
+            ModeIndex: ModeIndexFor(mode));
+    }
+
+    public static int ModeIndexFor(LineNumberMode mode) =>
+        mode == LineNumberMode.RestartEachPage ? 1 : 0;
+
+    public static LineNumberMode ModeForIndex(int selectedIndex) =>
+        selectedIndex == 1 ? LineNumberMode.RestartEachPage : LineNumberMode.Continuous;
+
+    public static bool TryBuildResult(
+        LineNumberOptionsDialogInput input,
+        CultureInfo culture,
+        out LineNumberOptionsDialogResult? result,
+        out string? errorMessage)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        result = null;
+        errorMessage = null;
+
+        if (!TryParsePositiveWholeNumber(input.StartAtText, culture, out var startAt))
+        {
+            errorMessage = StartAtValidationMessage;
+            return false;
+        }
+
+        if (!TryParsePositiveWholeNumber(input.CountByText, culture, out var countBy))
+        {
+            errorMessage = CountByValidationMessage;
+            return false;
+        }
+
+        result = new LineNumberOptionsDialogResult(startAt, countBy, ModeForIndex(input.ModeIndex));
+        return true;
+    }
+
+    private static bool TryParsePositiveWholeNumber(string? text, CultureInfo culture, out int value)
+    {
+        var trimmed = (text ?? string.Empty).Trim();
+        return int.TryParse(trimmed, NumberStyles.Integer, culture, out value) && value >= 1;
+    }
+}

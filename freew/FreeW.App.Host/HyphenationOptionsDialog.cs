@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -20,14 +21,11 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    /// <summary>The settings the dialog produces, mapped onto a <see cref="PageSettings"/> on apply.</summary>
-    internal sealed record Result(bool AutoHyphenation, double ZonePt, int ConsecutiveLimit, bool HyphenateCaps);
-
     private readonly CheckBox _autoBox;
     private readonly TextBox _zoneBox;
     private readonly TextBox _limitBox;
     private readonly CheckBox _hyphenateCapsBox;
-    private Result? _result;
+    private HyphenationOptionsDialogResult? _result;
 
     private HyphenationOptionsDialog(Window? owner, PageSettings page)
     {
@@ -39,10 +37,11 @@ internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWi
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _autoBox = new CheckBox { Content = "Automatically hyphenate document", IsChecked = page.AutoHyphenation };
-        _hyphenateCapsBox = new CheckBox { Content = "Hyphenate words in CAPS", IsChecked = !page.DoNotHyphenateCaps, Margin = new Thickness(0, 6, 0, 0) };
-        _zoneBox = NumberBox(page.HyphenationZonePt);
-        _limitBox = NumberBox(page.ConsecutiveHyphenLimit);
+        var state = HyphenationOptionsDialogPlanner.BuildInitialState(page, CultureInfo.CurrentCulture);
+        _autoBox = new CheckBox { Content = "Automatically hyphenate document", IsChecked = state.AutoHyphenation };
+        _hyphenateCapsBox = new CheckBox { Content = "Hyphenate words in CAPS", IsChecked = state.HyphenateCaps, Margin = new Thickness(0, 6, 0, 0) };
+        _zoneBox = NumberBox(state.ZoneText);
+        _limitBox = NumberBox(state.ConsecutiveLimitText);
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -74,9 +73,9 @@ internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWi
         DialogFocus.FocusAndSelect(_zoneBox);
     }
 
-    private static TextBox NumberBox(double value) => new()
+    private static TextBox NumberBox(string text) => new()
     {
-        Text = value.ToString("0.##", CultureInfo.CurrentCulture),
+        Text = text,
         MinWidth = 90
     };
 
@@ -101,29 +100,31 @@ internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWi
 
     private void Accept()
     {
-        if (!TryParseDouble(_zoneBox.Text, out var zone) || zone < 0
-            || !TryParseDouble(_limitBox.Text, out var limitValue) || limitValue < 0)
+        var input = new HyphenationOptionsDialogInput(
+            _autoBox.IsChecked == true,
+            _zoneBox.Text,
+            _limitBox.Text,
+            _hyphenateCapsBox.IsChecked == true);
+
+        if (!HyphenationOptionsDialogPlanner.TryBuildResult(
+                input,
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a non-negative hyphenation zone and a non-negative consecutive-hyphen limit (0 = no limit).");
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? HyphenationOptionsDialogPlanner.ValidationMessage);
             return;
         }
 
-        _result = new Result(
-            _autoBox.IsChecked == true,
-            zone,
-            (int)System.Math.Round(limitValue),
-            _hyphenateCapsBox.IsChecked == true);
+        _result = result;
         Close();
     }
-
-    private static bool TryParseDouble(string text, out double value) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
 
     /// <summary>
     /// Show the dialog seeded with the current page hyphenation settings; returns the chosen settings, or
     /// null if cancelled.
     /// </summary>
-    public static Result? Prompt(Window? owner, PageSettings page)
+    public static HyphenationOptionsDialogResult? Prompt(Window? owner, PageSettings page)
     {
         var dialog = new HyphenationOptionsDialog(owner, page);
         dialog.ShowDialog();
