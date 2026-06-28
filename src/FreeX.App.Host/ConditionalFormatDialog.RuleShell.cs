@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeX.App.Presentation.ConditionalFormatting;
 
 namespace FreeX.App.Host;
 
@@ -61,23 +62,10 @@ public partial class ConditionalFormatDialog
     }
 
     private string DefaultRuleTypeForShellLabel(string shellLabel)
-    {
-        if (shellLabel == ExcelRuleShellTypes[0])
-            return _ruleType is "Data Bar" or "Color Scale" or "Icon Set" ? _ruleType : "Data Bar";
-        if (shellLabel == ExcelRuleShellTypes[2]) return "Top 10 Items";
-        if (shellLabel == ExcelRuleShellTypes[3]) return "Above Average";
-        if (shellLabel == ExcelRuleShellTypes[4]) return "Duplicate Values";
-        if (shellLabel == ExcelRuleShellTypes[5]) return "Formula";
-        return "Greater Than";
-    }
+        => ConditionalFormatDialogCatalog.DefaultRuleTypeForShellKey(
+            LabelKeyForLocalizedOption(ConditionalFormatDialogCatalog.RuleShellOptions, shellLabel),
+            _ruleType);
 
-    private static string RuleTypeShellLabel(string ruleType) => ruleType switch
-    {
-        "Data Bar" or "Color Scale" or "Icon Set" => ExcelRuleShellTypes[0],
-        "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => ExcelRuleShellTypes[2],
-        "Above Average" or "Below Average" => ExcelRuleShellTypes[3],
-        "Duplicate Values" => ExcelRuleShellTypes[4],
-        "Formula" or "Use a Formula" => ExcelRuleShellTypes[5],
-        _ => ExcelRuleShellTypes[1]
-    };
+    private static string RuleTypeShellLabel(string ruleType) =>
+        UiText.Get(ConditionalFormatDialogCatalog.ShellKeyForRuleType(ruleType));
 }

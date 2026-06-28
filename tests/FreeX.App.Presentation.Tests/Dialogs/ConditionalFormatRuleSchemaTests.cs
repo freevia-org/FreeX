@@ -17,9 +17,14 @@ public sealed class ConditionalFormatRuleSchemaTests
     [InlineData(CfRuleType.IconSet, CfInputField.IconSetStyle)]
     [InlineData(CfRuleType.DataBar, CfInputField.DataBarMinMaxType)]
     [InlineData(CfRuleType.DataBar, CfInputField.DataBarColors)]
+    [InlineData(CfRuleType.DataBar, CfInputField.DataBarMinLength)]
+    [InlineData(CfRuleType.DataBar, CfInputField.DataBarMaxLength)]
     [InlineData(CfRuleType.ColorScale, CfInputField.UseThreeColorScale)]
     [InlineData(CfRuleType.ColorScale, CfInputField.ColorScaleThresholdTypes)]
     [InlineData(CfRuleType.ColorScale, CfInputField.ColorScaleColors)]
+    [InlineData(CfRuleType.ColorScale, CfInputField.ColorScaleMinColor)]
+    [InlineData(CfRuleType.ColorScale, CfInputField.ColorScaleMidColor)]
+    [InlineData(CfRuleType.ColorScale, CfInputField.ColorScaleMaxColor)]
     [InlineData(CfRuleType.DateOccurring, CfInputField.DatePeriod)]
     [InlineData(CfRuleType.DuplicateValues, CfInputField.DuplicateOrUnique)]
     [InlineData(CfRuleType.UniqueValues, CfInputField.DuplicateOrUnique)]
@@ -210,6 +215,26 @@ public sealed class ConditionalFormatRuleSchemaTests
         schema.Validate(input).IsValid.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("0", true)]
+    [InlineData("100", true)]
+    [InlineData("-1", false)]
+    [InlineData("101", false)]
+    [InlineData("abc", false)]
+    public void DataBar_LengthPercent_ValidatesOptionalRange(string value, bool expectedValid)
+    {
+        var schema = ConditionalFormatRuleSchema.ForRuleType(CfRuleType.DataBar);
+        var input = new CfRuleInput
+        {
+            RuleType = CfRuleType.DataBar,
+            DataBarMinLength = value,
+            DataBarMaxLength = value
+        };
+
+        schema.Validate(input).IsValid.Should().Be(expectedValid);
+    }
+
     [Fact]
     public void ColorScale_TwoColor_Valid_WhenMinMaxColorsParse()
     {
@@ -256,7 +281,7 @@ public sealed class ConditionalFormatRuleSchemaTests
         var result = schema.Validate(input);
 
         result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.Field == CfInputField.ColorScaleColors);
+        result.Errors.Should().Contain(e => e.Field == CfInputField.ColorScaleMinColor);
     }
 
     [Fact]
@@ -272,7 +297,10 @@ public sealed class ConditionalFormatRuleSchemaTests
             MaxColor = "255,255,255"
         };
 
-        schema.Validate(input).IsValid.Should().BeFalse();
+        var result = schema.Validate(input);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.Field == CfInputField.ColorScaleMidColor);
     }
 
     [Fact]

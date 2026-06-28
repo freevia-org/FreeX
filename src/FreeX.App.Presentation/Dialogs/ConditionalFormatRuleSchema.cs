@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Dialogs;
@@ -42,11 +43,26 @@ public enum CfInputField
     /// <summary>The data-bar fill/border colors.</summary>
     DataBarColors,
 
+    /// <summary>The optional minimum data-bar length percent.</summary>
+    DataBarMinLength,
+
+    /// <summary>The optional maximum data-bar length percent.</summary>
+    DataBarMaxLength,
+
     /// <summary>The color-scale min/mid/max threshold types.</summary>
     ColorScaleThresholdTypes,
 
     /// <summary>The color-scale min/mid/max colors.</summary>
     ColorScaleColors,
+
+    /// <summary>The color-scale minimum color.</summary>
+    ColorScaleMinColor,
+
+    /// <summary>The color-scale midpoint color.</summary>
+    ColorScaleMidColor,
+
+    /// <summary>The color-scale maximum color.</summary>
+    ColorScaleMaxColor,
 
     /// <summary>Whether the color scale uses three colors (with a midpoint) rather than two.</summary>
     UseThreeColorScale,
@@ -85,6 +101,9 @@ public sealed record CfRuleInput
     public string? Value2 { get; init; }
     public string? Text { get; init; }
 
+    /// <summary>The relative date period token for a Date Occurring rule.</summary>
+    public string? DatePeriod { get; init; }
+
     /// <summary>Top 10 rank (item count) or percent, as typed.</summary>
     public string? Rank { get; init; }
 
@@ -98,11 +117,33 @@ public sealed record CfRuleInput
     public bool IsTop { get; init; } = true;
 
     public string? IconSetStyle { get; init; }
+    public bool IconSetShowValue { get; init; } = true;
+    public bool IconSetReverse { get; init; }
+    public IReadOnlyList<CfThresholdModel>? IconSetThresholds { get; init; }
+    public IReadOnlyList<CfIconOverride?>? IconOverrides { get; init; }
 
     public CfThresholdType DataBarMinType { get; init; } = CfThresholdType.Min;
+    public string? DataBarMinValue { get; init; }
     public CfThresholdType DataBarMaxType { get; init; } = CfThresholdType.Max;
+    public string? DataBarMaxValue { get; init; }
+    public RgbColor? DataBarColor { get; init; }
+    public bool DataBarShowValue { get; init; } = true;
+    public bool DataBarGradient { get; init; } = true;
+    public string? DataBarMinLength { get; init; }
+    public string? DataBarMaxLength { get; init; }
+    public bool DataBarBorder { get; init; }
+    public string? DataBarAxisPosition { get; init; }
+    public RgbColor? DataBarAxisColor { get; init; }
+    public RgbColor? DataBarNegativeFillColor { get; init; }
+    public RgbColor? DataBarNegativeBorderColor { get; init; }
 
     public bool UseThreeColorScale { get; init; }
+    public CfThresholdType ColorScaleMinType { get; init; } = CfThresholdType.Min;
+    public string? ColorScaleMinValue { get; init; }
+    public CfThresholdType ColorScaleMidType { get; init; } = CfThresholdType.Percentile;
+    public string? ColorScaleMidValue { get; init; }
+    public CfThresholdType ColorScaleMaxType { get; init; } = CfThresholdType.Max;
+    public string? ColorScaleMaxValue { get; init; }
 
     /// <summary>Min/mid/max colors as typed; a null or unparseable entry where required is an error.</summary>
     public string? MinColor { get; init; }
@@ -148,14 +189,23 @@ public sealed record ConditionalFormatRuleSchema(
                 new[] { CfInputField.IconSetStyle },
 
             CfRuleType.DataBar =>
-                new[] { CfInputField.DataBarMinMaxType, CfInputField.DataBarColors },
+                new[]
+                {
+                    CfInputField.DataBarMinMaxType,
+                    CfInputField.DataBarColors,
+                    CfInputField.DataBarMinLength,
+                    CfInputField.DataBarMaxLength
+                },
 
             CfRuleType.ColorScale =>
                 new[]
                 {
                     CfInputField.UseThreeColorScale,
                     CfInputField.ColorScaleThresholdTypes,
-                    CfInputField.ColorScaleColors
+                    CfInputField.ColorScaleColors,
+                    CfInputField.ColorScaleMinColor,
+                    CfInputField.ColorScaleMidColor,
+                    CfInputField.ColorScaleMaxColor
                 },
 
             CfRuleType.DateOccurring =>
@@ -202,6 +252,10 @@ public sealed record ConditionalFormatRuleSchema(
             case CfRuleType.IconSet:
                 if (string.IsNullOrWhiteSpace(input.IconSetStyle))
                     errors.Add(new CfValidationError(CfInputField.IconSetStyle, "An icon-set style is required."));
+                break;
+
+            case CfRuleType.DataBar:
+                ValidateDataBar(input, errors);
                 break;
 
             case CfRuleType.ColorScale:
@@ -261,13 +315,22 @@ public sealed record ConditionalFormatRuleSchema(
     private static void ValidateColorScale(CfRuleInput input, List<CfValidationError> errors)
     {
         if (!IsParseableColor(input.MinColor))
-            errors.Add(new CfValidationError(CfInputField.ColorScaleColors, "A valid minimum color is required."));
+            errors.Add(new CfValidationError(CfInputField.ColorScaleMinColor, "A valid minimum color is required."));
 
         if (input.UseThreeColorScale && !IsParseableColor(input.MidColor))
-            errors.Add(new CfValidationError(CfInputField.ColorScaleColors, "A valid midpoint color is required."));
+            errors.Add(new CfValidationError(CfInputField.ColorScaleMidColor, "A valid midpoint color is required."));
 
         if (!IsParseableColor(input.MaxColor))
-            errors.Add(new CfValidationError(CfInputField.ColorScaleColors, "A valid maximum color is required."));
+            errors.Add(new CfValidationError(CfInputField.ColorScaleMaxColor, "A valid maximum color is required."));
+    }
+
+    private static void ValidateDataBar(CfRuleInput input, List<CfValidationError> errors)
+    {
+        if (!ConditionalFormatInputParser.TryParseOptionalPercent(input.DataBarMinLength, out _))
+            errors.Add(new CfValidationError(CfInputField.DataBarMinLength, "Enter a minimum bar length from 0 to 100."));
+
+        if (!ConditionalFormatInputParser.TryParseOptionalPercent(input.DataBarMaxLength, out _))
+            errors.Add(new CfValidationError(CfInputField.DataBarMaxLength, "Enter a maximum bar length from 0 to 100."));
     }
 
     /// <summary>
