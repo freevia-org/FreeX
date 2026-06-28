@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.App.Presentation.Comments;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
