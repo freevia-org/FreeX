@@ -81,17 +81,18 @@ public sealed partial class SelectionPanePlannerTests
     public void SelectionPaneDialog_PlannerConsolidatesDragReorderIndexLookups()
     {
         var hostSource = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
-        var serviceSource = WorkspaceFileLocator.ReadAllText(
+        var presentationSource = WorkspaceFileLocator.ReadAllText(
             "src",
-            "FreeX.App.Services",
+            "FreeX.App.Presentation",
+            "DrawingUI",
             "SelectionPanePlanner.cs");
 
         hostSource.Should().Contain("SharedSelectionPanePlanner.PlanDragReorder(");
-        serviceSource.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
-        serviceSource.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);");
-        serviceSource.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
-        serviceSource.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
-        serviceSource.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
+        presentationSource.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
+        presentationSource.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);");
+        presentationSource.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
+        presentationSource.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
+        presentationSource.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
     }
 
     [Fact]
@@ -99,17 +100,23 @@ public sealed partial class SelectionPanePlannerTests
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
         var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "SelectionPanePlanner.cs");
+        var servicePlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Services", "SelectionPanePlanner.cs");
         var dialogSource = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
-        var serviceSource = WorkspaceFileLocator.ReadAllText(
+        var presentationSource = WorkspaceFileLocator.ReadAllText(
             "src",
-            "FreeX.App.Services",
+            "FreeX.App.Presentation",
+            "DrawingUI",
             "SelectionPanePlanner.cs");
 
         File.Exists(hostPlannerPath)
             .Should()
             .BeFalse("the WPF Selection Pane should use the portable planner through the dialog edge");
+        File.Exists(servicePlannerPath)
+            .Should()
+            .BeFalse("drawing/selection UI planning should live in FreeX.App.Presentation.DrawingUI, not the service layer");
 
         dialogSource.Should().Contain("SharedSelectionPanePlanner.BuildItems(sheet, CreateLocalizedPlannerText())");
+        dialogSource.Should().Contain("using SharedSelectionPanePlanner = FreeX.App.Presentation.DrawingUI.SelectionPanePlanner;");
         dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultChartName\")");
         dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultPictureName\")");
         dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultTextBoxName\")");
@@ -117,7 +124,8 @@ public sealed partial class SelectionPanePlannerTests
         dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultEllipseName\")");
         dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultLineName\")");
         dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultRectangleName\")");
-        serviceSource.Should().Contain("SelectionPanePlannerText.Default");
-        serviceSource.Should().NotContain("UiText.Get(");
+        presentationSource.Should().Contain("namespace FreeX.App.Presentation.DrawingUI;");
+        presentationSource.Should().Contain("SelectionPanePlannerText.Default");
+        presentationSource.Should().NotContain("UiText.Get(");
     }
 }

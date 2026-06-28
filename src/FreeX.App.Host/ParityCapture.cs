@@ -8,6 +8,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
