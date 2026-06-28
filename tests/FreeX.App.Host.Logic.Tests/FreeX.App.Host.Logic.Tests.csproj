@@ -25,6 +25,7 @@
     <Using Include="FreeX.App.Services.Ribbon" />
     <Using Include="FreeX.App.Services" />
     <Using Include="FreeX.App.Presentation" />
+    <Using Include="FreeX.App.Presentation.DrawingUI" />
     <Using Include="FreeX.App.Presentation.FormulaBar" />
     <Using Include="FreeX.App.Presentation.TextToColumns" />
     <Using Include="FreeX.App.Presentation.NamedRanges" />

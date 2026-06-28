@@ -2,7 +2,7 @@ using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Services;
+namespace FreeX.App.Presentation.DrawingUI;
 
 public sealed record SelectionPaneItem(
     SelectionPaneObjectKind Kind,

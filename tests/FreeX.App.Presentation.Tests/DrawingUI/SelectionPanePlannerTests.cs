@@ -1,8 +1,9 @@
 using FluentAssertions;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Services.Tests;
+namespace FreeX.App.Presentation.Tests.DrawingUI;
 
 public sealed class SelectionPanePlannerTests
 {

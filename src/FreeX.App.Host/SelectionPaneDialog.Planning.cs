@@ -1,9 +1,9 @@
-using FreeX.App.Services;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-using SharedSelectionPanePlanner = FreeX.App.Services.SelectionPanePlanner;
+using SharedSelectionPanePlanner = FreeX.App.Presentation.DrawingUI.SelectionPanePlanner;
 
 internal sealed record SelectionPaneDialogItemState(
     SelectionPaneObjectKind Kind,
