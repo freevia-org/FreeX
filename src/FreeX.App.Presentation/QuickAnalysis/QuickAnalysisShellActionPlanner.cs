@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.QuickAnalysis;
@@ -26,6 +27,7 @@ public sealed record QuickAnalysisShellAction(
     QuickAnalysisShellActionKind Kind,
     QuickAnalysisCommandRoute Route,
     QuickAnalysisConditionalFormatCommand? ConditionalFormat = null,
+    ConditionalFormatPreset? ConditionalFormatPreset = null,
     string? ConditionalFormatDialogTitle = null,
     ChartType? ChartType = null,
     string? TotalFunction = null,
@@ -98,7 +100,10 @@ public static class QuickAnalysisShellActionPlanner
                 new QuickAnalysisShellAction(
                     QuickAnalysisShellActionKind.ApplyConditionalFormat,
                     route,
-                    ConditionalFormat: command),
+                    ConditionalFormat: command,
+                    ConditionalFormatPreset: QuickAnalysisConditionalFormatPresetPlanner.TryResolve(command, out var preset)
+                        ? preset
+                        : null),
 
             QuickAnalysisCommandKind.ClearConditionalFormatting
                 when capabilities.SupportsClearConditionalFormatting =>

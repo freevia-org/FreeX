@@ -39,6 +39,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         source.Should().Contain("var action = item.Action;");
         source.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
+        source.Should().Contain("action.ConditionalFormatPreset is { } preset");
+        source.Should().NotContain("TryMapQuickAnalysisConditionalFormatPreset(");
         source.Should().Contain("QuickAnalysisShellActionKind.ApplyConditionalFormat");
         source.Should().Contain("QuickAnalysisShellActionKind.Deferred");
         source.Should().NotContain("IsQuickAnalysisAutoSumFunction(");

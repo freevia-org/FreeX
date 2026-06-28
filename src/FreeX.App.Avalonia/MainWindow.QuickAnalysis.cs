@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -148,9 +147,7 @@ public sealed partial class MainWindow
         var action = item.Action;
         switch (action.Kind)
         {
-            case QuickAnalysisShellActionKind.ApplyConditionalFormat
-                when action.ConditionalFormat is { } conditionalFormat &&
-                     TryMapQuickAnalysisConditionalFormatPreset(conditionalFormat, out var preset):
+            case QuickAnalysisShellActionKind.ApplyConditionalFormat when action.ConditionalFormatPreset is { } preset:
                 ApplyConditionalFormatPreset(preset);
                 break;
 
@@ -175,34 +172,6 @@ public sealed partial class MainWindow
                 RefreshShell(action.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
                 break;
         }
-    }
-
-    private static bool TryMapQuickAnalysisConditionalFormatPreset(
-        QuickAnalysisConditionalFormatCommand command,
-        out ConditionalFormatPreset preset)
-    {
-        preset = command switch
-        {
-            QuickAnalysisConditionalFormatCommand.DataBar => ConditionalFormatPreset.DataBar,
-            QuickAnalysisConditionalFormatCommand.ColorScale => ConditionalFormatPreset.ColorScale,
-            QuickAnalysisConditionalFormatCommand.IconSet => ConditionalFormatPreset.IconSet,
-            QuickAnalysisConditionalFormatCommand.GreaterThan => ConditionalFormatPreset.HighlightGreaterThan,
-            QuickAnalysisConditionalFormatCommand.LessThan => ConditionalFormatPreset.HighlightLessThan,
-            QuickAnalysisConditionalFormatCommand.Between => ConditionalFormatPreset.HighlightBetween,
-            QuickAnalysisConditionalFormatCommand.EqualTo => ConditionalFormatPreset.HighlightEqualTo,
-            QuickAnalysisConditionalFormatCommand.TextContains => ConditionalFormatPreset.HighlightTextContains,
-            QuickAnalysisConditionalFormatCommand.DateOccurring => ConditionalFormatPreset.HighlightDateOccurring,
-            QuickAnalysisConditionalFormatCommand.DuplicateValues => ConditionalFormatPreset.HighlightDuplicateValues,
-            QuickAnalysisConditionalFormatCommand.Top10Items => ConditionalFormatPreset.Top10,
-            QuickAnalysisConditionalFormatCommand.Top10Percent => ConditionalFormatPreset.Top10Percent,
-            QuickAnalysisConditionalFormatCommand.Bottom10Items => ConditionalFormatPreset.Bottom10Items,
-            QuickAnalysisConditionalFormatCommand.Bottom10Percent => ConditionalFormatPreset.Bottom10Percent,
-            QuickAnalysisConditionalFormatCommand.AboveAverage => ConditionalFormatPreset.AboveAverage,
-            QuickAnalysisConditionalFormatCommand.BelowAverage => ConditionalFormatPreset.BelowAverage,
-            _ => default
-        };
-
-        return Enum.IsDefined(command);
     }
 
     /// <summary>
