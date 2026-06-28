@@ -46,6 +46,7 @@ public sealed class ReviewCommandSourceTests
         source.Should().NotContain("_messageService.ShowInfo(text, UiText.Get(\"MainWindowMessage_CommentsTitle\"))");
         source.Should().NotContain("_messageService.ShowInfo(text, UiText.Get(\"MainWindow_Text_Notes\"))");
         source.Should().Contain("ProtectionDialogPlanner.CreateSheetResult(");
+        source.Should().Contain("SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions()");
         source.Should().Contain("string? unprotectPassword = null;");
         source.Should().Contain("sheet.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword)");
         source.Should().Contain("private bool TryConfirmSheetUnprotectPassword(Sheet sheet, out string? password)");

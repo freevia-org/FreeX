@@ -25,7 +25,7 @@ public sealed class SheetProtectionWorkflowTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         var result = ProtectionDialogPlanner.CreateSheetResult(
-            sheet,
+            sheet.IsProtected,
             password: "secret",
             selectedSheetPermissions: ["Select unlocked cells", "Sort"]);
 

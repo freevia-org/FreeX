@@ -54,7 +54,10 @@ public partial class MainWindow
             ExecuteReviewProtectionMatrixCommand(
                 SheetProtectionWorkflow.CreateCommand(
                     context.Sheet,
-                    ProtectionDialogPlanner.CreateSheetResult(context.Sheet, context.Password, context.SelectedPermissionLabels)).Command,
+                    ProtectionDialogPlanner.CreateSheetResult(
+                        context.Sheet.IsProtected,
+                        context.Password,
+                        context.SelectedPermissionLabels)).Command,
                 "Protect Sheet",
                 commandOutcomes);
             RefreshSheetProtectionUi();
@@ -131,7 +134,10 @@ public partial class MainWindow
             ExecuteReviewProtectionMatrixCommand(
                 SheetProtectionWorkflow.CreateCommand(
                     context.Sheet,
-                    ProtectionDialogPlanner.CreateSheetResult(context.Sheet, context.Password)).Command,
+                    ProtectionDialogPlanner.CreateSheetResult(
+                        context.Sheet.IsProtected,
+                        context.Password,
+                        SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions())).Command,
                 "Unprotect Sheet",
                 commandOutcomes);
             RefreshSheetProtectionUi();
@@ -147,7 +153,10 @@ public partial class MainWindow
             ExecuteReviewProtectionMatrixCommand(
                 SheetProtectionWorkflow.CreateCommand(
                     context.Sheet,
-                    ProtectionDialogPlanner.CreateSheetResult(context.Sheet, context.Password, context.SelectedPermissionLabels)).Command,
+                    ProtectionDialogPlanner.CreateSheetResult(
+                        context.Sheet.IsProtected,
+                        context.Password,
+                        context.SelectedPermissionLabels)).Command,
                 "Protect Sheet for persistence",
                 commandOutcomes);
             ExecuteReviewProtectionMatrixCommand(
@@ -270,7 +279,7 @@ public partial class MainWindow
             SheetProtectionPermission.FormatRows
         };
         var selectedLabels = selectedPermissions
-            .Select(ProtectionDialogPlanner.FormatSheetPermission)
+            .Select(SheetProtectionPermissionLabels.FormatSheetPermission)
             .ToArray();
 
         SetSelectionRange(new GridRange(lockedCell, lockedCell), lockedCell);
@@ -400,10 +409,10 @@ public partial class MainWindow
             Password: "matrix-secret",
             SelectedPermissionLabels:
             [
-                ProtectionDialogPlanner.FormatSheetPermission(SheetProtectionPermission.SelectUnlockedCells),
-                ProtectionDialogPlanner.FormatSheetPermission(SheetProtectionPermission.Sort),
-                ProtectionDialogPlanner.FormatSheetPermission(SheetProtectionPermission.UseAutoFilter),
-                ProtectionDialogPlanner.FormatSheetPermission(SheetProtectionPermission.FormatRows)
+                SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.SelectUnlockedCells),
+                SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.Sort),
+                SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.UseAutoFilter),
+                SheetProtectionPermissionLabels.FormatSheetPermission(SheetProtectionPermission.FormatRows)
             ],
             SavedWorkbookOutputFileName: ReviewProtectionMatrixTourSavedWorkbookFileName,
             SavedWorkbookBytes: 0,

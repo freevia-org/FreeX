@@ -19,32 +19,32 @@ public sealed partial class ProtectionDialogTests
 
         AllowEditRangeDialog.CreateAddResult(range)
             .Should()
-            .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Add, range));
+            .Be(new AllowEditRangeResult(AllowEditRangeAction.Add, range));
         AllowEditRangeDialog.CreateModifyResult(range, range)
             .Should()
-            .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Modify, range, range));
+            .Be(new AllowEditRangeResult(AllowEditRangeAction.Modify, range, range));
         AllowEditRangeDialog.CreateRemoveResult(range)
             .Should()
-            .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Remove, range));
+            .Be(new AllowEditRangeResult(AllowEditRangeAction.Remove, range));
         AllowEditRangeDialog.CreateClearResult()
             .Should()
-            .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Clear, null));
+            .Be(new AllowEditRangeResult(AllowEditRangeAction.Clear, null));
     }
 
     [Fact]
-    public void AllowEditRangeDialogPlanner_BuildsRangeListAndButtonState()
+    public void AllowEditRangeSharedPlanner_BuildsRangeListAndButtonState()
     {
         var sheetId = SheetId.New();
         var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
 
-        AllowEditRangeDialogPlanner.BuildExistingRangeItems([range]).Should().Equal(range.ToString());
-        AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 0, hasSelectedRange: false)
+        AllowEditRangePlanner.BuildExistingRangeItems([range]).Should().Equal(range.ToString());
+        AllowEditRangePlanner.BuildButtonState(rangeCount: 0, hasSelectedRange: false)
             .Should()
             .Be(new AllowEditRangeButtonState(false, false, false));
-        AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 1, hasSelectedRange: false)
+        AllowEditRangePlanner.BuildButtonState(rangeCount: 1, hasSelectedRange: false)
             .Should()
             .Be(new AllowEditRangeButtonState(false, false, false));
-        AllowEditRangeDialogPlanner.BuildButtonState(rangeCount: 1, hasSelectedRange: true)
+        AllowEditRangePlanner.BuildButtonState(rangeCount: 1, hasSelectedRange: true)
             .Should()
             .Be(new AllowEditRangeButtonState(true, true, false));
     }

@@ -555,7 +555,10 @@ public partial class MainWindow
         if (sheet.IsProtected && !TryConfirmSheetUnprotectPassword(sheet, out unprotectPassword))
             return;
 
-        var result = ProtectionDialogPlanner.CreateSheetResult(sheet, unprotectPassword);
+        var result = ProtectionDialogPlanner.CreateSheetResult(
+            sheet.IsProtected,
+            unprotectPassword,
+            SheetProtectionPermissionLabels.GetDefaultSelectedSheetPermissions());
         if (!sheet.IsProtected)
         {
             var dialog = new PasswordProtectionDialog(
@@ -563,7 +566,7 @@ public partial class MainWindow
                 UiText.Get("MainWindowMessage_OptionalPasswordLabel")) { Owner = this };
             if (dialog.ShowDialog() != true) return;
             result = ProtectionDialogPlanner.CreateSheetResult(
-                sheet,
+                sheet.IsProtected,
                 dialog.Password,
                 dialog.SelectedSheetPermissions);
         }
@@ -656,11 +659,11 @@ public partial class MainWindow
         string? successMessage = null;
         switch (dialog.Result)
         {
-            case { Action: AllowEditRangeDialogAction.Add, Range: { } range }:
+            case { Action: AllowEditRangeAction.Add, Range: { } range }:
                 command = new AllowEditRangeCommand(_currentSheetId, range);
                 successMessage = UiText.Format("MainWindowMessage_AllowEditRangeAdded", range);
                 break;
-            case { Action: AllowEditRangeDialogAction.Modify, PreviousRange: { } previousRange, Range: { } range }:
+            case { Action: AllowEditRangeAction.Modify, PreviousRange: { } previousRange, Range: { } range }:
                 command = new CompositeWorkbookCommand(
                     "Modify Allow Edit Range",
                     [
@@ -669,11 +672,11 @@ public partial class MainWindow
                     ]);
                 successMessage = UiText.Format("MainWindowMessage_AllowEditRangeModified", range);
                 break;
-            case { Action: AllowEditRangeDialogAction.Remove, Range: { } range }:
+            case { Action: AllowEditRangeAction.Remove, Range: { } range }:
                 command = new RemoveAllowEditRangeCommand(_currentSheetId, range);
                 successMessage = UiText.Format("MainWindowMessage_AllowEditRangeRemoved", range);
                 break;
-            case { Action: AllowEditRangeDialogAction.Clear }:
+            case { Action: AllowEditRangeAction.Clear }:
                 command = new ClearAllowEditRangesCommand(_currentSheetId);
                 successMessage = UiText.Get("MainWindowMessage_AllowEditRangesCleared");
                 break;
