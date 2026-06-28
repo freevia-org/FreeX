@@ -16,6 +16,7 @@ using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using static FreeX.ToolsShared.Wpf.WpfImageDiff;
 
 /// <summary>
 /// FreeX Sheet Grid Image Compare — renders each worksheet of an .xlsx to a PNG using
@@ -1511,7 +1512,7 @@ internal static class Program
                         }
                     }
 
-                    row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!);
+                    row.DiffPercent = ComputeMeanPixelDiff(excelPng, r.FreeXPngPath!, 800, 600);
                     r.DiffPercent = row.DiffPercent;
                 }
                 catch (Exception ex)
@@ -1669,54 +1670,12 @@ internal static class Program
     // -----------------------------------------------------------------------
     // Image utilities (adapted from FreeX.SheetImageCompare/Program.cs)
     // -----------------------------------------------------------------------
-    private static BitmapSource LoadBitmap(string path)
-    {
-        using var stream = File.OpenRead(path);
-        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-        var source  = decoder.Frames[0];
-        return source.Format == PixelFormats.Bgra32
-            ? source
-            : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
-    }
-
     private static PngDimensions GetPngDimensions(string path)
     {
         using var stream = File.OpenRead(path);
         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
         var frame = decoder.Frames[0];
         return new PngDimensions(frame.PixelWidth, frame.PixelHeight);
-    }
-
-    private static double ComputeMeanPixelDiff(string excelPath, string freexPath)
-    {
-        const int W = 800, H = 600;
-
-        var excelBmp = ResizeTo(LoadBitmap(excelPath), W, H);
-        var freexBmp = File.Exists(freexPath)
-            ? ResizeTo(LoadBitmap(freexPath), W, H)
-            : CreateWhite(W, H);
-
-        var excelPixels = GetBgra32Pixels(excelBmp, W, H);
-        var freexPixels = GetBgra32Pixels(freexBmp, W, H);
-
-        long totalDiff = 0;
-        int  pixelCount = W * H;
-        for (int i = 0; i < pixelCount; i++)
-        {
-            int    offset = i * 4;
-            double ea     = excelPixels[offset + 3] / 255.0;
-            double fa     = freexPixels[offset + 3] / 255.0;
-
-            for (int c = 0; c < 3; c++)
-            {
-                double eVal = excelPixels[offset + c] * ea + 255 * (1 - ea);
-                double fVal = freexPixels[offset + c] * fa + 255 * (1 - fa);
-                totalDiff += (long)Math.Abs(eVal - fVal);
-            }
-        }
-
-        double maxDiff = (double)pixelCount * 3 * 255;
-        return totalDiff / maxDiff * 100.0;
     }
 
     private static PixelDiffMetrics ComputeExactPixelDiff(string excelPath, string freexPath, int pixelTolerance)
@@ -1767,40 +1726,6 @@ internal static class Program
             (double)changedPixels / pixelCount * 100.0,
             maxChannelDelta,
             pixelTolerance);
-    }
-
-    private static BitmapSource ResizeTo(BitmapSource source, int w, int h)
-    {
-        var visual = new System.Windows.Media.DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-        {
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, w, h));
-            double scale = Math.Min((double)w / source.PixelWidth, (double)h / source.PixelHeight);
-            double dw    = source.PixelWidth  * scale;
-            double dh    = source.PixelHeight * scale;
-            var    bounds = new Rect((w - dw) / 2, (h - dh) / 2, dw, dh);
-            ctx.DrawImage(source, bounds);
-        }
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static BitmapSource CreateWhite(int w, int h)
-    {
-        var visual = new System.Windows.Media.DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, w, h));
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static byte[] GetBgra32Pixels(BitmapSource bmp, int w, int h)
-    {
-        var pixels = new byte[w * h * 4];
-        bmp.CopyPixels(pixels, w * 4, 0);
-        return pixels;
     }
 
     private static void WriteSideBySide(string excelPath, string? freexPath, string outPath, DiffRow row)

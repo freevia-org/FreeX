@@ -88,5 +88,6 @@
     <Project Path="tools/FreeX.SheetGridImageCompare/FreeX.SheetGridImageCompare.csproj" />
     <Project Path="tools/FreeX.SheetImageCompare/FreeX.SheetImageCompare.csproj" />
     <Project Path="tools/FreeX.ToolsShared/FreeX.ToolsShared.csproj" />
+    <Project Path="tools/FreeX.ToolsShared.Wpf/FreeX.ToolsShared.Wpf.csproj" />
   </Folder>
 </Solution>

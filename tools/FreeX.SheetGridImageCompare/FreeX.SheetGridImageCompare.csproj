@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
     <!-- Mirror FreeX.SheetImageCompare references -->
     <ProjectReference Include="..\..\src\FreeX.App.UI\FreeX.App.UI.csproj" />
     <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />

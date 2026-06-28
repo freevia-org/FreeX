@@ -10,6 +10,7 @@ using System.Windows.Media.Imaging;
 using FreeX.App.UI;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using static FreeX.ToolsShared.Wpf.WpfImageDiff;
 
 /// <summary>
 /// FreeX Chart File Compare — renders all charts from a real workbook and compares against
@@ -250,7 +251,7 @@ internal static class Program
             {
                 try
                 {
-                    row.DiffPercent = ComputeMeanPixelDiff(row.ExcelPngPath, row.FreeXPngPath!);
+                    row.DiffPercent = ComputeMeanPixelDiff(row.ExcelPngPath, row.FreeXPngPath!, 600, 400);
                 }
                 catch (Exception ex)
                 {
@@ -368,93 +369,6 @@ internal static class Program
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);
         encoder.Save(stream);
-    }
-
-    private static BitmapSource LoadBitmap(string path)
-    {
-        using var stream = File.OpenRead(path);
-        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-        var source = decoder.Frames[0];
-        return source.Format == PixelFormats.Bgra32
-            ? source
-            : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
-    }
-
-    /// <summary>
-    /// Resizes both images to a common canvas (600x400), then computes mean absolute
-    /// per-channel difference as a percentage (0=identical, 100=maximally different).
-    /// </summary>
-    private static double ComputeMeanPixelDiff(string excelPath, string freexPath)
-    {
-        const int W = 600, H = 400;
-
-        var excelBmp = ResizeTo(LoadBitmap(excelPath), W, H);
-        BitmapSource freexBmp;
-
-        if (File.Exists(freexPath))
-            freexBmp = ResizeTo(LoadBitmap(freexPath), W, H);
-        else
-            freexBmp = CreateWhite(W, H);
-
-        var excelPixels = GetBgra32Pixels(excelBmp, W, H);
-        var freexPixels = GetBgra32Pixels(freexBmp, W, H);
-
-        long totalDiff = 0;
-        int pixelCount = W * H;
-        for (int i = 0; i < pixelCount; i++)
-        {
-            int offset = i * 4;
-            // Composite over white using alpha
-            double ea = excelPixels[offset + 3] / 255.0;
-            double fa = freexPixels[offset + 3] / 255.0;
-
-            for (int c = 0; c < 3; c++)
-            {
-                double eVal = excelPixels[offset + c] * ea + 255 * (1 - ea);
-                double fVal = freexPixels[offset + c] * fa + 255 * (1 - fa);
-                totalDiff += (long)Math.Abs(eVal - fVal);
-            }
-        }
-
-        // Max possible diff per pixel per channel = 255, 3 channels
-        double maxDiff = (double)pixelCount * 3 * 255;
-        return totalDiff / maxDiff * 100.0;
-    }
-
-    private static BitmapSource ResizeTo(BitmapSource source, int w, int h)
-    {
-        var visual = new DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-        {
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, w, h));
-            // Fit with letterbox
-            double scale = Math.Min((double)w / source.PixelWidth, (double)h / source.PixelHeight);
-            double dw = source.PixelWidth * scale;
-            double dh = source.PixelHeight * scale;
-            var bounds = new Rect((w - dw) / 2, (h - dh) / 2, dw, dh);
-            ctx.DrawImage(source, bounds);
-        }
-
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static BitmapSource CreateWhite(int w, int h)
-    {
-        var visual = new DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, w, h));
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static byte[] GetBgra32Pixels(BitmapSource bmp, int w, int h)
-    {
-        var pixels = new byte[w * h * 4];
-        bmp.CopyPixels(pixels, w * 4, 0);
-        return pixels;
     }
 
     // -----------------------------------------------------------------------
