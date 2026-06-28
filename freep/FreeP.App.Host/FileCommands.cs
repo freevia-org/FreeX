@@ -33,6 +33,7 @@ internal sealed class FileCommands
     private readonly Func<Presentation> _getModel;
     private readonly Action<Presentation> _loadModel;
     private readonly Action _onChanged;
+    private readonly IUserMessageService _messageService;
     private readonly FileCommandWorkflow _workflow;
     private readonly FreePOptions _options;
 
@@ -60,12 +61,14 @@ internal sealed class FileCommands
         Action<Presentation> loadModel,
         Action onChanged,
         FreePOptions? options = null,
-        Func<RecentFilesStore>? loadRecentFilesStore = null)
+        Func<RecentFilesStore>? loadRecentFilesStore = null,
+        IUserMessageService? messageService = null)
     {
         _window = window;
         _getModel = getModel;
         _loadModel = loadModel;
         _onChanged = onChanged;
+        _messageService = messageService ?? new WpfUserMessageService();
         _options = options ?? new FreePOptions();
         _workflow = new FileCommandWorkflow(
             () => _options.RecentFilesCap,
@@ -213,9 +216,9 @@ internal sealed class FileCommands
             DefaultExtension);
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
-    private SaveChangesPrompt PromptSaveChanges(string action)
-        => FileCommandMessageBox.PromptSaveChanges(_window, DisplayName, action, "FreeP");
+    private SaveChangesPrompt PromptSaveChanges(string action) =>
+        _messageService.PromptSaveChanges(DisplayName, action, "FreeP");
 
     private void ShowError(string summary, Exception ex) =>
-        FileCommandMessageBox.ShowError(_window, summary, ex, "FreeP");
+        _messageService.ShowFileCommandError(summary, ex, "FreeP");
 }

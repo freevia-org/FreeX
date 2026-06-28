@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
@@ -34,25 +35,32 @@ public sealed class FileLifecycleTests : IDisposable
         try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
     }
 
-    private (Window window, DocumentView editor, FileCommands file, Func<int> changeCount) CreateHarness()
+    private (
+        Window window,
+        DocumentView editor,
+        FileCommands file,
+        Func<int> changeCount,
+        RecordingUserMessageService messages) CreateHarness()
     {
         var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
         var editor = new DocumentView();
         editor.LoadModel(TextDocument.CreateEmpty());
         var changes = 0;
         var recentStorePath = Path.Combine(_tempDir, "recent.json");
+        var messages = new RecordingUserMessageService();
         var file = new FileCommands(
             window,
             editor,
             () => changes++,
-            loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath));
-        return (window, editor, file, () => changes);
+            loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath),
+            messageService: messages);
+        return (window, editor, file, () => changes, messages);
     }
 
     [StaFact]
     public void FreshDocument_IsCleanWithUntitledName()
     {
-        var (_, _, file, _) = CreateHarness();
+        var (_, _, file, _, _) = CreateHarness();
 
         Assert.False(file.IsDirty);
         Assert.Null(file.CurrentPath);
@@ -62,7 +70,7 @@ public sealed class FileLifecycleTests : IDisposable
     [StaFact]
     public void MarkDirty_SetsDirtyAndNotifiesOnce()
     {
-        var (_, _, file, changeCount) = CreateHarness();
+        var (_, _, file, changeCount, _) = CreateHarness();
 
         file.MarkDirty();
         Assert.True(file.IsDirty);
@@ -76,7 +84,7 @@ public sealed class FileLifecycleTests : IDisposable
     [StaFact]
     public void New_OnCleanDocument_ProceedsWithoutPromptAndResetsState()
     {
-        var (_, _, file, _) = CreateHarness();
+        var (_, _, file, _, _) = CreateHarness();
 
         var proceeded = file.New();
 
@@ -87,9 +95,30 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [StaFact]
+    public void New_OnDirtyDocument_UsesInjectedMessageServiceForSavePrompt()
+    {
+        var (_, _, file, _, messages) = CreateHarness();
+        messages.NextResult = UserMessageResult.No;
+
+        file.MarkDirty();
+        var proceeded = file.New();
+
+        Assert.True(proceeded);
+        Assert.False(file.IsDirty);
+        Assert.Single(messages.Messages);
+        var prompt = messages.Messages[0];
+        Assert.Equal(
+            "Do you want to save changes to Untitled before creating a new document?",
+            prompt.Message);
+        Assert.Equal("FreeW", prompt.Title);
+        Assert.Equal(UserMessageButtons.YesNoCancel, prompt.Buttons);
+        Assert.Equal(UserMessageIcon.Warning, prompt.Icon);
+    }
+
+    [StaFact]
     public void OpenPath_LoadsFileAndMarksSavedWithPath()
     {
-        var (_, _, file, _) = CreateHarness();
+        var (_, _, file, _, _) = CreateHarness();
         var path = WriteDocx("Opened.docx", "Hello from disk");
 
         var opened = file.OpenPath(path);
@@ -103,7 +132,7 @@ public sealed class FileLifecycleTests : IDisposable
     [StaFact]
     public void Save_AfterEdit_WritesToExistingPathAndClearsDirty()
     {
-        var (_, _, file, _) = CreateHarness();
+        var (_, _, file, _, _) = CreateHarness();
         var path = WriteDocx("Doc.docx", "Initial");
         Assert.True(file.OpenPath(path));
 
@@ -123,7 +152,7 @@ public sealed class FileLifecycleTests : IDisposable
     [StaFact]
     public void Save_OnCleanOpenedDocument_IsNoOpAndStaysClean()
     {
-        var (_, _, file, _) = CreateHarness();
+        var (_, _, file, _, _) = CreateHarness();
         var path = WriteDocx("Clean.docx", "Unchanged");
         Assert.True(file.OpenPath(path));
 
@@ -138,7 +167,7 @@ public sealed class FileLifecycleTests : IDisposable
     [StaFact]
     public void OpenSnapshot_MarksDirtyAndTargetsOriginalPath()
     {
-        var (_, _, file, _) = CreateHarness();
+        var (_, _, file, _, _) = CreateHarness();
         var original = Path.Combine(_tempDir, "Original.docx");
         var snapshot = WriteDocx("snapshot.docx", "Recovered content");
 
@@ -158,7 +187,7 @@ public sealed class FileLifecycleTests : IDisposable
     [StaFact]
     public void OpenSnapshot_CorruptFile_ReturnsFalseAndDocumentIsUnchanged()
     {
-        var (_, _, file, _) = CreateHarness();
+        var (_, _, file, _, messages) = CreateHarness();
         var corruptPath = Path.Combine(_tempDir, "corrupt.docx");
         // Write a file that is not a valid docx so DocxReader.Read throws.
         File.WriteAllText(corruptPath, "this is not a valid docx");
@@ -170,12 +199,18 @@ public sealed class FileLifecycleTests : IDisposable
         // The document state must be untouched: still clean and untitled.
         Assert.False(file.IsDirty);
         Assert.Null(file.CurrentPath);
+        Assert.Single(messages.Messages);
+        var error = messages.Messages[0];
+        Assert.StartsWith("Could not recover the document:\n", error.Message);
+        Assert.Equal("FreeW", error.Title);
+        Assert.Equal(UserMessageButtons.Ok, error.Buttons);
+        Assert.Equal(UserMessageIcon.Error, error.Icon);
     }
 
     [StaFact]
     public void RecoverSnapshot_OnCleanDocument_MarksDirtyAndTargetsOriginalPath()
     {
-        var (_, _, file, _) = CreateHarness();
+        var (_, _, file, _, _) = CreateHarness();
         var original = Path.Combine(_tempDir, "Original.docx");
         var snapshot = WriteDocx("recover.docx", "Recovered content");
 
@@ -195,5 +230,57 @@ public sealed class FileLifecycleTests : IDisposable
         var path = Path.Combine(_tempDir, name);
         DocxWriter.Write(doc, path);
         return path;
+    }
+
+    private sealed class RecordingUserMessageService : IUserMessageService
+    {
+        public UserMessageResult NextResult { get; set; } = UserMessageResult.Ok;
+
+        public List<MessageCall> Messages { get; } = new();
+
+        public void ShowError(string message, string title = "Error") =>
+            ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Error);
+
+        public void ShowWarning(string message, string title = "Warning") =>
+            ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Warning);
+
+        public void ShowInfo(string message, string title = "Information") =>
+            ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Information);
+
+        public bool AskYesNo(string message, string title = "Confirm") =>
+            ShowMessage(message, title, UserMessageButtons.YesNo, UserMessageIcon.Question) == UserMessageResult.Yes;
+
+        public UserMessageResult ShowMessage(
+            string message,
+            string title,
+            UserMessageButtons buttons,
+            UserMessageIcon icon)
+        {
+            Messages.Add(new MessageCall(message, title, buttons, icon));
+            return NextResult;
+        }
+    }
+
+    private sealed class MessageCall
+    {
+        public MessageCall(
+            string message,
+            string title,
+            UserMessageButtons buttons,
+            UserMessageIcon icon)
+        {
+            Message = message;
+            Title = title;
+            Buttons = buttons;
+            Icon = icon;
+        }
+
+        public string Message { get; }
+
+        public string Title { get; }
+
+        public UserMessageButtons Buttons { get; }
+
+        public UserMessageIcon Icon { get; }
     }
 }

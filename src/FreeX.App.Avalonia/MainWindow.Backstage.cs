@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -26,6 +27,14 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static readonly AvaloniaBackstageChromeStyle BackstageChromeStyle = new(PrimaryInk!, SecondaryInk!)
+    {
+        SectionHeaderFontSize = 14,
+        SectionHeaderMargin = default,
+        DetailLabelMargin = new Thickness(0, 3, 12, 3),
+        NoteLineHeight = 20,
+    };
+
     // ── File ▸ Info ────────────────────────────────────────────────────────────
     private void ShowBackstageInfo() => _ = ShowBackstageInfoDialogAsync();
 
@@ -97,18 +106,8 @@ public sealed partial class MainWindow
         content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Info_StatisticsSectionHeader")));
         content.Children.Add(CreateBackstageNote(display.StatisticsSummary, "BackstageInfoStatistics"));
 
-        var root = new DockPanel { Margin = new Thickness(18) };
-        DockPanel.SetDock(closeButton, Dock.Bottom);
-        root.Children.Add(closeButton);
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Margin = new Thickness(0, 0, 0, 12),
-            Content = content,
-        });
-
-        dialog.Content = root;
+        dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
+            new AvaloniaBackstageDialogLayoutSpec(content, closeButton));
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
@@ -295,18 +294,8 @@ public sealed partial class MainWindow
             Children = { cancelButton, exportButton },
         };
 
-        var root = new DockPanel { Margin = new Thickness(18) };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
-        root.Children.Add(buttonRow);
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Margin = new Thickness(0, 0, 0, 12),
-            Content = content,
-        });
-
-        dialog.Content = root;
+        dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
+            new AvaloniaBackstageDialogLayoutSpec(content, buttonRow));
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
@@ -401,28 +390,10 @@ public sealed partial class MainWindow
                 notice.AutomationId));
         }
 
-        var closeButton = new Button
-        {
-            Content = UiText.Get("Backstage_Account_CloseButton"),
-            MinWidth = 96,
-            Padding = new Thickness(10, 4),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-        };
-        AutomationProperties.SetAutomationId(closeButton, "BackstageAccountCloseButton");
-        closeButton.Click += (_, _) => dialog.Close();
+        var closeButton = CreateBackstageCloseButton("BackstageAccountCloseButton", dialog);
 
-        var root = new DockPanel { Margin = new Thickness(18) };
-        DockPanel.SetDock(closeButton, Dock.Bottom);
-        root.Children.Add(closeButton);
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Margin = new Thickness(0, 0, 0, 12),
-            Content = content,
-        });
-
-        dialog.Content = root;
+        dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
+            new AvaloniaBackstageDialogLayoutSpec(content, closeButton));
         dialog.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
@@ -503,100 +474,42 @@ public sealed partial class MainWindow
 
     // ── shared backstage chrome helpers ─────────────────────────────────────────
     private static TextBlock CreateBackstageAccountHeading(string text) =>
-        new()
-        {
-            Text = text,
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 22,
-            Foreground = PrimaryInk,
-        };
+        AvaloniaBackstageChrome.CreateHeading(text, BackstageChromeStyle);
 
     private static TextBlock CreateBackstageSectionHeader(string text) =>
-        new()
-        {
-            Text = text,
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 14,
-            Foreground = PrimaryInk,
-        };
+        AvaloniaBackstageChrome.CreateSectionHeader(text, BackstageChromeStyle);
 
-    private static TextBlock CreateBackstageNote(string text, string automationId)
-    {
-        var block = new TextBlock
-        {
-            Text = text,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SecondaryInk,
-            LineHeight = 20,
-        };
-        AutomationProperties.SetAutomationId(block, automationId);
-        return block;
-    }
+    private static TextBlock CreateBackstageNote(string text, string automationId) =>
+        AvaloniaBackstageChrome.CreateNote(text, BackstageChromeStyle, automationId);
 
     private static AvaloniaGrid CreateBackstageDetailGrid() =>
-        new()
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Margin = new Thickness(0, 2, 0, 0),
-        };
+        AvaloniaBackstageChrome.CreateDetailGrid();
 
-    private static void AddBackstageDetailRow(AvaloniaGrid grid, string label, string value, string valueAutomationId)
-    {
-        var rowIndex = grid.RowDefinitions.Count;
-        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+    private static void AddBackstageDetailRow(AvaloniaGrid grid, string label, string value, string valueAutomationId) =>
+        AvaloniaBackstageChrome.AddDetailRow(grid, label, value, valueAutomationId, BackstageChromeStyle);
 
-        var labelBlock = new TextBlock
-        {
-            Text = label,
-            Foreground = SecondaryInk,
-            Margin = new Thickness(0, 3, 12, 3),
-        };
-        AvaloniaGrid.SetColumn(labelBlock, 0);
-        AvaloniaGrid.SetRow(labelBlock, rowIndex);
-
-        var valueBlock = new TextBlock
-        {
-            Text = value,
-            Foreground = PrimaryInk,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 3, 0, 3),
-        };
-        AutomationProperties.SetAutomationId(valueBlock, valueAutomationId);
-        AvaloniaGrid.SetColumn(valueBlock, 1);
-        AvaloniaGrid.SetRow(valueBlock, rowIndex);
-
-        grid.Children.Add(labelBlock);
-        grid.Children.Add(valueBlock);
-    }
-
-    private static Button CreateBackstageActionButton(string text, string automationId, Window dialog, Action action)
-    {
-        var button = new Button
-        {
-            Content = text,
-            Padding = new Thickness(10, 4),
-        };
-        AutomationProperties.SetAutomationId(button, automationId);
-        button.Click += (_, _) =>
-        {
-            dialog.Close();
-            action();
-        };
-        return button;
-    }
+    private static Button CreateBackstageActionButton(string text, string automationId, Window dialog, Action action) =>
+        AvaloniaBackstageChrome.CreateActionButton(new AvaloniaBackstageActionButtonSpec(
+            text,
+            automationId,
+            () =>
+            {
+                dialog.Close();
+                action();
+            }));
 
     private static Button CreateBackstageCloseButton(string automationId, Window dialog)
     {
-        var button = new Button
+        var closeText = UiText.Get("Backstage_Account_CloseButton");
+        return AvaloniaBackstageChrome.CreateActionButton(new AvaloniaBackstageActionButtonSpec(
+            closeText,
+            automationId,
+            dialog.Close)
         {
-            Content = UiText.Get("Backstage_Account_CloseButton"),
+            AutomationName = closeText,
             MinWidth = 96,
             Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-        };
-        AutomationProperties.SetName(button, UiText.Get("Backstage_Account_CloseButton"));
-        AutomationProperties.SetAutomationId(button, automationId);
-        button.Click += (_, _) => dialog.Close();
-        return button;
+        });
     }
 }
