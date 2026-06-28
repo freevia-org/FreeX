@@ -1,0 +1,47 @@
+namespace FreeX.App.Services;
+
+public sealed record ZoomDialogSelection(int ZoomPercent, bool FitSelection = false);
+
+public sealed record ZoomDialogValidationError(string ResourceKey, string FallbackText);
+
+public static class ZoomDialogPlanner
+{
+    private static readonly int[] PresetValues = [400, 200, 100, 75, 50, 25];
+
+    public static IReadOnlyList<int> Presets => PresetValues;
+
+    public static bool IsPreset(int zoomPercent) =>
+        PresetValues.Contains(zoomPercent);
+
+    public static ZoomDialogSelection CreateFitSelectionResult(int currentZoomPercent) =>
+        new(currentZoomPercent, FitSelection: true);
+
+    public static bool TryCreateResult(
+        string? input,
+        out ZoomDialogSelection result,
+        out ZoomDialogValidationError? error)
+    {
+        result = new ZoomDialogSelection((int)ZoomLevelMapper.DefaultZoomPercent);
+        error = null;
+
+        if (!ZoomLevelMapper.TryParseZoomPercent(input, out var zoomPercent))
+        {
+            error = new ZoomDialogValidationError(
+                "Zoom_MustBeBetween10And400",
+                "Zoom must be between 10% and 400%.");
+            return false;
+        }
+
+        var roundedPercent = Math.Round(zoomPercent);
+        if (Math.Abs(zoomPercent - roundedPercent) > 0.000001)
+        {
+            error = new ZoomDialogValidationError(
+                "Zoom_MustBeWholePercentBetween10And400",
+                "Zoom must be a whole percent between 10% and 400%.");
+            return false;
+        }
+
+        result = new ZoomDialogSelection((int)roundedPercent);
+        return true;
+    }
+}

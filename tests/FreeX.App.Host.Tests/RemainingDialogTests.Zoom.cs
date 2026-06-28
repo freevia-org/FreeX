@@ -28,12 +28,8 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("ZoomPresets");
-        source.Should().Contain("[400, 200, 100, 75, 50, 25]");
-        source.Should().Contain("400");
-        source.Should().Contain("200");
-        source.Should().Contain("100");
-        source.Should().Contain("75");
+        source.Should().Contain("ZoomDialogPlanner.Presets");
+        source.Should().Contain("ZoomDialogPlanner.IsPreset(currentZoomPercent)");
         source.Should().Contain("_fitSelectionButton");
         source.Should().Contain("UiText.Get(\"Zoom_FitSelection\")");
         source.Should().Contain("_customZoomButton");
