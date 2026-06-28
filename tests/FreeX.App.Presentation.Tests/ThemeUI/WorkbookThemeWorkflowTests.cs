@@ -33,23 +33,53 @@ public sealed class WorkbookThemeWorkflowTests
     [Fact]
     public void WorkbookThemeCatalog_PresetsApplyExistingWorkflowBehavior()
     {
-        WorkbookThemeCatalog.ThemePresets.Single(option => option.Label == "FreeX Colorful")
+        WorkbookThemeCatalog.FreeXColorfulThemePreset
             .CreateTheme()
             .GetColor(WorkbookThemeColorSlot.Accent2)
             .Should().Be(new CellColor(233, 113, 50));
 
         var customNamedTheme = WorkbookTheme.Office.WithName("Keep Name");
-        WorkbookThemeCatalog.ColorPresets.Single(option => option.Label == "Grayscale")
+        WorkbookThemeCatalog.GrayscaleColorPreset
             .ApplyColors(customNamedTheme)
             .Name.Should().Be("Keep Name");
 
-        WorkbookThemeCatalog.FontPresets.Single(option => option.Label == "Times New Roman")
-            .Should().Match<WorkbookThemeFontPresetOption>(option =>
-                option.MajorFontName == "Times New Roman" &&
-                option.MinorFontName == "Times New Roman");
+        WorkbookThemeCatalog.TimesNewRomanFontPreset
+            .ApplyFonts(customNamedTheme)
+            .Should().Match<WorkbookTheme>(theme =>
+                theme.MajorFontName == "Times New Roman" &&
+                theme.MinorFontName == "Times New Roman");
 
-        WorkbookThemeCatalog.EffectPresets.Single(option => option.Label == "Refined")
+        WorkbookThemeCatalog.RefinedEffectPreset
+            .ApplyEffects(customNamedTheme)
             .EffectsName.Should().Be("Refined");
+    }
+
+    [Fact]
+    public void WorkbookThemeCatalog_NamedPresetsBackPublishedPresetLists()
+    {
+        WorkbookThemeCatalog.ThemePresets.Should().Equal(
+            WorkbookThemeCatalog.OfficeThemePreset,
+            WorkbookThemeCatalog.FreeXColorfulThemePreset,
+            WorkbookThemeCatalog.GrayscaleThemePreset,
+            WorkbookThemeCatalog.CustomizeThemePreset);
+
+        WorkbookThemeCatalog.ColorPresets.Should().Equal(
+            WorkbookThemeCatalog.OfficeColorPreset,
+            WorkbookThemeCatalog.FreeXColorfulColorPreset,
+            WorkbookThemeCatalog.GrayscaleColorPreset,
+            WorkbookThemeCatalog.CustomizeColorPreset);
+
+        WorkbookThemeCatalog.FontPresets.Should().Equal(
+            WorkbookThemeCatalog.OfficeFontPreset,
+            WorkbookThemeCatalog.ArialFontPreset,
+            WorkbookThemeCatalog.TimesNewRomanFontPreset,
+            WorkbookThemeCatalog.CustomizeFontPreset);
+
+        WorkbookThemeCatalog.EffectPresets.Should().Equal(
+            WorkbookThemeCatalog.OfficeEffectPreset,
+            WorkbookThemeCatalog.SubtleEffectPreset,
+            WorkbookThemeCatalog.RefinedEffectPreset,
+            WorkbookThemeCatalog.CustomizeEffectPreset);
     }
 
     [Fact]
