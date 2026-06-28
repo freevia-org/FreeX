@@ -720,14 +720,16 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, preserveText: true)");
         script.Should().Contain("CreatePastePictureMenuItem(`\"Picture`\", linkedPicture: false)");
         script.Should().Contain("CreateNativePastePictureMenuItem(`\"Linked Picture`\", linkedPicture: true)");
-        script.Should().Contain("private enum ShellFocusRegion");
-        script.Should().Contain("private static readonly ShellFocusRegion[] ShellFocusCycle");
+        script.Should().Contain("ShellFocusTarget.Worksheet");
+        script.Should().Contain("ShellFocusTarget.Ribbon");
+        script.Should().Contain("ShellFocusTarget.TaskPane");
         script.Should().Contain("private static bool IsShellFocusCycleKey(KeyEventArgs args)");
         script.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
         script.Should().Contain("private void CycleShellFocus(bool reverse)");
-        script.Should().Contain("private static ShellFocusRegion GetNextShellFocusRegion(ShellFocusRegion current, bool reverse)");
-        script.Should().Contain("private ShellFocusRegion GetCurrentShellFocusRegion()");
-        script.Should().Contain("private bool FocusShellRegion(ShellFocusRegion region)");
+        script.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        script.Should().Contain("private static bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
+        script.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
+        script.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
         script.Should().Contain("private bool FocusFirstEnabledToolbarControl()");
         script.Should().Contain("private IReadOnlyList<Control> GetToolbarFocusTargets()");
         script.Should().Contain("private static bool FocusControl(Control control)");
@@ -1962,15 +1964,12 @@ public sealed class MacOsAppReadinessPreflightTests
             public sealed class MainWindow
             {
                 private const string NativeWorkbookExtension = ".fxl";
-                private enum ShellFocusRegion { Worksheet, Toolbar, FormulaBar, SheetTabs, StatusBar }
-                private static readonly ShellFocusRegion[] ShellFocusCycle =
-                [
-                    ShellFocusRegion.Worksheet,
-                    ShellFocusRegion.Toolbar,
-                    ShellFocusRegion.FormulaBar,
-                    ShellFocusRegion.SheetTabs,
-                    ShellFocusRegion.StatusBar
-                ];
+                private const ShellFocusTarget DefaultShellFocusTarget = ShellFocusTarget.Worksheet;
+                private const ShellFocusTarget RibbonShellFocusTarget = ShellFocusTarget.Ribbon;
+                private const ShellFocusTarget FormulaBarShellFocusTarget = ShellFocusTarget.FormulaBar;
+                private const ShellFocusTarget SheetTabsShellFocusTarget = ShellFocusTarget.SheetTabs;
+                private const ShellFocusTarget TaskPaneShellFocusTarget = ShellFocusTarget.TaskPane;
+                private const ShellFocusTarget StatusBarShellFocusTarget = ShellFocusTarget.StatusBar;
                 /*
                 private readonly ScrollBar _verticalWorksheetScrollBar = new();
                 private readonly ScrollBar _horizontalWorksheetScrollBar = new();
@@ -3093,15 +3092,22 @@ public sealed class MacOsAppReadinessPreflightTests
                 private void ToggleShowFormulas() { }
                 private static bool HasCommandAndShiftModifiers(KeyModifiers modifiers) => true;
                 private static bool IsShellFocusCycleKey(KeyEventArgs args) => true;
-                private void CycleShellFocus(bool reverse) { }
-                private static ShellFocusRegion GetNextShellFocusRegion(ShellFocusRegion current, bool reverse) => current;
-                private ShellFocusRegion GetCurrentShellFocusRegion() => ShellFocusRegion.Worksheet;
-                private bool FocusShellRegion(ShellFocusRegion region) => region switch
+                private void CycleShellFocus(bool reverse)
                 {
-                    ShellFocusRegion.Toolbar => FocusFirstEnabledToolbarControl(),
-                    ShellFocusRegion.FormulaBar => FocusControl(_formulaBox),
-                    ShellFocusRegion.SheetTabs => FocusActiveSheetTab(),
-                    ShellFocusRegion.StatusBar => FocusControl(_zoomText),
+                    var current = GetCurrentShellFocusTarget();
+                    current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
+                    FocusShellRegion(current);
+                }
+                private static bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
+                    target != ShellFocusTarget.TaskPane;
+                private ShellFocusTarget GetCurrentShellFocusTarget() => ShellFocusTarget.Worksheet;
+                private bool FocusShellRegion(ShellFocusTarget target) => target switch
+                {
+                    ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl(),
+                    ShellFocusTarget.FormulaBar => FocusControl(_formulaBox),
+                    ShellFocusTarget.SheetTabs => FocusActiveSheetTab(),
+                    ShellFocusTarget.TaskPane => false,
+                    ShellFocusTarget.StatusBar => FocusControl(_zoomText),
                     _ => FocusControl(_sheetGridHost)
                 };
                 private bool FocusFirstEnabledToolbarControl() => true;

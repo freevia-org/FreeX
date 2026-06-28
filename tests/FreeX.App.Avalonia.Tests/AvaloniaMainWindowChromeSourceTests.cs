@@ -204,8 +204,26 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("var rowDelta = GetCellIndexDelta(current.Row, target.Row);");
         source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, target.Col);");
         source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
-        source.Should().Contain("FocusShellRegion(ShellFocusRegion.Worksheet);");
+        source.Should().Contain("FocusShellRegion(ShellFocusTarget.Worksheet);");
         source.Should().Contain("private static bool IsFormulaPointModeText(string? text)");
+    }
+
+    [Fact]
+    public void F6ShellFocusCycle_UsesSharedPresentationPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        source.Should().Contain("private static bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
+        source.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
+        source.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
+        source.Should().Contain("ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl()");
+        source.Should().Contain("ShellFocusTarget.TaskPane => false");
+
+        source.Should().NotContain("private enum ShellFocusRegion");
+        source.Should().NotContain("private static readonly ShellFocusRegion[] ShellFocusCycle");
+        source.Should().NotContain("GetNextShellFocusRegion");
+        source.Should().NotContain("Array.IndexOf(ShellFocusCycle");
     }
 
     [Fact]
