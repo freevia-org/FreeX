@@ -2,11 +2,10 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public sealed record ActivateSheetDialogResult(SheetId SheetId);
 
 public sealed class ActivateSheetDialog : Window
 {
@@ -18,9 +17,9 @@ public sealed class ActivateSheetDialog : Window
 
     public ActivateSheetDialog(Workbook workbook, SheetId activeSheetId)
     {
-        var targets = BuildTargets(workbook).ToList();
-        var selectedTarget = FindInitialTarget(targets, activeSheetId);
-        Result = new ActivateSheetDialogResult(selectedTarget?.SheetId ?? activeSheetId);
+        var targets = SheetDialogPlanner.BuildActivateSheetTargets(workbook);
+        var selectedTarget = SheetDialogPlanner.FindInitialActivateSheetTarget(targets, activeSheetId);
+        Result = SheetDialogPlanner.CreateActivateSheetResult(selectedTarget?.SheetId ?? activeSheetId);
 
         Title = UiText.Get("ActivateSheet_Title");
         Width = 280;
@@ -52,27 +51,6 @@ public sealed class ActivateSheetDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    private static IEnumerable<ActivateSheetTarget> BuildTargets(Workbook workbook)
-    {
-        foreach (var sheet in workbook.Sheets.Where(sheet => !sheet.IsHidden))
-            yield return new ActivateSheetTarget(sheet.Name, sheet.Id);
-    }
-
-    private static ActivateSheetTarget? FindInitialTarget(IReadOnlyList<ActivateSheetTarget> targets, SheetId activeSheetId)
-    {
-        ActivateSheetTarget? firstTarget = null;
-
-        foreach (var target in targets)
-        {
-            firstTarget ??= target;
-
-            if (target.SheetId == activeSheetId)
-                return target;
-        }
-
-        return firstTarget;
-    }
-
     private UIElement CreateContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
@@ -102,15 +80,15 @@ public sealed class ActivateSheetDialog : Window
 
     private void UpdateButtonState()
     {
-        _okButton.IsEnabled = _sheetList.SelectedItem is ActivateSheetTarget;
+        _okButton.IsEnabled = _sheetList.SelectedItem is SheetDialogTarget;
     }
 
     private bool Accept()
     {
-        if (_sheetList.SelectedItem is not ActivateSheetTarget target)
+        if (_sheetList.SelectedItem is not SheetDialogTarget target)
             return false;
 
-        Result = new ActivateSheetDialogResult(target.SheetId);
+        Result = SheetDialogPlanner.CreateActivateSheetResult(target.SheetId);
         DialogResult = true;
         return true;
     }
@@ -121,8 +99,4 @@ public sealed class ActivateSheetDialog : Window
             e.Handled = true;
     }
 
-    private sealed record ActivateSheetTarget(string DisplayName, SheetId SheetId)
-    {
-        public override string ToString() => DisplayName;
-    }
 }
