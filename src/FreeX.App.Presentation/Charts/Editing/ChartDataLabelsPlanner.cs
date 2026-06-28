@@ -8,9 +8,9 @@ public sealed record ChartDataLabelPositionChoice(ChartDataLabelPosition Positio
 
 /// <summary>
 /// The data-label show/position/which-values state read from a chart and edited back through the dialog.
-/// Only the fields the cross-platform "Data Labels" dialog exposes are carried here (show/hide, position,
-/// and the value/series-name/category-name/percentage/legend-key toggles); richer label styling stays on
-/// the model untouched.
+/// The first parameters are the original cross-platform data-label dialog surface; the optional tail carries
+/// separator, number format, callout, and label styling state for fuller shells without breaking existing
+/// callers.
 /// </summary>
 public readonly record struct ChartDataLabelsInput(
     bool ShowDataLabels,
@@ -19,7 +19,24 @@ public readonly record struct ChartDataLabelsInput(
     bool ShowCategoryName,
     bool ShowSeriesName,
     bool ShowPercentage,
-    bool ShowLegendKey);
+    bool ShowLegendKey,
+    ChartDataLabelSeparator? Separator = null,
+    ChartDataLabelNumberFormat? NumberFormat = null,
+    bool? ShowCallouts = null,
+    CellColor? FillColor = null,
+    CellColor? BorderColor = null,
+    CellColor? TextColor = null,
+    double? BorderThickness = null,
+    double? FontSize = null,
+    double? Angle = null);
+
+/// <summary>A semantic validation failure for the "Data Labels" dialog input.</summary>
+public enum ChartDataLabelsValidationIssue
+{
+    BorderThicknessOutOfRange,
+    FontSizeOutOfRange,
+    AngleOutOfRange,
+}
 
 /// <summary>
 /// Portable (no UI) planner for the "Data Labels" editing dialog (show/hide, position, and which values
@@ -30,6 +47,13 @@ public readonly record struct ChartDataLabelsInput(
 /// </summary>
 public static class ChartDataLabelsPlanner
 {
+    public const double MinBorderThickness = 0;
+    public const double MaxBorderThickness = 10;
+    public const double MinFontSize = 6;
+    public const double MaxFontSize = 72;
+    public const double MinAngle = -90;
+    public const double MaxAngle = 90;
+
     // Excel's data-label placements. Order mirrors the position cycler used by the ribbon toggle.
     private static readonly ChartDataLabelPositionChoice[] PositionCatalog =
     [
@@ -37,6 +61,22 @@ public static class ChartDataLabelsPlanner
         new(ChartDataLabelPosition.OutsideEnd, "Outside End"),
         new(ChartDataLabelPosition.InsideEnd, "Inside End"),
         new(ChartDataLabelPosition.Center, "Center"),
+    ];
+
+    private static readonly ChartDataLabelSeparator[] SeparatorCatalog =
+    [
+        ChartDataLabelSeparator.Comma,
+        ChartDataLabelSeparator.Semicolon,
+        ChartDataLabelSeparator.NewLine,
+        ChartDataLabelSeparator.Space,
+    ];
+
+    private static readonly ChartDataLabelNumberFormat[] NumberFormatCatalog =
+    [
+        ChartDataLabelNumberFormat.General,
+        ChartDataLabelNumberFormat.Number,
+        ChartDataLabelNumberFormat.Currency,
+        ChartDataLabelNumberFormat.Percent,
     ];
 
     /// <summary>The selectable data-label positions, in display order.</summary>
@@ -56,14 +96,69 @@ public static class ChartDataLabelsPlanner
 
     /// <summary>Reads the chart's current data-label state into the dialog input shape.</summary>
     public static ChartDataLabelsInput Read(ChartModel chart) =>
-        new(
+        Normalize(new ChartDataLabelsInput(
             chart.ShowDataLabels,
             chart.DataLabelPosition,
             chart.ShowDataLabelValue,
             chart.ShowDataLabelCategoryName,
             chart.ShowDataLabelSeriesName,
             chart.ShowDataLabelPercentage,
-            chart.ShowDataLabelLegendKey);
+            chart.ShowDataLabelLegendKey,
+            chart.DataLabelSeparator,
+            chart.DataLabelNumberFormat,
+            chart.ShowDataLabelCallouts,
+            chart.DataLabelFillColor,
+            chart.DataLabelBorderColor,
+            chart.DataLabelTextColor,
+            chart.DataLabelBorderThickness,
+            chart.DataLabelFontSize,
+            chart.DataLabelAngle));
+
+    /// <summary>
+    /// Normalizes result/default state for the data-label dialog: unknown enum values fall back to
+    /// Excel-like defaults, and numeric styling values are clamped to accepted command ranges.
+    /// </summary>
+    public static ChartDataLabelsInput Normalize(ChartDataLabelsInput input) =>
+        input with
+        {
+            Position = IsSelectablePosition(input.Position) ? input.Position : ChartDataLabelPosition.BestFit,
+            Separator = NormalizeSeparator(input.Separator),
+            NumberFormat = NormalizeNumberFormat(input.NumberFormat),
+            BorderThickness = ClampFiniteOrNull(input.BorderThickness, 0, MinBorderThickness, MaxBorderThickness),
+            FontSize = ClampFiniteOrNull(input.FontSize, 11, MinFontSize, MaxFontSize),
+            Angle = ClampFiniteOrNull(input.Angle, 0, MinAngle, MaxAngle),
+        };
+
+    /// <summary>Returns an English validation reason for the edited data-label styling, or null when valid.</summary>
+    public static string? Validate(ChartDataLabelsInput input)
+    {
+        var issue = ValidateIssue(input);
+        return issue switch
+        {
+            ChartDataLabelsValidationIssue.BorderThicknessOutOfRange => "The data-label border width must be between 0 and 10.",
+            ChartDataLabelsValidationIssue.FontSizeOutOfRange => "The data-label font size must be between 6 and 72.",
+            ChartDataLabelsValidationIssue.AngleOutOfRange => "The data-label angle must be between -90 and 90.",
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Validates the edited data-label input and returns the semantic field that failed, if any. Text parsing
+    /// and localized messages stay with the shell; the domain limits live here.
+    /// </summary>
+    public static ChartDataLabelsValidationIssue? ValidateIssue(ChartDataLabelsInput input)
+    {
+        if (input.BorderThickness is { } borderThickness && !IsFiniteInRange(borderThickness, MinBorderThickness, MaxBorderThickness))
+            return ChartDataLabelsValidationIssue.BorderThicknessOutOfRange;
+
+        if (input.FontSize is { } fontSize && !IsFiniteInRange(fontSize, MinFontSize, MaxFontSize))
+            return ChartDataLabelsValidationIssue.FontSizeOutOfRange;
+
+        if (input.Angle is { } angle && !IsFiniteInRange(angle, MinAngle, MaxAngle))
+            return ChartDataLabelsValidationIssue.AngleOutOfRange;
+
+        return null;
+    }
 
     /// <summary>
     /// Builds the <see cref="ChartLayoutOptions"/> delta for the edited data-label state. An invalid/unknown
@@ -73,23 +168,66 @@ public static class ChartDataLabelsPlanner
     /// </summary>
     public static ChartLayoutOptions Plan(ChartDataLabelsInput input)
     {
-        var position = IsSelectablePosition(input.Position) ? input.Position : ChartDataLabelPosition.BestFit;
+        var normalized = Normalize(input);
 
-        var showValue = input.ShowValue;
-        var anyValueSelected = showValue || input.ShowCategoryName || input.ShowSeriesName
-            || input.ShowPercentage || input.ShowLegendKey;
-        if (input.ShowDataLabels && !anyValueSelected)
+        var showValue = normalized.ShowValue;
+        var anyValueSelected = showValue || normalized.ShowCategoryName || normalized.ShowSeriesName
+            || normalized.ShowPercentage || normalized.ShowLegendKey;
+        if (normalized.ShowDataLabels && !anyValueSelected)
             showValue = true;
 
         return new ChartLayoutOptions(
-            ShowDataLabels: input.ShowDataLabels,
-            DataLabelPosition: position,
+            ShowDataLabels: normalized.ShowDataLabels,
+            DataLabelPosition: normalized.Position,
             ShowDataLabelValue: showValue,
-            ShowDataLabelCategoryName: input.ShowCategoryName,
-            ShowDataLabelSeriesName: input.ShowSeriesName,
-            ShowDataLabelPercentage: input.ShowPercentage,
-            ShowDataLabelLegendKey: input.ShowLegendKey);
+            ShowDataLabelCategoryName: normalized.ShowCategoryName,
+            ShowDataLabelSeriesName: normalized.ShowSeriesName,
+            ShowDataLabelPercentage: normalized.ShowPercentage,
+            ShowDataLabelLegendKey: normalized.ShowLegendKey,
+            DataLabelSeparator: normalized.Separator,
+            DataLabelNumberFormat: normalized.NumberFormat,
+            ShowDataLabelCallouts: normalized.ShowCallouts,
+            DataLabelFillColor: normalized.FillColor,
+            DataLabelBorderColor: normalized.BorderColor,
+            DataLabelTextColor: normalized.TextColor,
+            DataLabelBorderThickness: normalized.BorderThickness,
+            DataLabelFontSize: normalized.FontSize,
+            DataLabelAngle: normalized.Angle);
     }
+
+    private static ChartDataLabelSeparator? NormalizeSeparator(ChartDataLabelSeparator? separator) =>
+        separator is null ? null : IsKnownSeparator(separator.Value) ? separator.Value : ChartDataLabelSeparator.Comma;
+
+    private static ChartDataLabelNumberFormat? NormalizeNumberFormat(ChartDataLabelNumberFormat? numberFormat) =>
+        numberFormat is null ? null : IsKnownNumberFormat(numberFormat.Value) ? numberFormat.Value : ChartDataLabelNumberFormat.General;
+
+    private static bool IsKnownSeparator(ChartDataLabelSeparator separator)
+    {
+        foreach (var candidate in SeparatorCatalog)
+        {
+            if (candidate == separator)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsKnownNumberFormat(ChartDataLabelNumberFormat numberFormat)
+    {
+        foreach (var candidate in NumberFormatCatalog)
+        {
+            if (candidate == numberFormat)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsFiniteInRange(double value, double min, double max) =>
+        double.IsFinite(value) && value >= min && value <= max;
+
+    private static double? ClampFiniteOrNull(double? value, double fallback, double min, double max) =>
+        value is null ? null : Math.Clamp(double.IsFinite(value.Value) ? value.Value : fallback, min, max);
 
     private static bool IsSelectablePosition(ChartDataLabelPosition position)
     {

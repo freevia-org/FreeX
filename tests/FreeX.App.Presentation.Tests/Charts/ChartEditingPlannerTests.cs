@@ -337,16 +337,38 @@ public sealed class ChartEditingPlannerTests
             ShowDataLabels = true,
             DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
             ShowDataLabelValue = false,
+            ShowDataLabelLegendKey = true,
             ShowDataLabelCategoryName = true,
+            ShowDataLabelSeriesName = true,
             ShowDataLabelPercentage = true,
+            DataLabelSeparator = ChartDataLabelSeparator.NewLine,
+            DataLabelNumberFormat = ChartDataLabelNumberFormat.Currency,
+            ShowDataLabelCallouts = true,
+            DataLabelFillColor = new CellColor(10, 20, 30),
+            DataLabelBorderColor = new CellColor(40, 50, 60),
+            DataLabelTextColor = new CellColor(70, 80, 90),
+            DataLabelBorderThickness = 1.5,
+            DataLabelFontSize = 14,
+            DataLabelAngle = 25,
         };
         var input = ChartDataLabelsPlanner.Read(chart);
 
         input.ShowDataLabels.Should().BeTrue();
         input.Position.Should().Be(ChartDataLabelPosition.OutsideEnd);
         input.ShowValue.Should().BeFalse();
+        input.ShowLegendKey.Should().BeTrue();
         input.ShowCategoryName.Should().BeTrue();
+        input.ShowSeriesName.Should().BeTrue();
         input.ShowPercentage.Should().BeTrue();
+        input.Separator.Should().Be(ChartDataLabelSeparator.NewLine);
+        input.NumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
+        input.ShowCallouts.Should().BeTrue();
+        input.FillColor.Should().Be(new CellColor(10, 20, 30));
+        input.BorderColor.Should().Be(new CellColor(40, 50, 60));
+        input.TextColor.Should().Be(new CellColor(70, 80, 90));
+        input.BorderThickness.Should().Be(1.5);
+        input.FontSize.Should().Be(14);
+        input.Angle.Should().Be(25);
     }
 
     [Fact]
@@ -380,20 +402,111 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void DataLabels_Validate_RejectsStyleValuesOutOfRange()
+    {
+        var input = new ChartDataLabelsInput(
+            ShowDataLabels: true,
+            Position: ChartDataLabelPosition.Center,
+            ShowValue: true,
+            ShowCategoryName: false,
+            ShowSeriesName: false,
+            ShowPercentage: false,
+            ShowLegendKey: false);
+
+        ChartDataLabelsPlanner.ValidateIssue(input with { BorderThickness = 11 })
+            .Should().Be(ChartDataLabelsValidationIssue.BorderThicknessOutOfRange);
+        ChartDataLabelsPlanner.ValidateIssue(input with { FontSize = 5 })
+            .Should().Be(ChartDataLabelsValidationIssue.FontSizeOutOfRange);
+        ChartDataLabelsPlanner.ValidateIssue(input with { Angle = 120 })
+            .Should().Be(ChartDataLabelsValidationIssue.AngleOutOfRange);
+        ChartDataLabelsPlanner.Validate(input).Should().BeNull();
+    }
+
+    [Fact]
+    public void DataLabels_Normalize_FallsBackAndClampsDialogDefaults()
+    {
+        var input = new ChartDataLabelsInput(
+            ShowDataLabels: true,
+            Position: (ChartDataLabelPosition)999,
+            ShowValue: true,
+            ShowCategoryName: false,
+            ShowSeriesName: false,
+            ShowPercentage: false,
+            ShowLegendKey: false,
+            Separator: (ChartDataLabelSeparator)999,
+            NumberFormat: (ChartDataLabelNumberFormat)999,
+            BorderThickness: 99,
+            FontSize: double.NaN,
+            Angle: -120);
+
+        var normalized = ChartDataLabelsPlanner.Normalize(input);
+
+        normalized.Position.Should().Be(ChartDataLabelPosition.BestFit);
+        normalized.Separator.Should().Be(ChartDataLabelSeparator.Comma);
+        normalized.NumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        normalized.BorderThickness.Should().Be(ChartDataLabelsPlanner.MaxBorderThickness);
+        normalized.FontSize.Should().Be(11);
+        normalized.Angle.Should().Be(ChartDataLabelsPlanner.MinAngle);
+    }
+
+    [Fact]
+    public void DataLabels_Plan_OmittedExtendedFieldsDoNotResetExistingStyle()
+    {
+        var options = ChartDataLabelsPlanner.Plan(new ChartDataLabelsInput(
+            ShowDataLabels: true,
+            Position: ChartDataLabelPosition.Center,
+            ShowValue: true,
+            ShowCategoryName: false,
+            ShowSeriesName: false,
+            ShowPercentage: false,
+            ShowLegendKey: false));
+
+        options.DataLabelSeparator.Should().BeNull();
+        options.DataLabelNumberFormat.Should().BeNull();
+        options.ShowDataLabelCallouts.Should().BeNull();
+        options.DataLabelBorderThickness.Should().BeNull();
+        options.DataLabelFontSize.Should().BeNull();
+        options.DataLabelAngle.Should().BeNull();
+    }
+
+    [Fact]
     public void DataLabels_Plan_RoundTripsThroughSetChartLayoutCommand()
     {
         var chart = new ChartModel { Type = ChartType.Column };
         var options = ChartDataLabelsPlanner.Plan(new ChartDataLabelsInput(
-            ShowDataLabels: true, ChartDataLabelPosition.OutsideEnd,
-            ShowValue: true, ShowCategoryName: true, ShowSeriesName: false,
-            ShowPercentage: false, ShowLegendKey: false));
+            ShowDataLabels: true,
+            Position: ChartDataLabelPosition.OutsideEnd,
+            ShowValue: true,
+            ShowCategoryName: true,
+            ShowSeriesName: false,
+            ShowPercentage: false,
+            ShowLegendKey: true,
+            Separator: ChartDataLabelSeparator.NewLine,
+            NumberFormat: ChartDataLabelNumberFormat.Percent,
+            ShowCallouts: true,
+            FillColor: new CellColor(1, 2, 3),
+            BorderColor: new CellColor(4, 5, 6),
+            TextColor: new CellColor(7, 8, 9),
+            BorderThickness: 1.5,
+            FontSize: 13,
+            Angle: -30));
 
         ApplyLayout(chart, options);
 
         chart.ShowDataLabels.Should().BeTrue();
         chart.DataLabelPosition.Should().Be(ChartDataLabelPosition.OutsideEnd);
         chart.ShowDataLabelValue.Should().BeTrue();
+        chart.ShowDataLabelLegendKey.Should().BeTrue();
         chart.ShowDataLabelCategoryName.Should().BeTrue();
+        chart.DataLabelSeparator.Should().Be(ChartDataLabelSeparator.NewLine);
+        chart.DataLabelNumberFormat.Should().Be(ChartDataLabelNumberFormat.Percent);
+        chart.ShowDataLabelCallouts.Should().BeTrue();
+        chart.DataLabelFillColor.Should().Be(new CellColor(1, 2, 3));
+        chart.DataLabelBorderColor.Should().Be(new CellColor(4, 5, 6));
+        chart.DataLabelTextColor.Should().Be(new CellColor(7, 8, 9));
+        chart.DataLabelBorderThickness.Should().Be(1.5);
+        chart.DataLabelFontSize.Should().Be(13);
+        chart.DataLabelAngle.Should().Be(-30);
     }
 
     // ---- ChartAxisPlanner ----------------------------------------------------------------------------
@@ -407,8 +520,21 @@ public sealed class ChartEditingPlannerTests
             YAxisMinimum = 0,
             YAxisMaximum = 100,
             YAxisMajorUnit = 25,
+            YAxisMinorUnit = 5,
             YAxisNumberFormat = ChartDataLabelNumberFormat.Currency,
             ShowYAxisMajorGridlines = true,
+            ShowYAxisMinorGridlines = true,
+            YAxisMajorGridlineColor = new CellColor(10, 20, 30),
+            YAxisMinorGridlineColor = new CellColor(40, 50, 60),
+            YAxisGridlineThickness = 1.5,
+            YAxisMajorTickStyle = ChartAxisTickStyle.Cross,
+            YAxisMinorTickStyle = ChartAxisTickStyle.Inside,
+            ShowYAxisLabels = false,
+            YAxisLabelTextColor = new CellColor(70, 80, 90),
+            YAxisLabelFontSize = 13,
+            YAxisLabelAngle = -30,
+            YAxisLineColor = new CellColor(1, 2, 3),
+            YAxisLineThickness = 2,
         };
         var input = ChartAxisPlanner.Read(chart, useXAxis: false);
 
@@ -416,8 +542,21 @@ public sealed class ChartEditingPlannerTests
         input.Minimum.Should().Be(0);
         input.Maximum.Should().Be(100);
         input.MajorUnit.Should().Be(25);
+        input.MinorUnit.Should().Be(5);
         input.NumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
         input.ShowMajorGridlines.Should().BeTrue();
+        input.ShowMinorGridlines.Should().BeTrue();
+        input.MajorGridlineColor.Should().Be(new CellColor(10, 20, 30));
+        input.MinorGridlineColor.Should().Be(new CellColor(40, 50, 60));
+        input.GridlineThickness.Should().Be(1.5);
+        input.MajorTickStyle.Should().Be(ChartAxisTickStyle.Cross);
+        input.MinorTickStyle.Should().Be(ChartAxisTickStyle.Inside);
+        input.ShowLabels.Should().BeFalse();
+        input.LabelTextColor.Should().Be(new CellColor(70, 80, 90));
+        input.LabelFontSize.Should().Be(13);
+        input.LabelAngle.Should().Be(-30);
+        input.LineColor.Should().Be(new CellColor(1, 2, 3));
+        input.LineThickness.Should().Be(2);
     }
 
     [Fact]
@@ -436,6 +575,31 @@ public sealed class ChartEditingPlannerTests
             LogScale: false, ChartDataLabelNumberFormat.General, ShowMajorGridlines: false, ShowMinorGridlines: false);
 
         ChartAxisPlanner.Validate(input).Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Axis_Validate_RejectsMinorUnitAndStyleValuesOutOfRange()
+    {
+        var input = new ChartAxisInput(
+            UseXAxis: true,
+            Minimum: null,
+            Maximum: null,
+            MajorUnit: null,
+            LogScale: false,
+            NumberFormat: ChartDataLabelNumberFormat.General,
+            ShowMajorGridlines: false,
+            ShowMinorGridlines: false);
+
+        ChartAxisPlanner.ValidateIssue(input with { MinorUnit = 0 })
+            .Should().Be(ChartAxisValidationIssue.MinorUnitNotPositive);
+        ChartAxisPlanner.ValidateIssue(input with { GridlineThickness = 0 })
+            .Should().Be(ChartAxisValidationIssue.GridlineThicknessNotPositive);
+        ChartAxisPlanner.ValidateIssue(input with { LabelFontSize = 100 })
+            .Should().Be(ChartAxisValidationIssue.LabelFontSizeOutOfRange);
+        ChartAxisPlanner.ValidateIssue(input with { LabelAngle = -120 })
+            .Should().Be(ChartAxisValidationIssue.LabelAngleOutOfRange);
+        ChartAxisPlanner.ValidateIssue(input with { LineThickness = 0.1 })
+            .Should().Be(ChartAxisValidationIssue.LineThicknessOutOfRange);
     }
 
     [Fact]
@@ -461,20 +625,107 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void Axis_Normalize_FallsBackAndClampsDialogDefaults()
+    {
+        var input = new ChartAxisInput(
+            UseXAxis: false,
+            Minimum: null,
+            Maximum: null,
+            MajorUnit: -1,
+            LogScale: false,
+            NumberFormat: (ChartDataLabelNumberFormat)999,
+            ShowMajorGridlines: false,
+            ShowMinorGridlines: false,
+            MinorUnit: -2,
+            GridlineThickness: 99,
+            MajorTickStyle: (ChartAxisTickStyle)999,
+            MinorTickStyle: (ChartAxisTickStyle)999,
+            LabelFontSize: double.NaN,
+            LabelAngle: -120,
+            LineThickness: 0.1);
+
+        var normalized = ChartAxisPlanner.Normalize(input);
+
+        normalized.MajorUnit.Should().BeNull();
+        normalized.MinorUnit.Should().BeNull();
+        normalized.NumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        normalized.GridlineThickness.Should().Be(ChartAxisPlanner.MaxGridlineThickness);
+        normalized.MajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        normalized.MinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        normalized.LabelFontSize.Should().Be(11);
+        normalized.LabelAngle.Should().Be(ChartAxisPlanner.MinLabelAngle);
+        normalized.LineThickness.Should().Be(ChartAxisPlanner.MinLineThickness);
+    }
+
+    [Fact]
+    public void Axis_Plan_OmittedExtendedFieldsDoNotResetExistingStyle()
+    {
+        var options = ChartAxisPlanner.Plan(new ChartAxisInput(
+            UseXAxis: true,
+            Minimum: null,
+            Maximum: null,
+            MajorUnit: null,
+            LogScale: false,
+            NumberFormat: ChartDataLabelNumberFormat.General,
+            ShowMajorGridlines: false,
+            ShowMinorGridlines: false));
+
+        options.XAxisMinorUnit.Should().BeNull();
+        options.XAxisGridlineThickness.Should().BeNull();
+        options.XAxisMajorTickStyle.Should().BeNull();
+        options.XAxisMinorTickStyle.Should().BeNull();
+        options.ShowXAxisLabels.Should().BeNull();
+        options.XAxisLabelFontSize.Should().BeNull();
+        options.XAxisLabelAngle.Should().BeNull();
+        options.XAxisLineThickness.Should().BeNull();
+    }
+
+    [Fact]
     public void Axis_Plan_RoundTripsThroughSetChartLayoutCommand()
     {
         var chart = new ChartModel { Type = ChartType.Column };
-        var input = new ChartAxisInput(false, Minimum: 0, Maximum: 50, MajorUnit: 10,
-            LogScale: false, ChartDataLabelNumberFormat.Number, ShowMajorGridlines: true, ShowMinorGridlines: true);
+        var input = new ChartAxisInput(
+            UseXAxis: false,
+            Minimum: 0,
+            Maximum: 50,
+            MajorUnit: 10,
+            LogScale: false,
+            NumberFormat: ChartDataLabelNumberFormat.Number,
+            ShowMajorGridlines: true,
+            ShowMinorGridlines: true,
+            MinorUnit: 5,
+            MajorGridlineColor: new CellColor(10, 20, 30),
+            MinorGridlineColor: new CellColor(40, 50, 60),
+            GridlineThickness: 1.5,
+            MajorTickStyle: ChartAxisTickStyle.Cross,
+            MinorTickStyle: ChartAxisTickStyle.Inside,
+            ShowLabels: false,
+            LabelTextColor: new CellColor(70, 80, 90),
+            LabelFontSize: 13,
+            LabelAngle: -30,
+            LineColor: new CellColor(1, 2, 3),
+            LineThickness: 2);
 
         ApplyLayout(chart, ChartAxisPlanner.Plan(input));
 
         chart.YAxisMinimum.Should().Be(0);
         chart.YAxisMaximum.Should().Be(50);
         chart.YAxisMajorUnit.Should().Be(10);
+        chart.YAxisMinorUnit.Should().Be(5);
         chart.YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Number);
         chart.ShowYAxisMajorGridlines.Should().BeTrue();
         chart.ShowYAxisMinorGridlines.Should().BeTrue();
+        chart.YAxisMajorGridlineColor.Should().Be(new CellColor(10, 20, 30));
+        chart.YAxisMinorGridlineColor.Should().Be(new CellColor(40, 50, 60));
+        chart.YAxisGridlineThickness.Should().Be(1.5);
+        chart.YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Cross);
+        chart.YAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.Inside);
+        chart.ShowYAxisLabels.Should().BeFalse();
+        chart.YAxisLabelTextColor.Should().Be(new CellColor(70, 80, 90));
+        chart.YAxisLabelFontSize.Should().Be(13);
+        chart.YAxisLabelAngle.Should().Be(-30);
+        chart.YAxisLineColor.Should().Be(new CellColor(1, 2, 3));
+        chart.YAxisLineThickness.Should().Be(2);
     }
 
     // ---- ChartSeriesFormatPlanner --------------------------------------------------------------------

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -207,6 +208,41 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
+    public void ChartAxisFormatDialogResult_DelegatesOptionsDefaultsAndValidationToSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ChartAxisFormatDialog.cs");
+
+        source.Should().Contain("public ChartAxisInput ToInput()");
+        source.Should().Contain("ChartAxisPlanner.Plan(ToInput())");
+        source.Should().Contain("ChartAxisPlanner.Read(chart, useXAxis)");
+        source.Should().Contain("ChartAxisPlanner.Normalize(new ChartAxisInput(");
+        source.Should().Contain("ChartAxisPlanner.ValidateIssue(input)");
+        source.Should().Contain("ChartAxisPlanner.GetNumberFormatChoices()");
+        source.Should().NotContain("ClearYAxisBounds: Minimum is null && Maximum is null");
+    }
+
+    [Fact]
+    public void ChartAxisFormatDialog_FromChart_UsesPlannerNormalizationForDialogDefaults()
+    {
+        var chart = new ChartModel
+        {
+            YAxisMinorUnit = -2,
+            YAxisGridlineThickness = 99,
+            YAxisLabelFontSize = 100,
+            YAxisLabelAngle = -120,
+            YAxisLineThickness = 0.1,
+        };
+
+        var result = ChartAxisFormatDialog.FromChart(chart, useXAxis: false);
+
+        result.MinorUnit.Should().BeNull();
+        result.GridlineThickness.Should().Be(ChartAxisPlanner.MaxGridlineThickness);
+        result.LabelFontSize.Should().Be(ChartAxisPlanner.MaxLabelFontSize);
+        result.LabelAngle.Should().Be(ChartAxisPlanner.MinLabelAngle);
+        result.LineThickness.Should().Be(ChartAxisPlanner.MinLineThickness);
+    }
+
+    [Fact]
     public void ChartAxisFormatDialogOpenedFromKeyboard_FocusesMinimumBox()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartAxisFormatDialog.cs");
@@ -236,6 +272,7 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _lineColorBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidAxisLineWidthMessage\"), _lineThicknessBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("private bool ShowPlannerValidationWarning(ChartAxisInput input)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
