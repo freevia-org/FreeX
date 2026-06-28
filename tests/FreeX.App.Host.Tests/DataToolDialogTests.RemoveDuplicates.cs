@@ -226,6 +226,13 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("Target = _columnsPanel");
         source.Should().Contain("_columnsPanel.Focusable = true");
         source.Should().Contain("_columnsPanel.GotKeyboardFocus");
+        source.Should().Contain("ServicesRemoveDuplicatesPlanner.BuildColumnChoices");
+        source.Should().Contain("ServicesRemoveDuplicatesPlanner.GetSelectedColumnOffsets");
+        source.Should().Contain("ServicesRemoveDuplicatesPlanner.GuessHasHeaders");
+        source.Should().Contain("ServicesRemoveDuplicatesPlanner.ExcludeHeaderRow");
+        source.Should().NotContain("SpreadsheetDisplayFormatter");
+        source.Should().NotContain("ScalarValue?");
+        source.Should().NotContain("NumberValue or DateTimeValue or BoolValue");
         source.Should().NotContain("new TextBlock { Text = \"Columns:\"");
         source.Should().Contain("SelectAllButton_Click");
         source.Should().Contain("UnselectAllButton_Click");

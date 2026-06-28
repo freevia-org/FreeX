@@ -1,0 +1,49 @@
+using FluentAssertions;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed class DataToolDialogPlannerSourceGuardTests
+{
+    [Fact]
+    public void HostDataToolPlanningFacades_DelegatePortableLogicToSharedPlanners()
+    {
+        var advancedFilter = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.Planning.cs");
+        advancedFilter.Should().Contain("ServicesAdvancedFilterPlanner.CreatePlan(");
+        advancedFilter.Should().Contain("ServicesAdvancedFilterOutputMode");
+        advancedFilter.Should().NotContain("WorkbookReferenceNavigator");
+
+        var consolidate = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.Planning.cs");
+        consolidate.Should().Contain("SharedConsolidateDialogPlanner.TryAddReference(");
+        consolidate.Should().Contain("SharedConsolidateDialogPlanner.TryParse(");
+        consolidate.Should().Contain("SharedConsolidateDialogPlanner.CreateRangeSelectionRequest(");
+        consolidate.Should().NotContain("WorkbookRangeTextCodec.TryParse");
+
+        var dataValidation = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.Planning.cs");
+        dataValidation.Should().Contain("DataValidationDialogPlanner.ValidateCriteria(");
+        dataValidation.Should().Contain("DataValidationDialogPlanner.FocusTargetForInvalidCriteria(");
+        dataValidation.Should().Contain("DataValidationDialogPlanner.CreateRangeSelectionRequest(");
+        dataValidation.Should().NotContain("DataValidationDialogModel.ForType");
+
+        var removeDuplicates = DialogSourceTestSupport.ReadHostSources("RemoveDuplicatesDialog.Planning.cs");
+        removeDuplicates.Should().Contain("ServicesRemoveDuplicatesPlanner.SelectAll(");
+        removeDuplicates.Should().Contain("ServicesRemoveDuplicatesPlanner.ClearAll(");
+        removeDuplicates.Should().Contain("ServicesRemoveDuplicatesPlanner.GetSelectedColumnOffsets(");
+        removeDuplicates.Should().Contain("ServicesRemoveDuplicatesPlanner.BuildColumnChoices(");
+        removeDuplicates.Should().Contain("ServicesRemoveDuplicatesPlanner.GuessHasHeaders(");
+        removeDuplicates.Should().Contain("ServicesRemoveDuplicatesPlanner.ExcludeHeaderRow(");
+        removeDuplicates.Should().NotContain("SpreadsheetDisplayFormatter");
+        removeDuplicates.Should().NotContain("ScalarValue?");
+        removeDuplicates.Should().NotContain("NumberValue or DateTimeValue or BoolValue");
+
+        var sort = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
+        sort.Should().Contain("SortDialogPlanner.BuildSortKeys(levels, PlannerText)");
+        sort.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders, PlannerText)");
+        sort.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
+
+        var selectDataSource = DialogSourceTestSupport.ReadHostSources("SelectDataSourceDialog.Planning.cs");
+        selectDataSource.Should().Contain("SelectDataSourcePlanner.CreateResult(");
+        selectDataSource.Should().Contain("SelectDataSourcePlanner.InferPreviewEntries(");
+        selectDataSource.Should().Contain("SelectDataSourcePlanner.CreateRangeSelectionRequest(");
+        selectDataSource.Should().NotContain("TryParseCellRef");
+    }
+}
