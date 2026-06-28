@@ -212,6 +212,8 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().Contain("private readonly CheckBox _lockAspectRatioBox");
         source.Should().Contain("Content = UiText.Get(\"FormatPicture_LockAspectRatio\")");
         source.Should().Contain("Content = UiText.Get(\"HeaderFooterPicture_ResetButton\")");
+        source.Should().Contain("HeaderFooterPictureFormatPlanner.CreateState(");
+        source.Should().Contain("HeaderFooterPictureFormatPlanner.ResetSize(_pictureState)");
         source.Should().Contain("CalculateLockedAspectHeight");
         source.Should().Contain("CalculateLockedAspectWidth");
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
@@ -240,9 +242,9 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().Contain("HeaderCenterBox.Focus();");
         source.Should().Contain("HeaderCenterBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(HeaderCenterBox);");
-        source.Should().Contain("_widthBox.Focus();");
-        source.Should().Contain("_widthBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_widthBox);");
+        source.Should().Contain("FocusSizeInput(_pictureState.InitialFocusField);");
+        source.Should().Contain("private void FocusSizeInput(ObjectSizeDialogField field)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(field == ObjectSizeDialogField.Width ? _widthBox : _heightBox);");
     }
 
     [Fact]
@@ -250,11 +252,10 @@ public sealed class HeaderFooterDialogXamlTests
     {
         var source = ReadHeaderFooterDialogSource();
 
-        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text, out var width))");
-        source.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");
-        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text, out var height))");
-        source.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
-        source.Should().Contain("private static bool TryParsePositiveSize(string text, out double value)");
+        source.Should().Contain("HeaderFooterPictureFormatPlanner.TryCreateResult(");
+        source.Should().Contain("FocusSizeInput(invalidField);");
+        source.Should().Contain("private void FocusSizeInput(ObjectSizeDialogField field)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(field == ObjectSizeDialogField.Width ? _widthBox : _heightBox);");
         source.Should().NotContain("private static void FocusAndSelect(TextBox box)");
     }
 
