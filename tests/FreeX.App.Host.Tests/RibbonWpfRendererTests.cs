@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using FluentAssertions;
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Wpf;
 
 namespace FreeX.App.Host.Tests;
 
@@ -16,6 +17,18 @@ public class RibbonWpfRendererTests
     {
         public int Invocations { get; private set; }
         public void Execute(RibbonCommandContext context) => Invocations++;
+    }
+
+    private sealed class RecordingHandler
+    {
+        public object? Sender { get; private set; }
+        public int Invocations { get; private set; }
+
+        public void Handle(object sender, RoutedEventArgs e)
+        {
+            Sender = sender;
+            Invocations++;
+        }
     }
 
     [Fact]
@@ -285,6 +298,40 @@ public class RibbonWpfRendererTests
         });
 
         cut.Invocations.Should().Be(1);
+    }
+
+    [Fact]
+    public void WpfReflectiveRibbonCommand_UsesRenderedSenderBeforeFallback()
+    {
+        var handler = new RecordingHandler();
+        var method = typeof(RecordingHandler).GetMethod(nameof(RecordingHandler.Handle))!;
+        var fallbackSender = new object();
+        var renderedSender = new object();
+        var command = new WpfReflectiveRibbonCommand(handler, method, fallbackSender);
+
+        command.Execute(new RibbonCommandContext(new Dictionary<string, object?>
+        {
+            [RibbonWpfRenderer.SenderKey] = renderedSender
+        }));
+
+        handler.Invocations.Should().Be(1);
+        handler.Sender.Should().BeSameAs(renderedSender);
+    }
+
+    [Fact]
+    public void WpfControlRibbonCommand_RaisesButtonClick()
+    {
+        var invocations = 0;
+
+        StaTestRunner.Run(() =>
+        {
+            var button = new Button();
+            button.Click += (_, _) => invocations++;
+
+            new WpfControlRibbonCommand(button).Execute(RibbonCommandContext.Empty);
+        });
+
+        invocations.Should().Be(1);
     }
 
     [Fact]
