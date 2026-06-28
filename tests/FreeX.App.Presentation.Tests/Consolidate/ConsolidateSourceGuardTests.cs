@@ -20,4 +20,21 @@ public sealed class ConsolidateSourceGuardTests
             source.Should().NotContain("FreeX.App.Avalonia");
         }
     }
+
+    [Fact]
+    public void AvaloniaConsolidateDialog_ConsumesSharedPresentationPlannersDirectly()
+    {
+        var repoRoot = RepositoryFileLocator.FindDirectory("src");
+        var avaloniaRoot = Path.Combine(repoRoot, "FreeX.App.Avalonia");
+        var source = File.ReadAllText(Path.Combine(avaloniaRoot, "MainWindow.Consolidate.cs"));
+
+        File.Exists(Path.Combine(avaloniaRoot, "ConsolidateShellPlanner.cs"))
+            .Should()
+            .BeFalse("Avalonia should consume shared consolidate planners directly instead of keeping a pass-through facade");
+        source.Should().Contain("ConsolidateDialogPlanner.FunctionChoices");
+        source.Should().Contain("ConsolidateDialogPlanner.TryPlanApply(");
+        source.Should().Contain("new ConsolidateCommand(");
+        source.Should().NotContain("ConsolidateShellPlanner");
+        source.Should().NotContain("new EditCellsCommand(sheetId, edits)");
+    }
 }
