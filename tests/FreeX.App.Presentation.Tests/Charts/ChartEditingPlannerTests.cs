@@ -999,6 +999,13 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void Trendline_DashStyleChoices_ComeFromSharedPlanner()
+    {
+        ChartTrendlinePlanner.GetDashStyleChoices()
+            .Should().BeEquivalentTo(Enum.GetValues<ChartLineDashStyle>());
+    }
+
+    [Fact]
     public void Trendline_Supports_OnlyTrendlineCapableTypes()
     {
         ChartTrendlinePlanner.SupportsTrendlines(ChartType.Line).Should().BeTrue();
@@ -1019,6 +1026,64 @@ public sealed class ChartEditingPlannerTests
         options.TrendlineOrder.Should().Be(ChartTrendlinePlanner.MaxOrder);
         options.ShowTrendlineEquation.Should().BeTrue();
         options.ShowTrendlineRSquared.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Trendline_TryParseDialogInput_BuildsInputAndDefaultsMissingSelections()
+    {
+        ChartTrendlinePlanner.TryParseDialogInput(
+                showTrendline: true,
+                selectedType: null,
+                periodText: "4",
+                orderText: "5",
+                showEquation: true,
+                showRSquared: false,
+                colorText: "#506070",
+                thicknessText: "2.25",
+                selectedDashStyle: null,
+                out var input,
+                out var issue)
+            .Should().BeTrue();
+
+        issue.Should().Be(ChartTrendlineDialogParseIssue.None);
+        input.ShowTrendline.Should().BeTrue();
+        input.Type.Should().Be(ChartTrendlineType.Linear);
+        input.Period.Should().Be(4);
+        input.Order.Should().Be(5);
+        input.ShowEquation.Should().BeTrue();
+        input.ShowRSquared.Should().BeFalse();
+        input.Color.Should().Be(new CellColor(0x50, 0x60, 0x70));
+        input.Thickness.Should().Be(2.25);
+        input.DashStyle.Should().Be(ChartLineDashStyle.Solid);
+    }
+
+    [Theory]
+    [InlineData("1", "2", "#000000", "1", ChartTrendlineDialogParseIssue.Period)]
+    [InlineData("2", "7", "#000000", "1", ChartTrendlineDialogParseIssue.Order)]
+    [InlineData("2", "2", "bad", "1", ChartTrendlineDialogParseIssue.Color)]
+    [InlineData("2", "2", "#000000", "0.1", ChartTrendlineDialogParseIssue.Thickness)]
+    public void Trendline_TryParseDialogInput_ReportsFirstInvalidField(
+        string periodText,
+        string orderText,
+        string colorText,
+        string thicknessText,
+        ChartTrendlineDialogParseIssue expectedIssue)
+    {
+        ChartTrendlinePlanner.TryParseDialogInput(
+                showTrendline: false,
+                selectedType: ChartTrendlineType.Polynomial,
+                periodText,
+                orderText,
+                showEquation: false,
+                showRSquared: false,
+                colorText,
+                thicknessText,
+                selectedDashStyle: ChartLineDashStyle.Dash,
+                out _,
+                out var issue)
+            .Should().BeFalse();
+
+        issue.Should().Be(expectedIssue);
     }
 
     [Fact]
