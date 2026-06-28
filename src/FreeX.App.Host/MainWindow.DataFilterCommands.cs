@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
