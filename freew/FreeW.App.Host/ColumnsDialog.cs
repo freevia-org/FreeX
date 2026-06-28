@@ -1,38 +1,30 @@
-using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
 /// <summary>
-/// Word's "Columns" dialog (Layout &gt; Page Setup &gt; Columns &gt; More Columns…). Lets the user pick a
-/// preset — One / Two / Three / Left / Right — or a custom number of columns, with a column spacing and a
+/// Word's "Columns" dialog (Layout &gt; Page Setup &gt; Columns &gt; More Columns...). Lets the user pick a
+/// preset - One / Two / Three / Left / Right - or a custom number of columns, with a column spacing and a
 /// "line between" toggle. Returns the chosen column settings to apply to <see cref="PageSettings"/>, or
 /// null if cancelled.
 ///
 /// <para>
-/// "Left" and "Right" are the classic two-column unequal presets: a narrow column beside a wide one (Word
-/// uses roughly a 1.5"/4.5" split of the content area). They are returned as explicit per-column widths
-/// (see <see cref="PageSettings.ColumnWidthsPt"/>); the equal presets leave widths null so the layout is
-/// derived from the count + spacing.
+/// The dialog stays WPF-only chrome: preset catalog, initial state, parsing, validation, and result
+/// resolution live in the shared presentation planner.
 /// </para>
 /// </summary>
 internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    /// <summary>The settings the dialog produces, mapped onto a <see cref="PageSettings"/> on apply.</summary>
-    internal sealed record Result(int Count, double SpacingPt, bool LineBetween, IReadOnlyList<double>? WidthsPt);
-
     private readonly ComboBox _presetBox;
     private readonly TextBox _countBox;
     private readonly TextBox _spacingBox;
     private readonly CheckBox _lineBetween;
     private readonly double _contentWidthPt;
-    private Result? _result;
-
-    // Preset order shown in the drop-down. Indexes map to ApplyPreset below.
-    private static readonly string[] Presets = ["One", "Two", "Three", "Left", "Right"];
+    private ColumnsDialogResult? _result;
 
     private ColumnsDialog(Window? owner, PageSettings page)
     {
@@ -44,17 +36,18 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _contentWidthPt = System.Math.Max(72, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
+        var plan = ColumnsDialogPlanner.BuildInitialState(page, CultureInfo.CurrentCulture);
+        _contentWidthPt = plan.ContentWidthPt;
 
-        _countBox = NumberBox(System.Math.Max(1, page.ColumnCount));
-        _spacingBox = NumberBox(page.ColumnSpacingPt);
-        _lineBetween = new CheckBox { Content = "Line between", IsChecked = page.ColumnsLineBetween, Margin = new Thickness(0, 6, 0, 0) };
+        _countBox = NumberBox(plan.CountText);
+        _spacingBox = NumberBox(plan.SpacingText);
+        _lineBetween = new CheckBox { Content = "Line between", IsChecked = plan.LineBetween, Margin = new Thickness(0, 6, 0, 0) };
 
         _presetBox = new ComboBox { MinWidth = 140 };
-        foreach (var preset in Presets)
-            _presetBox.Items.Add(preset);
-        _presetBox.SelectedIndex = PresetIndexFor(page);
-        _presetBox.SelectionChanged += (_, _) => ApplyPreset(_presetBox.SelectedIndex);
+        foreach (var preset in ColumnsDialogPlanner.Presets)
+            _presetBox.Items.Add(preset.Label);
+        _presetBox.SelectedIndex = plan.PresetIndex;
+        _presetBox.SelectionChanged += (_, _) => ApplySelectedPreset();
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -81,9 +74,9 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         DialogFocus.FocusAndSelect(_countBox);
     }
 
-    private static TextBox NumberBox(double value) => new()
+    private static TextBox NumberBox(string value) => new()
     {
-        Text = value.ToString("0.##", CultureInfo.CurrentCulture),
+        Text = value,
         MinWidth = 120
     };
 
@@ -106,67 +99,36 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(field);
     }
 
-    // Maps an existing page back to a preset selection so reopening the dialog shows the current state.
-    private static int PresetIndexFor(PageSettings page)
+    private void ApplySelectedPreset()
     {
-        if (page.ColumnWidthsPt is { Count: 2 } widths)
-            return widths[0] < widths[1] ? 3 : 4; // narrow-first → Left, wide-first → Right
-        return System.Math.Clamp(page.ColumnCount - 1, 0, 2); // 1/2/3 → One/Two/Three
-    }
-
-    // Fills the count box (and clears any unequal-width intent) from a preset choice.
-    private void ApplyPreset(int index)
-    {
-        var count = index switch { 0 => 1, 1 or 3 or 4 => 2, _ => 3 };
+        var count = ColumnsDialogPlanner.ColumnCountForPreset(_presetBox.SelectedIndex);
         _countBox.Text = count.ToString(CultureInfo.CurrentCulture);
-    }
-
-    // Word's Left/Right split: a ~1.5" narrow column next to the rest of the content area.
-    private IReadOnlyList<double>? UnequalWidths()
-    {
-        var spacing = ParseOr(_spacingBox.Text, 36);
-        const double narrowPt = 108; // 1.5 inch
-        var widePt = System.Math.Max(36, _contentWidthPt - spacing - narrowPt);
-        return _presetBox.SelectedIndex switch
-        {
-            3 => [narrowPt, widePt], // Left: narrow column on the left
-            4 => [widePt, narrowPt], // Right: narrow column on the right
-            _ => null
-        };
     }
 
     private void Accept()
     {
-        if (!TryParseInt(_countBox.Text, out var count) || count < 1 || count > 12
-            || !TryParseDouble(_spacingBox.Text, out var spacing) || spacing < 0)
+        var input = new ColumnsDialogInput(
+            _presetBox.SelectedIndex,
+            _countBox.Text,
+            _spacingBox.Text,
+            _lineBetween.IsChecked == true,
+            _contentWidthPt);
+
+        if (!ColumnsDialogPlanner.TryBuildResult(input, CultureInfo.CurrentCulture, out var result, out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter 1–12 columns and a non-negative spacing in points.");
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? ColumnsDialogPlanner.ValidationMessage);
             return;
         }
 
-        var widths = UnequalWidths();
-        // An unequal preset forces a 2-column count regardless of what's in the count box.
-        if (widths is not null)
-            count = widths.Count;
-
-        _result = new Result(count, spacing, _lineBetween.IsChecked == true, widths);
+        _result = result;
         Close();
     }
-
-    private static bool TryParseInt(string text, out int value) =>
-        int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out value);
-
-    private static bool TryParseDouble(string text, out double value) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
-
-    private static double ParseOr(string text, double fallback) =>
-        TryParseDouble(text, out var v) ? v : fallback;
 
     /// <summary>
     /// Show the dialog seeded with the current page columns; returns the chosen settings, or null if
     /// cancelled.
     /// </summary>
-    public static Result? Prompt(Window? owner, PageSettings page)
+    public static ColumnsDialogResult? Prompt(Window? owner, PageSettings page)
     {
         var dialog = new ColumnsDialog(owner, page);
         dialog.ShowDialog();
