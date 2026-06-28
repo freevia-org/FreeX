@@ -17,6 +17,39 @@ public sealed class PptxPackageRetentionTests
         "http://example.com/freep/relationships/viewState";
 
     [Fact]
+    public void CoreProperties_RoundTripThroughPptxPackage()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Properties.Title = "FreeP title";
+        presentation.Properties.Author = "FreeP author";
+        presentation.Properties.Subject = "FreeP subject";
+        presentation.Properties.Keywords = "freep,pptx,opc";
+        presentation.Properties.Comments = "FreeP comments";
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var coreXml = LoadXml(archive, "docProps/core.xml");
+            coreXml.Root!.Element(DcNs + "title")!.Value.Should().Be("FreeP title");
+            coreXml.Root.Element(DcNs + "creator")!.Value.Should().Be("FreeP author");
+            coreXml.Root.Element(DcNs + "subject")!.Value.Should().Be("FreeP subject");
+            coreXml.Root.Element(CpNs + "keywords")!.Value.Should().Be("freep,pptx,opc");
+            coreXml.Root.Element(DcNs + "description")!.Value.Should().Be("FreeP comments");
+        }
+
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+        reloaded.Properties.Title.Should().Be("FreeP title");
+        reloaded.Properties.Author.Should().Be("FreeP author");
+        reloaded.Properties.Subject.Should().Be("FreeP subject");
+        reloaded.Properties.Keywords.Should().Be("freep,pptx,opc");
+        reloaded.Properties.Comments.Should().Be("FreeP comments");
+    }
+
+    [Fact]
     public void ReadWriteRead_RetainsUnmodeledPackagePartsRelationshipsAndContentTypes()
     {
         using var source = BuildPptxWithUnmodeledPackageData();
@@ -150,6 +183,9 @@ public sealed class PptxPackageRetentionTests
         "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace ContentTypesNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace DcNs = "http://purl.org/dc/elements/1.1/";
+    private static readonly XNamespace CpNs =
+        "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
 
     private static XElement? Relationship(XDocument doc, string type, string target) =>
         doc.Root?.Elements(RelsNs + "Relationship").FirstOrDefault(r =>

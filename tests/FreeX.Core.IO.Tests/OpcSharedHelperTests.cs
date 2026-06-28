@@ -106,6 +106,83 @@ public sealed class OpcSharedHelperTests
         OpcXml.LoadXml(entryStream).Root!.Name.LocalName.Should().Be("replacement");
     }
 
+    [Fact]
+    public void CoreDocumentProperties_BuildAndRead_RoundTripsSharedOpcFields()
+    {
+        var created = new DateTimeOffset(2026, 6, 28, 9, 10, 11, TimeSpan.Zero);
+        var modified = new DateTimeOffset(2026, 6, 28, 10, 11, 12, TimeSpan.Zero);
+        var properties = new CoreDocumentProperties(
+            Title: "Quarterly Plan",
+            Author: "FreeX",
+            Subject: "Shared doc properties",
+            Keywords: "opc,dedup",
+            Comments: "Round-trip through shared helper",
+            LastModifiedBy: "Codex",
+            Created: created,
+            Modified: modified,
+            Category: "Planning",
+            ContentStatus: "Draft",
+            Language: "en-US",
+            Version: "2026.06");
+
+        var document = OpcDocumentProperties.BuildCorePropertiesDocument(
+            properties,
+            includeDcmiTypeNamespace: true,
+            includeXmlDeclaration: true);
+
+        document.Declaration.Should().NotBeNull();
+        document.Root!.Attribute(XNamespace.Xmlns + "dcmitype")!.Value
+            .Should()
+            .Be(OpcDocumentProperties.DublinCoreTypeNamespace.NamespaceName);
+        document.Root.Element(OpcDocumentProperties.DublinCoreTermsNamespace + "created")!
+            .Attribute(OpcDocumentProperties.XmlSchemaInstanceNamespace + "type")!
+            .Value
+            .Should()
+            .Be("dcterms:W3CDTF");
+        OpcDocumentProperties.ReadCoreProperties(document).Should().Be(properties);
+    }
+
+    [Fact]
+    public void ExtendedDocumentProperties_BuildAndRead_RoundTripsSharedOpcFields()
+    {
+        var properties = new ExtendedDocumentProperties(
+            Application: "Microsoft Excel",
+            Company: "FreeX Test Lab",
+            Manager: "Fidelity",
+            PresentationFormat: "Workbook",
+            Template: "SchemaTemplate.xltx");
+
+        var document = OpcDocumentProperties.BuildExtendedPropertiesDocument(
+            properties,
+            includeXmlDeclaration: true);
+
+        document.Declaration.Should().NotBeNull();
+        OpcDocumentProperties.ReadExtendedProperties(document).Should().Be(properties);
+    }
+
+    [Fact]
+    public void PreservePropertyElements_CopiesOnlyRequestedOpcPropertyElements()
+    {
+        var source = new XElement(
+            OpcDocumentProperties.CorePropertiesNamespace + "coreProperties",
+            new XElement(OpcDocumentProperties.DublinCoreNamespace + "title", "source title"),
+            new XElement(OpcDocumentProperties.DublinCoreNamespace + "subject", "source subject"),
+            new XElement(OpcDocumentProperties.CorePropertiesNamespace + "category", "source category"));
+        var target = new XElement(
+            OpcDocumentProperties.CorePropertiesNamespace + "coreProperties",
+            new XElement(OpcDocumentProperties.DublinCoreNamespace + "title", "target title"));
+
+        var changed = OpcDocumentProperties.PreservePropertyElements(
+            source,
+            target,
+            OpcDocumentProperties.WorkbookStableCorePropertyElementNames);
+
+        changed.Should().BeTrue();
+        target.Element(OpcDocumentProperties.DublinCoreNamespace + "title")!.Value.Should().Be("target title");
+        target.Element(OpcDocumentProperties.DublinCoreNamespace + "subject")!.Value.Should().Be("source subject");
+        target.Element(OpcDocumentProperties.CorePropertiesNamespace + "category")!.Value.Should().Be("source category");
+    }
+
     private static MemoryStream ToStream(string xml) =>
         new(Encoding.UTF8.GetBytes(xml), writable: false);
 

@@ -4511,22 +4511,18 @@ public static class DocxReader
     /// <summary>Parses docProps/core.xml into <see cref="TextDocument.Properties"/>; a missing part is fine.</summary>
     private static void ReadCoreProperties(ZipArchive archive, TextDocument document)
     {
-        var coreXml = LoadPart(archive, "docProps/core.xml");
-        var root = coreXml?.Root;
-        if (root is null)
-            return;
-
+        var coreProperties = OpcDocumentProperties.ReadCoreProperties(archive);
         var properties = document.Properties;
-        properties.Title = Trimmed(root.Element(Dc + "title")?.Value);
-        properties.Author = Trimmed(root.Element(Dc + "creator")?.Value);
-        properties.Subject = Trimmed(root.Element(Dc + "subject")?.Value);
-        properties.Keywords = Trimmed(root.Element(Cp + "keywords")?.Value);
-        properties.Comments = Trimmed(root.Element(Dc + "description")?.Value);
-        properties.LastModifiedBy = Trimmed(root.Element(Cp + "lastModifiedBy")?.Value);
-        properties.Created = ParseW3CDtf(root.Element(DcTerms + "created")?.Value);
-        properties.Modified = ParseW3CDtf(root.Element(DcTerms + "modified")?.Value);
+        properties.Title = EmptyToNull(coreProperties.Title);
+        properties.Author = EmptyToNull(coreProperties.Author);
+        properties.Subject = EmptyToNull(coreProperties.Subject);
+        properties.Keywords = EmptyToNull(coreProperties.Keywords);
+        properties.Comments = EmptyToNull(coreProperties.Comments);
+        properties.LastModifiedBy = EmptyToNull(coreProperties.LastModifiedBy);
+        properties.Created = coreProperties.Created;
+        properties.Modified = coreProperties.Modified;
 
-        static string? Trimmed(string? value) => string.IsNullOrEmpty(value) ? null : value;
+        static string? EmptyToNull(string? value) => string.IsNullOrEmpty(value) ? null : value;
     }
 
     /// <summary>

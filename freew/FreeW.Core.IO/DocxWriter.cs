@@ -920,40 +920,18 @@ public static class DocxWriter
     }
 
     /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
-    private static XDocument BuildCoreProperties(DocumentProperties properties)
-    {
-        var core = new XElement(Cp + "coreProperties",
-            new XAttribute(XNamespace.Xmlns + "cp", Cp.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "dc", Dc.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "dcterms", DcTerms.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "dcmitype", DcmiType.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "xsi", Xsi.NamespaceName));
-
-        AddIfSet(core, Dc + "title", properties.Title);
-        AddIfSet(core, Dc + "creator", properties.Author);
-        AddIfSet(core, Dc + "subject", properties.Subject);
-        AddIfSet(core, Cp + "keywords", properties.Keywords);
-        AddIfSet(core, Dc + "description", properties.Comments);
-        AddIfSet(core, Cp + "lastModifiedBy", properties.LastModifiedBy);
-        AddTimestamp(core, DcTerms + "created", properties.Created);
-        AddTimestamp(core, DcTerms + "modified", properties.Modified);
-
-        return new XDocument(core);
-
-        static void AddIfSet(XElement parent, XName name, string? value)
-        {
-            if (!string.IsNullOrEmpty(value))
-                parent.Add(new XElement(name, value));
-        }
-
-        static void AddTimestamp(XElement parent, XName name, DateTimeOffset? value)
-        {
-            if (value is { } v)
-                parent.Add(new XElement(name,
-                    new XAttribute(Xsi + "type", "dcterms:W3CDTF"),
-                    ToW3CDtf(v)));
-        }
-    }
+    private static XDocument BuildCoreProperties(DocumentProperties properties) =>
+        OpcDocumentProperties.BuildCorePropertiesDocument(
+            new CoreDocumentProperties(
+                Title: properties.Title,
+                Author: properties.Author,
+                Subject: properties.Subject,
+                Keywords: properties.Keywords,
+                Comments: properties.Comments,
+                LastModifiedBy: properties.LastModifiedBy,
+                Created: properties.Created,
+                Modified: properties.Modified),
+            includeDcmiTypeNamespace: true);
 
     private static XDocument BuildDocumentRels(
         IReadOnlyList<ImagePart> images,

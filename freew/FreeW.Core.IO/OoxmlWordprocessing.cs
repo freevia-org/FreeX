@@ -130,11 +130,11 @@ internal static class Ooxml
     public const string DiagramDrawingRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
     // OPC core properties (docProps/core.xml): Dublin Core + the cp / dcterms / xsi vocabularies.
-    public static readonly XNamespace Cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
-    public static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
-    public static readonly XNamespace DcTerms = "http://purl.org/dc/terms/";
-    public static readonly XNamespace DcmiType = "http://purl.org/dc/dcmitype/";
-    public static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
+    public static readonly XNamespace Cp = OpcDocumentProperties.CorePropertiesNamespace;
+    public static readonly XNamespace Dc = OpcDocumentProperties.DublinCoreNamespace;
+    public static readonly XNamespace DcTerms = OpcDocumentProperties.DublinCoreTermsNamespace;
+    public static readonly XNamespace DcmiType = OpcDocumentProperties.DublinCoreTypeNamespace;
+    public static readonly XNamespace Xsi = OpcDocumentProperties.XmlSchemaInstanceNamespace;
 
     public const string CorePropertiesContentType = OpcPackageProperties.CorePropertiesContentType;
     public const string CorePropertiesRelType = OpcPackageProperties.CorePropertiesRelationshipType;

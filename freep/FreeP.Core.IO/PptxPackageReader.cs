@@ -17,8 +17,6 @@ public static class PptxPackageReader
     private static readonly XNamespace P   = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A   = PptxColorReader.A;
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace Dc  = "http://purl.org/dc/elements/1.1/";
-    private static readonly XNamespace Cp  = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
 
     // ── Relationship type constants ───────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -260,14 +258,12 @@ public static class PptxPackageReader
 
     private static void ReadCoreProperties(ZipArchive archive, string path, PresentationProperties props)
     {
-        var xml = LoadXml(archive, path);
-        if (xml?.Root is null) return;
-
-        props.Title = xml.Root.Element(Dc + "title")?.Value;
-        props.Author = xml.Root.Element(Dc + "creator")?.Value;
-        props.Subject = xml.Root.Element(Dc + "subject")?.Value;
-        props.Keywords = xml.Root.Element(Cp + "keywords")?.Value;
-        props.Comments = xml.Root.Element(Dc + "description")?.Value;
+        var properties = OpcDocumentProperties.ReadCoreProperties(archive, path);
+        props.Title = properties.Title;
+        props.Author = properties.Author;
+        props.Subject = properties.Subject;
+        props.Keywords = properties.Keywords;
+        props.Comments = properties.Comments;
     }
 
     // ── Sections ─────────────────────────────────────────────────────────────────

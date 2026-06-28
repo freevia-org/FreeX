@@ -20,10 +20,6 @@ public static class PptxPackageWriter
     private static readonly XNamespace A       = PptxColorReader.A;
     private static readonly XNamespace R       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace PkgRels = OpcRelationships.Namespace;
-    private static readonly XNamespace Dc      = "http://purl.org/dc/elements/1.1/";
-    private static readonly XNamespace Cp      = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
-    private static readonly XNamespace Dcterms = "http://purl.org/dc/terms/";
-    private static readonly XNamespace Xsi     = XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance");
 
     // ── Relationship types ────────────────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -1812,15 +1808,15 @@ public static class PptxPackageWriter
     // ── Core properties ───────────────────────────────────────────────────────────
 
     private static XDocument BuildCorePropsXml(PresentationProperties props) =>
-        new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(Cp + "coreProperties",
-                NsAttr("cp", Cp), NsAttr("dc", Dc), NsAttr("dcterms", Dcterms), NsAttr("xsi", Xsi),
-                props.Title is not null ? new XElement(Dc + "title", props.Title) : null,
-                props.Author is not null ? new XElement(Dc + "creator", props.Author) : null,
-                props.Subject is not null ? new XElement(Dc + "subject", props.Subject) : null,
-                props.Keywords is not null ? new XElement(Cp + "keywords", props.Keywords) : null,
-                props.Comments is not null ? new XElement(Dc + "description", props.Comments) : null));
+        OpcDocumentProperties.BuildCorePropertiesDocument(
+            new CoreDocumentProperties(
+                Title: props.Title,
+                Author: props.Author,
+                Subject: props.Subject,
+                Keywords: props.Keywords,
+                Comments: props.Comments),
+            includeEmptyStrings: true,
+            includeXmlDeclaration: true);
 
     // ── Shape elements ────────────────────────────────────────────────────────────
 
