@@ -1,3 +1,4 @@
+using System.IO;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.Core.Model;
@@ -420,5 +421,35 @@ public sealed class PageSetupDialogTests
             "SetPageSettings must not disturb the Watermark property");
         view.Document.Page.ColumnCount.Should().Be(2,
             "SetPageSettings must not disturb the ColumnCount property");
+    }
+
+    [Fact]
+    public void DialogPolicy_IsDelegatedToPresentationPlanner()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freew",
+            "FreeW.App.Avalonia",
+            "PageSetupDialog.cs"));
+
+        source.Should().Contain("PageSetupDialogPlanner.BuildInitialState(");
+        source.Should().Contain("PageSetupDialogPlanner.TryBuildResult(");
+        source.Should().NotContain("PaperSizes =");
+        source.Should().NotContain("TryParseNonNeg(");
+        source.Should().NotContain("TryParsePos(");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            if (File.Exists(Path.Combine(dir, "FreeX.slnx")))
+                return dir;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }

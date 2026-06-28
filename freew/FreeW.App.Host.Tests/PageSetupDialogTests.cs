@@ -1,3 +1,4 @@
+using System.IO;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 using Xunit;
@@ -124,5 +125,35 @@ public sealed class PageSetupDialogTests
         Assert.Equal(24, p.HeaderDistancePt);
         Assert.Equal(30, p.FooterDistancePt);
         Assert.Equal(PageVerticalAlignment.Justified, p.VerticalAlignment);
+    }
+
+    [Fact]
+    public void DialogPolicy_IsDelegatedToPresentationPlanner()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freew",
+            "FreeW.App.Host",
+            "PageSetupDialog.cs"));
+
+        Assert.Contains("PageSetupDialogPlanner.BuildInitialState(", source);
+        Assert.Contains("PageSetupDialogPlanner.TryBuildResult(", source);
+        Assert.DoesNotContain("PaperSizes =", source);
+        Assert.DoesNotContain("SectionStartValues =", source);
+        Assert.DoesNotContain("TryParse(_top.Text", source);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            if (File.Exists(Path.Combine(dir, "FreeX.slnx")))
+                return dir;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -51,32 +52,6 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         double FooterDistancePt,
         PageVerticalAlignment VerticalAlignment);
 
-    // Named paper sizes (portrait dimensions in points; 72 pt = 1 inch). "Custom" keeps whatever is typed.
-    private static readonly (string Name, double WidthPt, double HeightPt)[] PaperSizes =
-    [
-        ("Letter (8.5\" x 11\")", 612, 792),
-        ("Legal (8.5\" x 14\")", 612, 1008),
-        ("Tabloid (11\" x 17\")", 792, 1224),
-        ("A3 (29.7cm x 42cm)", 841.9, 1190.55),
-        ("A4 (21cm x 29.7cm)", 595.3, 841.9),
-        ("A5 (14.8cm x 21cm)", 419.55, 595.3),
-        ("B4 (25cm x 35.3cm)", 708.7, 1000.65),
-        ("B5 (17.6cm x 25cm)", 498.9, 708.7),
-        ("Custom", 0, 0),
-    ];
-
-    private static readonly string[] OrientationNames = ["Portrait", "Landscape"];
-    private static readonly string[] MultiplePagesNames = ["Normal", "Mirror margins"];
-    private static readonly string[] ApplyToNames = ["Whole document", "This section"];
-
-    private static readonly string[] SectionStartNames = ["Continuous", "New page", "Even page", "Odd page"];
-    private static readonly SectionBreakKind[] SectionStartValues =
-        [SectionBreakKind.Continuous, SectionBreakKind.NextPage, SectionBreakKind.EvenPage, SectionBreakKind.OddPage];
-
-    private static readonly string[] VAlignNames = ["Top", "Center", "Justified", "Bottom"];
-    private static readonly PageVerticalAlignment[] VAlignValues =
-        [PageVerticalAlignment.Top, PageVerticalAlignment.Center, PageVerticalAlignment.Justified, PageVerticalAlignment.Bottom];
-
     // Margins tab.
     private readonly TextBox _top;
     private readonly TextBox _bottom;
@@ -123,36 +98,35 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        // A landscape page stores already-swapped width/height; show the user the portrait (un-swapped)
-        // dimensions in the Paper tab and recombine with orientation on accept, exactly as Word does.
-        var (portraitW, portraitH) = page.Landscape
-            ? (page.HeightPt, page.WidthPt)
-            : (page.WidthPt, page.HeightPt);
+        var state = PageSetupDialogPlanner.BuildInitialState(
+            page,
+            sectionStart,
+            PageSetupDialogPlanner.HostPaperOptions,
+            PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
+            CultureInfo.CurrentCulture);
 
-        _top = NumberBox(page.MarginTopPt);
-        _bottom = NumberBox(page.MarginBottomPt);
-        _left = NumberBox(page.MarginLeftPt);
-        _right = NumberBox(page.MarginRightPt);
-        _gutter = NumberBox(page.GutterPt);
-        _orientation = Combo(OrientationNames, page.Landscape ? 1 : 0);
-        _multiplePages = Combo(MultiplePagesNames, page.MirrorMargins ? 1 : 0);
-        _applyTo = Combo(ApplyToNames, 0);
+        _top = NumberBox(state.MarginTopText);
+        _bottom = NumberBox(state.MarginBottomText);
+        _left = NumberBox(state.MarginLeftText);
+        _right = NumberBox(state.MarginRightText);
+        _gutter = NumberBox(state.GutterText);
+        _orientation = Combo(PageSetupDialogPlanner.OrientationNames.ToArray(), state.OrientationIndex);
+        _multiplePages = Combo(PageSetupDialogPlanner.MultiplePagesNames.ToArray(), state.MultiplePagesIndex);
+        _applyTo = Combo(PageSetupDialogPlanner.ApplyToNames.ToArray(), 0);
 
-        _width = NumberBox(portraitW);
-        _height = NumberBox(portraitH);
-        _paperSize = Combo(Array.ConvertAll(PaperSizes, p => p.Name), PaperIndexFor(portraitW, portraitH));
+        _width = NumberBox(state.WidthText);
+        _height = NumberBox(state.HeightText);
+        _paperSize = Combo(PageSetupDialogPlanner.HostPaperOptions.Select(p => p.HostLabel).ToArray(), state.PaperSizeIndex);
         _paperSize.SelectionChanged += (_, _) => ApplyPaperPreset();
         _width.TextChanged += (_, _) => SyncPaperToCustom();
         _height.TextChanged += (_, _) => SyncPaperToCustom();
 
-        _sectionStart = Combo(SectionStartNames, Math.Max(0, Array.IndexOf(SectionStartValues, sectionStart)));
-        _differentFirstPage = new CheckBox { Content = "Different first page", IsChecked = page.DifferentFirstPage };
-        _differentOddEven = new CheckBox { Content = "Different odd and even", IsChecked = page.DifferentOddEvenPages, Margin = new Thickness(0, 4, 0, 0) };
-        // Word defaults the header/footer distance to 0.5" (36 pt); show that when the model carries no explicit
-        // value (the "unspecified" 0), so the dialog reflects the effective distance.
-        _headerDistance = NumberBox(page.HeaderDistancePt > 0 ? page.HeaderDistancePt : 36);
-        _footerDistance = NumberBox(page.FooterDistancePt > 0 ? page.FooterDistancePt : 36);
-        _vAlign = Combo(VAlignNames, Math.Max(0, Array.IndexOf(VAlignValues, page.VerticalAlignment)));
+        _sectionStart = Combo(PageSetupDialogPlanner.SectionStartNames.ToArray(), state.SectionStartIndex);
+        _differentFirstPage = new CheckBox { Content = "Different first page", IsChecked = state.DifferentFirstPage };
+        _differentOddEven = new CheckBox { Content = "Different odd and even", IsChecked = state.DifferentOddEvenPages, Margin = new Thickness(0, 4, 0, 0) };
+        _headerDistance = NumberBox(state.HeaderDistanceText);
+        _footerDistance = NumberBox(state.FooterDistanceText);
+        _vAlign = Combo(PageSetupDialogPlanner.VerticalAlignmentNames.ToArray(), state.VerticalAlignmentIndex);
 
         var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
         tabs.Items.Add(new TabItem { Header = "Margins", Content = BuildMarginsTab() });
@@ -252,9 +226,9 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return combo;
     }
 
-    private static TextBox NumberBox(double value) => new()
+    private static TextBox NumberBox(string value) => new()
     {
-        Text = value.ToString("0.##", CultureInfo.CurrentCulture),
+        Text = value,
         MinWidth = 120
     };
 
@@ -277,25 +251,19 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(field);
     }
 
-    // Maps a (width, height) back to a named paper-size index so reopening shows the current size; an unmatched
-    // size resolves to "Custom" (the last entry).
-    private static int PaperIndexFor(double widthPt, double heightPt)
-    {
-        for (var i = 0; i < PaperSizes.Length - 1; i++)
-            if (Math.Abs(PaperSizes[i].WidthPt - widthPt) < 1 && Math.Abs(PaperSizes[i].HeightPt - heightPt) < 1)
-                return i;
-        return PaperSizes.Length - 1; // Custom
-    }
-
     // Fills width/height from the chosen named preset (Custom leaves them as typed).
     private void ApplyPaperPreset()
     {
-        var index = _paperSize.SelectedIndex;
-        if (index < 0 || index >= PaperSizes.Length - 1)
-            return; // Custom or none selected
+        var preset = PageSetupDialogPlanner.ApplyPaperPreset(
+            PageSetupDialogPlanner.HostPaperOptions,
+            _paperSize.SelectedIndex,
+            CultureInfo.CurrentCulture);
+        if (preset is null)
+            return;
+
         _suppressPaperSync = true;
-        _width.Text = PaperSizes[index].WidthPt.ToString("0.##", CultureInfo.CurrentCulture);
-        _height.Text = PaperSizes[index].HeightPt.ToString("0.##", CultureInfo.CurrentCulture);
+        _width.Text = preset.Value.WidthText;
+        _height.Text = preset.Value.HeightText;
         _suppressPaperSync = false;
     }
 
@@ -305,50 +273,66 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (_suppressPaperSync)
             return;
         if (TryParse(_width.Text, out var w) && TryParse(_height.Text, out var h))
-            _paperSize.SelectedIndex = PaperIndexFor(w, h);
+            _paperSize.SelectedIndex = PageSetupDialogPlanner.PaperIndexFor(PageSetupDialogPlanner.HostPaperOptions, w, h);
     }
 
     private void Accept()
     {
-        if (!TryParse(_top.Text, out var top) || top < 0
-            || !TryParse(_bottom.Text, out var bottom) || bottom < 0
-            || !TryParse(_left.Text, out var left) || left < 0
-            || !TryParse(_right.Text, out var right) || right < 0
-            || !TryParse(_gutter.Text, out var gutter) || gutter < 0
-            || !TryParse(_width.Text, out var width) || width <= 0
-            || !TryParse(_height.Text, out var height) || height <= 0
-            || !TryParse(_headerDistance.Text, out var headerDistance) || headerDistance < 0
-            || !TryParse(_footerDistance.Text, out var footerDistance) || footerDistance < 0)
+        var input = new PageSetupDialogInput(
+            MarginTopText: _top.Text,
+            MarginBottomText: _bottom.Text,
+            MarginLeftText: _left.Text,
+            MarginRightText: _right.Text,
+            GutterText: _gutter.Text,
+            OrientationIndex: _orientation.SelectedIndex,
+            MultiplePagesIndex: _multiplePages.SelectedIndex,
+            WidthText: _width.Text,
+            HeightText: _height.Text,
+            PaperSizeIndex: _paperSize.SelectedIndex,
+            SectionStartIndex: _sectionStart.SelectedIndex,
+            DifferentFirstPage: _differentFirstPage.IsChecked == true,
+            DifferentOddEvenPages: _differentOddEven.IsChecked == true,
+            HeaderDistanceText: _headerDistance.Text,
+            FooterDistanceText: _footerDistance.Text,
+            VerticalAlignmentIndex: _vAlign.SelectedIndex,
+            UseSelectedPaperPreset: false,
+            GeometryMode: PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
+            ValidationProfile: PageSetupValidationProfile.UnifiedDialog);
+
+        if (!PageSetupDialogPlanner.TryBuildResult(
+                input,
+                PageSetupDialogPlanner.HostPaperOptions,
+                CultureInfo.CurrentCulture,
+                out var planned,
+                out var error))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter non-negative margins/distances and a positive page width and height (in points).");
+            DialogMessageHelper.ShowWarning(this, error ?? PageSetupDialogPlanner.UnifiedValidationMessage);
             return;
         }
 
-        var landscape = _orientation.SelectedIndex == 1;
-        // Width/height are entered portrait-first; swap them for landscape so the stored geometry is oriented.
-        var (storedW, storedH) = landscape ? (height, width) : (width, height);
-
-        _result = new Result(
-            MarginTopPt: top,
-            MarginBottomPt: bottom,
-            MarginLeftPt: left,
-            MarginRightPt: right,
-            GutterPt: gutter,
-            Landscape: landscape,
-            MirrorMargins: _multiplePages.SelectedIndex == 1,
-            WidthPt: storedW,
-            HeightPt: storedH,
-            SectionStart: SectionStartValues[Math.Max(0, _sectionStart.SelectedIndex)],
-            DifferentFirstPage: _differentFirstPage.IsChecked == true,
-            DifferentOddEvenPages: _differentOddEven.IsChecked == true,
-            HeaderDistancePt: headerDistance,
-            FooterDistancePt: footerDistance,
-            VerticalAlignment: VAlignValues[Math.Max(0, _vAlign.SelectedIndex)]);
+        _result = ToHostResult(planned!);
         Close();
     }
 
     private static bool TryParse(string text, out double value) =>
         double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
+
+    private static Result ToHostResult(PageSetupDialogResult result) => new(
+        MarginTopPt: result.MarginTopPt,
+        MarginBottomPt: result.MarginBottomPt,
+        MarginLeftPt: result.MarginLeftPt,
+        MarginRightPt: result.MarginRightPt,
+        GutterPt: result.GutterPt,
+        Landscape: result.Landscape,
+        MirrorMargins: result.MirrorMargins,
+        WidthPt: result.WidthPt,
+        HeightPt: result.HeightPt,
+        SectionStart: result.SectionStart,
+        DifferentFirstPage: result.DifferentFirstPage,
+        DifferentOddEvenPages: result.DifferentOddEvenPages,
+        HeaderDistancePt: result.HeaderDistancePt,
+        FooterDistancePt: result.FooterDistancePt,
+        VerticalAlignment: result.VerticalAlignment);
 
     /// <summary>
     /// Test seam: builds a non-modal dialog instance seeded from <paramref name="page"/> so unit tests can
