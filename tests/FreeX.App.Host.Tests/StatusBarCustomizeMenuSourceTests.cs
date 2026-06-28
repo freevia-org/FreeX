@@ -43,7 +43,9 @@ public sealed class StatusBarCustomizeMenuSourceTests
         gridStatusSource.Should().Contain("private void StatusBarCustomizeMenu_Opened(object sender, RoutedEventArgs e)");
         gridStatusSource.Should().Contain("private void StatusBarCustomizeMenuItem_Click(object sender, RoutedEventArgs e)");
         gridStatusSource.Should().Contain("StatusBarPresentationPlanner.Build(");
-        gridStatusSource.Should().Contain("_options.StatusBarShowAverage = isChecked;");
+        gridStatusSource.Should().Contain("StatusBarOptionVisibilityStore.ToVisibility(_options)");
+        gridStatusSource.Should().Contain("StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked)");
+        gridStatusSource.Should().NotContain("case StatusBarOptionTags.Average");
         gridStatusSource.Should().Contain("_options.Save()");
         gridStatusSource.Should().Contain("ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);");
         gridStatusSource.Should().Contain("ApplyStatusBarInteractiveDisplayState(visibility);");

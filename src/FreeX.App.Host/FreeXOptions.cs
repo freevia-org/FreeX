@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Free.Shared.AppServices;
 using FreeX.App.Services;
 
 namespace FreeX.App.Host;
@@ -18,7 +19,7 @@ public enum FreeXObjectDisplay
     Nothing
 }
 
-public sealed class FreeXOptions
+public sealed class FreeXOptions : IStatusBarOptionVisibilityStore
 {
     internal const string OptionsPathEnvironmentVariable = AppOptionsStore.OptionsPathEnvironmentVariable;
     internal const string DefaultFontNameFallback = AppOptions.DefaultFontNameFallback;
