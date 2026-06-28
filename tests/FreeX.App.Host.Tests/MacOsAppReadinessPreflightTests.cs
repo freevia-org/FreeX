@@ -2114,19 +2114,17 @@ public sealed class MacOsAppReadinessPreflightTests
                     _autoSumCountAllFlyoutItem.Click += (_, _) => InsertAutoSumFormula("COUNTA");
                     _autoSumMaxFlyoutItem.Click += (_, _) => InsertAutoSumFormula("MAX");
                     _autoSumMinFlyoutItem.Click += (_, _) => InsertAutoSumFormula("MIN");
-                    _autoSumMenuItem.Header = "AutoSum";
                     _autoSumMenuItem.Menu = CreateNativeAutoSumMenu();
-                    _autoSumSumMenuItem.Gesture = new KeyGesture(Key.OemPlus, KeyModifiers.Alt);
-                    formulasMenu.Items.Add(_autoSumMenuItem);
+                    => CreateNativeMenu(NativeMenuCatalog.AutoSumMenuEntries);
+                    var formulasMenu = CreateNativeMenu(NativeMenuTopLevelId.Formulas);
                     _autoSumButton.IsEnabled = isIdle;
-                    _autoSumMenuItem.IsEnabled = _autoSumButton.IsEnabled;
                     private MenuFlyout CreateAutoSumFlyout()
                     private NativeMenu CreateNativeAutoSumMenu()
                     private void InsertAutoSumFormula(string functionName)
                     _session.InsertAutoSumFormula(functionName)
                     private static bool IsAutoSumShortcut(KeyEventArgs args)
                     HasAutoSumButton: _autoSumButton.Content?.ToString() == "AutoSum"
-                    HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, "AutoSum", requireGesture: false)
+                    HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, NativeMenuItemId.AutoSum)
                     _fillCellsButton.Content = "Fill Cells";
                     _fillCellsButton.Flyout = CreateFillCellsFlyout();
                     AutomationProperties.SetAutomationId(_fillCellsButton, "HomeFillCellsButton");
@@ -3173,12 +3171,16 @@ public sealed class MacOsAppReadinessPreflightTests
                     "public static IReadOnlyList<NativeMenuEntryPlan> FillCellsMenuEntries",
                     "public static IReadOnlyList<NativeMenuEntryPlan> ClearMenuEntries",
                     "public static IReadOnlyList<NativeMenuEntryPlan> WhatIfAnalysisMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> FormulasMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> AutoSumMenuEntries",
                     "new(NativeMenuItemId.SelectAll, "Select All", new NativeMenuGesturePlan(NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta))",
                     "new(NativeMenuItemId.Find, "Find...", new NativeMenuGesturePlan(NativeMenuGestureKey.F, NativeMenuGestureModifiers.Meta))",
                     "new(NativeMenuItemId.FillCells, "Fill", RequiresGestureInSmoke: false)",
                     "new(NativeMenuItemId.FillDown, "Down", new NativeMenuGesturePlan(NativeMenuGestureKey.D, NativeMenuGestureModifiers.Control))",
                     "new(NativeMenuItemId.Clear, "Clear", RequiresGestureInSmoke: false)",
                     "new(NativeMenuItemId.ClearContents, "Clear Contents", new NativeMenuGesturePlan(NativeMenuGestureKey.Delete))",
+                    "new(NativeMenuItemId.AutoSum, "AutoSum", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.AutoSumSum, "Sum", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Alt))",
                     "new(NativeMenuItemId.SortAscending, "Sort A to Z", RequiresGestureInSmoke: false)",
                     "new(NativeMenuItemId.FlashFill, "Flash Fill", new NativeMenuGesturePlan(NativeMenuGestureKey.E, NativeMenuGestureModifiers.Control))",
                     "new(NativeMenuItemId.RemoveDuplicates, "Remove Duplicates...", RequiresGestureInSmoke: false)",
@@ -3193,6 +3195,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     "Item(NativeMenuItemId.FormatCells)",
                     "Item(NativeMenuItemId.FillCells)",
                     "Item(NativeMenuItemId.Clear)",
+                    "Item(NativeMenuItemId.AutoSum)",
                     "Item(NativeMenuItemId.SortAscending)",
                     "Item(NativeMenuItemId.ReviewSummary)",
                     "Item(NativeMenuItemId.ShowGridlines)",
@@ -3204,6 +3207,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     "new(NativeMenuItemId.RemoveDuplicates, context.IsIdle && context.SelectedRangeRowCount > 1)",
                     "new(NativeMenuItemId.FillCells, context.CanFillCells)",
                     "new(NativeMenuItemId.Clear, context.CanClear)",
+                    "new(NativeMenuItemId.AutoSum, context.IsIdle)",
                     "new(NativeMenuItemId.ShowGridlines, context.IsIdle, context.IsShowingGridlines)",
                     "new(NativeMenuItemId.MinimizeWindow, true)",
                     "new(NativeMenuItemId.HelpOnline, true)"

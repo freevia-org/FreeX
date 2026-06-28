@@ -173,6 +173,37 @@ public sealed class NativeMenuCatalogTests
                 nameof(NativeMenuItemId.InsertShape),
                 nameof(NativeMenuItemId.InsertTextBox));
 
+        DescribeEntries(NativeMenuCatalog.GetMenuEntries(NativeMenuTopLevelId.PageLayout))
+            .Should()
+            .Equal(
+                nameof(NativeMenuItemId.Themes),
+                nameof(NativeMenuItemId.ThemeColors),
+                nameof(NativeMenuItemId.ThemeFonts),
+                nameof(NativeMenuItemId.ThemeEffects),
+                "|",
+                nameof(NativeMenuItemId.PageMargins),
+                nameof(NativeMenuItemId.PageOrientation),
+                nameof(NativeMenuItemId.PaperSize),
+                nameof(NativeMenuItemId.PrintArea),
+                nameof(NativeMenuItemId.PageBreaks),
+                nameof(NativeMenuItemId.SheetBackground),
+                nameof(NativeMenuItemId.PageSetup),
+                "|",
+                nameof(NativeMenuItemId.PrintGridlines),
+                nameof(NativeMenuItemId.PrintHeadings));
+
+        DescribeEntries(NativeMenuCatalog.GetMenuEntries(NativeMenuTopLevelId.Formulas))
+            .Should()
+            .Equal(
+                nameof(NativeMenuItemId.AutoSum),
+                nameof(NativeMenuItemId.InsertFunction),
+                "|",
+                nameof(NativeMenuItemId.NameManager),
+                nameof(NativeMenuItemId.DefineName),
+                nameof(NativeMenuItemId.CreateNamesFromSelection),
+                "|",
+                nameof(NativeMenuItemId.ShowFormulas));
+
         DescribeEntries(NativeMenuCatalog.GetMenuEntries(NativeMenuTopLevelId.Data))
             .Should()
             .Equal(
@@ -261,6 +292,50 @@ public sealed class NativeMenuCatalogTests
     }
 
     [Fact]
+    public void PageLayoutAndFormulasSubmenuEntries_LiveInCatalogInNativeOrder()
+    {
+        DescribeEntries(NativeMenuCatalog.PageMarginsMenuEntries)
+            .Should()
+            .Equal(
+                nameof(NativeMenuItemId.PageMarginsNormal),
+                nameof(NativeMenuItemId.PageMarginsWide),
+                nameof(NativeMenuItemId.PageMarginsNarrow),
+                "|",
+                nameof(NativeMenuItemId.PageMarginsCustom));
+
+        DescribeEntries(NativeMenuCatalog.PageOrientationMenuEntries)
+            .Should()
+            .Equal(nameof(NativeMenuItemId.PageOrientationPortrait), nameof(NativeMenuItemId.PageOrientationLandscape));
+
+        DescribeEntries(NativeMenuCatalog.PaperSizeMenuEntries)
+            .Should()
+            .Equal(
+                nameof(NativeMenuItemId.PaperSizeLetter),
+                nameof(NativeMenuItemId.PaperSizeLegal),
+                nameof(NativeMenuItemId.PaperSizeA4),
+                "|",
+                nameof(NativeMenuItemId.PaperSizeMore));
+
+        DescribeEntries(NativeMenuCatalog.PrintAreaMenuEntries)
+            .Should()
+            .Equal(nameof(NativeMenuItemId.SetPrintArea), nameof(NativeMenuItemId.ClearPrintArea));
+
+        DescribeEntries(NativeMenuCatalog.SheetBackgroundMenuEntries)
+            .Should()
+            .Equal(nameof(NativeMenuItemId.ChooseSheetBackground), nameof(NativeMenuItemId.DeleteSheetBackground));
+
+        DescribeEntries(NativeMenuCatalog.AutoSumMenuEntries)
+            .Should()
+            .Equal(
+                nameof(NativeMenuItemId.AutoSumSum),
+                nameof(NativeMenuItemId.AutoSumAverage),
+                nameof(NativeMenuItemId.AutoSumCountNumbers),
+                nameof(NativeMenuItemId.AutoSumCountAll),
+                nameof(NativeMenuItemId.AutoSumMax),
+                nameof(NativeMenuItemId.AutoSumMin));
+    }
+
+    [Fact]
     public void CatalogMenuItems_CarryLabelsGesturesAndSmokeExpectations()
     {
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.NewSheet).Should().Be(
@@ -279,6 +354,25 @@ public sealed class NativeMenuCatalogTests
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.FlashFill).Gesture
             .Should()
             .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.E, NativeMenuGestureModifiers.Control));
+
+        NativeMenuCatalog.GetMenuItem(NativeMenuItemId.PageSetup).Should().Be(
+            new NativeMenuItemPlan(
+                NativeMenuItemId.PageSetup,
+                "AvaloniaNativeMenu_PageSetup",
+                UsesResourceKey: true,
+                RequiresGestureInSmoke: false));
+
+        NativeMenuCatalog.GetMenuItem(NativeMenuItemId.InsertFunction).Gesture
+            .Should()
+            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.F3, NativeMenuGestureModifiers.Shift));
+
+        NativeMenuCatalog.GetMenuItem(NativeMenuItemId.AutoSumSum).Gesture
+            .Should()
+            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Alt));
+
+        NativeMenuCatalog.GetMenuItem(NativeMenuItemId.ShowFormulas).Gesture
+            .Should()
+            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.Oem3, NativeMenuGestureModifiers.Control));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.HelpOnline).Gesture
             .Should()
@@ -301,15 +395,23 @@ public sealed class NativeMenuCatalogTests
         plan.IsEnabled(NativeMenuItemId.InsertTable).Should().BeTrue();
         plan.IsEnabled(NativeMenuItemId.TextToColumns).Should().BeTrue();
         plan.IsEnabled(NativeMenuItemId.DataTable).Should().BeFalse();
+        plan.IsEnabled(NativeMenuItemId.PageMargins).Should().BeTrue();
+        plan.IsEnabled(NativeMenuItemId.PageMarginsNormal).Should().BeTrue();
+        plan.IsEnabled(NativeMenuItemId.PageSetup).Should().BeTrue();
+        plan.IsEnabled(NativeMenuItemId.AutoSum).Should().BeTrue();
+        plan.IsEnabled(NativeMenuItemId.AutoSumSum).Should().BeTrue();
         plan.IsChecked(NativeMenuItemId.ShowGridlines).Should().BeTrue();
         plan.IsChecked(NativeMenuItemId.ShowHeadings).Should().BeFalse();
         plan.IsChecked(NativeMenuItemId.PageBreakPreview).Should().BeTrue();
+        plan.IsChecked(NativeMenuItemId.ShowFormulas).Should().BeTrue();
 
         var busyPlan = NativeMenuCatalog.PlanMenuAvailability(CreateMenuAvailabilityContext(isIdle: false));
 
         busyPlan.IsEnabled(NativeMenuItemId.Undo).Should().BeTrue();
         busyPlan.IsEnabled(NativeMenuItemId.RenameSheet).Should().BeFalse();
         busyPlan.IsEnabled(NativeMenuItemId.FindNext).Should().BeFalse();
+        busyPlan.IsEnabled(NativeMenuItemId.PageMargins).Should().BeFalse();
+        busyPlan.IsEnabled(NativeMenuItemId.AutoSum).Should().BeFalse();
         busyPlan.IsEnabled(NativeMenuItemId.HelpOnline).Should().BeTrue();
     }
 
@@ -419,5 +521,6 @@ public sealed class NativeMenuCatalogTests
             IsShowingHeadings: false,
             CanZoomIn: true,
             CanZoomOut: false,
-            IsPageBreakPreview: true);
+            IsPageBreakPreview: true,
+            IsShowingFormulas: true);
 }
