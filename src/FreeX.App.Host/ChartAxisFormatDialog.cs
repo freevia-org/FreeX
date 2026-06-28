@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -31,49 +32,30 @@ public sealed record ChartAxisFormatDialogResult(
     CellColor? LineColor,
     double LineThickness)
 {
-    public ChartLayoutOptions ToOptions() => UseXAxis
-        ? new ChartLayoutOptions(
-            XAxisMinimum: Minimum,
-            XAxisMaximum: Maximum,
-            XAxisMajorUnit: MajorUnit,
-            XAxisMinorUnit: MinorUnit,
-            XAxisLogScale: LogScale,
-            XAxisNumberFormat: NumberFormat,
-            ShowXAxisMajorGridlines: ShowMajorGridlines,
-            ShowXAxisMinorGridlines: ShowMinorGridlines,
-            XAxisMajorGridlineColor: MajorGridlineColor,
-            XAxisMinorGridlineColor: MinorGridlineColor,
-            XAxisGridlineThickness: GridlineThickness,
-            XAxisMajorTickStyle: MajorTickStyle,
-            XAxisMinorTickStyle: MinorTickStyle,
-            ShowXAxisLabels: ShowLabels,
-            XAxisLabelTextColor: LabelTextColor,
-            XAxisLabelFontSize: LabelFontSize,
-            XAxisLabelAngle: LabelAngle,
-            XAxisLineColor: LineColor,
-            XAxisLineThickness: LineThickness,
-            ClearXAxisBounds: Minimum is null && Maximum is null)
-        : new ChartLayoutOptions(
-            YAxisMinimum: Minimum,
-            YAxisMaximum: Maximum,
-            YAxisMajorUnit: MajorUnit,
-            YAxisMinorUnit: MinorUnit,
-            YAxisLogScale: LogScale,
-            YAxisNumberFormat: NumberFormat,
-            ShowYAxisMajorGridlines: ShowMajorGridlines,
-            ShowYAxisMinorGridlines: ShowMinorGridlines,
-            YAxisMajorGridlineColor: MajorGridlineColor,
-            YAxisMinorGridlineColor: MinorGridlineColor,
-            YAxisGridlineThickness: GridlineThickness,
-            YAxisMajorTickStyle: MajorTickStyle,
-            YAxisMinorTickStyle: MinorTickStyle,
-            ShowYAxisLabels: ShowLabels,
-            YAxisLabelTextColor: LabelTextColor,
-            YAxisLabelFontSize: LabelFontSize,
-            YAxisLabelAngle: LabelAngle,
-            YAxisLineColor: LineColor,
-            YAxisLineThickness: LineThickness,
-            ClearYAxisBounds: Minimum is null && Maximum is null);
+    public ChartAxisInput ToInput() =>
+        new(
+            UseXAxis: UseXAxis,
+            Minimum: Minimum,
+            Maximum: Maximum,
+            MajorUnit: MajorUnit,
+            MinorUnit: MinorUnit,
+            LogScale: LogScale,
+            NumberFormat: NumberFormat,
+            ShowMajorGridlines: ShowMajorGridlines,
+            ShowMinorGridlines: ShowMinorGridlines,
+            MajorGridlineColor: MajorGridlineColor,
+            MinorGridlineColor: MinorGridlineColor,
+            GridlineThickness: GridlineThickness,
+            MajorTickStyle: MajorTickStyle,
+            MinorTickStyle: MinorTickStyle,
+            ShowLabels: ShowLabels,
+            LabelTextColor: LabelTextColor,
+            LabelFontSize: LabelFontSize,
+            LabelAngle: LabelAngle,
+            LineColor: LineColor,
+            LineThickness: LineThickness);
+
+    public ChartLayoutOptions ToOptions() => ChartAxisPlanner.Plan(ToInput());
 }
 
 public sealed class ChartAxisFormatDialog : Window
@@ -116,17 +98,31 @@ public sealed class ChartAxisFormatDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartAxisFormatDialogResult FromChart(ChartModel chart, bool useXAxis) => useXAxis
-        ? CreateResult(true, chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit, chart.XAxisMinorUnit,
-            chart.XAxisLogScale, chart.XAxisNumberFormat, chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines,
-            chart.XAxisMajorGridlineColor, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness,
-            chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle, chart.ShowXAxisLabels, chart.XAxisLabelTextColor,
-            chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chart.XAxisLineColor, chart.XAxisLineThickness)
-        : CreateResult(false, chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit, chart.YAxisMinorUnit,
-            chart.YAxisLogScale, chart.YAxisNumberFormat, chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines,
-            chart.YAxisMajorGridlineColor, chart.YAxisMinorGridlineColor, chart.YAxisGridlineThickness,
-            chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle, chart.ShowYAxisLabels, chart.YAxisLabelTextColor,
-            chart.YAxisLabelFontSize, chart.YAxisLabelAngle, chart.YAxisLineColor, chart.YAxisLineThickness);
+    public static ChartAxisFormatDialogResult FromChart(ChartModel chart, bool useXAxis)
+    {
+        var input = ChartAxisPlanner.Read(chart, useXAxis);
+        return CreateResult(
+            input.UseXAxis,
+            input.Minimum,
+            input.Maximum,
+            input.MajorUnit,
+            input.MinorUnit,
+            input.LogScale,
+            input.NumberFormat,
+            input.ShowMajorGridlines,
+            input.ShowMinorGridlines,
+            input.MajorGridlineColor,
+            input.MinorGridlineColor,
+            input.GridlineThickness ?? 1,
+            input.MajorTickStyle ?? ChartAxisTickStyle.Outside,
+            input.MinorTickStyle ?? ChartAxisTickStyle.None,
+            input.ShowLabels ?? true,
+            input.LabelTextColor,
+            input.LabelFontSize ?? 11,
+            input.LabelAngle ?? 0,
+            input.LineColor,
+            input.LineThickness ?? 1);
+    }
 
     public static ChartAxisFormatDialogResult CreateResult(
         bool useXAxis,
@@ -148,10 +144,51 @@ public sealed class ChartAxisFormatDialog : Window
         double labelFontSize,
         double labelAngle,
         CellColor? lineColor,
-        double lineThickness) =>
-        new(useXAxis, minimum, maximum, majorUnit, minorUnit, logScale, numberFormat, showMajorGridlines,
-            showMinorGridlines, majorGridlineColor, minorGridlineColor, gridlineThickness, majorTickStyle,
-            minorTickStyle, showLabels, labelTextColor, labelFontSize, labelAngle, lineColor, lineThickness);
+        double lineThickness)
+    {
+        var input = ChartAxisPlanner.Normalize(new ChartAxisInput(
+            UseXAxis: useXAxis,
+            Minimum: minimum,
+            Maximum: maximum,
+            MajorUnit: majorUnit,
+            MinorUnit: minorUnit,
+            LogScale: logScale,
+            NumberFormat: numberFormat,
+            ShowMajorGridlines: showMajorGridlines,
+            ShowMinorGridlines: showMinorGridlines,
+            MajorGridlineColor: majorGridlineColor,
+            MinorGridlineColor: minorGridlineColor,
+            GridlineThickness: gridlineThickness,
+            MajorTickStyle: majorTickStyle,
+            MinorTickStyle: minorTickStyle,
+            ShowLabels: showLabels,
+            LabelTextColor: labelTextColor,
+            LabelFontSize: labelFontSize,
+            LabelAngle: labelAngle,
+            LineColor: lineColor,
+            LineThickness: lineThickness));
+        return new(
+            input.UseXAxis,
+            input.Minimum,
+            input.Maximum,
+            input.MajorUnit,
+            input.MinorUnit,
+            input.LogScale,
+            input.NumberFormat,
+            input.ShowMajorGridlines,
+            input.ShowMinorGridlines,
+            input.MajorGridlineColor,
+            input.MinorGridlineColor,
+            input.GridlineThickness ?? 1,
+            input.MajorTickStyle ?? ChartAxisTickStyle.Outside,
+            input.MinorTickStyle ?? ChartAxisTickStyle.None,
+            input.ShowLabels ?? true,
+            input.LabelTextColor,
+            input.LabelFontSize ?? 11,
+            input.LabelAngle ?? 0,
+            input.LineColor,
+            input.LineThickness ?? 1);
+    }
 
     private StackPanel CreateContent()
     {
@@ -164,7 +201,7 @@ public sealed class ChartAxisFormatDialog : Window
             ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_MajorUnitLabel"), _majorUnitBox, UiText.Get("ChartAxisFormat_MajorUnitHelpText"));
             ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_MinorUnitLabel"), _minorUnitBox, UiText.Get("ChartAxisFormat_MinorUnitHelpText"));
             ChartDialogHelpers.AddCheck(stack, _logBox);
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_NumberFormatLabel"), _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_NumberFormatLabel"), _numberFormatBox, ChartAxisPlanner.GetNumberFormatChoices().Select(choice => choice.NumberFormat));
             root.Children.Add(CreateGroupBox(UiText.Get("ChartAxisFormat_AxisOptionsGroup"), stack));
         }
         {
@@ -236,13 +273,13 @@ public sealed class ChartAxisFormatDialog : Window
             return;
         }
 
-        if (!TryReadNullablePositiveDouble(_majorUnitBox, out var majorUnit))
+        if (!TryReadNullableDouble(_majorUnitBox, out var majorUnit))
         {
             ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"), _majorUnitBox);
             return;
         }
 
-        if (!TryReadNullablePositiveDouble(_minorUnitBox, out var minorUnit))
+        if (!TryReadNullableDouble(_minorUnitBox, out var minorUnit))
         {
             ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"), _minorUnitBox);
             return;
@@ -272,13 +309,13 @@ public sealed class ChartAxisFormatDialog : Window
             return;
         }
 
-        if (!TryReadClampedDouble(_labelFontSizeBox, min: 6, max: 72, out var labelFontSize))
+        if (!TryReadClampedDouble(_labelFontSizeBox, min: ChartAxisPlanner.MinLabelFontSize, max: ChartAxisPlanner.MaxLabelFontSize, out var labelFontSize))
         {
             ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"), _labelFontSizeBox);
             return;
         }
 
-        if (!TryReadClampedDouble(_labelAngleBox, min: -90, max: 90, out var labelAngle))
+        if (!TryReadClampedDouble(_labelAngleBox, min: ChartAxisPlanner.MinLabelAngle, max: ChartAxisPlanner.MaxLabelAngle, out var labelAngle))
         {
             ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"), _labelAngleBox);
             return;
@@ -290,34 +327,73 @@ public sealed class ChartAxisFormatDialog : Window
             return;
         }
 
-        if (!TryReadClampedDouble(_lineThicknessBox, min: 0.5, max: 10, out var lineThickness))
+        if (!TryReadClampedDouble(_lineThicknessBox, min: ChartAxisPlanner.MinLineThickness, max: ChartAxisPlanner.MaxLineThickness, out var lineThickness))
         {
             ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"), _lineThicknessBox);
             return;
         }
 
+        var input = new ChartAxisInput(
+            UseXAxis: _useXAxis,
+            Minimum: minimum,
+            Maximum: maximum,
+            MajorUnit: majorUnit,
+            MinorUnit: minorUnit,
+            LogScale: _logBox.IsChecked == true,
+            NumberFormat: ChartDialogHelpers.Selected(_numberFormatBox, ChartDataLabelNumberFormat.General),
+            ShowMajorGridlines: _majorGridBox.IsChecked == true,
+            ShowMinorGridlines: _minorGridBox.IsChecked == true,
+            MajorGridlineColor: majorGridColor,
+            MinorGridlineColor: minorGridColor,
+            GridlineThickness: gridlineThickness,
+            MajorTickStyle: ChartDialogHelpers.Selected(_majorTickBox, ChartAxisTickStyle.Outside),
+            MinorTickStyle: ChartDialogHelpers.Selected(_minorTickBox, ChartAxisTickStyle.None),
+            ShowLabels: _labelsBox.IsChecked == true,
+            LabelTextColor: labelColor,
+            LabelFontSize: labelFontSize,
+            LabelAngle: labelAngle,
+            LineColor: lineColor,
+            LineThickness: lineThickness);
+        if (ShowPlannerValidationWarning(input))
+            return;
+
         Result = CreateResult(
-            _useXAxis,
-            minimum,
-            maximum,
-            majorUnit,
-            minorUnit,
-            _logBox.IsChecked == true,
-            ChartDialogHelpers.Selected(_numberFormatBox, ChartDataLabelNumberFormat.General),
-            _majorGridBox.IsChecked == true,
-            _minorGridBox.IsChecked == true,
-            majorGridColor,
-            minorGridColor,
-            gridlineThickness,
-            ChartDialogHelpers.Selected(_majorTickBox, ChartAxisTickStyle.Outside),
-            ChartDialogHelpers.Selected(_minorTickBox, ChartAxisTickStyle.None),
-            _labelsBox.IsChecked == true,
-            labelColor,
-            labelFontSize,
-            labelAngle,
-            lineColor,
-            lineThickness);
+            input.UseXAxis,
+            input.Minimum,
+            input.Maximum,
+            input.MajorUnit,
+            input.MinorUnit,
+            input.LogScale,
+            input.NumberFormat,
+            input.ShowMajorGridlines,
+            input.ShowMinorGridlines,
+            input.MajorGridlineColor,
+            input.MinorGridlineColor,
+            input.GridlineThickness ?? 1,
+            input.MajorTickStyle ?? ChartAxisTickStyle.Outside,
+            input.MinorTickStyle ?? ChartAxisTickStyle.None,
+            input.ShowLabels ?? true,
+            input.LabelTextColor,
+            input.LabelFontSize ?? 11,
+            input.LabelAngle ?? 0,
+            input.LineColor,
+            input.LineThickness ?? 1);
         DialogResult = true;
+    }
+
+    private bool ShowPlannerValidationWarning(ChartAxisInput input)
+    {
+        return ChartAxisPlanner.ValidateIssue(input) switch
+        {
+            ChartAxisValidationIssue.MinimumNotBelowMaximum => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMaximumMessage"), _maximumBox),
+            ChartAxisValidationIssue.MajorUnitNotPositive => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"), _majorUnitBox),
+            ChartAxisValidationIssue.MinorUnitNotPositive => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"), _minorUnitBox),
+            ChartAxisValidationIssue.GridlineThicknessNotPositive => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"), _gridlineThicknessBox),
+            ChartAxisValidationIssue.LabelFontSizeOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"), _labelFontSizeBox),
+            ChartAxisValidationIssue.LabelAngleOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"), _labelAngleBox),
+            ChartAxisValidationIssue.LineThicknessOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"), _lineThicknessBox),
+            _ => false,
+        };
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

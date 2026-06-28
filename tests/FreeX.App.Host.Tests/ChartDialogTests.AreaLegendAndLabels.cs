@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -146,6 +147,20 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
+    public void ChartDataLabelsDialogResult_DelegatesOptionsDefaultsAndValidationToSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ChartDataLabelsDialog.cs");
+
+        source.Should().Contain("public ChartDataLabelsInput ToInput()");
+        source.Should().Contain("ChartDataLabelsPlanner.Plan(ToInput())");
+        source.Should().Contain("ChartDataLabelsPlanner.Read(chart)");
+        source.Should().Contain("ChartDataLabelsPlanner.Normalize(new ChartDataLabelsInput(");
+        source.Should().Contain("ChartDataLabelsPlanner.ValidateIssue(input)");
+        source.Should().Contain("ChartDataLabelsPlanner.GetPositionChoices()");
+        source.Should().NotContain("ShowDataLabels: ShowDataLabels");
+    }
+
+    [Fact]
     public void ChartDataLabelsDialog_FromChart_RoundTripsValueAndLegendKeyToggles()
     {
         var chart = new ChartModel
@@ -163,6 +178,29 @@ public sealed partial class ChartDialogTests
         result.ShowCategoryName.Should().BeTrue();
         result.ToOptions().ShowDataLabelValue.Should().BeFalse();
         result.ToOptions().ShowDataLabelLegendKey.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChartDataLabelsDialog_FromChart_UsesPlannerNormalizationForDialogDefaults()
+    {
+        var chart = new ChartModel
+        {
+            DataLabelPosition = (ChartDataLabelPosition)999,
+            DataLabelSeparator = (ChartDataLabelSeparator)999,
+            DataLabelNumberFormat = (ChartDataLabelNumberFormat)999,
+            DataLabelBorderThickness = 99,
+            DataLabelFontSize = 100,
+            DataLabelAngle = -120,
+        };
+
+        var result = ChartDataLabelsDialog.FromChart(chart);
+
+        result.Position.Should().Be(ChartDataLabelPosition.BestFit);
+        result.Separator.Should().Be(ChartDataLabelSeparator.Comma);
+        result.NumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        result.BorderThickness.Should().Be(ChartDataLabelsPlanner.MaxBorderThickness);
+        result.FontSize.Should().Be(ChartDataLabelsPlanner.MaxFontSize);
+        result.Angle.Should().Be(ChartDataLabelsPlanner.MinAngle);
     }
 
     [Fact]
@@ -188,6 +226,7 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDataLabels_InvalidFontSizeMessage\"), _fontSizeBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDataLabels_InvalidAngleMessage\"), _angleBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("private bool ShowPlannerValidationWarning(ChartDataLabelsInput input)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");

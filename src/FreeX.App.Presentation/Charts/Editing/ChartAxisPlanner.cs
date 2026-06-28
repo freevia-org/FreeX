@@ -8,8 +8,9 @@ public sealed record ChartAxisNumberFormatChoice(ChartDataLabelNumberFormat Numb
 
 /// <summary>
 /// The axis bounds / number-format / gridline state read from a chart and edited back through the dialog.
-/// A null <see cref="Minimum"/> / <see cref="Maximum"/> means "auto" (let the renderer pick). Carries only
-/// the fields the cross-platform "Format Axis" dialog exposes; richer axis styling stays on the model.
+/// A null <see cref="Minimum"/> / <see cref="Maximum"/> means "auto" (let the renderer pick). The first
+/// parameters are the original cross-platform axis dialog surface; the optional tail carries the fuller WPF
+/// format-axis surface without breaking existing callers.
 /// </summary>
 public readonly record struct ChartAxisInput(
     bool UseXAxis,
@@ -19,7 +20,31 @@ public readonly record struct ChartAxisInput(
     bool LogScale,
     ChartDataLabelNumberFormat NumberFormat,
     bool ShowMajorGridlines,
-    bool ShowMinorGridlines);
+    bool ShowMinorGridlines,
+    double? MinorUnit = null,
+    CellColor? MajorGridlineColor = null,
+    CellColor? MinorGridlineColor = null,
+    double? GridlineThickness = null,
+    ChartAxisTickStyle? MajorTickStyle = null,
+    ChartAxisTickStyle? MinorTickStyle = null,
+    bool? ShowLabels = null,
+    CellColor? LabelTextColor = null,
+    double? LabelFontSize = null,
+    double? LabelAngle = null,
+    CellColor? LineColor = null,
+    double? LineThickness = null);
+
+/// <summary>A semantic validation failure for the "Format Axis" dialog input.</summary>
+public enum ChartAxisValidationIssue
+{
+    MinimumNotBelowMaximum,
+    MajorUnitNotPositive,
+    MinorUnitNotPositive,
+    GridlineThicknessNotPositive,
+    LabelFontSizeOutOfRange,
+    LabelAngleOutOfRange,
+    LineThicknessOutOfRange,
+}
 
 /// <summary>
 /// Portable (no UI) planner for the "Format Axis" editing dialog: per-axis (X/Y) bounds (min/max, with null
@@ -32,6 +57,15 @@ public readonly record struct ChartAxisInput(
 /// </summary>
 public static class ChartAxisPlanner
 {
+    public const double MinGridlineThickness = 0.25;
+    public const double MaxGridlineThickness = 10;
+    public const double MinLabelFontSize = 6;
+    public const double MaxLabelFontSize = 72;
+    public const double MinLabelAngle = -90;
+    public const double MaxLabelAngle = 90;
+    public const double MinLineThickness = 0.5;
+    public const double MaxLineThickness = 10;
+
     private static readonly ChartAxisNumberFormatChoice[] NumberFormatCatalog =
     [
         new(ChartDataLabelNumberFormat.General, "General"),
@@ -59,7 +93,7 @@ public static class ChartAxisPlanner
     public static bool SupportsAxes(ChartType type) => ChartTypeSupport.SupportsAxes(type);
 
     /// <summary>Reads the chart's current state for the chosen axis into the dialog input shape.</summary>
-    public static ChartAxisInput Read(ChartModel chart, bool useXAxis) => useXAxis
+    public static ChartAxisInput Read(ChartModel chart, bool useXAxis) => Normalize(useXAxis
         ? new ChartAxisInput(
             UseXAxis: true,
             Minimum: chart.XAxisMinimum,
@@ -68,7 +102,19 @@ public static class ChartAxisPlanner
             LogScale: chart.XAxisLogScale,
             NumberFormat: chart.XAxisNumberFormat,
             ShowMajorGridlines: chart.ShowXAxisMajorGridlines,
-            ShowMinorGridlines: chart.ShowXAxisMinorGridlines)
+            ShowMinorGridlines: chart.ShowXAxisMinorGridlines,
+            MinorUnit: chart.XAxisMinorUnit,
+            MajorGridlineColor: chart.XAxisMajorGridlineColor,
+            MinorGridlineColor: chart.XAxisMinorGridlineColor,
+            GridlineThickness: chart.XAxisGridlineThickness,
+            MajorTickStyle: chart.XAxisMajorTickStyle,
+            MinorTickStyle: chart.XAxisMinorTickStyle,
+            ShowLabels: chart.ShowXAxisLabels,
+            LabelTextColor: chart.XAxisLabelTextColor,
+            LabelFontSize: chart.XAxisLabelFontSize,
+            LabelAngle: chart.XAxisLabelAngle,
+            LineColor: chart.XAxisLineColor,
+            LineThickness: chart.XAxisLineThickness)
         : new ChartAxisInput(
             UseXAxis: false,
             Minimum: chart.YAxisMinimum,
@@ -77,7 +123,40 @@ public static class ChartAxisPlanner
             LogScale: chart.YAxisLogScale,
             NumberFormat: chart.YAxisNumberFormat,
             ShowMajorGridlines: chart.ShowYAxisMajorGridlines,
-            ShowMinorGridlines: chart.ShowYAxisMinorGridlines);
+            ShowMinorGridlines: chart.ShowYAxisMinorGridlines,
+            MinorUnit: chart.YAxisMinorUnit,
+            MajorGridlineColor: chart.YAxisMajorGridlineColor,
+            MinorGridlineColor: chart.YAxisMinorGridlineColor,
+            GridlineThickness: chart.YAxisGridlineThickness,
+            MajorTickStyle: chart.YAxisMajorTickStyle,
+            MinorTickStyle: chart.YAxisMinorTickStyle,
+            ShowLabels: chart.ShowYAxisLabels,
+            LabelTextColor: chart.YAxisLabelTextColor,
+            LabelFontSize: chart.YAxisLabelFontSize,
+            LabelAngle: chart.YAxisLabelAngle,
+            LineColor: chart.YAxisLineColor,
+            LineThickness: chart.YAxisLineThickness));
+
+    /// <summary>
+    /// Normalizes result/default state for the axis dialog: unknown enum values fall back to Excel-like
+    /// defaults, non-finite optional numbers become auto, and style dimensions are clamped to accepted
+    /// command ranges before projection.
+    /// </summary>
+    public static ChartAxisInput Normalize(ChartAxisInput input) =>
+        input with
+        {
+            Minimum = FiniteOrNull(input.Minimum),
+            Maximum = FiniteOrNull(input.Maximum),
+            MajorUnit = PositiveFiniteOrNull(input.MajorUnit),
+            MinorUnit = PositiveFiniteOrNull(input.MinorUnit),
+            NumberFormat = IsKnownNumberFormat(input.NumberFormat) ? input.NumberFormat : ChartDataLabelNumberFormat.General,
+            GridlineThickness = ClampFiniteOrNull(input.GridlineThickness, 1, MinGridlineThickness, MaxGridlineThickness),
+            MajorTickStyle = NormalizeTickStyle(input.MajorTickStyle, ChartAxisTickStyle.Outside),
+            MinorTickStyle = NormalizeTickStyle(input.MinorTickStyle, ChartAxisTickStyle.None),
+            LabelFontSize = ClampFiniteOrNull(input.LabelFontSize, 11, MinLabelFontSize, MaxLabelFontSize),
+            LabelAngle = ClampFiniteOrNull(input.LabelAngle, 0, MinLabelAngle, MaxLabelAngle),
+            LineThickness = ClampFiniteOrNull(input.LineThickness, 1, MinLineThickness, MaxLineThickness),
+        };
 
     /// <summary>
     /// Validates the edited axis bounds. Returns null when the input is valid, otherwise an English reason
@@ -86,11 +165,46 @@ public static class ChartAxisPlanner
     /// </summary>
     public static string? Validate(ChartAxisInput input)
     {
-        if (input.Minimum is { } min && input.Maximum is { } max && min >= max)
-            return "The axis minimum must be less than the maximum.";
+        var issue = ValidateIssue(input);
+        return issue switch
+        {
+            ChartAxisValidationIssue.MinimumNotBelowMaximum => "The axis minimum must be less than the maximum.",
+            ChartAxisValidationIssue.MajorUnitNotPositive => "The major unit must be greater than zero.",
+            ChartAxisValidationIssue.MinorUnitNotPositive => "The minor unit must be greater than zero.",
+            ChartAxisValidationIssue.GridlineThicknessNotPositive => "The gridline width must be greater than zero.",
+            ChartAxisValidationIssue.LabelFontSizeOutOfRange => "The label font size must be between 6 and 72.",
+            ChartAxisValidationIssue.LabelAngleOutOfRange => "The label angle must be between -90 and 90.",
+            ChartAxisValidationIssue.LineThicknessOutOfRange => "The axis line width must be between 0.5 and 10.",
+            _ => null,
+        };
+    }
 
-        if (input.MajorUnit is { } unit && unit <= 0)
-            return "The major unit must be greater than zero.";
+    /// <summary>
+    /// Validates the edited axis input and returns the semantic field that failed, if any. Text parsing and
+    /// localized message ownership stay with the shell; the domain limits live here.
+    /// </summary>
+    public static ChartAxisValidationIssue? ValidateIssue(ChartAxisInput input)
+    {
+        if (input.Minimum is { } min && input.Maximum is { } max && min >= max)
+            return ChartAxisValidationIssue.MinimumNotBelowMaximum;
+
+        if (!IsPositiveOptional(input.MajorUnit))
+            return ChartAxisValidationIssue.MajorUnitNotPositive;
+
+        if (!IsPositiveOptional(input.MinorUnit))
+            return ChartAxisValidationIssue.MinorUnitNotPositive;
+
+        if (input.GridlineThickness is { } gridlineThickness && !IsPositiveFinite(gridlineThickness))
+            return ChartAxisValidationIssue.GridlineThicknessNotPositive;
+
+        if (input.LabelFontSize is { } labelFontSize && !IsFiniteInRange(labelFontSize, MinLabelFontSize, MaxLabelFontSize))
+            return ChartAxisValidationIssue.LabelFontSizeOutOfRange;
+
+        if (input.LabelAngle is { } labelAngle && !IsFiniteInRange(labelAngle, MinLabelAngle, MaxLabelAngle))
+            return ChartAxisValidationIssue.LabelAngleOutOfRange;
+
+        if (input.LineThickness is { } lineThickness && !IsFiniteInRange(lineThickness, MinLineThickness, MaxLineThickness))
+            return ChartAxisValidationIssue.LineThicknessOutOfRange;
 
         return null;
     }
@@ -102,29 +216,71 @@ public static class ChartAxisPlanner
     /// </summary>
     public static ChartLayoutOptions Plan(ChartAxisInput input)
     {
-        var numberFormat = IsKnownNumberFormat(input.NumberFormat) ? input.NumberFormat : ChartDataLabelNumberFormat.General;
-        var clearBounds = input.Minimum is null && input.Maximum is null;
+        var normalized = Normalize(input);
+        var clearBounds = normalized.Minimum is null && normalized.Maximum is null;
 
-        return input.UseXAxis
+        return normalized.UseXAxis
             ? new ChartLayoutOptions(
-                XAxisMinimum: input.Minimum,
-                XAxisMaximum: input.Maximum,
-                XAxisMajorUnit: input.MajorUnit,
-                XAxisLogScale: input.LogScale,
-                XAxisNumberFormat: numberFormat,
-                ShowXAxisMajorGridlines: input.ShowMajorGridlines,
-                ShowXAxisMinorGridlines: input.ShowMinorGridlines,
+                XAxisMinimum: normalized.Minimum,
+                XAxisMaximum: normalized.Maximum,
+                XAxisMajorUnit: normalized.MajorUnit,
+                XAxisMinorUnit: normalized.MinorUnit,
+                XAxisLogScale: normalized.LogScale,
+                XAxisNumberFormat: normalized.NumberFormat,
+                ShowXAxisMajorGridlines: normalized.ShowMajorGridlines,
+                ShowXAxisMinorGridlines: normalized.ShowMinorGridlines,
+                XAxisMajorGridlineColor: normalized.MajorGridlineColor,
+                XAxisMinorGridlineColor: normalized.MinorGridlineColor,
+                XAxisGridlineThickness: normalized.GridlineThickness,
+                XAxisMajorTickStyle: normalized.MajorTickStyle,
+                XAxisMinorTickStyle: normalized.MinorTickStyle,
+                ShowXAxisLabels: normalized.ShowLabels,
+                XAxisLabelTextColor: normalized.LabelTextColor,
+                XAxisLabelFontSize: normalized.LabelFontSize,
+                XAxisLabelAngle: normalized.LabelAngle,
+                XAxisLineColor: normalized.LineColor,
+                XAxisLineThickness: normalized.LineThickness,
                 ClearXAxisBounds: clearBounds)
             : new ChartLayoutOptions(
-                YAxisMinimum: input.Minimum,
-                YAxisMaximum: input.Maximum,
-                YAxisMajorUnit: input.MajorUnit,
-                YAxisLogScale: input.LogScale,
-                YAxisNumberFormat: numberFormat,
-                ShowYAxisMajorGridlines: input.ShowMajorGridlines,
-                ShowYAxisMinorGridlines: input.ShowMinorGridlines,
+                YAxisMinimum: normalized.Minimum,
+                YAxisMaximum: normalized.Maximum,
+                YAxisMajorUnit: normalized.MajorUnit,
+                YAxisMinorUnit: normalized.MinorUnit,
+                YAxisLogScale: normalized.LogScale,
+                YAxisNumberFormat: normalized.NumberFormat,
+                ShowYAxisMajorGridlines: normalized.ShowMajorGridlines,
+                ShowYAxisMinorGridlines: normalized.ShowMinorGridlines,
+                YAxisMajorGridlineColor: normalized.MajorGridlineColor,
+                YAxisMinorGridlineColor: normalized.MinorGridlineColor,
+                YAxisGridlineThickness: normalized.GridlineThickness,
+                YAxisMajorTickStyle: normalized.MajorTickStyle,
+                YAxisMinorTickStyle: normalized.MinorTickStyle,
+                ShowYAxisLabels: normalized.ShowLabels,
+                YAxisLabelTextColor: normalized.LabelTextColor,
+                YAxisLabelFontSize: normalized.LabelFontSize,
+                YAxisLabelAngle: normalized.LabelAngle,
+                YAxisLineColor: normalized.LineColor,
+                YAxisLineThickness: normalized.LineThickness,
                 ClearYAxisBounds: clearBounds);
     }
+
+    private static double? FiniteOrNull(double? value) =>
+        value is { } number && double.IsFinite(number) ? number : null;
+
+    private static double? PositiveFiniteOrNull(double? value) =>
+        value is { } number && IsPositiveFinite(number) ? number : null;
+
+    private static bool IsPositiveOptional(double? value) =>
+        value is null || IsPositiveFinite(value.Value);
+
+    private static bool IsPositiveFinite(double value) =>
+        double.IsFinite(value) && value > 0;
+
+    private static bool IsFiniteInRange(double value, double min, double max) =>
+        double.IsFinite(value) && value >= min && value <= max;
+
+    private static double? ClampFiniteOrNull(double? value, double fallback, double min, double max) =>
+        value is null ? null : Math.Clamp(double.IsFinite(value.Value) ? value.Value : fallback, min, max);
 
     private static bool IsKnownNumberFormat(ChartDataLabelNumberFormat numberFormat)
     {
@@ -136,4 +292,13 @@ public static class ChartAxisPlanner
 
         return false;
     }
+
+    private static ChartAxisTickStyle? NormalizeTickStyle(ChartAxisTickStyle? tickStyle, ChartAxisTickStyle fallback) =>
+        tickStyle is null ? null : IsKnownTickStyle(tickStyle.Value) ? tickStyle.Value : fallback;
+
+    private static bool IsKnownTickStyle(ChartAxisTickStyle tickStyle) =>
+        tickStyle is ChartAxisTickStyle.None
+            or ChartAxisTickStyle.Inside
+            or ChartAxisTickStyle.Outside
+            or ChartAxisTickStyle.Cross;
 }
