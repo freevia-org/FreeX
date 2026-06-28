@@ -51,9 +51,9 @@ public sealed class TableDesignCommandSourceTests
         source.Should().Contain("TableResizePlanner.Capture(table)");
         source.Should().Contain("TableResizePlanner.TryCreateResize(");
         source.Should().Contain("TableDesignCommandPlanner.BuildResizeCommand(");
-        source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        source.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
         source.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
-        source.Should().Contain("new AddPivotTableCommand(");
+        source.Should().Contain("PivotCreatePlanner.BuildInPlaceCommand(");
         source.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangeCommand(");
         source.Should().Contain("_messageService.AskYesNo(");
     }

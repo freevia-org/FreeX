@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -156,15 +157,15 @@ public partial class MainWindow
         }
 
         var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? sheet;
-        var dataFieldIndex = PivotUiPlanner.ChooseDefaultDataField(sourceSheet, dialogSourceRange);
-        var rowFieldIndex = dataFieldIndex == 0 ? 1 : 0;
+        var layout = PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange);
+        var name = PivotCreatePlanner.SuggestName(_workbook);
         if (dialog.Result.DestinationKind == PivotTableDestinationKind.NewWorksheet)
         {
-            var command = new AddPivotTableToNewWorksheetCommand(
+            var command = PivotCreatePlanner.BuildNewWorksheetCommand(
                 dialogSourceRange,
-                PivotUiPlanner.GenerateUniquePivotTableName(sheet),
-                rowFieldIndexes: [rowFieldIndex],
-                dataFieldIndexes: [dataFieldIndex]);
+                name,
+                layout.RowFieldIndexes,
+                layout.DataFieldIndexes);
 
             if (!TryExecuteCommand(command, "Summarize with PivotTable"))
                 return;
@@ -190,13 +191,13 @@ public partial class MainWindow
         }
 
         if (!TryExecuteCommand(
-                new AddPivotTableCommand(
+                PivotCreatePlanner.BuildInPlaceCommand(
                     _currentSheetId,
                     dialogSourceRange,
                     targetRange,
-                    PivotUiPlanner.GenerateUniquePivotTableName(sheet),
-                    rowFieldIndexes: [rowFieldIndex],
-                    dataFieldIndexes: [dataFieldIndex]),
+                    name,
+                    layout.RowFieldIndexes,
+                    layout.DataFieldIndexes),
                 "Summarize with PivotTable"))
             return;
 

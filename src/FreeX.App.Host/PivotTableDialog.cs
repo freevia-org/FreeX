@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -52,8 +53,8 @@ public sealed class PivotTableDialog : Window
         _workbook = workbook;
         _sourceSheetId = sourceSheetId;
         _requestRangeSelection = requestRangeSelection;
-        var sourceRangeText = FormatRange(workbook, sourceSheetId, sourceRange);
-        var destinationText = FormatDestination(workbook, sourceSheetId, sourceRange);
+        var sourceRangeText = PivotCreatePlanner.FormatRange(workbook, sourceSheetId, sourceRange);
+        var destinationText = PivotCreatePlanner.FormatDefaultDestination(workbook, sourceSheetId, sourceRange);
         Result = CreateResult(
             sourceRangeText,
             PivotTableDestinationKind.NewWorksheet,
@@ -148,25 +149,6 @@ public sealed class PivotTableDialog : Window
                 ? string.Empty
                 : RequireRangeText(destinationRangeText, nameof(destinationRangeText)),
             openFieldList);
-
-    private static string FormatRange(Workbook workbook, SheetId sheetId, GridRange range)
-    {
-        var sheetName = workbook.GetSheet(sheetId)?.Name;
-        var address = $"{range.Start.ToA1()}:{range.End.ToA1()}";
-        return string.IsNullOrWhiteSpace(sheetName)
-            ? address
-            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{address}";
-    }
-
-    private static string FormatDestination(Workbook workbook, SheetId sheetId, GridRange sourceRange)
-    {
-        var sheetName = workbook.GetSheet(sheetId)?.Name;
-        var col = Math.Min(sourceRange.End.Col + 2, CellAddress.MaxCol);
-        var address = new CellAddress(sheetId, sourceRange.Start.Row, col).ToA1();
-        return string.IsNullOrWhiteSpace(sheetName)
-            ? address
-            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{address}";
-    }
 
     private static string RequireRangeText(string? value, string parameterName)
     {
