@@ -1,3 +1,4 @@
+using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -60,9 +61,20 @@ public sealed class BackstageInfoPanelSourceTests
     public void BackstageCodeBehind_PopulatesInfoPanelFromActiveSheetAwarePlan()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var serviceSource = DialogSourceTestSupport.ReadAppServicesSource("BackstageInfoPlanner.cs");
 
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "BackstageInfoPlanner.cs"))
+            .Should()
+            .BeFalse("Backstage Info plan construction is shared service logic; Host keeps only UI resources");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "InfoPanelSummaryPlanner.cs"))
+            .Should()
+            .BeFalse("Info panel summary computation is shared service logic");
+        serviceSource.Should().Contain("public sealed record BackstageInfoPlan");
+        serviceSource.Should().Contain("public static class BackstageInfoPlanner");
         source.Should().Contain("var activeSheet = _workbook.GetSheet(_currentSheetId);");
         source.Should().Contain("BackstageInfoPlanner.Build(");
+        source.Should().Contain("BackstageInfoResources.Strings");
         source.Should().Contain("hasSelection: SheetGrid.SelectedRange is not null");
         source.Should().Contain("InfoFileSize.Text = plan.FileSize;");
         source.Should().Contain("InfoShareStatus.Text = plan.SharingStatus;");

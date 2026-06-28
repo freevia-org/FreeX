@@ -276,6 +276,7 @@ public partial class MainWindow
         var plan = BackstageInfoPlanner.Build(
             _workbook,
             _currentFilePath,
+            BackstageInfoResources.Strings,
             activeSheet,
             hasSelection: SheetGrid.SelectedRange is not null);
         InfoWorkbookName.Text = plan.WorkbookName;

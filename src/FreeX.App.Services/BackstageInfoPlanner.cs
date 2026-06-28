@@ -1,11 +1,10 @@
 using System.Globalization;
 using System.IO;
 using Free.Shared.AppServices;
-using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public sealed record BackstageInfoPlan(
     string WorkbookName,
@@ -26,11 +25,13 @@ public static class BackstageInfoPlanner
     public static BackstageInfoPlan Build(
         Workbook workbook,
         string? currentFilePath,
+        WorkbookInfoDisplayStrings strings,
         Sheet? activeSheet = null,
         CultureInfo? culture = null,
         Func<string, bool>? fileExists = null,
         bool hasSelection = false)
     {
+        ArgumentNullException.ThrowIfNull(strings);
         culture ??= CultureInfo.CurrentCulture;
         var accessibilityIssues = AccessibilityCheckerService.FindIssues(workbook);
         var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook);
@@ -54,7 +55,7 @@ public static class BackstageInfoPlanner
         var display = WorkbookInfoDisplayPlanner.Build(
             workbookInfoPlan,
             WorkbookInfoDisplaySurface.WindowsBackstagePane,
-            CreateDisplayStrings(),
+            strings,
             culture);
 
         return new BackstageInfoPlan(
@@ -63,8 +64,8 @@ public static class BackstageInfoPlanner
             display.SheetCount,
             display.Format,
             display.StatisticsSummary,
-            FormatAccessibilitySummary(accessibilityIssues.Count),
-            FormatFormulaErrorSummary(formulaIssues.Count),
+            FormatAccessibilitySummary(accessibilityIssues.Count, strings),
+            FormatFormulaErrorSummary(formulaIssues.Count, strings),
             display.FileSize,
             display.LastModified,
             sharingStatus,
@@ -72,18 +73,21 @@ public static class BackstageInfoPlanner
             summary);
     }
 
-    private static string FormatAccessibilitySummary(int issueCount) =>
-        FormatIssueSummary(issueCount, UiText.Get("Backstage_Info_NoAccessibilityIssues"));
+    private static string FormatAccessibilitySummary(int issueCount, WorkbookInfoDisplayStrings strings) =>
+        FormatIssueSummary(issueCount, strings.Get("Backstage_Info_NoAccessibilityIssues"), strings);
 
-    private static string FormatFormulaErrorSummary(int issueCount) =>
-        FormatIssueSummary(issueCount, UiText.Get("Backstage_Info_NoFormulaErrors"));
+    private static string FormatFormulaErrorSummary(int issueCount, WorkbookInfoDisplayStrings strings) =>
+        FormatIssueSummary(issueCount, strings.Get("Backstage_Info_NoFormulaErrors"), strings);
 
-    private static string FormatIssueSummary(int issueCount, string emptySummary) =>
+    private static string FormatIssueSummary(
+        int issueCount,
+        string emptySummary,
+        WorkbookInfoDisplayStrings strings) =>
         issueCount == 0
             ? emptySummary
             : issueCount == 1
-                ? UiText.Get("Backstage_Info_OneIssueFound")
-                : UiText.Format("Backstage_Info_MultipleIssuesFound", issueCount);
+                ? strings.Get("Backstage_Info_OneIssueFound")
+                : strings.Format("Backstage_Info_MultipleIssuesFound", issueCount);
 
     private static bool TryGetFileInfo(string? currentFilePath, out FileInfo fileInfo)
     {
@@ -124,6 +128,4 @@ public static class BackstageInfoPlanner
         return workbook.ActiveSheetIndex ?? 0;
     }
 
-    private static WorkbookInfoDisplayStrings CreateDisplayStrings() =>
-        new(UiText.Get, (key, args) => UiText.Format(key, args));
 }
