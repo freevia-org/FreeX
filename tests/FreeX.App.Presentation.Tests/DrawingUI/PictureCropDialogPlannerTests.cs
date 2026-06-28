@@ -75,12 +75,33 @@ public sealed class PictureCropDialogPlannerTests
         result.Right.Should().BeApproximately(0.3, 1e-9);
     }
 
+    [Fact]
+    public void TryCreateResult_AcceptsDelimitedCropText()
+    {
+        var ok = PictureCropDialogPlanner.TryCreateResult("10, 20; 30, 5", out var result, out var error);
+
+        ok.Should().BeTrue();
+        error.Should().BeNull();
+        result!.Left.Should().BeApproximately(0.1, 1e-9);
+        result.Right.Should().BeApproximately(0.3, 1e-9);
+    }
+
     [Theory]
     [InlineData("60", "0", "60", "0")] // left + right >= 1
     [InlineData("0", "70", "0", "40")] // top + bottom >= 1
     public void TryCreateResult_RejectsCropWithNoVisibleRegion(string l, string t, string r, string b)
     {
         var ok = PictureCropDialogPlanner.TryCreateResult(l, t, r, b, out var result, out var error);
+
+        ok.Should().BeFalse();
+        result.Should().BeNull();
+        error.Should().Be(PictureCropDialogPlanner.InvalidPercentMessage);
+    }
+
+    [Fact]
+    public void TryCreateResult_RejectsDelimitedCropTextWithWrongEdgeCount()
+    {
+        var ok = PictureCropDialogPlanner.TryCreateResult("10, 20, 30", out var result, out var error);
 
         ok.Should().BeFalse();
         result.Should().BeNull();

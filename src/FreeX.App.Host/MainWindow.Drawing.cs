@@ -109,10 +109,10 @@ public partial class MainWindow
 
         var commands = new List<IWorkbookCommand>
         {
-            new ResizePictureCommand(sheetId, picture.Id, result.Width, result.Height),
-            new RotatePictureCommand(sheetId, picture.Id, result.RotationDegrees),
+            DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, DrawingObjectTargetKind.Picture, picture.Id, result.Width, result.Height),
+            DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, DrawingObjectTargetKind.Picture, picture.Id, result.RotationDegrees),
             new SetPictureLockAspectRatioCommand(sheetId, picture.Id, result.LockAspectRatio),
-            new SetPictureAltTextCommand(sheetId, picture.Id, result.AltText)
+            DrawingObjectCommandPlanner.BuildAltTextCommand(sheetId, DrawingObjectTargetKind.Picture, picture.Id, result.AltText)
         };
         if (picture.Kind == PictureKind.Image)
         {

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -50,22 +51,24 @@ public sealed class ObjectSizeDialog : Window
     public static bool TryParseSize(string input, out ObjectSizeDialogResult result)
     {
         result = new ObjectSizeDialogResult(0, 0);
-        if (!DrawingInputParser.TryParseSize(input, out var width, out var height) ||
-            width <= 0 ||
-            height <= 0)
+        if (!FormatPicturePlanner.TryCreateSizeResult(input, out var size) || size is null)
         {
             return false;
         }
 
-        result = new ObjectSizeDialogResult(width, height);
+        result = new ObjectSizeDialogResult(size.Width, size.Height);
         return true;
     }
 
     internal static double CalculateLockedAspectHeight(double width, double originalWidth, double originalHeight) =>
-        originalWidth <= 0 || originalHeight <= 0 ? width : width * originalHeight / originalWidth;
+        FormatPicturePlanner.SyncHeightFromWidth(
+            width,
+            FormatPicturePlanner.AspectRatio(originalWidth, originalHeight)) ?? width;
 
     internal static double CalculateLockedAspectWidth(double height, double originalWidth, double originalHeight) =>
-        originalWidth <= 0 || originalHeight <= 0 ? height : height * originalWidth / originalHeight;
+        FormatPicturePlanner.SyncWidthFromHeight(
+            height,
+            FormatPicturePlanner.AspectRatio(originalWidth, originalHeight)) ?? height;
 
     internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept, string? acceptContent = null)
     {
@@ -107,8 +110,7 @@ public sealed class ObjectSizeDialog : Window
     }
 
     private static bool TryParsePositiveSize(string text) =>
-        DrawingInputParser.TryParseSize($"{text}x{text}", out var value, out _)
-        && value > 0;
+        FormatPicturePlanner.TryCreateSizeResult(text, text, out _);
 
     private static void FocusInvalidSizeInput(TextBox textBox)
     {
@@ -212,18 +214,15 @@ public sealed class RotationDialog : Window
     public static bool TryParseRotation(string input, out RotationDialogResult result)
     {
         result = new RotationDialogResult(0);
-        if (!DrawingInputParser.TryParseRotationDegrees(input, out var value))
+        if (!FormatPicturePlanner.TryCreateRotationResult(input, out var rotation) || rotation is null)
             return false;
 
-        result = new RotationDialogResult(NormalizeRotationDegrees(value));
+        result = new RotationDialogResult(rotation.Degrees);
         return true;
     }
 
-    internal static double NormalizeRotationDegrees(double value)
-    {
-        var normalized = value % 360;
-        return normalized < 0 ? normalized + 360 : normalized;
-    }
+    internal static double NormalizeRotationDegrees(double value) =>
+        FormatPicturePlanner.NormalizeRotationDegrees(value);
 
     private void Accept()
     {
@@ -269,10 +268,10 @@ public sealed class PictureCropDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
-        _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
-        _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
-        _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
+        _cropLeftBox.Text = PictureCropDialogPlanner.FormatPercent(picture.CropLeft);
+        _cropTopBox.Text = PictureCropDialogPlanner.FormatPercent(picture.CropTop);
+        _cropRightBox.Text = PictureCropDialogPlanner.FormatPercent(picture.CropRight);
+        _cropBottomBox.Text = PictureCropDialogPlanner.FormatPercent(picture.CropBottom);
         AutomationProperties.SetName(_cropLeftBox, UiText.Get("ObjectSizing_CropLeft"));
         AutomationProperties.SetAutomationId(_cropLeftBox, "PictureCropLeftBox");
         AutomationProperties.SetHelpText(_cropLeftBox, UiText.Get("ObjectSizing_EnterTheLeftCropPercentage"));
@@ -293,13 +292,13 @@ public sealed class PictureCropDialog : Window
     {
         result = new PictureCropDialogResult(0, 0, 0, 0);
         error = null;
-        if (!DrawingInputParser.TryParseCropPercents(input, out var left, out var top, out var right, out var bottom))
+        if (!PictureCropDialogPlanner.TryCreateResult(input, out var crop, out _) || crop is null)
         {
             error = UiText.Get("ObjectSizing_EnterFourCropPercentages");
             return false;
         }
 
-        result = new PictureCropDialogResult(left, top, right, bottom);
+        result = new PictureCropDialogResult(crop.Left, crop.Top, crop.Right, crop.Bottom);
         return true;
     }
 
@@ -326,13 +325,13 @@ public sealed class PictureCropDialog : Window
     {
         if (string.Equals(error, UiText.Get("ObjectSizing_EnterFourCropPercentages"), StringComparison.Ordinal))
         {
-            if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropLeftBox.Text, out _))
                 return _cropLeftBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropTopBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropTopBox.Text, out _))
                 return _cropTopBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropRightBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropRightBox.Text, out _))
                 return _cropRightBox;
-            if (!DrawingInputParser.TryParseCropPercent(_cropBottomBox.Text, out _))
+            if (!PictureCropDialogPlanner.TryParsePercent(_cropBottomBox.Text, out _))
                 return _cropBottomBox;
         }
 

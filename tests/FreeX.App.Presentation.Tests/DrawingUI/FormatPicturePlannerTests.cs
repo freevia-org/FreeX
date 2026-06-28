@@ -62,10 +62,37 @@ public sealed class FormatPicturePlannerTests
     }
 
     [Fact]
+    public void NumericSync_PreservesAspectRatio()
+    {
+        var ratio = FormatPicturePlanner.AspectRatio(200, 100); // 2.0
+        FormatPicturePlanner.SyncHeightFromWidth(300, ratio).Should().Be(150);
+        FormatPicturePlanner.SyncWidthFromHeight(50, ratio).Should().Be(100);
+    }
+
+    [Fact]
     public void Sync_ReturnsNull_WhenAspectRatioNonPositive()
     {
         FormatPicturePlanner.SyncHeightFromWidth("100", 0).Should().BeNull();
         FormatPicturePlanner.SyncWidthFromHeight("100", -1).Should().BeNull();
+    }
+
+    [Fact]
+    public void TryCreateSizeResult_AcceptsDelimitedWidthByHeightText()
+    {
+        FormatPicturePlanner.TryCreateSizeResult("320 x 180", out var result).Should().BeTrue();
+
+        result.Should().Be(new FormatPicturePlanner.SizeResult(320, 180));
+    }
+
+    [Theory]
+    [InlineData("450", 90)]
+    [InlineData("-90", 270)]
+    [InlineData("720", 0)]
+    public void TryCreateRotationResult_NormalizesFullTurns(string text, double expected)
+    {
+        FormatPicturePlanner.TryCreateRotationResult(text, out var result).Should().BeTrue();
+
+        result.Should().Be(new FormatPicturePlanner.RotationResult(expected));
     }
 
     [Fact]
@@ -81,6 +108,17 @@ public sealed class FormatPicturePlannerTests
         result.RotationDegrees.Should().Be(45);
         result.LockAspectRatio.Should().BeTrue();
         result.AltText.Should().Be("hello");
+    }
+
+    [Fact]
+    public void TryCreateResult_NormalizesRotation()
+    {
+        var ok = FormatPicturePlanner.TryCreateResult(
+            "150", "75", "450", lockAspectRatio: true, "hello", out var result, out var error);
+
+        ok.Should().BeTrue();
+        error.Should().BeNull();
+        result!.RotationDegrees.Should().Be(90);
     }
 
     [Fact]
