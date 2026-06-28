@@ -1,10 +1,11 @@
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.TableUI;
 using FreeX.App.Presentation.ThemeUI;
-using FreeX.App.Services;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Ribbon;
 
-internal sealed record RibbonRuntimeCatalogSurface(
+public sealed record RibbonRuntimeCatalogSurface(
     string TabHeader,
     string CommandTitle,
     string InventorySection,
@@ -15,22 +16,34 @@ internal sealed record RibbonRuntimeCatalogSurface(
     public int ItemCount => Groups.Sum(group => group.Items.Count);
 }
 
-internal sealed record RibbonRuntimeCatalogGroup(
+public sealed record RibbonRuntimeCatalogGroup(
     string Name,
     IReadOnlyList<string> Items);
 
-internal static class RibbonRuntimeCatalogPlanner
+public sealed record RibbonRuntimeCatalogNumberFormatOption(
+    string Label,
+    bool OpensFormatCellsDialog = false);
+
+public static class RibbonRuntimeCatalogPlanner
 {
-    public static IReadOnlyList<RibbonRuntimeCatalogSurface> GetSurfaces() =>
-    [
-        CreateFormatAsTableSurface(),
-        CreateNumberFormatSurface(),
-        CreateConditionalFormattingDataBarSurface(),
-        CreateConditionalFormattingColorScaleSurface(),
-        CreateConditionalFormattingIconSetSurface(),
-        CreatePageLayoutThemeSurface(),
-        CreatePivotTableStyleSurface()
-    ];
+    public static IReadOnlyList<RibbonRuntimeCatalogSurface> GetSurfaces(
+        Func<string, string> textProvider,
+        IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions)
+    {
+        ArgumentNullException.ThrowIfNull(textProvider);
+        ArgumentNullException.ThrowIfNull(numberFormatOptions);
+
+        return
+        [
+            CreateFormatAsTableSurface(),
+            CreateNumberFormatSurface(numberFormatOptions),
+            CreateConditionalFormattingDataBarSurface(textProvider),
+            CreateConditionalFormattingColorScaleSurface(textProvider),
+            CreateConditionalFormattingIconSetSurface(textProvider),
+            CreatePageLayoutThemeSurface(),
+            CreatePivotTableStyleSurface()
+        ];
+    }
 
     private static RibbonRuntimeCatalogSurface CreateFormatAsTableSurface() =>
         new(
@@ -46,29 +59,30 @@ internal static class RibbonRuntimeCatalogPlanner
                     group.Select(option => option.StyleName).ToArray()))
                 .ToArray());
 
-    private static RibbonRuntimeCatalogSurface CreateNumberFormatSurface() =>
+    private static RibbonRuntimeCatalogSurface CreateNumberFormatSurface(
+        IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions) =>
         new(
             "Home",
             "Number Format Dropdown",
             "Home",
             "Custom Number Format",
-            nameof(HomeNumberFormatDropdownPlanner),
+            "HomeNumberFormatDropdownPlanner",
             [
                 new RibbonRuntimeCatalogGroup(
                     "Formats",
-                    HomeNumberFormatDropdownPlanner.Options
+                    numberFormatOptions
                         .Where(option => !option.OpensFormatCellsDialog)
                         .Select(option => option.Label)
                         .ToArray()),
                 new RibbonRuntimeCatalogGroup(
                     "Actions",
-                    HomeNumberFormatDropdownPlanner.Options
+                    numberFormatOptions
                         .Where(option => option.OpensFormatCellsDialog)
                         .Select(option => option.Label)
                         .ToArray())
             ]);
 
-    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingDataBarSurface() =>
+    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingDataBarSurface(Func<string, string> textProvider) =>
         new(
             "Home",
             "Conditional Formatting Data Bars",
@@ -77,11 +91,11 @@ internal static class RibbonRuntimeCatalogPlanner
             nameof(ConditionalFormatPresetGalleryPlanner),
             ConditionalFormatPresetGalleryPlanner.DataBarGroups
                 .Select(group => new RibbonRuntimeCatalogGroup(
-                    UiText.Get(group.CategoryKey),
-                    group.Options.Select(option => UiText.Get(option.LabelKey)).ToArray()))
+                    textProvider(group.CategoryKey),
+                    group.Options.Select(option => textProvider(option.LabelKey)).ToArray()))
                 .ToArray());
 
-    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingColorScaleSurface() =>
+    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingColorScaleSurface(Func<string, string> textProvider) =>
         new(
             "Home",
             "Conditional Formatting Color Scales",
@@ -90,11 +104,11 @@ internal static class RibbonRuntimeCatalogPlanner
             nameof(ConditionalFormatPresetGalleryPlanner),
             ConditionalFormatPresetGalleryPlanner.ColorScaleGroups
                 .Select(group => new RibbonRuntimeCatalogGroup(
-                    UiText.Get(group.CategoryKey),
-                    group.Options.Select(option => UiText.Get(option.LabelKey)).ToArray()))
+                    textProvider(group.CategoryKey),
+                    group.Options.Select(option => textProvider(option.LabelKey)).ToArray()))
                 .ToArray());
 
-    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingIconSetSurface() =>
+    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingIconSetSurface(Func<string, string> textProvider) =>
         new(
             "Home",
             "Conditional Formatting Icon Sets",
@@ -103,8 +117,8 @@ internal static class RibbonRuntimeCatalogPlanner
             nameof(ConditionalFormatIconSetCatalog),
             ConditionalFormatIconSetCatalog.GalleryGroups
                 .Select(group => new RibbonRuntimeCatalogGroup(
-                    UiText.Get(group.CategoryKey),
-                    group.Options.Select(option => UiText.Get(option.LabelKey)).ToArray()))
+                    textProvider(group.CategoryKey),
+                    group.Options.Select(option => textProvider(option.LabelKey)).ToArray()))
                 .ToArray());
 
     private static RibbonRuntimeCatalogSurface CreatePageLayoutThemeSurface() =>
@@ -131,7 +145,7 @@ internal static class RibbonRuntimeCatalogPlanner
 
     private static RibbonRuntimeCatalogSurface CreatePivotTableStyleSurface()
     {
-        var groups = PivotStyleCatalog.BuiltInStyleNames
+        var groups = PivotStyleGalleryPlanner.BuiltInStyleNames
             .GroupBy(GetPivotStyleFamily)
             .Select(group => new RibbonRuntimeCatalogGroup(group.Key, group.ToArray()))
             .ToArray();
@@ -141,7 +155,7 @@ internal static class RibbonRuntimeCatalogPlanner
             "PivotTable Styles",
             "Insert",
             "PivotTable",
-            nameof(PivotStyleCatalog),
+            nameof(PivotStyleGalleryPlanner),
             groups);
     }
 

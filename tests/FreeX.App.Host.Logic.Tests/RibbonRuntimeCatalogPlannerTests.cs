@@ -2,6 +2,8 @@ using System.IO;
 using System.Text.Json;
 using FluentAssertions;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.ThemeUI;
 
 namespace FreeX.App.Host.Tests;
@@ -11,7 +13,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
     [Fact]
     public void GetSurfaces_ExposesRuntimeGalleriesThatStaticXamlCatalogCannotSee()
     {
-        var surfaces = RibbonRuntimeCatalogPlanner.GetSurfaces();
+        var surfaces = GetSurfaces();
 
         surfaces.Select(surface => surface.CommandTitle).Should().Equal(
             "Format as Table",
@@ -64,7 +66,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
     {
         var inventoryRows = LoadInventoryRows();
 
-        foreach (var surface in RibbonRuntimeCatalogPlanner.GetSurfaces())
+        foreach (var surface in GetSurfaces())
         {
             inventoryRows.TryGetValue(surface.InventorySection, out var sectionRows)
                 .Should()
@@ -79,7 +81,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
     [Fact]
     public void GetSurfaces_StayBoundToTheirRuntimeProviderSources()
     {
-        var surfaces = RibbonRuntimeCatalogPlanner.GetSurfaces();
+        var surfaces = GetSurfaces();
 
         Surface(surfaces, "Format as Table").ItemCount.Should().Be(TableStyleGalleryPlanner.GetOptions().Count);
         Surface(surfaces, "Number Format Dropdown").ItemCount.Should()
@@ -95,8 +97,39 @@ public sealed class RibbonRuntimeCatalogPlannerTests
             WorkbookThemeCatalog.FontPresets.Count +
             WorkbookThemeCatalog.EffectPresets.Count);
         Surface(surfaces, "Themes").Source.Should().Be(nameof(WorkbookThemeCatalog));
-        Surface(surfaces, "PivotTable Styles").ItemCount.Should().Be(PivotStyleCatalog.BuiltInStyleNames.Length);
+        Surface(surfaces, "PivotTable Styles").ItemCount.Should().Be(PivotStyleGalleryPlanner.BuiltInStyleNames.Count);
     }
+
+    [Fact]
+    public void PlannerLivesInPresentationAndHostDoesNotKeepCatalogProjectionCopy()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "RibbonRuntimeCatalogPlanner.cs");
+        var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
+            "Ribbon",
+            "RibbonRuntimeCatalogPlanner.cs");
+
+        File.Exists(hostPlannerPath)
+            .Should()
+            .BeFalse("runtime ribbon catalog projection should live in the shared presentation layer");
+
+        presentationSource.Should().Contain("namespace FreeX.App.Presentation.Ribbon;");
+        presentationSource.Should().Contain("Func<string, string> textProvider");
+        presentationSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions");
+        presentationSource.Should().Contain("PivotStyleGalleryPlanner.BuiltInStyleNames");
+        presentationSource.Should().NotContain("namespace FreeX.App.Host");
+        presentationSource.Should().NotContain("using System.Windows");
+        presentationSource.Should().NotContain("UiText.Get(");
+    }
+
+    private static IReadOnlyList<RibbonRuntimeCatalogSurface> GetSurfaces() =>
+        RibbonRuntimeCatalogPlanner.GetSurfaces(
+            UiText.Get,
+            HomeNumberFormatDropdownPlanner.Options
+                .Select(option => new RibbonRuntimeCatalogNumberFormatOption(
+                    option.Label,
+                    option.OpensFormatCellsDialog))
+                .ToArray());
 
     private static RibbonRuntimeCatalogSurface Surface(
         IEnumerable<RibbonRuntimeCatalogSurface> surfaces,

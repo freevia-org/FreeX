@@ -1,10 +1,10 @@
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
-internal sealed record RibbonScreenshotTourTab(string Header, string FileName, string CatalogId);
+public sealed record RibbonScreenshotTourTab(string Header, string FileName, string CatalogId);
 
-internal sealed record RibbonScreenshotTourWidth(string Label, double? WindowWidth);
+public sealed record RibbonScreenshotTourWidth(string Label, double? WindowWidth);
 
-internal static class RibbonScreenshotTourWidthExtensions
+public static class RibbonScreenshotTourWidthExtensions
 {
     public static string EvidencePurpose(this RibbonScreenshotTourWidth width) =>
         width.WindowWidth switch
@@ -16,13 +16,13 @@ internal static class RibbonScreenshotTourWidthExtensions
         };
 }
 
-internal sealed record RibbonScreenshotTourPhase(string Label, string? FileNameSuffix);
+public sealed record RibbonScreenshotTourPhase(string Label, string? FileNameSuffix);
 
-internal sealed record RibbonScreenshotTourPhaseCaptureGroup(
+public sealed record RibbonScreenshotTourPhaseCaptureGroup(
     RibbonScreenshotTourPhase Phase,
     IReadOnlyList<string> FileNames);
 
-internal sealed record RibbonScreenshotTourCapture(
+public sealed record RibbonScreenshotTourCapture(
     RibbonScreenshotTourTab Tab,
     RibbonScreenshotTourWidth Width,
     RibbonScreenshotTourPhase Phase)
@@ -42,7 +42,7 @@ internal sealed record RibbonScreenshotTourCapture(
     public string CounterpartFileName => $"excel_{Width.Label}_{Tab.FileName}.png";
 }
 
-internal sealed record RibbonScreenshotTourPlan(
+public sealed record RibbonScreenshotTourPlan(
     string? Context,
     IReadOnlyList<RibbonScreenshotTourTab> Tabs,
     IReadOnlyList<RibbonScreenshotTourWidth> Widths,
@@ -67,7 +67,7 @@ internal sealed record RibbonScreenshotTourPlan(
             .ToArray();
 }
 
-internal static class RibbonScreenshotTourPlanner
+public static class RibbonScreenshotTourPlanner
 {
     public static IReadOnlyList<RibbonScreenshotTourTab> DefaultTabs { get; } =
     [
