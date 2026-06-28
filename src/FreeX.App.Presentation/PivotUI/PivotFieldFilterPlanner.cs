@@ -1,8 +1,33 @@
 using System.Globalization;
 
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
+
+public sealed record PivotValueFilterKindOption(string ResourceKey, string FallbackLabel, PivotValueFilterKind Kind)
+{
+    public string Label => FallbackLabel;
+
+    public void Deconstruct(out string label, out PivotValueFilterKind kind)
+    {
+        label = Label;
+        kind = Kind;
+    }
+}
+
+public sealed record PivotValueFilterValidationErrorPlan(
+    PivotValueFilterValidationError Error,
+    string ResourceKey,
+    string FallbackMessage);
+
+public enum PivotValueFilterValidationError
+{
+    None,
+    PositiveCountRequired,
+    NumericValueRequired,
+    NumericSecondValueRequired
+}
 
 /// <summary>
 /// Portable, UI-free planning for the PivotTable field-filter dialog: the label-filter and value-filter kind
@@ -27,6 +52,9 @@ public static class PivotFieldFilterPlanner
         "Enter a numeric comparison value.";
     public const string NumericSecondValueRequiredMessage =
         "Enter a numeric second value for a Between filter.";
+    public const PivotValueFilterKind DefaultValueFilterKind = PivotValueFilterKind.GreaterThan;
+    public const string DefaultValueFilterPrimaryText = "0";
+    public const string ValueFilterComparisonDisplayFormat = "0.########";
 
     /// <summary>Label-filter kinds in display order, with the English label the dialog shows.</summary>
     public static readonly IReadOnlyList<(string Label, PivotLabelFilterKind Kind)> LabelFilterKinds =
@@ -45,20 +73,36 @@ public static class PivotFieldFilterPlanner
     ];
 
     /// <summary>Value-filter kinds in display order, with the English label the dialog shows.</summary>
-    public static readonly IReadOnlyList<(string Label, PivotValueFilterKind Kind)> ValueFilterKinds =
+    public static readonly IReadOnlyList<PivotValueFilterKindOption> ValueFilterKinds =
     [
-        ("Top", PivotValueFilterKind.Top),
-        ("Bottom", PivotValueFilterKind.Bottom),
-        ("Greater Than", PivotValueFilterKind.GreaterThan),
-        ("Greater Than Or Equal To", PivotValueFilterKind.GreaterThanOrEqual),
-        ("Less Than", PivotValueFilterKind.LessThan),
-        ("Less Than Or Equal To", PivotValueFilterKind.LessThanOrEqual),
-        ("Equals", PivotValueFilterKind.Equals),
-        ("Does Not Equal", PivotValueFilterKind.DoesNotEqual),
-        ("Between", PivotValueFilterKind.Between),
-        ("Not Between", PivotValueFilterKind.NotBetween),
-        ("Above Average", PivotValueFilterKind.AboveAverage),
-        ("Below Average", PivotValueFilterKind.BelowAverage),
+        new("PivotValueFilter_Top", "Top", PivotValueFilterKind.Top),
+        new("PivotValueFilter_Bottom", "Bottom", PivotValueFilterKind.Bottom),
+        new("PivotValueFilter_GreaterThan", "Greater Than", PivotValueFilterKind.GreaterThan),
+        new("PivotValueFilter_GreaterThanOrEqual", "Greater Than Or Equal To", PivotValueFilterKind.GreaterThanOrEqual),
+        new("PivotValueFilter_LessThan", "Less Than", PivotValueFilterKind.LessThan),
+        new("PivotValueFilter_LessThanOrEqual", "Less Than Or Equal To", PivotValueFilterKind.LessThanOrEqual),
+        new("PivotValueFilter_Equals", "Equals", PivotValueFilterKind.Equals),
+        new("PivotValueFilter_DoesNotEqual", "Does Not Equal", PivotValueFilterKind.DoesNotEqual),
+        new("PivotValueFilter_Between", "Between", PivotValueFilterKind.Between),
+        new("PivotValueFilter_NotBetween", "Not Between", PivotValueFilterKind.NotBetween),
+        new("PivotValueFilter_AboveAverage", "Above Average", PivotValueFilterKind.AboveAverage),
+        new("PivotValueFilter_BelowAverage", "Below Average", PivotValueFilterKind.BelowAverage),
+    ];
+
+    public static readonly IReadOnlyList<PivotValueFilterValidationErrorPlan> ValueFilterValidationErrors =
+    [
+        new(
+            PivotValueFilterValidationError.PositiveCountRequired,
+            "PivotValueFilter_PositiveItemCountMessage",
+            PositiveCountRequiredMessage),
+        new(
+            PivotValueFilterValidationError.NumericValueRequired,
+            "PivotValueFilter_NumericComparisonMessage",
+            NumericValueRequiredMessage),
+        new(
+            PivotValueFilterValidationError.NumericSecondValueRequired,
+            "PivotValueFilter_NumericEndingComparisonMessage",
+            NumericSecondValueRequiredMessage),
     ];
 
     public static int FindLabelKindIndex(PivotLabelFilterKind kind)
@@ -88,6 +132,8 @@ public static class PivotFieldFilterPlanner
 
     public static PivotValueFilterKind ValueKindFromIndex(int selectedIndex) =>
         ValueFilterKinds[Math.Max(0, Math.Min(selectedIndex, ValueFilterKinds.Count - 1))].Kind;
+
+    public static int DefaultValueKindIndex => FindValueKindIndex(DefaultValueFilterKind);
 
     /// <summary>True when the label-filter kind needs a second value box (Between).</summary>
     public static bool LabelKindNeedsSecondValue(PivotLabelFilterKind kind) =>
@@ -160,8 +206,33 @@ public static class PivotFieldFilterPlanner
         out PivotValueFilterModel? filter,
         out string? error)
     {
+        var result = TryCreateValueFilter(
+            sourceFieldIndex,
+            dataFieldIndex,
+            kind,
+            primaryText,
+            secondaryText,
+            CultureInfo.CurrentCulture,
+            out filter,
+            out var validationError);
+        error = DescribeValueFilterValidationError(validationError)?.FallbackMessage;
+        return result;
+    }
+
+    public static bool TryCreateValueFilter(
+        int sourceFieldIndex,
+        int dataFieldIndex,
+        PivotValueFilterKind kind,
+        string? primaryText,
+        string? secondaryText,
+        CultureInfo culture,
+        out PivotValueFilterModel? filter,
+        out PivotValueFilterValidationError error)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
         filter = null;
-        error = null;
+        error = PivotValueFilterValidationError.None;
 
         var count = 0;
         double? comparison = null;
@@ -169,26 +240,34 @@ public static class PivotFieldFilterPlanner
 
         if (ValueKindIsTopBottom(kind))
         {
-            if (!int.TryParse(primaryText, NumberStyles.Integer, CultureInfo.CurrentCulture, out count) || count <= 0)
+            if (!int.TryParse(primaryText?.Trim() ?? string.Empty, NumberStyles.Integer, culture, out count) || count <= 0)
             {
-                error = PositiveCountRequiredMessage;
+                error = PivotValueFilterValidationError.PositiveCountRequired;
                 return false;
             }
         }
         else if (!ValueKindIsAverage(kind))
         {
-            if (!double.TryParse(primaryText, NumberStyles.Any, CultureInfo.CurrentCulture, out var parsed))
+            if (!NumericInputParser.TryParseFiniteDouble(
+                    primaryText ?? string.Empty,
+                    NumberStyles.Any,
+                    culture,
+                    out var parsed))
             {
-                error = NumericValueRequiredMessage;
+                error = PivotValueFilterValidationError.NumericValueRequired;
                 return false;
             }
 
             comparison = parsed;
             if (ValueKindNeedsSecondValue(kind))
             {
-                if (!double.TryParse(secondaryText, NumberStyles.Any, CultureInfo.CurrentCulture, out var parsed2))
+                if (!NumericInputParser.TryParseFiniteDouble(
+                        secondaryText ?? string.Empty,
+                        NumberStyles.Any,
+                        culture,
+                        out var parsed2))
                 {
-                    error = NumericSecondValueRequiredMessage;
+                    error = PivotValueFilterValidationError.NumericSecondValueRequired;
                     return false;
                 }
 
@@ -206,20 +285,46 @@ public static class PivotFieldFilterPlanner
         return true;
     }
 
-    /// <summary>The text that pre-fills the primary value/count box when editing an existing value filter.</summary>
-    public static string PrimaryInputText(PivotValueFilterModel? existing)
+    public static PivotValueFilterValidationErrorPlan? DescribeValueFilterValidationError(
+        PivotValueFilterValidationError error)
     {
+        if (error == PivotValueFilterValidationError.None)
+            return null;
+
+        for (var index = 0; index < ValueFilterValidationErrors.Count; index++)
+        {
+            if (ValueFilterValidationErrors[index].Error == error)
+                return ValueFilterValidationErrors[index];
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(error), error, null);
+    }
+
+    /// <summary>The text that pre-fills the primary value/count box when editing an existing value filter.</summary>
+    public static string PrimaryInputText(PivotValueFilterModel? existing) =>
+        PrimaryInputText(existing, CultureInfo.CurrentCulture);
+
+    public static string PrimaryInputText(PivotValueFilterModel? existing, CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
         if (existing is null)
             return string.Empty;
 
         return ValueKindIsTopBottom(existing.Kind)
-            ? existing.Count.ToString(CultureInfo.CurrentCulture)
-            : existing.ComparisonValue?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+            ? existing.Count.ToString(culture)
+            : existing.ComparisonValue?.ToString(ValueFilterComparisonDisplayFormat, culture) ?? string.Empty;
     }
 
     /// <summary>The text that pre-fills the second value box when editing an existing value filter.</summary>
     public static string SecondaryInputText(PivotValueFilterModel? existing) =>
-        existing?.ComparisonValue2?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+        SecondaryInputText(existing, CultureInfo.CurrentCulture);
+
+    public static string SecondaryInputText(PivotValueFilterModel? existing, CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+        return existing?.ComparisonValue2?.ToString(ValueFilterComparisonDisplayFormat, culture) ?? string.Empty;
+    }
 
     /// <summary>The data-field combo selection for editing a value filter, clamped to the data-field range.</summary>
     public static int InitialDataFieldIndex(PivotValueFilterModel? existing, int dataFieldCount)

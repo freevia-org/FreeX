@@ -214,6 +214,21 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotValueFilterDialog_DelegatesOptionAndInputPolicyToPresentationPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PivotValueFilterDialog.xaml.cs");
+
+        source.Should().Contain("PivotFieldFilterPlanner.ValueFilterKinds");
+        source.Should().Contain("PivotFieldFilterPlanner.DefaultValueKindIndex");
+        source.Should().Contain("PivotFieldFilterPlanner.TryCreateValueFilter");
+        source.Should().Contain("PivotFieldFilterPlanner.ValueKindNeedsPrimaryInput");
+        source.Should().Contain("PivotFieldFilterPlanner.ValueKindNeedsSecondValue");
+        source.Should().Contain("PivotFieldFilterPlanner.DescribeValueFilterValidationError");
+        source.Should().NotContain("PivotValueFilterInputParser.TryCreateFilter");
+        source.Should().NotContain("bool UsesCount");
+    }
+
+    [Fact]
     public void PivotChartInsert_UsesTypeDialogInsteadOfHardCodedColumn()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotChartCommands.cs");
