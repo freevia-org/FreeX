@@ -282,7 +282,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var appSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "App.cs"));
+        var catalogSource = File.ReadAllText(RepoFile("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var normalizedCatalogSource = catalogSource.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         appSource.Should().Contain("private const string ApplicationTitle = \"FreeX\";");
         appSource.Should().Contain("Name = ApplicationTitle;");
@@ -290,71 +292,94 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("NativeDock.SetMenu(app, menu);");
         source.Should().Contain("NativeMenu.SetMenu(this, menu);");
         source.Should().Contain("InstallNativeMenu(_nativeMenu);");
+        source.Should().Contain("private NativeMenu CreateNativeFileMenu()");
+        source.Should().Contain("foreach (var entry in NativeMenuCatalog.FileMenuEntries)");
+        source.Should().Contain("menu.Items.Add(GetNativeFileMenuItem(entry.Item!.Id));");
 
-        var fileMenuBlock = ExtractSourceBlock(
-            normalizedSource,
-            "var fileMenu = new NativeMenu();",
-            "fileMenu.Items.Add(_quitMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_openRecentMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageInfoMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_printMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_printPreviewMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageExportMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_filePageSetupMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_backstageAccountMenuItem);");
-        fileMenuBlock.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
+        var fileMenuCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeFileMenuEntryPlan> FileMenuEntries",
+            "    ];");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.OpenRecent)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.ShareWorkbook)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.BackstageInfo)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.Print)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.PrintPreview)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.BackstageExport)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.ExportPdf)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.PageSetup)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.BackstageAccount)");
+        fileMenuCatalogBlock.Should().Contain("FileItem(NativeFileMenuItemId.Options)");
+        source.Should().Contain("NativeFileMenuItemId.PageSetup => _filePageSetupMenuItem");
 
-        AssertBefore(fileMenuBlock, "_openRecentMenuItem", "_shareWorkbookMenuItem");
-        AssertBefore(fileMenuBlock, "_shareWorkbookMenuItem", "_backstageInfoMenuItem");
-        AssertBefore(fileMenuBlock, "_backstageInfoMenuItem", "_saveMenuItem");
-        AssertBefore(fileMenuBlock, "_saveAsMenuItem", "_printMenuItem");
-        AssertBefore(fileMenuBlock, "_printPreviewMenuItem", "_backstageExportMenuItem");
-        AssertBefore(fileMenuBlock, "_backstageExportMenuItem", "_exportPdfMenuItem");
-        AssertBefore(fileMenuBlock, "_exportPdfMenuItem", "_workbookStatisticsMenuItem");
-        AssertBefore(fileMenuBlock, "_workbookStatisticsMenuItem", "_filePageSetupMenuItem");
-        AssertBefore(fileMenuBlock, "_filePageSetupMenuItem", "_closeWorkbookMenuItem");
-        AssertBefore(fileMenuBlock, "_closeWorkbookMenuItem", "_backstageAccountMenuItem");
-        AssertBefore(fileMenuBlock, "_backstageAccountMenuItem", "_optionsMenuItem");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.OpenRecent", "NativeFileMenuItemId.ShareWorkbook");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.ShareWorkbook", "NativeFileMenuItemId.BackstageInfo");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.BackstageInfo", "NativeFileMenuItemId.Save");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.SaveAs", "NativeFileMenuItemId.Print");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.PrintPreview", "NativeFileMenuItemId.BackstageExport");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.BackstageExport", "NativeFileMenuItemId.ExportPdf");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.ExportPdf", "NativeFileMenuItemId.WorkbookStatistics");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.WorkbookStatistics", "NativeFileMenuItemId.PageSetup");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.PageSetup", "NativeFileMenuItemId.CloseWorkbook");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.CloseWorkbook", "NativeFileMenuItemId.BackstageAccount");
+        AssertBefore(fileMenuCatalogBlock, "NativeFileMenuItemId.BackstageAccount", "NativeFileMenuItemId.Options");
     }
 
     [Fact]
     public void NativeMenuBar_UsesRibbonAndBackstageTopLevelOrder()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepoFile("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var smokeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var normalizedCatalogSource = catalogSource.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         var nativeMenuBlock = ExtractSourceBlock(
             normalizedSource,
             "_nativeMenu = new NativeMenu();",
             "_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
 
-        nativeMenuBlock.Should().Contain("Header = \"File\"");
-        nativeMenuBlock.Should().Contain("Header = \"Home\"");
-        nativeMenuBlock.Should().Contain("Header = \"Insert\"");
-        nativeMenuBlock.Should().Contain("Header = \"Page Layout\"");
-        nativeMenuBlock.Should().Contain("Header = \"Formulas\"");
-        nativeMenuBlock.Should().Contain("Header = \"Data\"");
-        nativeMenuBlock.Should().Contain("Header = \"Review\"");
-        nativeMenuBlock.Should().Contain("Header = \"View\"");
-        nativeMenuBlock.Should().Contain("Header = \"Sheet\"");
-        nativeMenuBlock.Should().Contain("Header = \"Window\"");
-        nativeMenuBlock.Should().Contain("Header = \"Help\"");
+        nativeMenuBlock.Should().Contain("AddNativeTopLevelMenus(_nativeMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.File] = fileMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Home] = homeMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Insert] = insertMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.PageLayout] = pageLayoutMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Formulas] = formulasMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Data] = dataMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Review] = reviewMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.View] = viewMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Sheet] = sheetMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Window] = windowMenu");
+        nativeMenuBlock.Should().Contain("[NativeMenuTopLevelId.Help] = helpMenu");
+
+        var topLevelCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeMenuTopLevelPlan> TopLevelMenus",
+            "    ];");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.File, \"File\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Home, \"Home\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Insert, \"Insert\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.PageLayout, \"Page Layout\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Formulas, \"Formulas\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Data, \"Data\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Review, \"Review\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.View, \"View\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Sheet, \"Sheet\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Window, \"Window\")");
+        topLevelCatalogBlock.Should().Contain("new(NativeMenuTopLevelId.Help, \"Help\")");
         nativeMenuBlock.Should().NotContain("Header = \"Edit\"");
         nativeMenuBlock.Should().NotContain("Header = \"Format\"");
 
-        AssertBefore(nativeMenuBlock, "Header = \"File\"", "Header = \"Home\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Home\"", "Header = \"Insert\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Insert\"", "Header = \"Page Layout\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Page Layout\"", "Header = \"Formulas\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Formulas\"", "Header = \"Data\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Data\"", "Header = \"Review\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Review\"", "Header = \"View\"");
-        AssertBefore(nativeMenuBlock, "Header = \"View\"", "Header = \"Sheet\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Sheet\"", "Header = \"Window\"");
-        AssertBefore(nativeMenuBlock, "Header = \"Window\"", "Header = \"Help\"");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.File", "NativeMenuTopLevelId.Home");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Home", "NativeMenuTopLevelId.Insert");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Insert", "NativeMenuTopLevelId.PageLayout");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.PageLayout", "NativeMenuTopLevelId.Formulas");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Formulas", "NativeMenuTopLevelId.Data");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Data", "NativeMenuTopLevelId.Review");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Review", "NativeMenuTopLevelId.View");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.View", "NativeMenuTopLevelId.Sheet");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Sheet", "NativeMenuTopLevelId.Window");
+        AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Window", "NativeMenuTopLevelId.Help");
 
         var homeMenuBlock = ExtractSourceBlock(
             normalizedSource,

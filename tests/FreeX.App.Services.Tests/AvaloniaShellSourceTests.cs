@@ -143,6 +143,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresWorkbookSharePlannerToAvaloniaFallback()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var serviceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorkbookShareSheetService.cs"));
         var macOsServiceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOs", "MacOsWorkbookShareSheetService.cs"));
 
@@ -152,12 +153,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics),");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookShareSheetService);");
         source.Should().Contain("private readonly NativeMenuItem _shareWorkbookMenuItem = new();");
-        source.Should().Contain("_shareWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_ShareWorkbook\");");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook);");
+        catalogSource.Should().Contain("NativeFileMenuItemId.ShareWorkbook");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_ShareWorkbook\"");
         source.Should().Contain("_shareWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share);");
-        source.Should().Contain("fileMenu.Items.Add(_shareWorkbookMenuItem);");
-        source.Should().Contain("_shareWorkbookMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_ShareWorkbook\"), requireGesture: false)");
-        source.Should().Contain("private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true)");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.ShareWorkbook)");
+        source.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
+        source.Should().Contain("HasNativeShareWorkbookMenuItem: HasEnabledNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook)");
+        source.Should().Contain("private static bool HasEnabledNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id)");
         source.Should().Contain("private async Task ShareWorkbookAsync()");
         source.Should().Contain("WorkbookShareActionPlanner.CreatePlan(");
         source.Should().Contain("_session.CurrentFilePath");
@@ -237,14 +240,16 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresPortablePdfExportToNativeFileMenu()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var exporterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "PortablePdfDocumentExporter.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _exportPdfMenuItem = new();");
-        source.Should().Contain("_exportPdfMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_ExportPdf\");");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_ExportPdf\"");
         source.Should().Contain("_exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();");
-        source.Should().Contain("fileMenu.Items.Add(_exportPdfMenuItem);");
-        source.Should().Contain("_exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.ExportPdf)");
+        catalogSource.Should().Contain("new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)");
         source.Should().Contain("private async Task ExportActiveSheetPdfAsync()");
         source.Should().Contain("var storageFile = await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
         source.Should().Contain("private async Task<IStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
@@ -285,7 +290,7 @@ public sealed class AvaloniaShellSourceTests
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
         pdfRouterSource.Should().Contain("SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream");
         pdfRouterSource.Should().Contain("PortablePdfDocumentExporter.Save(workbook, exportPlan, stream");
-        source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get(\"AvaloniaNativeMenu_ExportPdf\"), requireGesture: false)");
+        source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)");
 
         smokeSource.Should().Contain("bool HasNativeExportPdfMenuItem,");
         smokeSource.Should().Contain("HasNativeExportPdfMenuItem &&");
@@ -412,10 +417,11 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_NativeFileMenuLabelsUseLocalizedResources()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var neutralResources = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Localization", "Resources", "Strings.resx"));
         var frenchResources = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Localization", "Resources", "Strings.fr-FR.resx"));
 
-        var keys = new[]
+        var fileMenuKeys = new[]
         {
             "AvaloniaNativeMenu_NewWorkbook",
             "AvaloniaNativeMenu_Open",
@@ -428,15 +434,22 @@ public sealed class AvaloniaShellSourceTests
             "AvaloniaNativeMenu_ShareWorkbook",
             "AvaloniaNativeMenu_WorkbookStatistics",
             "AvaloniaNativeMenu_CloseWorkbook",
-            "AvaloniaNativeMenu_NewSheet",
         };
 
-        foreach (var key in keys)
+        foreach (var key in fileMenuKeys)
         {
-            source.Should().Contain($"UiText.Get(\"{key}\")");
+            catalogSource.Should().Contain($"\"{key}\"");
             neutralResources.Should().Contain($"<data name=\"{key}\"");
             frenchResources.Should().Contain($"<data name=\"{key}\"");
         }
+
+        source.Should().Contain("ConfigureNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook);");
+        source.Should().Contain("GetNativeFileMenuItemHeader(NativeMenuCatalog.GetFileMenuItem(id))");
+        source.Should().Contain("plan.UsesResourceKey");
+        source.Should().Contain("UiText.Get(plan.Label)");
+        source.Should().Contain("_newSheetMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_NewSheet\");");
+        neutralResources.Should().Contain("<data name=\"AvaloniaNativeMenu_NewSheet\"");
+        frenchResources.Should().Contain("<data name=\"AvaloniaNativeMenu_NewSheet\"");
 
         var nativeMenuBlock = ExtractSourceBlock(
             source,
@@ -468,14 +481,16 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresOptionsDialogToSharedAppOptionsStore()
     {
         var menuSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var optionsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
 
         // Wired into the native File menu with an Options entry that routes through the shared
         // Backstage workflow planner before the platform executor calls ShowOptions.
         menuSource.Should().Contain("private readonly NativeMenuItem _optionsMenuItem = new();");
-        menuSource.Should().Contain("_optionsMenuItem.Header = UiText.Get(\"Options_Title\");");
+        menuSource.Should().Contain("ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);");
+        catalogSource.Should().Contain("\"Options_Title\"");
         menuSource.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);");
-        menuSource.Should().Contain("fileMenu.Items.Add(_optionsMenuItem);");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.Options)");
 
         // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
         optionsSource.Should().Contain("var current = AppOptionsStore.Load();");
@@ -502,6 +517,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var workflowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.BackstageWorkflow.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
@@ -556,22 +572,28 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private readonly NativeMenuItem _checkForUpdatesMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _aboutMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _legalNoticesMenuItem = new();");
-        source.Should().Contain("_newWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_NewWorkbook\");");
-        source.Should().Contain("_newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_NewWorkbook\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.N, NativeMenuGestureModifiers.Meta)");
         source.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
-        source.Should().Contain("_openMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_Open\");");
-        source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_Open\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.O, NativeMenuGestureModifiers.Meta)");
         source.Should().Contain("_openMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);");
-        source.Should().Contain("_openRecentMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_OpenRecent\");");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_OpenRecent\"");
         source.Should().Contain("_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);");
-        source.Should().Contain("_saveMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_Save\");");
-        source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_saveMenuItem, NativeFileMenuItemId.Save);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_Save\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.S, NativeMenuGestureModifiers.Meta)");
         source.Should().Contain("_saveMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save);");
-        source.Should().Contain("_saveAsMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_SaveAs\");");
-        source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_SaveAs\"");
+        catalogSource.Should().Contain("NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
         source.Should().Contain("_saveAsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);");
-        source.Should().Contain("_closeWorkbookMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_CloseWorkbook\");");
-        source.Should().Contain("_closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_CloseWorkbook\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta)");
         source.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);");
         source.Should().Contain("_backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);");
         source.Should().Contain("_backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);");
@@ -753,7 +775,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("viewMenu.Items.Add(_freezeFirstColumnMenuItem);");
         source.Should().Contain("viewMenu.Items.Add(_unfreezePanesMenuItem);");
         source.Should().Contain("formulasMenu.Items.Add(_showFormulasMenuItem);");
-        source.Should().Contain("Header = \"View\"");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.View, \"View\")");
         source.Should().Contain("_freezePanesMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_freezeTopRowMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("_freezeFirstColumnMenuItem.IsEnabled = isIdle;");
@@ -839,12 +861,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();");
         source.Should().Contain("_legalNoticesMenuItem.Header = \"Legal Notices\";");
         source.Should().Contain("_legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();");
-        source.Should().Contain("_quitMenuItem.Header = \"Quit FreeX\";");
-        source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit);");
+        catalogSource.Should().Contain("\"Quit FreeX\"");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta)");
         source.Should().Contain("_quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();");
-        source.Should().Contain("fileMenu.Items.Add(_newWorkbookMenuItem);");
-        source.Should().Contain("fileMenu.Items.Add(_openRecentMenuItem);");
-        source.Should().Contain("fileMenu.Items.Add(_closeWorkbookMenuItem);");
+        source.Should().Contain("var fileMenu = CreateNativeFileMenu();");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.NewWorkbook)");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.OpenRecent)");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.CloseWorkbook)");
         source.Should().Contain("homeMenu.Items.Add(_undoMenuItem);");
         source.Should().Contain("homeMenu.Items.Add(_redoMenuItem);");
         source.Should().Contain("homeMenu.Items.Add(_cutMenuItem);");
@@ -887,20 +911,20 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("helpMenu.Items.Add(_checkForUpdatesMenuItem);");
         source.Should().Contain("helpMenu.Items.Add(_aboutMenuItem);");
         source.Should().Contain("helpMenu.Items.Add(_legalNoticesMenuItem);");
-        source.Should().Contain("Header = \"Home\"");
-        source.Should().Contain("Header = \"Page Layout\"");
-        source.Should().Contain("Header = \"Help\"");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.Home, \"Home\")");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.PageLayout, \"Page Layout\")");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.Help, \"Help\")");
         source.Should().Contain("InstallNativeMenu(_nativeMenu);");
         source.Should().Contain("NativeDock.SetMenu(app, menu);");
         source.Should().Contain("NativeMenu.SetMenu(this, menu);");
         source.Should().Contain("_nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();");
-        source.Should().Contain("_newWorkbookMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("_openMenuItem.IsEnabled = _openButton.IsEnabled;");
-        source.Should().Contain("_openRecentMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
+        source.Should().Contain("new NativeFileMenuAvailabilityContext(");
+        source.Should().Contain("CanOpen: _openButton.IsEnabled");
         source.Should().Contain("RefreshNativeOpenRecentMenu(isIdle);");
-        source.Should().Contain("_saveMenuItem.IsEnabled = _saveButton.IsEnabled;");
-        source.Should().Contain("_saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;");
-        source.Should().Contain("_closeWorkbookMenuItem.IsEnabled = isIdle;");
+        source.Should().Contain("CanSave: _saveButton.IsEnabled");
+        source.Should().Contain("CanSaveAs: _saveAsButton.IsEnabled");
+        catalogSource.Should().Contain("new(NativeFileMenuItemId.CloseWorkbook, context.IsIdle)");
         source.Should().Contain("_undoMenuItem.IsEnabled = _undoButton.IsEnabled;");
         source.Should().Contain("_redoMenuItem.IsEnabled = _redoButton.IsEnabled;");
         source.Should().Contain("_cutMenuItem.IsEnabled = _cutButton.IsEnabled;");
@@ -1350,14 +1374,15 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
         windowSource.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
         windowSource.Should().Contain("GetNativeTopLevelMenuOrder(_nativeMenu)");
-        windowSource.Should().Contain("HasNativeTopLevelMenu(_nativeMenu, expectedHeader)");
+        windowSource.Should().Contain("HasNativeTopLevelMenu(_nativeMenu, id);");
+        windowSource.Should().Contain("HasNativeTopLevelMenu(menu, GetNativeTopLevelHeader(id))");
         windowSource.Should().Contain("FindNativeTopLevelSubmenu(menu, expectedHeader)");
         windowSource.Should().Contain("WindowShown: IsVisible");
         windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
-        windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_NewWorkbook\"))");
-        windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, UiText.Get(\"AvaloniaNativeMenu_OpenRecent\"), requireGesture: false)");
+        windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook)");
+        windowSource.Should().Contain("HasNativeOpenRecentMenuItem: HasNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent)");
         windowSource.Should().Contain("NativeOpenRecentItemCount: nativeOpenRecentItemCount");
-        windowSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\"))");
+        windowSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)");
         windowSource.Should().Contain("NativeTabColorSwatchCount: nativeTabColorSwatchCount");
         windowSource.Should().Contain("HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable)");
         windowSource.Should().Contain("HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true");
@@ -1376,10 +1401,10 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeDockMenu: hasNativeDockMenu");
         windowSource.Should().Contain("HasNativeDockFileMenu: hasNativeDockFileMenu");
         windowSource.Should().Contain("NativeDockFileMenuItemCount: nativeDockFileMenuItemCount");
-        windowSource.Should().Contain("CountNativeTopLevelMenuItems(nativeDockMenu, \"File\")");
+        windowSource.Should().Contain("CountNativeTopLevelMenuItems(nativeDockMenu, NativeMenuTopLevelId.File)");
         windowSource.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, \"Select All Sheets\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, \"Ungroup Sheets\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_CloseWorkbook\"))");
+        windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook)");
         windowSource.Should().Contain("NativeTopLevelMenuOrder: nativeTopLevelMenuOrder");
         windowSource.Should().Contain("HasNativeHomeMenu: hasNativeHomeMenu");
         windowSource.Should().Contain("HasNativeInsertMenu: hasNativeInsertMenu");
@@ -1484,7 +1509,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, \"Check for Updates\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeAboutMenuItem: HasNativeMenuItem(_aboutMenuItem, \"About FreeX\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, \"Legal Notices\", requireGesture: false)");
-        windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, \"Quit FreeX\")");
+        windowSource.Should().Contain("HasNativeQuitMenuItem: HasNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit)");
     }
 
     [Fact]
@@ -1883,6 +1908,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         sessionSource.Should().Contain("public bool CanSortSelectedRange => SelectedRange.RowCount > 1;");
@@ -1906,9 +1932,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("dataMenu.Items.Add(_sortAscendingMenuItem);");
         source.Should().Contain("dataMenu.Items.Add(_sortDescendingMenuItem);");
         source.Should().Contain("dataMenu.Items.Add(_customSortMenuItem);");
-        source.Should().Contain("Header = \"Data\",");
-        source.Should().Contain("Menu = dataMenu,");
-        source.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(\"Data\");");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.Data, \"Data\")");
+        source.Should().Contain("[NativeMenuTopLevelId.Data] = dataMenu,");
+        source.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);");
         source.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         source.Should().Contain("_sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
         source.Should().Contain("_sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
@@ -2004,11 +2030,11 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("native_next_comment_menu_item={FormatBool(snapshot.HasNativeNextCommentMenuItem)}");
         smokeSource.Should().Contain("native_previous_comment_menu_item={FormatBool(snapshot.HasNativePreviousCommentMenuItem)}");
 
-        var homeMenuIndex = normalizedSource.IndexOf("Header = \"Home\",\n            Menu = homeMenu,", StringComparison.Ordinal);
-        var insertMenuIndex = normalizedSource.IndexOf("Header = \"Insert\",\n            Menu = insertMenu,", StringComparison.Ordinal);
-        var pageLayoutMenuIndex = normalizedSource.IndexOf("Header = \"Page Layout\",\n            Menu = pageLayoutMenu,", StringComparison.Ordinal);
-        var formulasMenuIndex = normalizedSource.IndexOf("Header = \"Formulas\",\n            Menu = formulasMenu,", StringComparison.Ordinal);
-        var dataMenuIndex = normalizedSource.IndexOf("Header = \"Data\",\n            Menu = dataMenu,", StringComparison.Ordinal);
+        var homeMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Home, \"Home\")", StringComparison.Ordinal);
+        var insertMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Insert, \"Insert\")", StringComparison.Ordinal);
+        var pageLayoutMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.PageLayout, \"Page Layout\")", StringComparison.Ordinal);
+        var formulasMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Formulas, \"Formulas\")", StringComparison.Ordinal);
+        var dataMenuIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Data, \"Data\")", StringComparison.Ordinal);
         homeMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         insertMenuIndex.Should().BeGreaterThanOrEqualTo(0);
         pageLayoutMenuIndex.Should().BeGreaterThanOrEqualTo(0);
@@ -3262,6 +3288,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ReviewWorkflowPlanner.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("private readonly NativeMenuItem _reviewSummaryMenuItem = new();");
@@ -3292,12 +3319,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("reviewMenu.Items.Add(_nextCommentMenuItem);");
         source.Should().Contain("reviewMenu.Items.Add(_previousCommentMenuItem);");
 
-        var nativeMenuIndex = normalizedSource.IndexOf("_nativeMenu = new NativeMenu();", StringComparison.Ordinal);
+        var nativeMenuIndex = normalizedSource.IndexOf("NativeMenuCatalog.TopLevelMenus", StringComparison.Ordinal);
         nativeMenuIndex.Should().BeGreaterThanOrEqualTo(0);
-        var nativeMenuSource = normalizedSource[nativeMenuIndex..];
-        var dataIndex = nativeMenuSource.IndexOf("Header = \"Data\"", StringComparison.Ordinal);
-        var reviewIndex = nativeMenuSource.IndexOf("Header = \"Review\"", StringComparison.Ordinal);
-        var viewIndex = nativeMenuSource.IndexOf("Header = \"View\"", StringComparison.Ordinal);
+        var dataIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Data, \"Data\")", StringComparison.Ordinal);
+        var reviewIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.Review, \"Review\")", StringComparison.Ordinal);
+        var viewIndex = catalogSource.IndexOf("new(NativeMenuTopLevelId.View, \"View\")", StringComparison.Ordinal);
         dataIndex.Should().BeGreaterThanOrEqualTo(0);
         reviewIndex.Should().BeGreaterThan(dataIndex);
         viewIndex.Should().BeGreaterThan(reviewIndex);
@@ -3869,6 +3895,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly DropDownButton _bordersButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _bordersMenuItem = new();");
@@ -4448,6 +4475,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly Button _newSheetButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _newSheetMenuItem = new();");
@@ -4498,7 +4526,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("sheetMenu.Items.Add(_hideSheetMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_unhideSheetMenuItem);");
         source.Should().Contain("sheetMenu.Items.Add(_deleteSheetMenuItem);");
-        source.Should().Contain("Header = \"Sheet\"");
+        catalogSource.Should().Contain("new(NativeMenuTopLevelId.Sheet, \"Sheet\")");
         source.Should().Contain("_newSheetButton.IsEnabled = isIdle;");
         source.Should().Contain("_newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;");
         source.Should().Contain("_renameSheetMenuItem.IsEnabled = isIdle;");
@@ -5085,15 +5113,17 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresWorkbookStatisticsToCompactNativeMenuDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
-        source.Should().Contain("_workbookStatisticsMenuItem.Header = UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\");");
-        source.Should().Contain("_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);");
+        source.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
+        catalogSource.Should().Contain("\"AvaloniaNativeMenu_WorkbookStatistics\"");
+        catalogSource.Should().Contain("NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift");
         source.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
-        source.Should().Contain("fileMenu.Items.Add(_workbookStatisticsMenuItem);");
-        source.Should().Contain("_workbookStatisticsMenuItem.IsEnabled = isIdle;");
-        source.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get(\"AvaloniaNativeMenu_WorkbookStatistics\"))");
+        catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
+        catalogSource.Should().Contain("new(NativeFileMenuItemId.WorkbookStatistics, context.IsIdle)");
+        source.Should().Contain("HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)");
         smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
         smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
         smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
@@ -5126,6 +5156,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_KeepsMacOsCommandKeyMenuGesturesAndDirectInputRoutesAligned()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("const KeyModifiers commandModifiers = KeyModifiers.Control | KeyModifiers.Meta;");
         source.Should().Contain("return (modifiers & commandModifiers) != 0 &&");
@@ -5133,11 +5164,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("return modifiers.HasFlag(KeyModifiers.Shift) &&");
         source.Should().Contain("(modifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;");
 
-        source.Should().Contain("_newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);");
-        source.Should().Contain("_openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);");
-        source.Should().Contain("_saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);");
-        source.Should().Contain("_saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);");
-        source.Should().Contain("_closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("NativeMenuGestureKey.N, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.O, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.S, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
+        catalogSource.Should().Contain("NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta");
         source.Should().Contain("_undoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta);");
         source.Should().Contain("_redoMenuItem.Gesture = new KeyGesture(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift);");
         source.Should().Contain("_cutMenuItem.Gesture = new KeyGesture(Key.X, KeyModifiers.Meta);");
@@ -5151,7 +5182,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_italicMenuItem.Gesture = new KeyGesture(Key.I, KeyModifiers.Meta);");
         source.Should().Contain("_underlineMenuItem.Gesture = new KeyGesture(Key.U, KeyModifiers.Meta);");
         source.Should().Contain("_formatCellsMenuItem.Gesture = new KeyGesture(Key.D1, KeyModifiers.Meta);");
-        source.Should().Contain("_quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);");
+        catalogSource.Should().Contain("NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta");
 
         source.Should().Contain("e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers)");
@@ -5187,8 +5218,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("windowMenu.Items.Add(_minimizeWindowMenuItem);");
         windowSource.Should().Contain("windowMenu.Items.Add(_zoomWindowMenuItem);");
         windowSource.Should().Contain("windowMenu.Items.Add(_bringAllToFrontMenuItem);");
-        windowSource.Should().Contain("Header = \"Window\",");
-        windowSource.Should().Contain("Menu = windowMenu,");
+        windowSource.Should().Contain("[NativeMenuTopLevelId.Window] = windowMenu,");
         windowSource.Should().Contain("HasNativeWindowMenu: hasNativeWindowMenu");
         windowSource.Should().Contain("HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, \"Minimize\")");
         windowSource.Should().Contain("HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, \"Zoom\", requireGesture: false)");
