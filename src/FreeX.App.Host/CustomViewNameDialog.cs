@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.CustomViews;
 
 namespace FreeX.App.Host;
 
@@ -76,11 +77,18 @@ public sealed class CustomViewNameDialog : Window
     public static CustomViewNameDialogResult CreateResult(
         string viewName,
         bool includePrintSettings = true,
-        bool includeHiddenRowsColumnsAndFilterSettings = true) =>
-        new(
-            viewName.Trim(),
+        bool includeHiddenRowsColumnsAndFilterSettings = true)
+    {
+        var submission = CustomViewsPlanner.CreateNameSubmission(
+            viewName,
             includePrintSettings,
             includeHiddenRowsColumnsAndFilterSettings);
+
+        return new(
+            submission.ViewName,
+            submission.IncludePrintSettings,
+            submission.IncludeHiddenRowsColumnsAndFilterSettings);
+    }
 
     private void Accept()
     {
