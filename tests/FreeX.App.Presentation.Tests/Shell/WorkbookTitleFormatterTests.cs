@@ -1,6 +1,7 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Shell;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.Shell;
 
 public sealed class WorkbookTitleFormatterTests
 {

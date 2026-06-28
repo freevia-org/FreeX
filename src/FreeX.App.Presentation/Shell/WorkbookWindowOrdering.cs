@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Shell;
 
 /// <summary>
 /// Pure, WPF-free selection and numbering logic for the multi-window workbook registry.
