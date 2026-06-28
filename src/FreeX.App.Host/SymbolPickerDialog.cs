@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
-using FreeX.App.Services;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host;
 
@@ -13,6 +13,9 @@ public sealed partial class SymbolPickerDialog : Window
 
     public readonly record struct SymbolCatalogEntry(string Symbol, string Name, string Subset, string CodeText)
     {
+        internal static SymbolCatalogEntry FromPresentation(SymbolPickerCatalogEntry entry) =>
+            new(entry.Symbol, entry.Name, entry.Subset, entry.CodeText);
+
         public string AutomationName => CreateSymbolAutomationName(Symbol);
         public string SearchText => $"{Symbol} {Name} {Subset} U+{CodeText}";
         public string ToolTipText => $"{Name} (U+{CodeText})";
@@ -20,13 +23,11 @@ public sealed partial class SymbolPickerDialog : Window
 
     public readonly record struct SpecialCharacter(string Name, string Symbol, string Shortcut = "")
     {
-        public string CodeText => SymbolPickerSelectionPlanner.FormatCodeText(Symbol);
-        public string DisplaySymbol => Symbol switch
-        {
-            "\u00a0" => "NBSP",
-            "\u00ad" => "SHY",
-            _ => Symbol
-        };
+        internal static SpecialCharacter FromPresentation(SymbolPickerSpecialCharacter special) =>
+            new(special.Name, special.Symbol, special.Shortcut);
+
+        public string CodeText => SymbolPickerCatalogPlanner.FormatCodeText(Symbol);
+        public string DisplaySymbol => SymbolPickerCatalogPlanner.CreateDisplaySymbol(Symbol);
         public string AutomationName => UiText.Format("SymbolPicker_SpecialCharacterAutomationNameFormat", Name, CreateSymbolAutomationName(Symbol));
         public string SearchText => $"{Name} {Symbol} {DisplaySymbol} {Shortcut} U+{CodeText}";
     }
@@ -42,11 +43,11 @@ public sealed partial class SymbolPickerDialog : Window
         ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;
 
-        ApplySelection(SymbolPickerSelectionPlanner.CreateInitialSelection(GetSymbolsForSubset(SubsetChoices[0])));
+        ApplySelection(SymbolPickerCatalogPlanner.CreateDefaultSelection());
         Content = CreateDialogContent();
     }
 
-    private void ApplySelection(SymbolPickerSelection selection)
+    private void ApplySelection(SymbolPickerSelectionPlan selection)
     {
         SelectedSymbol = selection.Symbol;
         SelectedChar = selection.SelectedChar;

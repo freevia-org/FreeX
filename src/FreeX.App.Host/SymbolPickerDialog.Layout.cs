@@ -7,7 +7,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using FreeX.App.Services;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host;
 
@@ -18,10 +18,10 @@ public sealed partial class SymbolPickerDialog
 
     private UIElement CreateDialogContent()
     {
-        var recentSymbols = CommonSymbols.ToList();
+        var recentSymbols = SymbolPickerCatalogPlanner.DefaultRecentSymbols.ToList();
         var symbolItems = new ObservableCollection<SymbolCatalogEntry>();
         var recentItems = new ObservableCollection<SymbolCatalogEntry>();
-        var selectedCode = new TextBox { Width = 96, Text = SymbolPickerSelectionPlanner.FormatCodeText(SelectedSymbol) };
+        var selectedCode = new TextBox { Width = 96, Text = SymbolPickerCatalogPlanner.FormatCodeText(SelectedSymbol) };
         var preview = new TextBlock
         {
             FontSize = 44,
@@ -69,7 +69,7 @@ public sealed partial class SymbolPickerDialog
 
         void SelectSymbolText(string value, string? name = null, string? subset = null, string? codeText = null)
         {
-            var selection = SymbolPickerSelectionPlanner.CreateSelection(value);
+            var selection = SymbolPickerCatalogPlanner.CreateSelection(value);
             var entry = CreateSymbolEntry(selection.Symbol, subset ?? "");
             ApplySelection(selection);
             preview.Text = CreateVisibleSymbolText(selection.Symbol);
@@ -116,24 +116,20 @@ public sealed partial class SymbolPickerDialog
 
         void RefreshSymbols()
         {
-            var query = searchBox.Text.Trim();
-            var entries = query.Length == 0 && subsetBox.SelectedItem is string subset
-                ? GetSymbolEntriesForSubset(subset)
-                : SearchSymbolEntries(query);
-            var currentSymbol = SelectedSymbol;
+            var plan = SymbolPickerCatalogPlanner.PlanSymbolList(
+                subsetBox.SelectedItem as string,
+                searchBox.Text,
+                SelectedSymbol);
 
             symbolItems.Clear();
-            foreach (var entry in entries)
-                symbolItems.Add(entry);
+            foreach (var entry in plan.Entries)
+                symbolItems.Add(SymbolCatalogEntry.FromPresentation(entry));
 
             resultCount.Text = UiText.Format("SymbolPicker_SearchResultCountFormat", symbolItems.Count);
             noResults.Visibility = symbolItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-            if (!string.IsNullOrEmpty(currentSymbol))
-                SelectVisibleSymbol(currentSymbol);
-
-            if (symbolItems.Count > 0 && symbolList.SelectedIndex < 0)
-                symbolList.SelectedIndex = 0;
+            if (plan.SelectedEntry is { } selectedEntry)
+                SelectVisibleSymbol(selectedEntry.Symbol);
         }
 
         void ApplySymbolFont(string fontName)
