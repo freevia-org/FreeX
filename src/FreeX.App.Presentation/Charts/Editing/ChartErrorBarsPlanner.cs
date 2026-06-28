@@ -85,12 +85,24 @@ public static class ChartErrorBarsPlanner
 
     /// <summary>Reads the chart's current error-bar state into the dialog input shape.</summary>
     public static ChartErrorBarsInput Read(ChartModel chart) =>
-        new(
+        Normalize(new ChartErrorBarsInput(
             chart.ShowErrorBars,
-            IsKnownKind(chart.ErrorBarKind) ? chart.ErrorBarKind : ChartErrorBarKind.StandardError,
-            IsKnownDirection(chart.ErrorBarDirection) ? chart.ErrorBarDirection : ChartErrorBarDirection.Both,
-            ClampValue(chart.ErrorBarValue),
-            chart.ErrorBarEndCaps);
+            chart.ErrorBarKind,
+            chart.ErrorBarDirection,
+            chart.ErrorBarValue,
+            chart.ErrorBarEndCaps));
+
+    /// <summary>
+    /// Normalizes error-bar dialog state: unknown kind/direction values fall back to Excel defaults, and the
+    /// amount is clamped into Excel's accepted range.
+    /// </summary>
+    public static ChartErrorBarsInput Normalize(ChartErrorBarsInput input) =>
+        input with
+        {
+            Kind = IsKnownKind(input.Kind) ? input.Kind : ChartErrorBarKind.StandardError,
+            Direction = IsKnownDirection(input.Direction) ? input.Direction : ChartErrorBarDirection.Both,
+            Value = ClampValue(input.Value),
+        };
 
     /// <summary>
     /// Builds the <see cref="ChartLayoutOptions"/> delta for the edited error-bar state. An invalid/unknown
@@ -98,13 +110,16 @@ public static class ChartErrorBarsPlanner
     /// range. The kind, direction, amount, and end-cap toggle are always set (even when hiding) so re-showing
     /// keeps the chosen configuration.
     /// </summary>
-    public static ChartLayoutOptions Plan(ChartErrorBarsInput input) =>
-        new ChartLayoutOptions(
-            ShowErrorBars: input.ShowErrorBars,
-            ErrorBarKind: IsKnownKind(input.Kind) ? input.Kind : ChartErrorBarKind.StandardError,
-            ErrorBarDirection: IsKnownDirection(input.Direction) ? input.Direction : ChartErrorBarDirection.Both,
-            ErrorBarValue: ClampValue(input.Value),
-            ErrorBarEndCaps: input.EndCaps);
+    public static ChartLayoutOptions Plan(ChartErrorBarsInput input)
+    {
+        var normalized = Normalize(input);
+        return new ChartLayoutOptions(
+            ShowErrorBars: normalized.ShowErrorBars,
+            ErrorBarKind: normalized.Kind,
+            ErrorBarDirection: normalized.Direction,
+            ErrorBarValue: normalized.Value,
+            ErrorBarEndCaps: normalized.EndCaps);
+    }
 
     private static double ClampValue(double value) =>
         Math.Clamp(double.IsFinite(value) ? value : 5, MinValue, MaxValue);

@@ -38,6 +38,18 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTrendlineOptionsDialogResult_DelegatesOptionsToSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
+
+        source.Should().Contain("public ChartTrendlineInput ToInput()");
+        source.Should().Contain("ChartTrendlinePlanner.Plan(ToInput())");
+        source.Should().Contain("ChartTrendlinePlanner.Read(chart)");
+        source.Should().Contain("ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(");
+        source.Should().NotContain("ShowLinearTrendline: ShowTrendline");
+    }
+
+    [Fact]
     public void ChartTrendlineOptionsDialogOpenedFromKeyboard_FocusesShowTrendlineChoice()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
@@ -79,6 +91,19 @@ public sealed partial class ChartDialogTests
             ErrorBarDirection: ChartErrorBarDirection.Minus,
             ErrorBarValue: 7.5,
             ErrorBarEndCaps: false));
+    }
+
+    [Fact]
+    public void ChartErrorBarsDialogResult_DelegatesOptionsAndDefaultsToSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
+
+        source.Should().Contain("public ChartErrorBarsInput ToInput()");
+        source.Should().Contain("ChartErrorBarsPlanner.Plan(ToInput())");
+        source.Should().Contain("ChartErrorBarsPlanner.Read(chart)");
+        source.Should().Contain("ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(");
+        source.Should().NotContain("Enum.IsDefined");
+        source.Should().NotContain("Math.Clamp");
     }
 
     [Fact]

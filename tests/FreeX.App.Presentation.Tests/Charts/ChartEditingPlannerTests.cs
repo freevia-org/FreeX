@@ -663,6 +663,59 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void Trendline_Read_ProjectsLineStyleForShellsThatSurfaceIt()
+    {
+        var chart = new ChartModel
+        {
+            ShowLinearTrendline = true,
+            TrendlineColor = new CellColor(80, 90, 100),
+            TrendlineThickness = 2.25,
+            TrendlineDashStyle = ChartLineDashStyle.Dot,
+        };
+
+        var input = ChartTrendlinePlanner.Read(chart);
+
+        input.Color.Should().Be(new CellColor(80, 90, 100));
+        input.Thickness.Should().Be(2.25);
+        input.DashStyle.Should().Be(ChartLineDashStyle.Dot);
+    }
+
+    [Fact]
+    public void Trendline_Plan_ProjectsLineStyleWhenProvided()
+    {
+        var options = ChartTrendlinePlanner.Plan(new ChartTrendlineInput(
+            ShowTrendline: true,
+            Type: ChartTrendlineType.Polynomial,
+            Period: 4,
+            Order: 5,
+            ShowEquation: true,
+            ShowRSquared: true,
+            Color: new CellColor(80, 90, 100),
+            Thickness: 2.25,
+            DashStyle: ChartLineDashStyle.Dot));
+
+        options.TrendlineColor.Should().Be(new CellColor(80, 90, 100));
+        options.TrendlineThickness.Should().Be(2.25);
+        options.TrendlineDashStyle.Should().Be(ChartLineDashStyle.Dot);
+    }
+
+    [Fact]
+    public void Trendline_Plan_LeavesLineStyleUnsetWhenShellDoesNotProvideIt()
+    {
+        var options = ChartTrendlinePlanner.Plan(new ChartTrendlineInput(
+            ShowTrendline: true,
+            Type: ChartTrendlineType.Linear,
+            Period: 2,
+            Order: 2,
+            ShowEquation: false,
+            ShowRSquared: false));
+
+        options.TrendlineColor.Should().BeNull();
+        options.TrendlineThickness.Should().BeNull();
+        options.TrendlineDashStyle.Should().BeNull();
+    }
+
+    [Fact]
     public void Trendline_Plan_RoundTripsThroughSetChartLayoutCommand()
     {
         var chart = new ChartModel { Type = ChartType.Scatter };
@@ -723,6 +776,22 @@ public sealed class ChartEditingPlannerTests
         options.ErrorBarDirection.Should().Be(ChartErrorBarDirection.Plus);
         options.ErrorBarValue.Should().Be(ChartErrorBarsPlanner.MaxValue);
         options.ErrorBarEndCaps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ErrorBars_Normalize_DefaultsInvalidEnumsAndClampsValue()
+    {
+        var input = ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(
+            ShowErrorBars: true,
+            Kind: (ChartErrorBarKind)999,
+            Direction: (ChartErrorBarDirection)999,
+            Value: double.NaN,
+            EndCaps: false));
+
+        input.Kind.Should().Be(ChartErrorBarKind.StandardError);
+        input.Direction.Should().Be(ChartErrorBarDirection.Both);
+        input.Value.Should().Be(5);
+        input.EndCaps.Should().BeFalse();
     }
 
     [Fact]

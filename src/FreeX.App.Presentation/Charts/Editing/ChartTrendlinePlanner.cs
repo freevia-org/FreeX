@@ -17,15 +17,19 @@ public readonly record struct ChartTrendlineInput(
     int Period,
     int Order,
     bool ShowEquation,
-    bool ShowRSquared);
+    bool ShowRSquared,
+    CellColor? Color = null,
+    double? Thickness = null,
+    ChartLineDashStyle? DashStyle = null);
 
 /// <summary>
 /// Portable (no UI) planner for the "Trendline" editing dialog (linear / exponential / logarithmic / power /
-/// moving-average / polynomial, plus the equation and R-squared readouts). Single-sources the offered
-/// trendline types, clamps the moving-average period and polynomial order into Excel's ranges, and projects
-/// an edited <see cref="ChartTrendlineInput"/> into the <see cref="ChartLayoutOptions"/> the shell hands to
-/// the Core <see cref="SetChartLayoutCommand"/>. Whether a chart can carry a trendline at all is gated by
-/// <see cref="SupportsTrendlines"/> (column/line/bar/scatter/bubble/area). Reused across every shell.
+/// moving-average / polynomial, plus the equation and R-squared readouts and optional line style). Single-
+/// sources the offered trendline types, clamps the moving-average period and polynomial order into Excel's
+/// ranges, and projects an edited <see cref="ChartTrendlineInput"/> into the <see cref="ChartLayoutOptions"/>
+/// the shell hands to the Core <see cref="SetChartLayoutCommand"/>. Whether a chart can carry a trendline at
+/// all is gated by <see cref="SupportsTrendlines"/> (column/line/bar/scatter/bubble/area). Reused across
+/// every shell.
 /// </summary>
 public static class ChartTrendlinePlanner
 {
@@ -67,30 +71,49 @@ public static class ChartTrendlinePlanner
 
     /// <summary>Reads the chart's current trendline state into the dialog input shape.</summary>
     public static ChartTrendlineInput Read(ChartModel chart) =>
-        new(
+        Normalize(new ChartTrendlineInput(
             chart.ShowLinearTrendline,
             chart.TrendlineType,
-            chart.TrendlinePeriod < MinPeriod ? MinPeriod : chart.TrendlinePeriod,
-            chart.TrendlineOrder < MinOrder ? MinOrder : chart.TrendlineOrder,
+            chart.TrendlinePeriod,
+            chart.TrendlineOrder,
             chart.ShowTrendlineEquation,
-            chart.ShowTrendlineRSquared);
+            chart.ShowTrendlineRSquared,
+            chart.TrendlineColor,
+            chart.TrendlineThickness,
+            chart.TrendlineDashStyle));
+
+    /// <summary>
+    /// Normalizes the trendline dialog state that is safe to normalize before command execution: unknown
+    /// trendline types fall back to Linear, and period/order are clamped into Excel's accepted ranges.
+    /// Optional line styling is left unchanged so shells that do not surface it can omit those options.
+    /// </summary>
+    public static ChartTrendlineInput Normalize(ChartTrendlineInput input) =>
+        input with
+        {
+            Type = IsKnownType(input.Type) ? input.Type : ChartTrendlineType.Linear,
+            Period = Math.Clamp(input.Period, MinPeriod, MaxPeriod),
+            Order = Math.Clamp(input.Order, MinOrder, MaxOrder),
+        };
 
     /// <summary>
     /// Builds the <see cref="ChartLayoutOptions"/> delta for the edited trendline state. An invalid/unknown
     /// type falls back to Linear; the period and order are clamped into Excel's ranges. The type, period,
-    /// order, and readout toggles are always set (even when hiding) so re-showing keeps the chosen
-    /// configuration.
+    /// order, readout toggles, and any supplied line styling are set (even when hiding) so re-showing keeps
+    /// the chosen configuration.
     /// </summary>
     public static ChartLayoutOptions Plan(ChartTrendlineInput input)
     {
-        var type = IsKnownType(input.Type) ? input.Type : ChartTrendlineType.Linear;
+        var normalized = Normalize(input);
         return new ChartLayoutOptions(
-            ShowLinearTrendline: input.ShowTrendline,
-            TrendlineType: type,
-            TrendlinePeriod: Math.Clamp(input.Period, MinPeriod, MaxPeriod),
-            TrendlineOrder: Math.Clamp(input.Order, MinOrder, MaxOrder),
-            ShowTrendlineEquation: input.ShowEquation,
-            ShowTrendlineRSquared: input.ShowRSquared);
+            ShowLinearTrendline: normalized.ShowTrendline,
+            TrendlineType: normalized.Type,
+            TrendlinePeriod: normalized.Period,
+            TrendlineOrder: normalized.Order,
+            ShowTrendlineEquation: normalized.ShowEquation,
+            ShowTrendlineRSquared: normalized.ShowRSquared,
+            TrendlineColor: normalized.Color,
+            TrendlineThickness: normalized.Thickness,
+            TrendlineDashStyle: normalized.DashStyle);
     }
 
     private static bool IsKnownType(ChartTrendlineType type)

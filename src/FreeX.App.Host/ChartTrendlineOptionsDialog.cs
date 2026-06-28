@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -20,16 +21,10 @@ public sealed record ChartTrendlineOptionsDialogResult(
     double Thickness,
     ChartLineDashStyle DashStyle)
 {
-    public ChartLayoutOptions ToOptions() => new(
-        ShowLinearTrendline: ShowTrendline,
-        TrendlineType: Type,
-        TrendlinePeriod: Period,
-        TrendlineOrder: Order,
-        ShowTrendlineEquation: ShowEquation,
-        ShowTrendlineRSquared: ShowRSquared,
-        TrendlineColor: Color,
-        TrendlineThickness: Thickness,
-        TrendlineDashStyle: DashStyle);
+    public ChartTrendlineInput ToInput() =>
+        new(ShowTrendline, Type, Period, Order, ShowEquation, ShowRSquared, Color, Thickness, DashStyle);
+
+    public ChartLayoutOptions ToOptions() => ChartTrendlinePlanner.Plan(ToInput());
 }
 
 public sealed class ChartTrendlineOptionsDialog : Window
@@ -60,16 +55,20 @@ public sealed class ChartTrendlineOptionsDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartTrendlineOptionsDialogResult FromChart(ChartModel chart) => CreateResult(
-        chart.ShowLinearTrendline,
-        chart.TrendlineType,
-        chart.TrendlinePeriod,
-        chart.TrendlineOrder,
-        chart.ShowTrendlineEquation,
-        chart.ShowTrendlineRSquared,
-        chart.TrendlineColor,
-        chart.TrendlineThickness,
-        chart.TrendlineDashStyle);
+    public static ChartTrendlineOptionsDialogResult FromChart(ChartModel chart)
+    {
+        var input = ChartTrendlinePlanner.Read(chart);
+        return CreateResult(
+            input.ShowTrendline,
+            input.Type,
+            input.Period,
+            input.Order,
+            input.ShowEquation,
+            input.ShowRSquared,
+            input.Color,
+            input.Thickness ?? chart.TrendlineThickness,
+            input.DashStyle ?? chart.TrendlineDashStyle);
+    }
 
     public static ChartTrendlineOptionsDialogResult CreateResult(
         bool showTrendline,
@@ -80,8 +79,29 @@ public sealed class ChartTrendlineOptionsDialog : Window
         bool showRSquared,
         CellColor? color,
         double thickness,
-        ChartLineDashStyle dashStyle) =>
-        new(showTrendline, type, Math.Clamp(period, 2, 255), Math.Clamp(order, 2, 6), showEquation, showRSquared, color, thickness, dashStyle);
+        ChartLineDashStyle dashStyle)
+    {
+        var input = ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(
+            showTrendline,
+            type,
+            period,
+            order,
+            showEquation,
+            showRSquared,
+            color,
+            thickness,
+            dashStyle));
+        return new(
+            input.ShowTrendline,
+            input.Type,
+            input.Period,
+            input.Order,
+            input.ShowEquation,
+            input.ShowRSquared,
+            input.Color,
+            input.Thickness ?? thickness,
+            input.DashStyle ?? dashStyle);
+    }
 
     private StackPanel CreateContent()
     {
