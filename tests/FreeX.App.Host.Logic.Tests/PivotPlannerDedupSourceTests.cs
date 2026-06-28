@@ -1,0 +1,69 @@
+using System.IO;
+using FluentAssertions;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed class PivotPlannerDedupSourceTests
+{
+    [Fact]
+    public void PivotSourceRangePlanner_HostFacadeIsRemovedAndInsertUsesSharedCreatePlannerDirectly()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var hostFacadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "PivotTableSourceRangePlanner.cs");
+        var hostTestsPath = Path.Combine(repoRoot, "tests", "FreeX.App.Host.Logic.Tests", "PivotTableSourceRangePlannerTests.cs");
+        var pivotCommandsSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotCommands.cs");
+        var presentationSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotCreatePlanner.cs");
+
+        File.Exists(hostFacadePath)
+            .Should()
+            .BeFalse("the WPF Host should call the shared PivotCreatePlanner directly instead of carrying enum/record mirrors");
+        File.Exists(hostTestsPath)
+            .Should()
+            .BeFalse("source-range behavior is covered by the shared PivotCreatePlanner tests");
+
+        pivotCommandsSource.Should().Contain("PivotCreatePlanner.CreateSourceRangePlan(sheet, SheetGrid.SelectedRange)");
+        pivotCommandsSource.Should().Contain("private void ShowPivotTableSourceRangeError(PivotCreateSourceRangeError error)");
+        pivotCommandsSource.Should().NotContain("PivotTableSourceRangePlanner");
+
+        presentationSource.Should().Contain("public sealed record PivotCreateSourceRangePlan");
+        presentationSource.Should().Contain("public enum PivotCreateSourceRangeError");
+    }
+
+    [Fact]
+    public void PivotHostPlannerFacades_DelegateToPresentationPivotUi()
+    {
+        var hostPivotUiSource = DialogSourceTestSupport.ReadHostSourceFile("PivotUiPlanner.cs");
+        var headerSource = DialogSourceTestSupport.ReadHostSourceFile("PivotHeaderDropdownPlanner.cs");
+        var adornmentSource = DialogSourceTestSupport.ReadHostSourceFile("PivotRowLabelAdornmentPlanner.cs");
+        var valueFieldDialogSource = DialogSourceTestSupport.ReadHostSourceFile("PivotValueFieldSettingsDialogPlanner.cs");
+        var sharedUiSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotUiPlanner.cs");
+        var sharedAdornmentSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotGridAdornmentPlanner.cs");
+        var sharedValueFieldSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotValueFieldPlanner.cs");
+
+        hostPivotUiSource.Should().Contain("using SharedPivotUiPlanner = FreeX.App.Presentation.PivotUI.PivotUiPlanner;");
+        hostPivotUiSource.Should().Contain("SharedPivotUiPlanner.FindPivotTableContainingSelection");
+        hostPivotUiSource.Should().Contain("SharedPivotUiPlanner.TryParseValueFilter");
+        hostPivotUiSource.Should().NotContain("private static bool PivotTableContainsCell");
+        hostPivotUiSource.Should().NotContain("private static bool TryParseTopBottomValueFilter");
+
+        headerSource.Should().Contain("using SharedPivotGridAdornmentPlanner = FreeX.App.Presentation.PivotUI.PivotGridAdornmentPlanner;");
+        headerSource.Should().Contain("SharedPivotGridAdornmentPlanner.BuildHeaderTargets(workbook, sheet)");
+        headerSource.Should().NotContain("private static void AddTargets");
+        headerSource.Should().NotContain("private static IReadOnlyList<string> ReadHeaders");
+
+        adornmentSource.Should().Contain("SharedPivotGridAdornmentPlanner.BuildRowLabelAdornments(workbook, sheet)");
+        adornmentSource.Should().NotContain("private static void AddAdornments");
+        adornmentSource.Should().NotContain("private static bool HasChildRowsBeforeNextPeer");
+
+        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.SummaryFunctions");
+        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.ShowValuesAsOptions");
+        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.ValidateShowValuesAs");
+        valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.CreateResult(");
+
+        sharedUiSource.Should().Contain("public sealed record PivotFieldListPanePlan");
+        sharedUiSource.Should().Contain("public sealed record PivotShowDetailsTarget");
+        sharedAdornmentSource.Should().Contain("public static IReadOnlyList<PivotHeaderDropdownTarget> BuildHeaderTargets");
+        sharedAdornmentSource.Should().Contain("public static IReadOnlyList<PivotRowLabelAdornment> BuildRowLabelAdornments");
+        sharedValueFieldSource.Should().Contain("public enum PivotShowValuesAsValidationError");
+    }
+}

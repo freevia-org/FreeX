@@ -19,7 +19,7 @@ public partial class MainWindow
     private void PivotTableBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var sourcePlan = PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange);
+        var sourcePlan = PivotCreatePlanner.CreateSourceRangePlan(sheet, SheetGrid.SelectedRange);
         if (!sourcePlan.IsValid || sourcePlan.SourceRange is not { } sourceRange)
         {
             ShowPivotTableSourceRangeError(sourcePlan.Error);
@@ -94,21 +94,21 @@ public partial class MainWindow
             RefreshPivotFieldListPane();
     }
 
-    private void ShowPivotTableSourceRangeError(PivotTableSourceRangeError error)
+    private void ShowPivotTableSourceRangeError(PivotCreateSourceRangeError error)
     {
         switch (error)
         {
-            case PivotTableSourceRangeError.MissingSource:
+            case PivotCreateSourceRangeError.MissingSource:
                 _messageService.ShowInfo(
                     UiText.Get("MainWindowMessage_PivotTableSelectSourceRange"),
                     UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
                 break;
-            case PivotTableSourceRangeError.MinimumShape:
+            case PivotCreateSourceRangeError.MinimumShape:
                 _messageService.ShowInfo(
                     UiText.Get("MainWindowMessage_PivotTableSourceMinimumShape"),
                     UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
                 break;
-            case PivotTableSourceRangeError.MissingHeaders:
+            case PivotCreateSourceRangeError.MissingHeaders:
                 _messageService.ShowWarning(
                     UiText.Get("MainWindowMessage_PivotTableInvalidSourceRange"),
                     UiText.Get("MainWindowMessage_InsertPivotTableTitle"));

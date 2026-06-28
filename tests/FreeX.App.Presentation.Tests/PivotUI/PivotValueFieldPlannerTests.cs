@@ -51,10 +51,16 @@ public sealed class PivotValueFieldPlannerTests
     [Fact]
     public void TryValidateShowValuesAs_RequiresBaseField()
     {
+        PivotValueFieldPlanner.ValidateShowValuesAs(PivotShowValuesAs.RunningTotalIn, null, null)
+            .Should()
+            .Be(PivotShowValuesAsValidationError.MissingBaseField);
         PivotValueFieldPlanner.TryValidateShowValuesAs(PivotShowValuesAs.RunningTotalIn, null, null, out var error)
             .Should().BeFalse();
         error.Should().NotBeNullOrWhiteSpace();
 
+        PivotValueFieldPlanner.ValidateShowValuesAs(PivotShowValuesAs.RunningTotalIn, 1, null)
+            .Should()
+            .Be(PivotShowValuesAsValidationError.None);
         PivotValueFieldPlanner.TryValidateShowValuesAs(PivotShowValuesAs.RunningTotalIn, 1, null, out _)
             .Should().BeTrue();
     }
@@ -62,6 +68,9 @@ public sealed class PivotValueFieldPlannerTests
     [Fact]
     public void TryValidateShowValuesAs_DifferenceFrom_RequiresBaseItem()
     {
+        PivotValueFieldPlanner.ValidateShowValuesAs(PivotShowValuesAs.DifferenceFrom, 1, null)
+            .Should()
+            .Be(PivotShowValuesAsValidationError.MissingBaseItem);
         PivotValueFieldPlanner.TryValidateShowValuesAs(PivotShowValuesAs.DifferenceFrom, 1, null, out _)
             .Should().BeFalse();
         PivotValueFieldPlanner.TryValidateShowValuesAs(PivotShowValuesAs.DifferenceFrom, 1, "Q1", out _)
