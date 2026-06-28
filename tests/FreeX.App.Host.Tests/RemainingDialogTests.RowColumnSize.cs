@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host.Tests;
 
@@ -34,7 +35,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void RowHeightDialogOpenedFromKeyboard_FocusesHeightBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed class ColumnWidthDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -44,7 +45,7 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void RowHeightDialog_FieldExposesAutomationMetadata()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed class ColumnWidthDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_heightBox, UiText.Get(\"Remaining_RowHeight\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_heightBox, \"RowHeightBox\");");
@@ -128,17 +129,23 @@ public sealed partial class RemainingDialogTests
     [Fact]
     public void RowAndColumnSizeDialogsInvalidInput_ShowOwnedWarningsAndRefocusInputs()
     {
-        var rowSource = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+        var rowSource = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed class ColumnWidthDialog");
         var columnSource = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
 
         rowSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         rowSource.Should().Contain("error ?? UiText.Get(\"Remaining_EnterARowHeightFrom0To409\")");
+        rowSource.Should().Contain("WorksheetDimensionDialogPlanner.TryCreateRowHeightResult(input, out result)");
+        rowSource.Should().NotContain("WorksheetSizeInputParser.TryParseSizeInRange");
+        rowSource.Should().NotContain("MaximumExcelRowHeight");
         rowSource.Should().Contain("FocusInvalidHeightInput();");
         rowSource.Should().Contain("private void FocusInvalidHeightInput()");
         rowSource.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
 
         columnSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         columnSource.Should().Contain("error ?? UiText.Get(\"Remaining_EnterAColumnWidthFrom0To255\")");
+        columnSource.Should().Contain("WorksheetDimensionDialogPlanner.TryCreateColumnWidthResult(input, out result)");
+        columnSource.Should().NotContain("WorksheetSizeInputParser.TryParseSizeInRange");
+        columnSource.Should().NotContain("MaximumExcelColumnWidth");
         columnSource.Should().Contain("FocusInvalidWidthInput();");
         columnSource.Should().Contain("private void FocusInvalidWidthInput()");
         columnSource.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");

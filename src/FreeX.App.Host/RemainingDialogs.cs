@@ -3,11 +3,9 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host;
-
-public sealed record ConditionalFormatThresholdDialogResult(string ThresholdText);
 
 public sealed class ConditionalFormatThresholdDialog : Window
 {
@@ -38,12 +36,11 @@ public sealed class ConditionalFormatThresholdDialog : Window
     }
 
     public static ConditionalFormatThresholdDialogResult CreateResult(string thresholdText) =>
-        new(thresholdText.Trim());
+        ConditionalFormatThresholdDialogPlanner.CreateResult(thresholdText);
 
     public static bool TryCreateResult(string? thresholdText, out ConditionalFormatThresholdDialogResult result, out string? error)
     {
-        result = CreateResult(thresholdText ?? "");
-        if (string.IsNullOrWhiteSpace(result.ThresholdText))
+        if (!ConditionalFormatThresholdDialogPlanner.TryCreateResult(thresholdText, out result))
         {
             error = UiText.Get("Remaining_EnterThresholdValue");
             return false;
@@ -74,14 +71,11 @@ public sealed class ConditionalFormatThresholdDialog : Window
     }
 }
 
-public sealed record RowHeightDialogResult(double Height);
-
 public sealed class RowHeightDialog : Window
 {
-    private const double MaximumExcelRowHeight = 409.5;
     private readonly TextBox _heightBox = new();
 
-    public RowHeightDialogResult Result { get; private set; } = new(20);
+    public RowHeightDialogResult Result { get; private set; } = new(WorksheetDimensionDialogPlanner.DefaultRowHeight);
 
     public RowHeightDialog(double height = 20)
     {
@@ -112,15 +106,14 @@ public sealed class RowHeightDialog : Window
 
     public static bool TryCreateResult(string? input, out RowHeightDialogResult result, out string? error)
     {
-        result = new RowHeightDialogResult(20);
+        result = new RowHeightDialogResult(WorksheetDimensionDialogPlanner.DefaultRowHeight);
         error = null;
-        if (input is null || !WorksheetSizeInputParser.TryParseSizeInRange(input, 0, MaximumExcelRowHeight, out var height))
+        if (!WorksheetDimensionDialogPlanner.TryCreateRowHeightResult(input, out result))
         {
             error = UiText.Get("Remaining_EnterRowHeightFrom0To4095");
             return false;
         }
 
-        result = new RowHeightDialogResult(height);
         return true;
     }
 
@@ -138,14 +131,11 @@ public sealed class RowHeightDialog : Window
     }
 }
 
-public sealed record ColumnWidthDialogResult(double Width);
-
 public sealed class ColumnWidthDialog : Window
 {
-    private const double MaximumExcelColumnWidth = 255;
     private readonly TextBox _widthBox = new();
 
-    public ColumnWidthDialogResult Result { get; private set; } = new(8);
+    public ColumnWidthDialogResult Result { get; private set; } = new(WorksheetDimensionDialogPlanner.DefaultColumnWidth);
 
     public ColumnWidthDialog(double width = 8)
     {
@@ -176,15 +166,14 @@ public sealed class ColumnWidthDialog : Window
 
     public static bool TryCreateResult(string? input, out ColumnWidthDialogResult result, out string? error)
     {
-        result = new ColumnWidthDialogResult(8);
+        result = new ColumnWidthDialogResult(WorksheetDimensionDialogPlanner.DefaultColumnWidth);
         error = null;
-        if (input is null || !WorksheetSizeInputParser.TryParseSizeInRange(input, 0, MaximumExcelColumnWidth, out var width))
+        if (!WorksheetDimensionDialogPlanner.TryCreateColumnWidthResult(input, out result))
         {
             error = UiText.Get("Remaining_EnterColumnWidthFrom0To255");
             return false;
         }
 
-        result = new ColumnWidthDialogResult(width);
         return true;
     }
 
