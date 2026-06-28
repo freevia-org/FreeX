@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
@@ -8,6 +9,12 @@ public readonly record struct ChartBubbleFormatInput(
     int BubbleScale,
     bool ShowNegativeBubbles,
     ChartBubbleSizeRepresents BubbleSizeRepresents);
+
+public enum ChartBubbleFormatParseIssue
+{
+    None,
+    BubbleScale
+}
 
 /// <summary>
 /// Portable (no UI) planner for the "Format Bubble Chart" editing dialog: the bubble scale (percent), whether
@@ -34,7 +41,7 @@ public static class ChartBubbleFormatPlanner
     public static ChartBubbleFormatInput Read(ChartModel chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
-        return new ChartBubbleFormatInput(chart.BubbleScale, chart.ShowNegativeBubbles, chart.BubbleSizeRepresents);
+        return Normalize(new ChartBubbleFormatInput(chart.BubbleScale, chart.ShowNegativeBubbles, chart.BubbleSizeRepresents));
     }
 
     /// <summary>Validates the edited input. Returns null when valid, else an English reason.</summary>
@@ -50,12 +57,53 @@ public static class ChartBubbleFormatPlanner
     public static IReadOnlyList<ChartBubbleSizeRepresents> GetSizeRepresentsChoices() =>
         Enum.GetValues<ChartBubbleSizeRepresents>();
 
-    /// <summary>Builds the <see cref="ChartLayoutOptions"/> delta for the edited bubble sizing.</summary>
-    public static ChartLayoutOptions Plan(ChartBubbleFormatInput input) =>
+    public static bool TryParseDialogInput(
+        string bubbleScaleText,
+        bool showNegativeBubbles,
+        ChartBubbleSizeRepresents? selectedSizeRepresents,
+        out ChartBubbleFormatInput input,
+        out ChartBubbleFormatParseIssue issue)
+    {
+        if (!TryParseClampedInt(bubbleScaleText, MinBubbleScale, MaxBubbleScale, out var scale))
+        {
+            input = default;
+            issue = ChartBubbleFormatParseIssue.BubbleScale;
+            return false;
+        }
+
+        input = new ChartBubbleFormatInput(
+            scale,
+            showNegativeBubbles,
+            NormalizeSizeRepresents(selectedSizeRepresents));
+        issue = ChartBubbleFormatParseIssue.None;
+        return true;
+    }
+
+    public static ChartBubbleSizeRepresents NormalizeSizeRepresents(ChartBubbleSizeRepresents? sizeRepresents) =>
+        sizeRepresents is { } value && Enum.IsDefined(value)
+            ? value
+            : ChartBubbleSizeRepresents.Area;
+
+    public static ChartBubbleFormatInput Normalize(ChartBubbleFormatInput input) =>
         new(
-            BubbleScale: Math.Clamp(input.BubbleScale, MinBubbleScale, MaxBubbleScale),
-            ShowNegativeBubbles: input.ShowNegativeBubbles,
-            BubbleSizeRepresents: Enum.IsDefined(input.BubbleSizeRepresents)
-                ? input.BubbleSizeRepresents
-                : ChartBubbleSizeRepresents.Area);
+            Math.Clamp(input.BubbleScale, MinBubbleScale, MaxBubbleScale),
+            input.ShowNegativeBubbles,
+            NormalizeSizeRepresents(input.BubbleSizeRepresents));
+
+    /// <summary>Builds the <see cref="ChartLayoutOptions"/> delta for the edited bubble sizing.</summary>
+    public static ChartLayoutOptions Plan(ChartBubbleFormatInput input)
+    {
+        var normalized = Normalize(input);
+        return new(
+            BubbleScale: normalized.BubbleScale,
+            ShowNegativeBubbles: normalized.ShowNegativeBubbles,
+            BubbleSizeRepresents: normalized.BubbleSizeRepresents);
+    }
+
+    private static bool TryParseClampedInt(string text, int min, int max, out int value) =>
+        TryParseInt(text, out value) && value >= min && value <= max;
+
+    private static bool TryParseInt(string text, out int value) =>
+        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value)
+        || int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
 }
