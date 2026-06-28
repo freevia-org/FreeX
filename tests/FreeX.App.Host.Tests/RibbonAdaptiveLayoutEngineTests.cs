@@ -254,10 +254,10 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     [Fact]
     public void BreakpointThresholds_SourceAvoidsRedundantSortedSetLinqPasses()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveTabProfiles.cs");
+        var source = DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonAdaptiveTabProfiles.cs");
         var method = source.Substring(
             source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal),
-            source.IndexOf("internal static string? ResolveProfileName", StringComparison.Ordinal) -
+            source.IndexOf("public static string? ResolveProfileName", StringComparison.Ordinal) -
             source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal));
 
         method.Should().Contain("new List<double>(thresholds.Count)");

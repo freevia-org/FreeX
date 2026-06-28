@@ -1,4 +1,4 @@
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
 public static partial class RibbonCommandPresentationPlanner
 {

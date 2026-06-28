@@ -683,10 +683,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var iconResources = DialogSourceTestSupport.ReadHostSources("Resources\\IconResources.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Ribbon.cs");
         // RibbonCommandIconKind/Accent now live in Free.Shared.Ribbon (Model/RibbonCommandIcon.cs);
-        // the presentation planner still references them, which is what this test asserts.
-        var planner = DialogSourceTestSupport.ReadHostSources(
-            "RibbonCommandPresentationPlanner.cs",
-            "RibbonCommandPresentationPlanner.Icons.cs");
+        // the shared presentation planner still references them, which is what this test asserts.
+        var planner =
+            DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonCommandPresentationPlanner.cs") +
+            DialogSourceTestSupport.ReadRibbonDefinitionSource("RibbonCommandPresentationPlanner.Icons.cs");
 
         DialogSourceTestSupport.ReadHostSources("RibbonIconFactory.cs").Should().NotBeNull();
         iconResources.Should().Contain("FreeXRibbonLargeIconSlot");
