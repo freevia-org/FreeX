@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.App.Presentation.QuickAnalysis;
 
 /// <summary>
@@ -6,6 +8,46 @@ namespace FreeX.App.Presentation.QuickAnalysis;
 /// </summary>
 public static class QuickAnalysisShellPlanner
 {
+    public static QuickAnalysisShellPlan BuildMenuPlan(
+        QuickAnalysisDisplayModel displayModel,
+        QuickAnalysisShellCapabilities capabilities,
+        GridRange selection)
+    {
+        ArgumentNullException.ThrowIfNull(displayModel);
+        ArgumentNullException.ThrowIfNull(capabilities);
+
+        if (displayModel.IsEmpty)
+            return QuickAnalysisShellPlan.Empty;
+
+        var groups = new List<QuickAnalysisShellGroupPlan>();
+        foreach (var group in displayModel.Groups)
+        {
+            var items = new List<QuickAnalysisShellItemPlan>();
+            foreach (var item in group.Items)
+            {
+                items.Add(new QuickAnalysisShellItemPlan(
+                    item.Id,
+                    item.Group,
+                    item.Label,
+                    item.PreviewText,
+                    item.PreviewVisual,
+                    item.Route,
+                    item,
+                    QuickAnalysisShellActionPlanner.Plan(item, capabilities),
+                    QuickAnalysisPlanner.BuildHoverPreview(selection, item),
+                    $"QuickAnalysis_{item.Id}"));
+            }
+
+            groups.Add(new QuickAnalysisShellGroupPlan(
+                group.Group,
+                GroupTitleResourceKey(group.Group),
+                GroupTitleFallback(group.Group),
+                items));
+        }
+
+        return groups.Count == 0 ? QuickAnalysisShellPlan.Empty : new QuickAnalysisShellPlan(groups);
+    }
+
     public static IReadOnlyList<QuickAnalysisOptionGroup> GroupOptions(IReadOnlyList<QuickAnalysisOption> options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -50,3 +92,37 @@ public static class QuickAnalysisShellPlanner
 }
 
 public sealed record QuickAnalysisOptionGroup(QuickAnalysisGroup Group, IReadOnlyList<QuickAnalysisOption> Options);
+
+public sealed record QuickAnalysisShellPlan(IReadOnlyList<QuickAnalysisShellGroupPlan> Groups)
+{
+    public static QuickAnalysisShellPlan Empty { get; } = new([]);
+
+    public bool IsEmpty => Groups.Count == 0;
+
+    public IEnumerable<QuickAnalysisShellItemPlan> AllItems()
+    {
+        foreach (var group in Groups)
+        {
+            foreach (var item in group.Items)
+                yield return item;
+        }
+    }
+}
+
+public sealed record QuickAnalysisShellGroupPlan(
+    QuickAnalysisGroup Group,
+    string TitleResourceKey,
+    string TitleFallback,
+    IReadOnlyList<QuickAnalysisShellItemPlan> Items);
+
+public sealed record QuickAnalysisShellItemPlan(
+    string Id,
+    QuickAnalysisGroup Group,
+    string Label,
+    string ToolTip,
+    QuickAnalysisPreviewVisual PreviewVisual,
+    QuickAnalysisCommandRoute Route,
+    QuickAnalysisDisplayItem DisplayItem,
+    QuickAnalysisShellAction Action,
+    QuickAnalysisDisplayHoverPreview HoverPreview,
+    string AutomationId);

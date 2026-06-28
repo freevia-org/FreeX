@@ -10,8 +10,19 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void QuickAnalysisShell_UsesSharedGroupTitleMetadata()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs"));
+        var plannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellPlanner.cs"));
 
-        source.Should().Contain("QuickAnalysisShellPlanner.GroupTitleResourceKey(group.Group)");
+        source.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(");
+        source.Should().Contain("Text = UiText.Get(group.TitleResourceKey)");
+        source.Should().Contain("foreach (var group in shellPlan.Groups)");
+        source.Should().NotContain("foreach (var group in displayModel.Groups)");
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, item.AutomationId)");
+        plannerSource.Should().Contain("GroupTitleResourceKey(group.Group)");
+        plannerSource.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
         source.Should().NotContain("QuickAnalysisGroupTitle(");
         source.Should().NotContain("QuickAnalysisGroup.Formatting => UiText.Get");
     }
@@ -26,7 +37,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "QuickAnalysis",
             "QuickAnalysisShellActionPlanner.cs"));
 
-        source.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
+        source.Should().Contain("var action = item.Action;");
+        source.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
         source.Should().Contain("QuickAnalysisShellActionKind.ApplyConditionalFormat");
         source.Should().Contain("QuickAnalysisShellActionKind.Deferred");
         source.Should().NotContain("IsQuickAnalysisAutoSumFunction(");
