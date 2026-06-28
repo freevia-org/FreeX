@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -191,7 +192,7 @@ public partial class MainWindow
 
         if (!PasteNamesPlanner.TryBuildPasteListEdits(range.Start, items, out var edits, out var error))
         {
-            _messageService.ShowWarning(error ?? UiText.Get("PasteNames_NoNamesMessage"), title);
+            _messageService.ShowWarning(DescribePasteNamesListError(error), title);
             return;
         }
 
@@ -202,6 +203,13 @@ public partial class MainWindow
         RefreshToolbar();
         RefreshStatusBar();
     }
+
+    private static string DescribePasteNamesListError(PasteNamesListError error) => error switch
+    {
+        PasteNamesListError.NotEnoughColumns => UiText.Get("PasteNames_NotEnoughColumnsMessage"),
+        PasteNamesListError.NotEnoughRows => UiText.Get("PasteNames_NotEnoughRowsMessage"),
+        _ => UiText.Get("PasteNames_NoNamesMessage"),
+    };
 
     private void InsertDefinedNameIntoFormula(string name)
     {

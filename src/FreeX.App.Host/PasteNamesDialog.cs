@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using FreeX.App.Presentation.DefinedNames;
 
 namespace FreeX.App.Host;
 
@@ -50,7 +51,7 @@ internal sealed class PasteNamesDialog : Window
 
     public PasteNamesDialogResult Result { get; private set; } = PasteNamesDialogResult.None;
 
-    public PasteNamesDialog(IReadOnlyList<PasteNamesDialogItem> items)
+    public PasteNamesDialog(IReadOnlyList<PasteNamesItem> items)
     {
         Title = UiText.Get("PasteNames_Title");
         Width = 380;
@@ -90,13 +91,13 @@ internal sealed class PasteNamesDialog : Window
         {
             Header = UiText.Get("NamedRange_Name"),
             Width = 130,
-            DisplayMemberBinding = new Binding(nameof(PasteNamesDialogItem.Name))
+            DisplayMemberBinding = new Binding(nameof(PasteNamesItem.Name))
         });
         view.Columns.Add(new GridViewColumn
         {
             Header = UiText.Get("NamedRange_RefersTo"),
             Width = 210,
-            DisplayMemberBinding = new Binding(nameof(PasteNamesDialogItem.RefersTo))
+            DisplayMemberBinding = new Binding(nameof(PasteNamesItem.RefersTo))
         });
         return view;
     }
@@ -153,7 +154,7 @@ internal sealed class PasteNamesDialog : Window
 
     private void AcceptSelectedName()
     {
-        if (_namesList.SelectedItem is not PasteNamesDialogItem item)
+        if (_namesList.SelectedItem is not PasteNamesItem item)
             return;
 
         Result = new PasteNamesDialogResult(PasteNamesDialogAction.InsertName, item.Name);
@@ -168,7 +169,7 @@ internal sealed class PasteNamesDialog : Window
 
     private void SyncButtonState()
     {
-        _okButton.IsEnabled = _namesList.SelectedItem is PasteNamesDialogItem;
+        _okButton.IsEnabled = _namesList.SelectedItem is PasteNamesItem;
         _pasteListButton.IsEnabled = _namesList.Items.Count > 0;
     }
 
