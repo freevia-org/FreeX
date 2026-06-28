@@ -1,21 +1,39 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Editing;
 
-internal static class CellShiftDialogPlanner
+public enum CellShiftDialogMode
+{
+    Insert,
+    Delete
+}
+
+public enum CellShiftDialogChoice
+{
+    ShiftCellsRight,
+    ShiftCellsDown,
+    ShiftCellsLeft,
+    ShiftCellsUp,
+    EntireRow,
+    EntireColumn
+}
+
+public sealed record CellShiftDialogOption(CellShiftDialogChoice Choice, string LabelKey);
+
+public static class CellShiftDialogPlanner
 {
     private static readonly IReadOnlyList<CellShiftDialogOption> InsertChoices =
     [
-        new(CellShiftDialogChoice.ShiftCellsRight, UiText.Get("CellShift_Insert_ShiftCellsRight")),
-        new(CellShiftDialogChoice.ShiftCellsDown, UiText.Get("CellShift_Insert_ShiftCellsDown")),
-        new(CellShiftDialogChoice.EntireRow, UiText.Get("CellShift_Insert_EntireRow")),
-        new(CellShiftDialogChoice.EntireColumn, UiText.Get("CellShift_Insert_EntireColumn"))
+        new(CellShiftDialogChoice.ShiftCellsRight, "CellShift_Insert_ShiftCellsRight"),
+        new(CellShiftDialogChoice.ShiftCellsDown, "CellShift_Insert_ShiftCellsDown"),
+        new(CellShiftDialogChoice.EntireRow, "CellShift_Insert_EntireRow"),
+        new(CellShiftDialogChoice.EntireColumn, "CellShift_Insert_EntireColumn")
     ];
 
     private static readonly IReadOnlyList<CellShiftDialogOption> DeleteChoices =
     [
-        new(CellShiftDialogChoice.ShiftCellsLeft, UiText.Get("CellShift_Delete_ShiftCellsLeft")),
-        new(CellShiftDialogChoice.ShiftCellsUp, UiText.Get("CellShift_Delete_ShiftCellsUp")),
-        new(CellShiftDialogChoice.EntireRow, UiText.Get("CellShift_Delete_EntireRow")),
-        new(CellShiftDialogChoice.EntireColumn, UiText.Get("CellShift_Delete_EntireColumn"))
+        new(CellShiftDialogChoice.ShiftCellsLeft, "CellShift_Delete_ShiftCellsLeft"),
+        new(CellShiftDialogChoice.ShiftCellsUp, "CellShift_Delete_ShiftCellsUp"),
+        new(CellShiftDialogChoice.EntireRow, "CellShift_Delete_EntireRow"),
+        new(CellShiftDialogChoice.EntireColumn, "CellShift_Delete_EntireColumn")
     ];
 
     public static IReadOnlyList<CellShiftDialogOption> GetAvailableChoices(CellShiftDialogMode mode) =>

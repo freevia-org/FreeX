@@ -1,7 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Editing;
 
 public enum KeyboardInsertDeletePlan
 {

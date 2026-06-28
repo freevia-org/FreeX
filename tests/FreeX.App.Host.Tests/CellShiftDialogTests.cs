@@ -1,6 +1,7 @@
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.App.Presentation.Editing;
 
 namespace FreeX.App.Host.Tests;
 
@@ -29,7 +30,7 @@ public sealed class CellShiftDialogTests
     {
         var choices = CellShiftDialog.GetAvailableChoices(CellShiftDialogMode.Insert);
 
-        choices.Select(choice => choice.Label).Should().Equal(
+        choices.Select(choice => UiText.Get(choice.LabelKey)).Should().Equal(
             UiText.Get("CellShift_Insert_ShiftCellsRight"),
             UiText.Get("CellShift_Insert_ShiftCellsDown"),
             UiText.Get("CellShift_Insert_EntireRow"),
@@ -41,7 +42,7 @@ public sealed class CellShiftDialogTests
     {
         var choices = CellShiftDialog.GetAvailableChoices(CellShiftDialogMode.Delete);
 
-        choices.Select(choice => choice.Label).Should().Equal(
+        choices.Select(choice => UiText.Get(choice.LabelKey)).Should().Equal(
             UiText.Get("CellShift_Delete_ShiftCellsLeft"),
             UiText.Get("CellShift_Delete_ShiftCellsUp"),
             UiText.Get("CellShift_Delete_EntireRow"),
@@ -55,6 +56,8 @@ public sealed class CellShiftDialogTests
 
         source.Should().Contain("CellShiftDialogPlanner.GetAvailableChoices");
         source.Should().Contain("CellShiftDialogPlanner.ToKeyboardChoice");
+        source.Should().Contain("Content = UiText.Get(option.LabelKey)");
+        source.Should().NotContain("GetChoiceLabel");
         source.Should().NotContain("Choose how Excel should make room");
         source.Should().NotContain("Choose how Excel should close the gap");
         source.Should().Contain("DialogButtonRowFactory.Create");
