@@ -1,9 +1,9 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.DataTools;
 
-internal static class ForecastSheetSourceRangePlanner
+public static class ForecastSheetSourceRangePlanner
 {
     public static GridRange Create(Sheet sheet, GridRange selectedRange)
     {

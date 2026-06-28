@@ -1,8 +1,8 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.GridInteraction;
 
-internal static class SelectionMoveOverwritePlanner
+public static class SelectionMoveOverwritePlanner
 {
     public static bool HasOverwriteTargets(Sheet sheet, GridRange sourceRange, GridRange targetRange) =>
         FindOverwriteTargets(sheet, sourceRange, targetRange).Count > 0;

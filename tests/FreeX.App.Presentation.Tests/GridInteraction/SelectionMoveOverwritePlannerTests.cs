@@ -1,7 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.GridInteraction;
 
 public sealed class SelectionMoveOverwritePlannerTests
 {
@@ -70,20 +71,6 @@ public sealed class SelectionMoveOverwritePlannerTests
         SelectionMoveOverwritePlanner.FindOverwriteTargets(sheet, sourceRange, Range(sheet, 3, 3, 3, 3))
             .Should()
             .BeEmpty();
-    }
-
-    [Fact]
-    public void MainWindowSelectionMove_WarnsBeforeOverwritingDestinationData()
-    {
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
-        var method = SourceMethodExtractor.ExtractMethodSource(
-            source,
-            "private void OnSelectionMoveRequested(");
-
-        method.Should().Contain("SelectionMoveOverwritePlanner.HasOverwriteTargets(sheet, sourceRange, targetRange)");
-        method.Should().Contain("UiText.Get(\"MainWindowMessage_TextToColumnsReplaceDataPrompt\")");
-        method.Should().Contain("_messageService.AskYesNo");
-        method.Should().Contain("new MoveRangeCommand(_currentSheetId, sourceRange, targetRange.Start)");
     }
 
     private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>

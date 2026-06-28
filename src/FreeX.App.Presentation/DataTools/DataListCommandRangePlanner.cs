@@ -1,9 +1,9 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.DataTools;
 
-internal static class DataListCommandRangePlanner
+public static class DataListCommandRangePlanner
 {
     public static GridRange Create(Sheet sheet, GridRange selectedRange)
     {

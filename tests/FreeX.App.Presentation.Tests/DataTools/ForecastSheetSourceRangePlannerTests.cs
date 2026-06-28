@@ -1,7 +1,8 @@
 using FreeX.Core.Model;
 using FluentAssertions;
+using FreeX.App.Presentation.DataTools;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.DataTools;
 
 public sealed class ForecastSheetSourceRangePlannerTests
 {
