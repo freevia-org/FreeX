@@ -493,6 +493,18 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void SeriesFormat_ReadDefault_UsesFirstStoredSeriesFormatIndexWithinSeriesRange()
+    {
+        var chart = MultiSeriesChart();
+        chart.SeriesFormats.Add(new ChartSeriesFormat(1, DashStyle: ChartLineDashStyle.Dot));
+
+        var input = ChartSeriesFormatPlanner.ReadDefault(chart);
+
+        input.SeriesIndex.Should().Be(1);
+        input.DashStyle.Should().Be(ChartLineDashStyle.Dot);
+    }
+
+    [Fact]
     public void SeriesFormat_Read_ClampsRequestedIndexIntoSeriesRange()
     {
         // An empty data range has at most one series, so an out-of-range request clamps to 0.
@@ -541,6 +553,48 @@ public sealed class ChartEditingPlannerTests
         updated.FillColor.Should().Be(new CellColor(9, 9, 9));
         updated.MarkerStyle.Should().Be(ChartMarkerStyle.Circle);
         updated.MarkerSize.Should().Be(6);
+    }
+
+    [Fact]
+    public void SeriesFormat_Plan_MergesDashStyle_AndPreservesExistingFormatPolicy()
+    {
+        var chart = new ChartModel { Type = ChartType.Line };
+        chart.SeriesFormats.Add(new ChartSeriesFormat(
+            1,
+            FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3),
+            DashStyle: ChartLineDashStyle.Dash,
+            MarkerStyle: ChartMarkerStyle.Circle));
+
+        var options = ChartSeriesFormatPlanner.Plan(chart, new ChartSeriesFormatInput(
+            1,
+            FillColor: null,
+            StrokeColor: new CellColor(40, 50, 60),
+            StrokeThickness: 2.5,
+            MarkerStyle: ChartMarkerStyle.Diamond,
+            MarkerSize: 9,
+            DashStyle: ChartLineDashStyle.Dot));
+
+        var updated = options.SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 1).Which;
+        updated.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2));
+        updated.StrokeColor.Should().Be(new CellColor(40, 50, 60));
+        updated.StrokeThemeColor.Should().BeNull();
+        updated.DashStyle.Should().Be(ChartLineDashStyle.Dot);
+        updated.MarkerStyle.Should().Be(ChartMarkerStyle.Diamond);
+        updated.MarkerSize.Should().Be(9);
+    }
+
+    [Fact]
+    public void SeriesFormat_Plan_NullDashStyle_ClearsExistingDash()
+    {
+        var chart = new ChartModel { Type = ChartType.Line };
+        chart.SeriesFormats.Add(new ChartSeriesFormat(0, DashStyle: ChartLineDashStyle.Dash));
+
+        var options = ChartSeriesFormatPlanner.Plan(chart, new ChartSeriesFormatInput(
+            0, null, null, null, null, null, DashStyle: null));
+
+        options.SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0)
+            .Which.DashStyle.Should().BeNull();
     }
 
     [Fact]

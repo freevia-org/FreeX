@@ -219,6 +219,13 @@ public sealed partial class ChartDialogTests
     [Fact]
     public void ChartSeriesFormatDialogResult_ReplacesSelectedSeriesFormat()
     {
+        var chart = new ChartModel { Type = ChartType.Line };
+        chart.SeriesFormats.Add(new ChartSeriesFormat(0, FillColor: new CellColor(1, 1, 1)));
+        chart.SeriesFormats.Add(new ChartSeriesFormat(
+            2,
+            FillColor: new CellColor(2, 2, 2),
+            StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            NoLine: true));
         var result = ChartSeriesFormatDialog.CreateResult(
             seriesIndex: 2,
             fillColor: new CellColor(10, 20, 30),
@@ -228,10 +235,7 @@ public sealed partial class ChartDialogTests
             markerStyle: ChartMarkerStyle.Diamond,
             markerSize: 9);
 
-        var options = result.ToOptions([
-            new ChartSeriesFormat(0, FillColor: new CellColor(1, 1, 1)),
-            new ChartSeriesFormat(2, FillColor: new CellColor(2, 2, 2))
-        ]);
+        var options = result.ToOptions(chart);
 
         options.SeriesFormats.Should().NotBeNull();
         options.SeriesFormats!.Should().ContainSingle(format => format.SeriesIndex == 2)
@@ -242,8 +246,39 @@ public sealed partial class ChartDialogTests
                 StrokeThickness: 2.5,
                 DashStyle: ChartLineDashStyle.Dash,
                 MarkerStyle: ChartMarkerStyle.Diamond,
-                MarkerSize: 9));
+                MarkerSize: 9,
+                NoLine: true));
         options.SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0);
+    }
+
+    [Fact]
+    public void ChartSeriesFormatDialogResult_NullDashStyleClearsDashThroughSharedPlanner()
+    {
+        var chart = new ChartModel { Type = ChartType.Line };
+        chart.SeriesFormats.Add(new ChartSeriesFormat(0, DashStyle: ChartLineDashStyle.Dash));
+
+        var result = ChartSeriesFormatDialog.CreateResult(
+            seriesIndex: 0,
+            fillColor: null,
+            strokeColor: null,
+            strokeThickness: null,
+            dashStyle: null,
+            markerStyle: null,
+            markerSize: null);
+
+        result.ToOptions(chart).SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0)
+            .Which.DashStyle.Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartSeriesFormatDialogResult_DelegatesOptionsToSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ChartSeriesFormatDialog.cs");
+
+        source.Should().Contain("public ChartSeriesFormatInput ToInput()");
+        source.Should().Contain("ChartSeriesFormatPlanner.Plan(chart, ToInput())");
+        source.Should().Contain("ChartSeriesFormatPlanner.ReadDefault(chart)");
+        source.Should().NotContain("IndexOfSeriesFormat");
     }
 
     [Fact]
