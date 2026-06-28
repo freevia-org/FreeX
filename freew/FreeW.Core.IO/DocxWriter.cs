@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.IO.Compression;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeW.Core.Model;
 using static FreeW.Core.IO.Ooxml;
 
@@ -652,11 +653,7 @@ public static class DocxWriter
     }
 
     private static void WritePart(ZipArchive archive, string entryPath, XDocument content)
-    {
-        var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
-        using var entryStream = entry.Open();
-        content.Save(entryStream);
-    }
+        => OpcXml.WriteXmlEntry(archive, entryPath, content);
 
     private static void WriteBinaryPart(ZipArchive archive, string entryPath, byte[] content)
     {
@@ -834,26 +831,14 @@ public static class DocxWriter
                     new XAttribute("ContentType", p.ContentTypeOverride!)))));
 
     private static XDocument BuildPackageRels(bool hasCustomProps, bool hasExtendedProps) => new(
-        new XElement(Rel + "Relationships",
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", "rId1"),
-                new XAttribute("Type", OfficeDocumentRel),
-                new XAttribute("Target", "word/document.xml")),
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", "rIdCore"),
-                new XAttribute("Type", CorePropertiesRelType),
-                new XAttribute("Target", "docProps/core.xml")),
+        OpcRelationships.CreateRoot(
+            OpcRelationships.CreateRelationship("rId1", OfficeDocumentRel, "word/document.xml"),
+            OpcRelationships.CreateRelationship("rIdCore", CorePropertiesRelType, "docProps/core.xml"),
             hasCustomProps
-                ? new XElement(Rel + "Relationship",
-                    new XAttribute("Id", "rIdCustom"),
-                    new XAttribute("Type", CustomPropertiesRelType),
-                    new XAttribute("Target", "docProps/custom.xml"))
+                ? OpcRelationships.CreateRelationship("rIdCustom", CustomPropertiesRelType, "docProps/custom.xml")
                 : null,
             hasExtendedProps
-                ? new XElement(Rel + "Relationship",
-                    new XAttribute("Id", "rIdExtended"),
-                    new XAttribute("Type", ExtendedPropertiesRelType),
-                    new XAttribute("Target", "docProps/app.xml"))
+                ? OpcRelationships.CreateRelationship("rIdExtended", ExtendedPropertiesRelType, "docProps/app.xml")
                 : null));
 
     /// <summary>
@@ -1545,12 +1530,12 @@ public static class DocxWriter
     /// <summary>Builds word/_rels/comments.xml.rels: one image relationship per comment media part.</summary>
     private static XDocument BuildCommentsRels(IReadOnlyList<ImagePart> commentImages)
     {
-        var relationships = new XElement(Rel + "Relationships");
+        var relationships = OpcRelationships.CreateRoot();
         foreach (var image in commentImages)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", image.RelationshipId),
-                new XAttribute("Type", ImageRel),
-                new XAttribute("Target", "media/" + image.FileName)));
+            relationships.Add(OpcRelationships.CreateRelationship(
+                image.RelationshipId,
+                ImageRel,
+                "media/" + image.FileName));
         return new XDocument(relationships);
     }
 
@@ -4859,12 +4844,12 @@ public static class DocxWriter
     /// </summary>
     private static XDocument BuildHeaderFooterRels(HeaderFooterPart part)
     {
-        var relationships = new XElement(Rel + "Relationships");
+        var relationships = OpcRelationships.CreateRoot();
         foreach (var image in part.Images)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", image.RelationshipId),
-                new XAttribute("Type", ImageRel),
-                new XAttribute("Target", "media/" + image.FileName)));
+            relationships.Add(OpcRelationships.CreateRelationship(
+                image.RelationshipId,
+                ImageRel,
+                "media/" + image.FileName));
         return new XDocument(relationships);
     }
 
@@ -5527,12 +5512,12 @@ public static class DocxWriter
     /// </summary>
     private static XDocument BuildFontTableRels(IReadOnlyList<FontTablePart> embeddedFonts)
     {
-        var relationships = new XElement(Rel + "Relationships");
+        var relationships = OpcRelationships.CreateRoot();
         foreach (var part in embeddedFonts.SelectMany(f => f.Parts))
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", part.RelationshipId),
-                new XAttribute("Type", FontRelType),
-                new XAttribute("Target", "fonts/" + part.FileName)));
+            relationships.Add(OpcRelationships.CreateRelationship(
+                part.RelationshipId,
+                FontRelType,
+                "fonts/" + part.FileName));
         return new XDocument(relationships);
     }
 

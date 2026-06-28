@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
 using Free.Shared.Opc;
@@ -18,7 +17,6 @@ public static class PptxPackageReader
     private static readonly XNamespace P   = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A   = PptxColorReader.A;
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace Pkgr = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace Dc  = "http://purl.org/dc/elements/1.1/";
     private static readonly XNamespace Cp  = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
 
@@ -29,7 +27,7 @@ public static class PptxPackageReader
     private const string SlideLayoutRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
     private const string ThemeRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     private const string ImageRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
-    private const string CorePropsRelType     = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+    private const string CorePropsRelType     = OpcPackageProperties.CorePropertiesRelationshipType;
     private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
@@ -3717,77 +3715,29 @@ public static class PptxPackageReader
 
     /// <summary>Loads and parses a .rels file from the archive. Returns empty list on missing/error.</summary>
     private static List<(string id, string type, string target)> LoadRels(ZipArchive archive, string relsPath)
-    {
-        var entry = archive.GetEntry(relsPath);
-        if (entry is null) return new();
-
-        try
-        {
-            using var stream = entry.Open();
-            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
-            var doc = XDocument.Load(reader);
-            return doc.Root?
-                .Elements(Pkgr + "Relationship")
-                .Select(r => (
-                    r.Attribute("Id")?.Value ?? string.Empty,
-                    r.Attribute("Type")?.Value ?? string.Empty,
-                    r.Attribute("Target")?.Value ?? string.Empty))
-                .Where(t => !string.IsNullOrEmpty(t.Item1))
-                .ToList() ?? new();
-        }
-        catch { return new(); }
-    }
+        => OpcRelationships.Load(archive, relsPath, ignoreMalformed: true)
+            .Select(r => (id: r.Id, type: r.Type, target: r.Target))
+            .ToList();
 
     private static string? GetRelTarget(List<(string id, string type, string target)> rels, string relType) =>
         rels.FirstOrDefault(r => r.type == relType).target is { Length: > 0 } t ? t : null;
 
     private static XDocument? LoadXml(ZipArchive archive, string path)
-    {
-        var entry = archive.GetEntry(path);
-        if (entry is null) return null;
-        try
-        {
-            using var stream = entry.Open();
-            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
-            return XDocument.Load(reader);
-        }
-        catch { return null; }
-    }
+        => OpcXml.TryLoadXml(archive, path);
 
     // ── Path helpers ──────────────────────────────────────────────────────────────
 
     private static string NormalizePath(string path) =>
-        path.TrimStart('/');
+        OpcPathHelper.ToZipEntryPath(path);
 
     private static string GetDirectory(string path)
-    {
-        var lastSlash = path.LastIndexOf('/');
-        return lastSlash < 0 ? string.Empty : path[..lastSlash];
-    }
+        => OpcPathHelper.GetDirectoryName(path);
 
     private static string GetRelsPath(string partPath)
-    {
-        var dir = GetDirectory(partPath);
-        var file = partPath[(partPath.LastIndexOf('/') + 1)..];
-        return string.IsNullOrEmpty(dir)
-            ? $"_rels/{file}.rels"
-            : $"{dir}/_rels/{file}.rels";
-    }
+        => OpcPathHelper.GetRelationshipPartPath(partPath);
 
     private static string ResolvePath(string baseDir, string target)
-    {
-        if (target.StartsWith('/')) return NormalizePath(target);
-
-        // Resolve relative path
-        var parts = (string.IsNullOrEmpty(baseDir) ? target : $"{baseDir}/{target}").Split('/');
-        var resolved = new List<string>();
-        foreach (var part in parts)
-        {
-            if (part == "..") { if (resolved.Count > 0) resolved.RemoveAt(resolved.Count - 1); }
-            else if (part != ".") resolved.Add(part);
-        }
-        return string.Join("/", resolved);
-    }
+        => OpcPathHelper.ResolveRelativeZipPath(baseDir, target);
 
     // ── Content-type guessing ────────────────────────────────────────────────────
 

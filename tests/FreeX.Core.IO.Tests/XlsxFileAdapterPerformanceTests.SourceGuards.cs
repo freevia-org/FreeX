@@ -67,10 +67,16 @@ public sealed partial class XlsxFileAdapterPerformanceTests
     [Fact]
     public void PackageXmlEditor_RewritesXmlWithoutFormattingWhitespace()
     {
-        var source = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxPackageXmlEditor.cs");
+        var editorSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxPackageXmlEditor.cs");
+        var sharedSource = TestWorkspaceFiles.ReadRepoText("shared", "Free.Shared.Opc", "OpcXml.cs");
+        var replaceXmlEntry = sharedSource[
+            sharedSource.IndexOf("public static void ReplaceXmlEntry", StringComparison.Ordinal)..
+            sharedSource.IndexOf("public static void WriteXmlEntry", StringComparison.Ordinal)];
 
-        source.Should().Contain("document.Save(stream, SaveOptions.DisableFormatting);");
-        source.Should().NotContain("document.Save(stream);");
+        editorSource.Should().Contain("OpcXml.ReplaceXmlEntry(archive, entryName, document);");
+        replaceXmlEntry.Should().Contain("SaveOptions saveOptions = SaveOptions.DisableFormatting");
+        replaceXmlEntry.Should().Contain("document.Save(stream, saveOptions);");
+        replaceXmlEntry.Should().NotContain("document.Save(stream);");
     }
 
     [Fact]
