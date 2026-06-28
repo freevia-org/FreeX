@@ -1,22 +1,31 @@
+using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class CommentNavigationPlannerFacadeTests
+public sealed class CommentNavigationPlannerDedupSourceTests
 {
     [Fact]
-    public void HostCommentNavigationPlanner_RemainsThinPresentationFacade()
+    public void HostCommentNavigationPlannerFacade_IsRemovedAndConsumersUsePresentationPlannerDirectly()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("CommentNavigationPlanner.cs");
+        var hostSourceDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.ReviewCommands.cs");
+        File.Exists(Path.Combine(hostSourceDirectory, "CommentNavigationPlanner.cs")).Should().BeFalse();
 
-        source.Should().Contain(
-            "using SharedCommentNavigationPlanner = FreeX.App.Presentation.Comments.CommentNavigationPlanner;");
-        source.Should().Contain("SharedCommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)");
-        source.Should().Contain("SharedCommentNavigationPlanner.FormatThreadedComment(thread)");
-        source.Should().Contain("SharedCommentNavigationPlanner.FormatCellCommentPreview(comments, threadedComments, address)");
-        source.Should().NotContain("OrderBy(address => address.Row)");
-        source.Should().NotContain("StringBuilder");
-        source.Should().NotContain("FormatCommentPart");
-        source.Should().NotContain("FindFirstAfter");
+        var reviewCommands = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        reviewCommands.Should().Contain("using FreeX.App.Presentation.Comments;");
+        reviewCommands.Should().Contain("CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr)");
+        reviewCommands.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
+        reviewCommands.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
+
+        var commentListWindow = DialogSourceTestSupport.ReadHostSources("CommentListWindow.cs");
+        commentListWindow.Should().Contain("using FreeX.App.Presentation.Comments;");
+        commentListWindow.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)");
+        commentListWindow.Should().Contain("CommentNavigationPlanner.FormatThreadedComment(threadedComments[address])");
+        commentListWindow.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(notes)");
+
+        var printRendererComments = DialogSourceTestSupport.ReadHostSources("PrintRenderer.Comments.cs");
+        printRendererComments.Should().Contain("using FreeX.App.Presentation.Comments;");
+        printRendererComments.Should().Contain("CommentNavigationPlanner.FormatThreadedComment(pair.Value)");
+        printRendererComments.Should().NotContain("SharedCommentNavigationPlanner");
     }
 }

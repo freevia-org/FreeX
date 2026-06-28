@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Free.Shared.AppServices;
+using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.UI;
 using FreeX.Core.Commands;
