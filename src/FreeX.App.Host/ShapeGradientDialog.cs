@@ -12,9 +12,6 @@ internal sealed record ShapeGradientDirectionOption(DrawingShapeGradientDirectio
 
 internal static class ShapeGradientDialogPlanner
 {
-    public static CellColor DefaultStartColor { get; } = new(31, 119, 180);
-    public static CellColor DefaultEndColor { get; } = new(180, 210, 240);
-
     public static IReadOnlyList<ShapeGradientDirectionOption> CreateDirectionOptions() =>
         ShapeGradientPlanner.CreateDirectionOptions()
             .Select(option => new ShapeGradientDirectionOption(option.Direction, ResolveDirectionLabel(option.LabelKey)))
@@ -75,7 +72,7 @@ public sealed class ShapeGradientDialog : Window
 
     public ShapeGradientDialog(
         DrawingShapeGradientDirection direction = DrawingShapeGradientDirection.DiagonalDown)
-        : this(ShapeGradientDialogPlanner.DefaultStartColor, ShapeGradientDialogPlanner.DefaultEndColor, direction)
+        : this(ShapeGradientPlanner.DefaultStartColor, ShapeGradientPlanner.DefaultEndColor, direction)
     {
     }
 

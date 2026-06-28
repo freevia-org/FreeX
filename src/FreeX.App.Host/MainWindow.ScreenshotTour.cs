@@ -6690,7 +6690,7 @@ public partial class MainWindow
                     context.Shape.FillThemeColor?.Resolve(_workbook.Theme)
                         ?? context.Shape.FillColor
                         ?? DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme),
-                    context.Shape.GradientFillEndColor ?? ShapeGradientDialogPlanner.DefaultEndColor,
+                    context.Shape.GradientFillEndColor ?? ShapeGradientPlanner.DefaultEndColor,
                     context.Shape.GetEffectiveGradientFillDirection())
                 {
                     Owner = this
