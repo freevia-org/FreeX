@@ -119,19 +119,6 @@ public sealed partial class ObjectDialogTests
     }
 
     [Fact]
-    public void HyperlinkDialogPrefill_UsesExistingCellTextAsDisplayText()
-    {
-        var sheetId = SheetId.New();
-        var address = new CellAddress(sheetId, 4, 2);
-        var sheet = new Sheet(sheetId, "Sheet1");
-        sheet.SetCell(address, new TextValue("Quarterly report"));
-
-        HyperlinkDialogPrefill.FromCell(sheet, address).Should().Be(new HyperlinkDialogPrefill(
-            "https://",
-            "Quarterly report"));
-    }
-
-    [Fact]
     public void HyperlinkNavigationPlanner_CreatesExternalLaunchPlanForWebLink()
     {
         var sheetId = SheetId.New();

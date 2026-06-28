@@ -17,6 +17,7 @@ public sealed class MiscWorkflowPlannerDedupSourceTests
         File.Exists(Path.Combine(hostDirectory, "ShareWorkbookPlanner.cs")).Should().BeFalse();
         File.Exists(Path.Combine(hostDirectory, "SpellCheckWorkflowPlanner.cs")).Should().BeFalse();
         File.Exists(Path.Combine(hostDirectory, "ZoomSelectionPlanner.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(hostDirectory, "HyperlinkNavigationPlanner.cs")).Should().BeFalse();
 
         File.Exists(Path.Combine(servicesDirectory, "FindReplaceDialogPlanner.cs")).Should().BeTrue();
         File.Exists(Path.Combine(servicesDirectory, "SpellCheckWorkflowPlanner.cs")).Should().BeTrue();
@@ -35,8 +36,5 @@ public sealed class MiscWorkflowPlannerDedupSourceTests
         DialogSourceTestSupport.ReadHostSources("CrashAnalyticsConsentPlanner.cs")
             .Should()
             .Contain("Host adapter");
-        DialogSourceTestSupport.ReadHostSources("HyperlinkNavigationPlanner.cs")
-            .Should()
-            .Contain("Only the WPF-specific dialog prefill");
     }
 }

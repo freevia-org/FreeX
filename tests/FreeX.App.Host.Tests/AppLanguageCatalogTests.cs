@@ -1,38 +1,27 @@
 using FluentAssertions;
-using Free.Shared.Localization;
 using FreeX.App.Host;
 using FreeX.App.Localization;
+using HostAppLanguageCatalog = FreeX.App.Host.AppLanguageCatalog;
+using PortableAppLanguageCatalog = FreeX.App.Localization.AppLanguageCatalog;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed class AppLanguageCatalogTests
 {
     [Fact]
-    public void CreateOptions_IncludesSystemEnglishAndSatelliteCultures()
+    public void CreateOptions_ForwardsToPortableCatalog()
     {
-        var options = AppLanguageCatalog.CreateOptions([
+        var cultureNames = new[]
+        {
             "uk-UA",
             "en-US",
             "not-a-culture",
             "fr-FR"
-        ]);
+        };
 
-        options[0].Should().Be(new AppLanguageOption(
-            AppLanguageCatalog.SystemDefaultCultureName,
-            UiText.Get("Options_AppLanguageSystemDefault")));
-        options[1].Should().Be(new AppLanguageOption(
-            AppLanguageCatalog.EnglishUnitedStatesCultureName,
-            UiText.Get("Options_AppLanguageEnglishUnitedStates")));
-        options[2].Should().Be(new AppLanguageOption(
-            AppLanguageCatalog.PseudoLocalizationCultureName,
-            PseudoLocalization.Expand(UiText.GetNeutral("Options_AppLanguageEnglishUnitedStates"))));
-        options.Select(option => option.CultureName)
+        HostAppLanguageCatalog.CreateOptions(cultureNames)
             .Should()
-            .Contain(["uk-UA", "fr-FR"]);
-        options.Select(option => option.CultureName)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Should()
-            .HaveCount(options.Count);
+            .Equal(PortableAppLanguageCatalog.CreateOptions(cultureNames));
     }
 
     [Theory]
@@ -46,6 +35,6 @@ public sealed class AppLanguageCatalogTests
         string? input,
         string expected)
     {
-        AppLanguageCatalog.NormalizeCultureName(input).Should().Be(expected);
+        HostAppLanguageCatalog.NormalizeCultureName(input).Should().Be(expected);
     }
 }
