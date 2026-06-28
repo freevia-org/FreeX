@@ -10,10 +10,7 @@ namespace FreeP.App.Compositor;
 /// It works in slide DIP coordinates — callers convert screen→slide with
 /// <see cref="SlideTransformCore"/> before calling.
 ///
-/// NOTE: The WPF project (<c>FreeP.App.Rendering.Wpf</c>) still contains its own copy
-/// (<c>FreeP.App.Rendering.Wpf.ShapeHitTester</c>). This copy in
-/// <c>FreeP.App.Compositor</c> is the shared version used by the Avalonia renderer.
-/// They share identical logic; if one is fixed the other should be updated too.
+/// This shared implementation is used by both the WPF and Avalonia renderers.
 /// </summary>
 public static class ShapeHitTester
 {
