@@ -36,10 +36,8 @@ public sealed class ChartDataDialog : Window
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
-    private readonly EditingSession     _editor;
-    private readonly List<string>       _categories;  // mutable working copy
-    private readonly List<string>       _seriesNames; // mutable working copy
-    private readonly List<List<double?>> _values;     // [seriesIndex][categoryIndex]; null = gap
+    private readonly EditingSession          _editor;
+    private readonly ChartDataDialogPlanner _planner;
 
     // ── Controls ──────────────────────────────────────────────────────────────────
 
@@ -64,14 +62,7 @@ public sealed class ChartDataDialog : Window
 
         // Deep-copy the data so we don't mutate the live model until OK is pressed.
         // W7: preserve gap (null) entries — do NOT coerce to 0.0 here.
-        _categories  = chart.Categories.ToList();
-        _seriesNames = chart.Series.Select(s => s.Name).ToList();
-        _values      = chart.Series
-            .Select(s => s.Values.ToList())   // List<double?> — nulls kept as nulls
-            .ToList();
-
-        // Ensure matrix is rectangular.
-        EnsureRectangular();
+        _planner = ChartDataDialogPlanner.FromChart(chart);
 
         // ── Window chrome ─────────────────────────────────────────────────────────
         Title          = "Edit Chart Data";
@@ -157,8 +148,8 @@ public sealed class ChartDataDialog : Window
     // ── Grid rebuild ──────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Reconstructs the DataGrid columns from current _seriesNames and repopulates
-    /// rows from _categories / _values.  Called after any structural change.
+    /// Reconstructs the DataGrid columns and rows from the presentation planner.
+    /// Called after any structural change.
     /// </summary>
     private void RebuildGrid()
     {
@@ -177,7 +168,7 @@ public sealed class ChartDataDialog : Window
         _grid.Columns.Add(catCol);
 
         // One column per series; header = series name (editable via cell template).
-        for (int si = 0; si < _seriesNames.Count; si++)
+        for (int si = 0; si < _planner.SeriesCount; si++)
         {
             int capturedSi = si; // closure capture
 
@@ -197,23 +188,19 @@ public sealed class ChartDataDialog : Window
 
         // Build row items.
         var rows = new List<ChartRowViewModel>();
-        for (int ci = 0; ci < _categories.Count; ci++)
+        for (int ci = 0; ci < _planner.CategoryCount; ci++)
         {
             int capturedCi = ci;
             // W7: pass nullable values to ObservableDoubleNullableArray; display converts null↔blank.
             var rowValues = new ObservableDoubleNullableArray(
-                _values.Select(sv => capturedCi < sv.Count ? sv[capturedCi] : null).ToArray(),
-                (si, v) =>
-                {
-                    while (_values.Count <= si) _values.Add(new List<double?>());
-                    while (_values[si].Count <= capturedCi) _values[si].Add(null);
-                    _values[si][capturedCi] = v;
-                });
+                _planner.SeriesCount,
+                si => _planner.GetValue(si, capturedCi),
+                (si, v) => _planner.SetValue(si, capturedCi, v));
 
             rows.Add(new ChartRowViewModel(
-                category: _categories[capturedCi],
+                category: _planner.GetCategory(capturedCi),
                 values:   rowValues,
-                onCategoryChanged: label => _categories[capturedCi] = label));
+                onCategoryChanged: label => _planner.SetCategory(capturedCi, label)));
         }
 
         _grid.ItemsSource = rows;
@@ -224,14 +211,14 @@ public sealed class ChartDataDialog : Window
     {
         var tb = new TextBox
         {
-            Text        = _seriesNames[seriesIndex],
+            Text        = _planner.GetSeriesName(seriesIndex),
             Background  = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             FontWeight  = FontWeights.SemiBold,
             MinWidth    = 60,
             Padding     = new Thickness(2),
         };
-        tb.LostFocus += (_, _) => _seriesNames[seriesIndex] = tb.Text;
+        tb.LostFocus += (_, _) => _planner.SetSeriesName(seriesIndex, tb.Text);
         return tb;
     }
 
@@ -239,34 +226,25 @@ public sealed class ChartDataDialog : Window
 
     private void OnAddSeries()
     {
-        _seriesNames.Add($"Series {_seriesNames.Count + 1}");
-        // New series slots start as null (no plotted value) rather than 0.0.
-        _values.Add(Enumerable.Repeat((double?)null, _categories.Count).ToList());
-        EnsureRectangular();
+        _planner.AddSeries();
         RebuildGrid();
     }
 
     private void OnRemoveSeries()
     {
-        if (_seriesNames.Count == 0) return;
-        _seriesNames.RemoveAt(_seriesNames.Count - 1);
-        _values.RemoveAt(_values.Count - 1);
+        _planner.RemoveLastSeries();
         RebuildGrid();
     }
 
     private void OnAddCategory()
     {
-        _categories.Add($"Cat {_categories.Count + 1}");
-        foreach (var sv in _values) sv.Add(null);
+        _planner.AddCategory();
         RebuildGrid();
     }
 
     private void OnRemoveCategory()
     {
-        if (_categories.Count == 0) return;
-        _categories.RemoveAt(_categories.Count - 1);
-        foreach (var sv in _values)
-            if (sv.Count > 0) sv.RemoveAt(sv.Count - 1);
+        _planner.RemoveLastCategory();
         RebuildGrid();
     }
 
@@ -282,14 +260,14 @@ public sealed class ChartDataDialog : Window
         if (_grid.ItemsSource is List<ChartRowViewModel> rows)
         {
             for (int ci = 0; ci < rows.Count; ci++)
-                _categories[ci] = rows[ci].Category;
+                _planner.SetCategory(ci, rows[ci].Category);
         }
 
         // W7: pass nullable values so gaps stay null in the committed model.
         _editor.ReplaceChartData(
-            _categories,
-            _seriesNames,
-            _values.Select(sv => (IEnumerable<double?>)sv));
+            _planner.CategoriesForCommit(),
+            _planner.SeriesNamesForCommit(),
+            _planner.ValuesForCommit().Select(values => (IEnumerable<double?>)values));
 
         DialogResult = true;
         Close();
@@ -307,17 +285,6 @@ public sealed class ChartDataDialog : Window
         };
         btn.Click += (_, _) => onClick();
         return btn;
-    }
-
-    /// <summary>Pads every series' Values list to have exactly Categories.Count entries.</summary>
-    private void EnsureRectangular()
-    {
-        int catCount = _categories.Count;
-        foreach (var sv in _values)
-        {
-            while (sv.Count < catCount) sv.Add(null);  // new slots = gap, not 0.0
-            while (sv.Count > catCount) sv.RemoveAt(sv.Count - 1);
-        }
     }
 
     // ── Inner view-model types ────────────────────────────────────────────────────
@@ -349,8 +316,7 @@ public sealed class ChartDataDialog : Window
     }
 
     /// <summary>
-    /// A simple indexable array that calls back into the _values matrix on set,
-    /// allowing DataGrid bindings to mutate the working copy directly.
+    /// A simple indexable adapter that lets DataGrid bindings mutate planner values.
     ///
     /// W7: Stores <see cref="double?"/> so that gap (null) values survive the dialog
     /// round-trip.  The WPF DataGrid binding pairs this with <see cref="NullableDoubleConverter"/>
@@ -358,24 +324,28 @@ public sealed class ChartDataDialog : Window
     /// </summary>
     internal sealed class ObservableDoubleNullableArray
     {
-        private readonly double?[]              _data;
-        private readonly Action<int, double?>   _onSet;
+        private readonly int _count;
+        private readonly Func<int, double?> _get;
+        private readonly Action<int, double?> _set;
 
-        public ObservableDoubleNullableArray(double?[] data, Action<int, double?> onSet)
+        public ObservableDoubleNullableArray(
+            int count,
+            Func<int, double?> get,
+            Action<int, double?> set)
         {
-            _data  = data;
-            _onSet = onSet;
+            _count = count;
+            _get = get;
+            _set = set;
         }
 
         public double? this[int index]
         {
-            get => index >= 0 && index < _data.Length ? _data[index] : null;
+            get => index >= 0 && index < _count ? _get(index) : null;
             set
             {
-                if (index >= 0 && index < _data.Length)
+                if (index >= 0 && index < _count)
                 {
-                    _data[index] = value;
-                    _onSet(index, value);
+                    _set(index, value);
                 }
             }
         }
@@ -394,20 +364,12 @@ public sealed class ChartDataDialog : Window
     {
         public object? Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
         {
-            if (value is double d) return d.ToString("G6", culture);
-            return string.Empty;  // null or other → blank
+            return ChartDataDialogPlanner.FormatCellValue(value as double?, culture);
         }
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
         {
-            if (value is string s)
-            {
-                var trimmed = s.Trim();
-                if (trimmed.Length == 0) return (double?)null;  // blank → gap
-                if (double.TryParse(trimmed, System.Globalization.NumberStyles.Any, culture, out double d))
-                    return (double?)d;
-            }
-            return (double?)null;  // unparseable → gap
+            return ChartDataDialogPlanner.ParseCellValue(value, culture);
         }
     }
 }
