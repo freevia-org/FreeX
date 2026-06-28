@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -28,6 +29,7 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Right)");
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Up)");
         source.Should().Contain("=> ExecuteFillCells(FillCellsDirection.Left)");
+        source.Should().Contain("using FreeX.App.Presentation.FillSeries;");
         source.Should().Contain("FillSeriesPlanner.BuildSeriesEdits(");
         source.Should().Contain("dialog.Result");
         source.Should().Contain("UiText.Get(\"FillSeriesStep_SelectNumericOrDateStartMessage\")");
@@ -60,5 +62,13 @@ public sealed class HomeEditingCommandSourceTests
         source.Should().Contain("TryExecuteRepeatableCurrentSelectionRangesCommand(");
         source.Should().Contain("new ClearCommentsCommand(sheetId, currentRange)");
         source.Should().Contain("new ClearHyperlinksCommand(sheetId, currentRange)");
+    }
+
+    [Fact]
+    public void FillSeriesCommandHandlers_DoNotUseHostPlannerFacade()
+    {
+        var hostSourceDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.HomeEditing.cs");
+
+        File.Exists(Path.Combine(hostSourceDirectory, "FillSeriesPlanner.cs")).Should().BeFalse();
     }
 }

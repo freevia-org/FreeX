@@ -3,37 +3,9 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.FillSeries;
 
 namespace FreeX.App.Host;
-
-public enum FillSeriesDirection
-{
-    Rows,
-    Columns
-}
-
-public enum FillSeriesType
-{
-    Linear,
-    Growth,
-    Date,
-    AutoFill
-}
-
-public enum FillSeriesDateUnit
-{
-    Day,
-    Weekday,
-    Month,
-    Year
-}
-
-public sealed record FillSeriesStepDialogResult(
-    double Step,
-    FillSeriesDirection SeriesIn = FillSeriesDirection.Columns,
-    FillSeriesType Type = FillSeriesType.Linear,
-    FillSeriesDateUnit DateUnit = FillSeriesDateUnit.Day,
-    double? StopValue = null);
 
 public sealed class FillSeriesStepDialog : Window
 {
@@ -50,11 +22,11 @@ public sealed class FillSeriesStepDialog : Window
     private readonly RadioButton _monthButton = new() { Content = UiText.Get("FillSeriesStep_Month"), GroupName = "DateUnit" };
     private readonly RadioButton _yearButton = new() { Content = UiText.Get("FillSeriesStep_Year"), GroupName = "DateUnit" };
 
-    public FillSeriesStepDialogResult Result { get; private set; } = new(1);
+    public FillSeriesOptions Result { get; private set; } = new(1);
 
     public FillSeriesStepDialog(double step = 1)
     {
-        Result = new FillSeriesStepDialogResult(step);
+        Result = new FillSeriesOptions(step);
         Title = UiText.Get("FillSeriesStep_Title");
         Width = 380;
         Height = 356;
@@ -103,35 +75,35 @@ public sealed class FillSeriesStepDialog : Window
         _yearButton.IsEnabled = isDateSeries;
     }
 
-    public static bool TryCreateResult(string? input, out FillSeriesStepDialogResult result, out string? error)
+    public static bool TryCreateResult(string? input, out FillSeriesOptions result, out string? error)
     {
-        result = new FillSeriesStepDialogResult(1);
+        result = new FillSeriesOptions(1);
         error = null;
-        if (input is null || !FillSeriesPlanner.TryParseStep(input, out var step))
+        if (input is null || !FillSeriesPlanner.TryParseStep(input, CultureInfo.CurrentCulture, out var step))
         {
             error = UiText.Get("FillSeriesStep_InvalidStepMessage");
             return false;
         }
 
-        result = new FillSeriesStepDialogResult(step);
+        result = new FillSeriesOptions(step);
         return true;
     }
 
-    public static FillSeriesStepDialogResult CreateResult(
+    public static FillSeriesOptions CreateResult(
         FillSeriesDirection seriesIn,
         FillSeriesType type,
         FillSeriesDateUnit dateUnit,
         string? stepText,
         string? stopText)
     {
-        var step = FillSeriesPlanner.TryParseStep(stepText ?? "", out var parsedStep)
+        var step = FillSeriesPlanner.TryParseStep(stepText ?? "", CultureInfo.CurrentCulture, out var parsedStep)
             ? parsedStep
             : 1;
-        var stopValue = TryParseOptionalFiniteDouble(stopText, out var parsedStop)
+        var stopValue = TryParseOptionalStep(stopText, out var parsedStop)
             ? parsedStop
             : (double?)null;
 
-        return new FillSeriesStepDialogResult(step, seriesIn, type, dateUnit, stopValue);
+        return new FillSeriesOptions(step, seriesIn, type, dateUnit, stopValue);
     }
 
     public static bool TryCreateResult(
@@ -140,28 +112,35 @@ public sealed class FillSeriesStepDialog : Window
         FillSeriesDateUnit dateUnit,
         string? stepText,
         string? stopText,
-        out FillSeriesStepDialogResult result,
+        out FillSeriesOptions result,
         out string? error)
     {
-        result = new FillSeriesStepDialogResult(1, seriesIn, type, dateUnit);
-        if (!TryCreateResult(stepText, out var stepResult, out error))
-            return false;
-
-        double? stopValue = null;
-        if (!string.IsNullOrWhiteSpace(stopText))
+        if (FillSeriesPlanner.TryCreateOptions(
+                seriesIn,
+                type,
+                dateUnit,
+                stepText,
+                stopText,
+                CultureInfo.CurrentCulture,
+                out result,
+                out var inputError))
         {
-            if (!TryParseOptionalFiniteDouble(stopText, out var parsedStop))
-            {
-                error = UiText.Get("FillSeriesStep_InvalidStopMessage");
-                return false;
-            }
-
-            stopValue = parsedStop;
+            error = null;
+            return true;
         }
 
-        result = new FillSeriesStepDialogResult(stepResult.Step, seriesIn, type, dateUnit, stopValue);
-        return true;
+        result = new FillSeriesOptions(1, seriesIn, type, dateUnit);
+        error = ToErrorMessage(inputError);
+        return false;
     }
+
+    private static string? ToErrorMessage(FillSeriesInputError inputError) =>
+        inputError switch
+        {
+            FillSeriesInputError.InvalidStop => UiText.Get("FillSeriesStep_InvalidStopMessage"),
+            FillSeriesInputError.InvalidStep => UiText.Get("FillSeriesStep_InvalidStepMessage"),
+            _ => null,
+        };
 
     private UIElement CreateSeriesContent()
     {
@@ -213,15 +192,13 @@ public sealed class FillSeriesStepDialog : Window
         _yearButton.IsChecked == true ? FillSeriesDateUnit.Year :
         FillSeriesDateUnit.Day;
 
-    private static bool TryParseOptionalFiniteDouble(string? input, out double value)
+    private static bool TryParseOptionalStep(string? input, out double value)
     {
         value = 0;
-        // Parse with the SAME culture/styles as the Step field (FillSeriesPlanner.TryParseStep uses
-        // CurrentCulture); otherwise a locale whose decimal separator is ',' rejects a Stop value the
-        // user typed in the same format the Step field just accepted.
+        // Parse with the same culture as the Step field; otherwise a locale whose decimal separator is ','
+        // rejects a Stop value the user typed in the same format the Step field just accepted.
         return !string.IsNullOrWhiteSpace(input) &&
-               double.TryParse(input.Trim(), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out value) &&
-               double.IsFinite(value);
+               FillSeriesPlanner.TryParseStep(input, CultureInfo.CurrentCulture, out value);
     }
 
     private static StackPanel CreateHorizontalRow(params UIElement[] children)

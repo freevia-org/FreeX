@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.FillSeries;
 
 namespace FreeX.App.Host.Tests;
 
@@ -9,7 +10,7 @@ public sealed partial class RemainingDialogTests
     {
         FillSeriesStepDialog.TryCreateResult("-2", out var result, out _).Should().BeTrue();
 
-        result.Should().Be(new FillSeriesStepDialogResult(-2));
+        result.Should().Be(new FillSeriesOptions(-2));
     }
 
     [Fact]
@@ -17,13 +18,16 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("enum FillSeriesDirection");
-        source.Should().Contain("enum FillSeriesType");
-        source.Should().Contain("enum FillSeriesDateUnit");
+        source.Should().Contain("using FreeX.App.Presentation.FillSeries;");
+        source.Should().Contain("FillSeriesOptions");
         source.Should().Contain("FillSeriesDirection.Rows");
         source.Should().Contain("FillSeriesType.Date");
         source.Should().Contain("FillSeriesDateUnit.Month");
         source.Should().Contain("StopValue");
+        source.Should().NotContain("enum FillSeriesDirection");
+        source.Should().NotContain("enum FillSeriesType");
+        source.Should().NotContain("enum FillSeriesDateUnit");
+        source.Should().NotContain("FillSeriesStepDialogResult");
     }
 
     [Fact]
