@@ -31,7 +31,7 @@ public static class SparklineRenderPlanner
 
     /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into its numeric series, keyed by id.
-    /// Mirrors the Windows host's <c>SparklineValuePlanner.BuildValues</c>: data ranges over the
+    /// Delegates to <see cref="SparklineSeriesReader.BuildValues"/>: data ranges over the
     /// supported cell cap are reported as empty, and only number / date / bool cells contribute.
     /// </summary>
     public static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildValues(Sheet sheet) =>

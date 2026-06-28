@@ -1,9 +1,10 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.Sparklines;
 
-public sealed class SparklineValuePlannerTests
+public sealed class SparklineSeriesReaderTests
 {
     [Fact]
     public void BuildValues_CollectsSupportedScalarValuesInRowMajorOrder()
@@ -24,7 +25,7 @@ public sealed class SparklineValuePlannerTests
             Kind = SparklineKind.Line
         });
 
-        var values = SparklineValuePlanner.BuildValues(sheet);
+        var values = SparklineSeriesReader.BuildValues(sheet);
 
         values.Should().ContainKey(sparklineId);
         values[sparklineId].Should().Equal(
@@ -62,7 +63,7 @@ public sealed class SparklineValuePlannerTests
             Kind = SparklineKind.Line
         });
 
-        var values = SparklineValuePlanner.BuildValues(sheet);
+        var values = SparklineSeriesReader.BuildValues(sheet);
 
         values.Should().ContainKey(sparklineId);
         values[sparklineId].Should().Equal(1, 4);
@@ -84,7 +85,7 @@ public sealed class SparklineValuePlannerTests
             Kind = SparklineKind.Line
         });
 
-        var values = SparklineValuePlanner.BuildValues(sheet);
+        var values = SparklineSeriesReader.BuildValues(sheet);
 
         values.Should().ContainKey(sparklineId);
         values[sparklineId].Should().BeEmpty();

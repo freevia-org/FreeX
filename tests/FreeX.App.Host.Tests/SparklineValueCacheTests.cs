@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using FluentAssertions;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Model;
 using Xunit.Abstractions;
 
@@ -32,7 +33,7 @@ public sealed class SparklineValueCacheTests
         IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues()
         {
             calls++;
-            return SparklineValuePlanner.BuildValues(sheet);
+            return SparklineSeriesReader.BuildValues(sheet);
         }
     }
 
@@ -54,7 +55,7 @@ public sealed class SparklineValueCacheTests
         IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues()
         {
             calls++;
-            return SparklineValuePlanner.BuildValues(sheet);
+            return SparklineSeriesReader.BuildValues(sheet);
         }
     }
 
@@ -79,7 +80,7 @@ public sealed class SparklineValueCacheTests
         IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues(Sheet sheet)
         {
             calls++;
-            return SparklineValuePlanner.BuildValues(sheet);
+            return SparklineSeriesReader.BuildValues(sheet);
         }
     }
 
@@ -100,7 +101,7 @@ public sealed class SparklineValueCacheTests
         IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues()
         {
             calls++;
-            return SparklineValuePlanner.BuildValues(sheet);
+            return SparklineSeriesReader.BuildValues(sheet);
         }
     }
 
@@ -111,8 +112,8 @@ public sealed class SparklineValueCacheTests
         var cache = new SparklineValueCache();
         const int repetitions = 100;
 
-        var uncached = Measure(repetitions, () => SparklineValuePlanner.BuildValues(sheet));
-        var cached = Measure(repetitions, () => cache.GetOrCreate(sheet, revision: 9, () => SparklineValuePlanner.BuildValues(sheet)));
+        var uncached = Measure(repetitions, () => SparklineSeriesReader.BuildValues(sheet));
+        var cached = Measure(repetitions, () => cache.GetOrCreate(sheet, revision: 9, () => SparklineSeriesReader.BuildValues(sheet)));
 
         _output.WriteLine(
             $"Sparkline values repeated {repetitions}x over {sheet.Sparklines.Count:N0} sparklines: " +
