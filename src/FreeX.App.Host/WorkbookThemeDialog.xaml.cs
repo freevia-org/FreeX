@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using FreeX.App.Presentation.ThemeUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;

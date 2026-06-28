@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.ThemeUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;

@@ -1,6 +1,6 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.ThemeUI;
 
 public static class WorkbookThemeWorkflow
 {

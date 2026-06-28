@@ -1,3 +1,5 @@
+using FreeX.App.Presentation.ThemeUI;
+
 namespace FreeX.App.Host;
 
 internal sealed record RibbonRuntimeCatalogSurface(

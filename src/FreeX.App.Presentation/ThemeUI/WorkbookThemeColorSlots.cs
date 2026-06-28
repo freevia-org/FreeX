@@ -1,8 +1,8 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.ThemeUI;
 
-internal static class WorkbookThemeColorSlots
+public static class WorkbookThemeColorSlots
 {
     public static IReadOnlyList<WorkbookThemeColorSlot> All { get; } =
     [
