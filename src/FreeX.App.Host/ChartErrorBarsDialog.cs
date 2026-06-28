@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -16,12 +17,9 @@ public sealed record ChartErrorBarsDialogResult(
     double Value,
     bool EndCaps)
 {
-    public ChartLayoutOptions ToOptions() => new(
-        ShowErrorBars: ShowErrorBars,
-        ErrorBarKind: Kind,
-        ErrorBarDirection: Direction,
-        ErrorBarValue: Value,
-        ErrorBarEndCaps: EndCaps);
+    public ChartErrorBarsInput ToInput() => new(ShowErrorBars, Kind, Direction, Value, EndCaps);
+
+    public ChartLayoutOptions ToOptions() => ChartErrorBarsPlanner.Plan(ToInput());
 }
 
 public sealed class ChartErrorBarsDialog : Window
@@ -48,25 +46,27 @@ public sealed class ChartErrorBarsDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartErrorBarsDialogResult FromChart(ChartModel chart) => CreateResult(
-        chart.ShowErrorBars,
-        chart.ErrorBarKind,
-        chart.ErrorBarDirection,
-        chart.ErrorBarValue,
-        chart.ErrorBarEndCaps);
+    public static ChartErrorBarsDialogResult FromChart(ChartModel chart)
+    {
+        var input = ChartErrorBarsPlanner.Read(chart);
+        return CreateResult(input.ShowErrorBars, input.Kind, input.Direction, input.Value, input.EndCaps);
+    }
 
     public static ChartErrorBarsDialogResult CreateResult(
         bool showErrorBars,
         ChartErrorBarKind kind,
         ChartErrorBarDirection direction,
         double value,
-        bool endCaps) =>
-        new(
+        bool endCaps)
+    {
+        var input = ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(
             showErrorBars,
-            Enum.IsDefined(kind) ? kind : ChartErrorBarKind.StandardError,
-            Enum.IsDefined(direction) ? direction : ChartErrorBarDirection.Both,
-            Math.Clamp(double.IsFinite(value) ? value : 5, 0, 1000),
-            endCaps);
+            kind,
+            direction,
+            value,
+            endCaps));
+        return new(input.ShowErrorBars, input.Kind, input.Direction, input.Value, input.EndCaps);
+    }
 
     private StackPanel CreateContent()
     {
