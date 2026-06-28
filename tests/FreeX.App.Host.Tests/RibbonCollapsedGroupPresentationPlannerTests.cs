@@ -7,46 +7,61 @@ namespace FreeX.App.Host.Tests;
 public sealed class RibbonCollapsedGroupPresentationPlannerTests
 {
     [Theory]
-    [InlineData(700, "Captionless", 52, Visibility.Collapsed, 12, 48, 18, "captionless")]
-    [InlineData(701, "Compact", 52, Visibility.Visible, 12, 48, 18, "compact")]
-    [InlineData(920, "Compact", 52, Visibility.Visible, 12, 48, 18, "compact")]
-    [InlineData(921, "Normal", 64, Visibility.Visible, 12, 60, 22, "normal")]
-    public void CreateFootprint_MapsExcelWidthBandsToCollapsedGroupPresentation(
-        double availableWidth,
-        string expectedMode,
-        double expectedWidth,
-        Visibility expectedCaptionVisibility,
-        double expectedCaptionFontSize,
-        double expectedCaptionMaxWidth,
-        double expectedIconFontSize,
-        string expectedCacheKey)
+    [InlineData(700)]
+    [InlineData(701)]
+    [InlineData(920)]
+    [InlineData(921)]
+    public void CreateFootprint_MapsSharedPolicyToWpfCollapsedGroupPresentation(double availableWidth)
     {
+        var sharedFootprint = RibbonCollapsedGroupBreakpoints.CreateFootprint(availableWidth);
         var footprint = RibbonCollapsedGroupPresentationPlanner.CreateFootprint(availableWidth);
 
-        footprint.Mode.ToString().Should().Be(expectedMode);
-        footprint.Width.Should().Be(expectedWidth);
-        footprint.CaptionVisibility.Should().Be(expectedCaptionVisibility);
-        footprint.CaptionFontSize.Should().Be(expectedCaptionFontSize);
-        footprint.CaptionMaxWidth.Should().Be(expectedCaptionMaxWidth);
-        footprint.IconFontSize.Should().Be(expectedIconFontSize);
-        RibbonCollapsedGroupPresentationPlanner.GetCacheKey(availableWidth).Should().Be(expectedCacheKey);
+        footprint.Mode.Should().Be(sharedFootprint.Mode);
+        footprint.Width.Should().Be(sharedFootprint.Width);
+        footprint.Margin.Should().Be(ToThickness(sharedFootprint.Margin));
+        footprint.Padding.Should().Be(ToThickness(sharedFootprint.Padding));
+        footprint.CaptionVisibility.Should().Be(ToWpfVisibility(sharedFootprint.CaptionVisibility));
+        footprint.CaptionFontSize.Should().Be(sharedFootprint.CaptionFontSize);
+        footprint.CaptionMaxWidth.Should().Be(sharedFootprint.CaptionMaxWidth);
+        footprint.IconFontSize.Should().Be(sharedFootprint.IconFontSize);
+        RibbonCollapsedGroupPresentationPlanner.GetCacheKey(availableWidth).Should().Be(sharedFootprint.CacheKey);
     }
 
     [Theory]
-    [InlineData(-8, 900, 0)]
-    [InlineData(72, 900, 54)]
-    [InlineData(42, 900, 42)]
-    [InlineData(72, 1200, 68)]
-    [InlineData(60, 1200, 60)]
-    public void GetPlannedWidth_CapsMeasuredCollapsedWidthForAdaptivePlanning(
+    [InlineData(-8, 900)]
+    [InlineData(72, 900)]
+    [InlineData(42, 900)]
+    [InlineData(72, 1200)]
+    [InlineData(60, 1200)]
+    public void GetPlannedWidth_DelegatesAdaptivePlanningWidthToSharedPolicy(
         double measuredWidth,
-        double availableWidth,
-        double expectedWidth)
+        double availableWidth)
     {
         RibbonCollapsedGroupPresentationPlanner
             .GetPlannedWidth(measuredWidth, availableWidth)
             .Should()
-            .Be(expectedWidth);
+            .Be(RibbonCollapsedGroupBreakpoints.GetPlannedWidth(measuredWidth, availableWidth));
+    }
+
+    [Fact]
+    public void CollapsedGroupFootprint_SourceKeepsNumericModePolicyInSharedRibbon()
+    {
+        var plannerSource = DialogSourceTestSupport.ReadHostSources("RibbonCollapsedGroupPresentationPlanner.cs");
+        var adaptiveSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
+        var sharedSource = WorkspaceFileLocator.ReadAllText(
+            "shared",
+            "Free.Shared.Ribbon",
+            "Layout",
+            "RibbonCollapsedGroupBreakpoints.cs");
+
+        plannerSource.Should().Contain("RibbonCollapsedGroupBreakpoints.CreateFootprint(availableWidth)");
+        plannerSource.Should().Contain("ToThickness(");
+        plannerSource.Should().Contain("ToVisibility(");
+        adaptiveSource.Should().Contain("RibbonCollapsedGroupBreakpoints.GetFootprintMode(availableWidth)");
+        (plannerSource + adaptiveSource).Should().NotContain("availableWidth <= 700");
+        (plannerSource + adaptiveSource).Should().NotContain("availableWidth <= 920");
+        sharedSource.Should().Contain("availableWidth <= 700");
+        sharedSource.Should().Contain("availableWidth <= 920");
     }
 
     [Fact]
@@ -98,4 +113,12 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
 
         return content;
     }
+
+    private static Thickness ToThickness(RibbonCollapsedGroupInsets insets) =>
+        new(insets.Left, insets.Top, insets.Right, insets.Bottom);
+
+    private static Visibility ToWpfVisibility(RibbonCollapsedGroupCaptionVisibility visibility) =>
+        visibility == RibbonCollapsedGroupCaptionVisibility.Visible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 }

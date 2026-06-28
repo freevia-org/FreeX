@@ -842,14 +842,7 @@ public partial class MainWindow
     }
 
     private static RibbonCollapsedGroupFootprintMode GetCollapsedRibbonFootprintMode(double availableWidth)
-    {
-        if (availableWidth <= 700)
-            return RibbonCollapsedGroupFootprintMode.Captionless;
-
-        return availableWidth <= 920
-            ? RibbonCollapsedGroupFootprintMode.Compact
-            : RibbonCollapsedGroupFootprintMode.Normal;
-    }
+        => RibbonCollapsedGroupBreakpoints.GetFootprintMode(availableWidth);
 
     private static bool UsesWideIconOnlyLabelMode(double availableWidth) =>
         availableWidth > 820;
