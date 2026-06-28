@@ -251,6 +251,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
         source.Should().Contain("FreeXBackstagePaneCatalog.GetExportScopeLabelKey(");
         source.Should().Contain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(");
+        source.Should().Contain("ToBackstageExportScopeId(option.Scope)");
+        source.Should().Contain("ToBackstageExportOutputKindId(outputKind)");
+        source.Should().NotContain("GetExportScopeLabelKey(option.Scope");
+        source.Should().NotContain("GetExportOutputKindLabelKey(outputKind");
         source.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountDetails()");
         source.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountActions(plan.OptionsAvailable)");
         source.Should().NotContain("FormatBackstageFileSize");
