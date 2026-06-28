@@ -78,6 +78,19 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void SelectChartDataDialog_UsesSharedSelectDataSourcePlanner()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.InferPreviewEntries(");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.FormatSeriesListItem");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.FormatNewSeriesItem");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.CreateResult(");
+        chartTabsSource.Should().NotContain("TryParseCellRef");
+        chartTabsSource.Should().NotContain("TryParseRangeReference");
+    }
+
+    [Fact]
     public void WorksheetChrome_UsesCompactGridMetricsAndExcelSheetTabOrder()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));

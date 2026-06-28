@@ -22,6 +22,19 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialog_PlanningDelegatesToPresentationPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("SelectDataSourceDialog.Planning.cs");
+
+        source.Should().Contain("SelectDataSourcePlanner.CreateResult");
+        source.Should().Contain("SelectDataSourcePlanner.InferPreviewEntries");
+        source.Should().Contain("SelectDataSourcePlanner.CreateRangeSelectionRequest");
+        source.Should().NotContain("ParsedRangeReference");
+        source.Should().NotContain("TryParseCellReference");
+        source.Should().NotContain("CellAddress.");
+    }
+
+    [Fact]
     public void SelectDataSourceDialogOpenedFromKeyboard_FocusesChartDataRangeBox()
     {
         var source = ReadChartDialogSource();
