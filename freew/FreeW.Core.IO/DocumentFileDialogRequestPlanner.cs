@@ -13,7 +13,7 @@ public static class DocumentFileDialogRequestPlanner
         IEnumerable<IDocumentFileAdapter> adapters,
         string allSupportedName = "All supported files") =>
         FileDialogRequestPlanner.BuildOpenDialogPlan(
-            ToSharedDescriptors(GetFormats(adapters, static format => format.CanOpen)),
+            FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(GetFormats(adapters)),
             allSupportedName);
 
     public static FileSaveDialogPlan BuildSaveDialogPlan(
@@ -21,7 +21,7 @@ public static class DocumentFileDialogRequestPlanner
         string suggestedFileName,
         string defaultExtensionWithDot) =>
         FileDialogRequestPlanner.BuildSaveDialogPlan(
-            ToSharedDescriptors(GetFormats(adapters, static format => format.CanSave)),
+            FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(GetFormats(adapters)),
             suggestedFileName,
             defaultExtensionWithDot);
 
@@ -42,7 +42,7 @@ public static class DocumentFileDialogRequestPlanner
         IEnumerable<IDocumentFileAdapter> adapters,
         string allSupportedName = AllSupportedDocumentsName) =>
         FileDialogRequestPlanner.BuildOpenPickerPlan(
-            ToSharedDescriptors(GetFormats(adapters, static format => format.CanOpen)),
+            FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(GetFormats(adapters)),
             allSupportedName);
 
     public static FileSavePickerPlan BuildSavePickerPlan(
@@ -52,20 +52,12 @@ public static class DocumentFileDialogRequestPlanner
         string defaultExtensionWithDot,
         string? preferredFirstExtension = null) =>
         FileDialogRequestPlanner.BuildSavePickerPlan(
-            ToSharedDescriptors(GetFormats(adapters, static format => format.CanSave)),
+            FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(GetFormats(adapters)),
             sourceName,
             fallbackDisplayName,
             defaultExtensionWithDot,
             preferredFirstExtension);
 
-    private static List<FileFormatDescriptor> GetFormats(
-        IEnumerable<IDocumentFileAdapter> adapters,
-        Func<FileFormatDescriptor, bool> predicate) =>
-        adapters.SelectMany(adapter => adapter.Formats).Where(predicate).ToList();
-
-    private static IEnumerable<FileDialogFormatDescriptor> ToSharedDescriptors(IEnumerable<FileFormatDescriptor> formats) =>
-        formats.Select(ToSharedDescriptor);
-
-    private static FileDialogFormatDescriptor ToSharedDescriptor(FileFormatDescriptor format) =>
-        new(format.Extension, format.FormatName, format.CanOpen, format.CanSave);
+    private static List<FileFormatDescriptor> GetFormats(IEnumerable<IDocumentFileAdapter> adapters) =>
+        adapters.SelectMany(adapter => adapter.Formats).ToList();
 }
