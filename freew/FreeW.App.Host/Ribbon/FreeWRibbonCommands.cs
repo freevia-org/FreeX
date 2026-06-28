@@ -6219,40 +6219,12 @@ internal static class FreeWRibbonCommands
 
     // ── Merge Rule dialogs ───────────────────────────────────────────────────────────────────────
 
-    // All operators available in the Rules condition dialogs (matching Word's Rules dialog).
-    private static readonly (MergeConditionOperator Op, string Label)[] ConditionOperators =
-    [
-        (MergeConditionOperator.Equal,              "Equal to (=)"),
-        (MergeConditionOperator.NotEqual,           "Not equal to (<>)"),
-        (MergeConditionOperator.LessThan,           "Less than (<)"),
-        (MergeConditionOperator.LessThanOrEqual,    "Less than or equal (<=)"),
-        (MergeConditionOperator.GreaterThan,        "Greater than (>)"),
-        (MergeConditionOperator.GreaterThanOrEqual, "Greater than or equal (>=)"),
-        (MergeConditionOperator.IsBlank,            "Is blank"),
-        (MergeConditionOperator.IsNotBlank,         "Is not blank"),
-        (MergeConditionOperator.Contains,           "Contains"),
-    ];
-
-    // Result from If…Then…Else dialog.
-    private sealed record MergeRuleIfResult(
-        string FieldName,
-        MergeConditionOperator Operator,
-        string Value,
-        string TrueText,
-        string FalseText);
-
-    // Result from Skip/Next Record If dialog.
-    private sealed record MergeRuleCondResult(
-        string FieldName,
-        MergeConditionOperator Operator,
-        string Value);
-
     // If…Then…Else dialog: builds the complete rule definition.
     private static class MergeRuleIfDialog
     {
-        public static MergeRuleIfResult? Ask(Window? owner, IReadOnlyList<string> header)
+        public static MailMergeRuleIfDialogResult? Ask(Window? owner, IReadOnlyList<string> header)
         {
-            MergeRuleIfResult? result = null;
+            MailMergeRuleIfDialogResult? result = null;
             var dialog = new Window
             {
                 Title = "If…Then…Else",
@@ -6268,7 +6240,7 @@ internal static class FreeWRibbonCommands
             if (fieldCombo.Items.Count > 0) fieldCombo.SelectedIndex = 0;
 
             var opCombo = new System.Windows.Controls.ComboBox { MinWidth = 200 };
-            foreach (var (_, label) in ConditionOperators) opCombo.Items.Add(label);
+            foreach (var choice in MailMergeRuleDialogPlanner.GetConditionOperators()) opCombo.Items.Add(choice.Label);
             opCombo.SelectedIndex = 0;
 
             var valueBox = new System.Windows.Controls.TextBox { MinWidth = 140 };
@@ -6278,19 +6250,17 @@ internal static class FreeWRibbonCommands
             // Disable value field for blank/not blank operators.
             opCombo.SelectionChanged += (_, _) =>
             {
-                var idx = opCombo.SelectedIndex;
-                var op = ConditionOperators[idx].Op;
-                valueBox.IsEnabled = op != MergeConditionOperator.IsBlank && op != MergeConditionOperator.IsNotBlank;
+                var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
+                valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
             };
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var opIdx = opCombo.SelectedIndex < 0 ? 0 : opCombo.SelectedIndex;
-                result = new MergeRuleIfResult(
+                result = MailMergeRuleDialogPlanner.CreateIfResult(
                     fieldCombo.SelectedItem?.ToString() ?? fieldCombo.Text,
-                    ConditionOperators[opIdx].Op,
+                    opCombo.SelectedIndex,
                     valueBox.Text,
                     trueBox.Text,
                     falseBox.Text);
@@ -6336,9 +6306,9 @@ internal static class FreeWRibbonCommands
     // Skip Record If / Next Record If dialog.
     private static class MergeRuleCondDialog
     {
-        public static MergeRuleCondResult? Ask(Window? owner, IReadOnlyList<string> header, string title)
+        public static MailMergeRuleConditionDialogResult? Ask(Window? owner, IReadOnlyList<string> header, string title)
         {
-            MergeRuleCondResult? result = null;
+            MailMergeRuleConditionDialogResult? result = null;
             var dialog = new Window
             {
                 Title = title,
@@ -6354,25 +6324,23 @@ internal static class FreeWRibbonCommands
             if (fieldCombo.Items.Count > 0) fieldCombo.SelectedIndex = 0;
 
             var opCombo = new System.Windows.Controls.ComboBox { MinWidth = 200 };
-            foreach (var (_, label) in ConditionOperators) opCombo.Items.Add(label);
+            foreach (var choice in MailMergeRuleDialogPlanner.GetConditionOperators()) opCombo.Items.Add(choice.Label);
             opCombo.SelectedIndex = 0;
 
             var valueBox = new System.Windows.Controls.TextBox { MinWidth = 140 };
             opCombo.SelectionChanged += (_, _) =>
             {
-                var idx = opCombo.SelectedIndex;
-                var op = ConditionOperators[idx].Op;
-                valueBox.IsEnabled = op != MergeConditionOperator.IsBlank && op != MergeConditionOperator.IsNotBlank;
+                var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
+                valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
             };
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var opIdx = opCombo.SelectedIndex < 0 ? 0 : opCombo.SelectedIndex;
-                result = new MergeRuleCondResult(
+                result = MailMergeRuleDialogPlanner.CreateConditionResult(
                     fieldCombo.SelectedItem?.ToString() ?? fieldCombo.Text,
-                    ConditionOperators[opIdx].Op,
+                    opCombo.SelectedIndex,
                     valueBox.Text);
                 dialog.DialogResult = true;
             };
