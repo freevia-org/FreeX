@@ -2,7 +2,7 @@ using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.PivotUI;
 
 public sealed record GetPivotDataFormulaPlan(string FunctionCall, string Formula);
 
