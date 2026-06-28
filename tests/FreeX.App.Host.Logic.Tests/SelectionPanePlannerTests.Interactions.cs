@@ -54,7 +54,7 @@ public sealed partial class SelectionPanePlannerTests
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
         source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
-        source.Should().Contain("SelectionPaneDialogStatePlanner.PlanMove");
+        source.Should().Contain("SelectionPanePlanner.PlanMove");
         source.Should().Contain("_moveChanges.AddRange(plan.MoveChanges)");
         source.Should().Contain("ApplySearchAndFilter(selected.Source.Id)");
         var acceptMoveBody = source.Substring(
@@ -77,7 +77,7 @@ public sealed partial class SelectionPanePlannerTests
         source.Should().Contain("_list.DragOver");
         source.Should().Contain("_list.Drop");
         source.Should().Contain("DragDrop.DoDragDrop");
-        source.Should().Contain("SelectionPaneDialogStatePlanner.PlanDragReorder");
+        source.Should().Contain("SelectionPanePlanner.PlanDragReorder");
         source.Should().Contain("GetDropPlacement");
         source.Should().Contain("SelectionPaneDropPlacement.After");
         source.Should().Contain("CreateDragMoveChanges");

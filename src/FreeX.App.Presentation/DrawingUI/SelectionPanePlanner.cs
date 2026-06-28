@@ -28,6 +28,11 @@ public sealed record SelectionPaneReorderPlan(
     IReadOnlyList<Guid> OrderedIds,
     IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
 
+public sealed record SelectionPaneDropVisualPlan(
+    Guid TargetId,
+    SelectionPaneDropPlacement Placement,
+    bool IsAllowed);
+
 public enum SelectionPaneDialogAction
 {
     ApplyVisibility,
@@ -67,6 +72,17 @@ public sealed record SelectionPanePlannerText(
         "Rectangle");
 }
 
+public static class SelectionPaneFilterValues
+{
+    public const string All = "All";
+    public const string Visible = "Visible";
+    public const string Hidden = "Hidden";
+    public const string Charts = "Charts";
+    public const string Pictures = "Pictures";
+    public const string Shapes = "Shapes";
+    public const string TextBoxes = "Text Boxes";
+}
+
 public static class SelectionPanePlanner
 {
     public static IReadOnlyList<SelectionPaneItem> BuildItems(Sheet sheet) =>
@@ -84,6 +100,30 @@ public static class SelectionPanePlanner
         AddDrawingObjectItems(sheet, text, items);
         items.Reverse();
         return items;
+    }
+
+    public static IReadOnlyList<SelectionPaneItemState> FilterItems(
+        IReadOnlyList<SelectionPaneItemState> items,
+        string search,
+        string filter)
+    {
+        var normalizedSearch = search.Trim();
+        var normalizedFilter = string.IsNullOrWhiteSpace(filter) ? SelectionPaneFilterValues.All : filter;
+        if (normalizedSearch.Length == 0 &&
+            string.Equals(normalizedFilter, SelectionPaneFilterValues.All, StringComparison.Ordinal))
+        {
+            return items;
+        }
+
+        var filtered = new List<SelectionPaneItemState>();
+        for (var index = 0; index < items.Count; index++)
+        {
+            var item = items[index];
+            if (MatchesSearch(item, normalizedSearch) && MatchesFilter(item, normalizedFilter))
+                filtered.Add(item);
+        }
+
+        return filtered;
     }
 
     public static SelectionPaneReorderPlan? PlanMove(
@@ -119,6 +159,16 @@ public static class SelectionPanePlanner
         orderedIds.RemoveAt(dragPlan.DraggedIndex);
         orderedIds.Insert(dragPlan.InsertIndex, dragged);
         return new SelectionPaneReorderPlan(orderedIds, dragPlan.MoveChanges);
+    }
+
+    public static SelectionPaneDropVisualPlan PlanDropVisual(
+        IReadOnlyList<SelectionPaneItemState> items,
+        Guid draggedId,
+        Guid targetId,
+        SelectionPaneDropPlacement placement = SelectionPaneDropPlacement.Before)
+    {
+        var plan = PlanDragReorder(items, draggedId, targetId, placement);
+        return new SelectionPaneDropVisualPlan(targetId, placement, plan is not null);
     }
 
     public static int FindMoveTargetIndex(
@@ -472,6 +522,23 @@ public static class SelectionPanePlanner
         string.Format(CultureInfo.CurrentCulture, format, args);
 
     private static string NormalizeName(string name) => name.Trim();
+
+    private static bool MatchesSearch(SelectionPaneItemState item, string search) =>
+        string.IsNullOrWhiteSpace(search) ||
+        item.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+        item.Kind.ToString().Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    private static bool MatchesFilter(SelectionPaneItemState item, string filter) =>
+        filter switch
+        {
+            SelectionPaneFilterValues.Visible => item.IsVisible,
+            SelectionPaneFilterValues.Hidden => !item.IsVisible,
+            SelectionPaneFilterValues.Charts => item.Kind == SelectionPaneObjectKind.Chart,
+            SelectionPaneFilterValues.Pictures => item.Kind == SelectionPaneObjectKind.Picture,
+            SelectionPaneFilterValues.Shapes => item.Kind == SelectionPaneObjectKind.Shape,
+            SelectionPaneFilterValues.TextBoxes => item.Kind == SelectionPaneObjectKind.TextBox,
+            _ => true
+        };
 
     private static IReadOnlyDictionary<Guid, int> CreateIndexMap<T>(
         IReadOnlyList<T> items,

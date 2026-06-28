@@ -182,6 +182,40 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void FilterItems_AppliesSearchAndKindFilters()
+    {
+        var picture = State(SelectionPaneObjectKind.Picture, "Logo", isVisible: true);
+        var hiddenShape = State(SelectionPaneObjectKind.Shape, "Process Box", isVisible: false);
+        var textBox = State(SelectionPaneObjectKind.TextBox, "Quarter Notes", isVisible: true);
+
+        var visibleMatches = SelectionPanePlanner.FilterItems(
+            [picture, hiddenShape, textBox],
+            "  notes  ",
+            SelectionPaneFilterValues.Visible);
+        var shapeMatches = SelectionPanePlanner.FilterItems(
+            [picture, hiddenShape, textBox],
+            "shape",
+            SelectionPaneFilterValues.All);
+
+        visibleMatches.Should().Equal(textBox);
+        shapeMatches.Should().Equal(hiddenShape);
+    }
+
+    [Fact]
+    public void FilterItems_ReturnsOriginalListForDefaultView()
+    {
+        var items = new[]
+        {
+            State(SelectionPaneObjectKind.Picture, "Logo"),
+            State(SelectionPaneObjectKind.Shape, "Process Box", isVisible: false)
+        };
+
+        var filtered = SelectionPanePlanner.FilterItems(items, " ", "");
+
+        filtered.Should().BeSameAs(items);
+    }
+
+    [Fact]
     public void PlanDragReorder_CreatesAdjacentMovesAndNewOrder()
     {
         var front = State(SelectionPaneObjectKind.Picture);
@@ -198,6 +232,61 @@ public sealed class SelectionPanePlannerTests
         plan.MoveChanges.Should().Equal(
             new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back.Id, Forward: true),
             new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, back.Id, Forward: true));
+    }
+
+    [Fact]
+    public void PlanDropVisual_AllowsMixedSupportedInsertionCue()
+    {
+        var front = State(SelectionPaneObjectKind.Picture, "Front");
+        var back = State(SelectionPaneObjectKind.Shape, "Back");
+
+        var plan = SelectionPanePlanner.PlanDropVisual(
+            [front, back],
+            draggedId: back.Id,
+            targetId: front.Id,
+            placement: SelectionPaneDropPlacement.Before);
+
+        plan.Should().Be(new SelectionPaneDropVisualPlan(
+            front.Id,
+            SelectionPaneDropPlacement.Before,
+            IsAllowed: true));
+    }
+
+    [Fact]
+    public void PlanDropVisual_RejectsSameItemUnsupportedChartAndNoOpCues()
+    {
+        var front = State(SelectionPaneObjectKind.Picture, "Front");
+        var back = State(SelectionPaneObjectKind.Picture, "Back");
+        var chart = State(SelectionPaneObjectKind.Chart, "Chart");
+
+        var sameItem = SelectionPanePlanner.PlanDropVisual(
+            [front, chart],
+            draggedId: front.Id,
+            targetId: front.Id,
+            placement: SelectionPaneDropPlacement.After);
+        var chartCue = SelectionPanePlanner.PlanDropVisual(
+            [front, chart],
+            draggedId: front.Id,
+            targetId: chart.Id,
+            placement: SelectionPaneDropPlacement.After);
+        var noOpCue = SelectionPanePlanner.PlanDropVisual(
+            [front, back],
+            draggedId: front.Id,
+            targetId: back.Id,
+            placement: SelectionPaneDropPlacement.Before);
+
+        sameItem.Should().Be(new SelectionPaneDropVisualPlan(
+            front.Id,
+            SelectionPaneDropPlacement.After,
+            IsAllowed: false));
+        chartCue.Should().Be(new SelectionPaneDropVisualPlan(
+            chart.Id,
+            SelectionPaneDropPlacement.After,
+            IsAllowed: false));
+        noOpCue.Should().Be(new SelectionPaneDropVisualPlan(
+            back.Id,
+            SelectionPaneDropPlacement.Before,
+            IsAllowed: false));
     }
 
     [Fact]
@@ -268,5 +357,11 @@ public sealed class SelectionPanePlannerTests
     }
 
     private static SelectionPaneItemState State(SelectionPaneObjectKind kind) =>
-        new(kind, Guid.NewGuid(), kind.ToString(), IsVisible: true);
+        State(kind, kind.ToString());
+
+    private static SelectionPaneItemState State(
+        SelectionPaneObjectKind kind,
+        string name,
+        bool isVisible = true) =>
+        new(kind, Guid.NewGuid(), name, isVisible);
 }

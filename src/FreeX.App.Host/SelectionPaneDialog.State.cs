@@ -25,7 +25,7 @@ public sealed partial class SelectionPaneDialog
             return;
 
         var forward = action == SelectionPaneDialogAction.MoveUp;
-        var plan = SelectionPaneDialogStatePlanner.PlanMove(CurrentItemStates(), selected.Source.Id, forward);
+        var plan = SelectionPanePlanner.PlanMove(CurrentItemStates(), selected.Source.Id, forward);
         if (plan is null)
             return;
 
@@ -71,7 +71,7 @@ public sealed partial class SelectionPaneDialog
         var placement = targetContainer is null ? SelectionPaneDropPlacement.Before : GetDropPlacement(e, targetContainer);
         var visualPlan = dragged is null || target is null
             ? null
-            : SelectionPaneDialogStatePlanner.PlanDropVisual(
+            : SelectionPanePlanner.PlanDropVisual(
                 CurrentItemStates(),
                 dragged.Source.Id,
                 target.Source.Id,
@@ -149,7 +149,7 @@ public sealed partial class SelectionPaneDialog
         SelectionPaneDialogItem target,
         SelectionPaneDropPlacement placement)
     {
-        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+        var plan = SelectionPanePlanner.PlanDragReorder(
             CurrentItemStates(),
             dragged.Source.Id,
             target.Source.Id,
@@ -163,10 +163,10 @@ public sealed partial class SelectionPaneDialog
     }
 
     private IReadOnlyList<SelectionPaneVisibilityChange> CurrentVisibilityChanges() =>
-        SelectionPaneDialogStatePlanner.CreateVisibilityChanges(_sourceItems, CurrentItemStates());
+        SelectionPanePlanner.CreateVisibilityChanges(_sourceItems, CurrentItemStates());
 
     private IReadOnlyList<SelectionPaneRenameChange> CurrentRenameChanges() =>
-        SelectionPaneDialogStatePlanner.CreateRenameChanges(_sourceItems, CurrentItemStates());
+        SelectionPanePlanner.CreateRenameChanges(_sourceItems, CurrentItemStates());
 
     private void SetAllVisibility(bool isVisible)
     {
@@ -182,7 +182,7 @@ public sealed partial class SelectionPaneDialog
     {
         var search = _searchBox.Text.Trim();
         var filter = (_filterBox.SelectedItem as SelectionPaneFilterChoice)?.Value ?? SelectionPaneFilterValues.All;
-        var filteredIds = SelectionPaneDialogStatePlanner
+        var filteredIds = SelectionPanePlanner
             .FilterItems(CurrentItemStates(), search, filter)
             .Select(item => item.Id)
             .ToHashSet();
@@ -260,7 +260,7 @@ public sealed partial class SelectionPaneDialog
         dragged is not null &&
         target is not null &&
         !ReferenceEquals(dragged, target) &&
-        SelectionPaneDialogStatePlanner.CanReorderKinds(dragged.Source.Kind, target.Source.Kind);
+        SelectionPanePlanner.CanReorderKinds(dragged.Source.Kind, target.Source.Kind);
 
     private void RenameSelectedItem()
     {
@@ -306,20 +306,20 @@ public sealed partial class SelectionPaneDialog
 
         var currentIndex = _items.IndexOf(selected);
         var states = CurrentItemStates();
-        _moveUpButton.IsEnabled = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(states, currentIndex, forward: true) >= 0;
-        _moveDownButton.IsEnabled = SelectionPaneDialogStatePlanner.FindMoveTargetIndex(states, currentIndex, forward: false) >= 0;
+        _moveUpButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(states, currentIndex, forward: true) >= 0;
+        _moveDownButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(states, currentIndex, forward: false) >= 0;
     }
 
-    private IReadOnlyList<SelectionPaneDialogItemState> CurrentItemStates() =>
+    private IReadOnlyList<SelectionPaneItemState> CurrentItemStates() =>
         _items
-            .Select(item => new SelectionPaneDialogItemState(
+            .Select(item => new SelectionPaneItemState(
                 item.Source.Kind,
                 item.Source.Id,
                 item.Name,
                 item.IsVisible))
             .ToList();
 
-    private void ApplyReorderPlan(SelectionPaneDialogReorderPlan plan)
+    private void ApplyReorderPlan(SelectionPaneReorderPlan plan)
     {
         var itemsById = _items.ToDictionary(item => item.Source.Id);
         _items.Clear();
