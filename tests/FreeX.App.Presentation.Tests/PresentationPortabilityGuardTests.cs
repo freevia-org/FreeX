@@ -212,6 +212,21 @@ public sealed class PresentationPortabilityGuardTests
     }
 
     [Fact]
+    public void PasteNamesPlanner_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "DefinedNames", "PasteNamesPlanner.cs"))
+            .Should()
+            .BeTrue("Paste Names projection and edit planning should live in the shared Presentation layer");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "PasteNamesPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared Paste Names planner instead of carrying a renderer-local facade");
+    }
+
+    [Fact]
     public void ProtectionDialogParsingAndResults_AreSharedPresentationImplementations()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
