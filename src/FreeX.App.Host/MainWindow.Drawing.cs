@@ -458,26 +458,11 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
-                    if (target.Kind == DrawingObjectTargetKind.Shape)
-                    {
-                        return new SetDrawingShapeColorsCommand(
-                            sheetId,
-                            groupedTarget?.Id ?? Guid.Empty,
-                            selectedColor,
-                            null,
-                            updateFill: true,
-                            updateOutline: false,
-                            hasFill: hasFill);
-                    }
-
-                    return new SetTextBoxColorsCommand(
+                    return DrawingObjectCommandPlanner.BuildFillColorCommand(
                         sheetId,
+                        target.Kind,
                         groupedTarget?.Id ?? Guid.Empty,
-                        selectedColor,
-                        null,
-                        updateFill: true,
-                        updateOutline: false,
-                        hasFill: hasFill);
+                        selectedColor);
                 }))
             return;
 
@@ -514,24 +499,17 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
-                    if (target.Kind == DrawingObjectTargetKind.Shape)
-                    {
-                        return new SetDrawingShapeColorsCommand(
+                    return isFill
+                        ? DrawingObjectCommandPlanner.BuildFillColorCommand(
                             sheetId,
+                            target.Kind,
                             groupedTarget?.Id ?? Guid.Empty,
-                            isFill ? color : null,
-                            isFill ? null : color,
-                            updateFill: isFill,
-                            updateOutline: !isFill);
-                    }
-
-                    return new SetTextBoxColorsCommand(
-                        sheetId,
-                        groupedTarget?.Id ?? Guid.Empty,
-                        isFill ? color : groupedTarget?.FillColor,
-                        isFill ? groupedTarget?.OutlineColor : color,
-                        updateFill: isFill,
-                        updateOutline: !isFill);
+                            color)
+                        : DrawingObjectCommandPlanner.BuildOutlineColorCommand(
+                            sheetId,
+                            target.Kind,
+                            groupedTarget?.Id ?? Guid.Empty,
+                            color);
                 }))
             return;
 

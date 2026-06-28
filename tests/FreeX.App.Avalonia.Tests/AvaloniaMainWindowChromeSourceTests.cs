@@ -502,6 +502,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedDrawingShape(");
         formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
@@ -514,6 +516,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().NotContain("new BringDrawingShapeForwardCommand(");
         contextualTabsSource.Should().NotContain("new SendDrawingShapeBackwardCommand(");
         contextualTabsSource.Should().NotContain("new SetDrawingObjectRotationCommand(");
+        contextualTabsSource.Should().NotContain("new SetDrawingShapeColorsCommand(");
         contextualTabsSource.Should().NotContain("new ResizePictureCommand(");
         contextualTabsSource.Should().NotContain("new ResizeDrawingShapeCommand(");
         contextualTabsSource.Should().NotContain("new SetPictureAltTextCommand(");
