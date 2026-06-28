@@ -203,7 +203,7 @@ public static class XlsxColorReader
             return false;
         }
 
-        color = ApplyTint(indexedColor, ReadTint(element));
+        color = WorkbookThemeTint.Apply(indexedColor, ReadTint(element));
         return true;
     }
 
@@ -214,25 +214,6 @@ public static class XlsxColorReader
             double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var tint)
             ? tint
             : 0d;
-    }
-
-    private static CellColor ApplyTint(CellColor color, double tint)
-    {
-        if (Math.Abs(tint) < 0.000001)
-            return color;
-
-        return new CellColor(
-            ApplyTint(color.R, tint),
-            ApplyTint(color.G, tint),
-            ApplyTint(color.B, tint));
-    }
-
-    private static byte ApplyTint(byte channel, double tint)
-    {
-        var value = tint < 0
-            ? channel * (1.0 + tint)
-            : channel + ((255 - channel) * tint);
-        return (byte)Math.Clamp(Math.Round(value), 0, 255);
     }
 
     private static bool TryMapThemeColorSlot(int themeIndex, out WorkbookThemeColorSlot slot)
