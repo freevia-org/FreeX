@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.SheetUI;
 
 public static class WorksheetSizeInputParser
 {

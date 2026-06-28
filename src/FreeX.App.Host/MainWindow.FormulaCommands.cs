@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
