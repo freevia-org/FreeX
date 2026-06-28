@@ -184,8 +184,7 @@ public sealed partial class PrintPreviewDialog : Window
 
         var collatedBox = new CheckBox
         {
-            // Strip the mnemonic marker so the toolbar shows "Collated" not "C_ollated".
-            Content = UiText.Get("PrintPreview_CollatedLabel").Replace("_", string.Empty, StringComparison.Ordinal),
+            Content = PrintPreviewToolbarStatePlanner.CreateToolbarCollatedText(WpfPrintSettingsTextResolver.Instance),
             IsChecked = true,
             Margin = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -197,14 +196,13 @@ public sealed partial class PrintPreviewDialog : Window
         var sidesBox = new ComboBox
         {
             Width = 178,
-            SelectedIndex = 0,
             Margin = new Thickness(0, 0, 8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
             ToolTip = UiText.Get("PrintPreview_SidesToolTip")
         };
-        sidesBox.Items.Add(UiText.Get("PrintPreview_SidesOneSided"));
-        sidesBox.Items.Add(UiText.Get("PrintPreview_SidesFlipLongEdge"));
-        sidesBox.Items.Add(UiText.Get("PrintPreview_SidesFlipShortEdge"));
+        foreach (var option in PrintPreviewToolbarStatePlanner.CreateSidesOptions(WpfPrintSettingsTextResolver.Instance))
+            sidesBox.Items.Add(option.Text);
+        sidesBox.SelectedIndex = PrintPreviewToolbarStatePlanner.SidesModeToIndex(PrintPreviewSidesMode.OneSided);
         AutomationProperties.SetName(sidesBox, UiText.Get("PrintPreview_SidesAutomationName"));
         AutomationProperties.SetHelpText(sidesBox, UiText.Get("PrintPreview_SidesHelpText"));
 
@@ -336,11 +334,16 @@ public sealed partial class PrintPreviewDialog : Window
 
     private static PrintRangeControls CreatePrintRangeControls(int totalPages, Action<PrintPreviewPageRangeMode> selectPageRangeMode)
     {
+        var rangePlan = PrintPreviewToolbarStatePlanner.CreatePageRangeToolbarPlan(
+            totalPages,
+            WpfPrintSettingsTextResolver.Instance);
+        var allPagesChoice = rangePlan.Choices.Single(choice => choice.Mode == PrintPreviewPageRangeMode.AllPages);
+        var currentPageChoice = rangePlan.Choices.Single(choice => choice.Mode == PrintPreviewPageRangeMode.CurrentPage);
+        var pagesChoice = rangePlan.Choices.Single(choice => choice.Mode == PrintPreviewPageRangeMode.Pages);
         var allPagesButton = new RadioButton
         {
-            // Strip the mnemonic marker so the toolbar shows "All pages" not "_All pages".
-            Content = UiText.Get("PrintPreview_AllPagesLabel").Replace("_", string.Empty, StringComparison.Ordinal),
-            IsChecked = true,
+            Content = allPagesChoice.Text,
+            IsChecked = allPagesChoice.IsChecked,
             GroupName = "PrintPageRange",
             Margin = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -348,7 +351,8 @@ public sealed partial class PrintPreviewDialog : Window
         };
         var currentPageButton = new RadioButton
         {
-            Content = UiText.Get("PrintPreview_CurrentPageLabel"),
+            Content = currentPageChoice.Text,
+            IsChecked = currentPageChoice.IsChecked,
             GroupName = "PrintPageRange",
             Margin = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -356,7 +360,8 @@ public sealed partial class PrintPreviewDialog : Window
         };
         var pagesButton = new RadioButton
         {
-            Content = UiText.Get("PrintPreview_PagesLabel"),
+            Content = pagesChoice.Text,
+            IsChecked = pagesChoice.IsChecked,
             GroupName = "PrintPageRange",
             Margin = new Thickness(0, 0, 4, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -365,18 +370,18 @@ public sealed partial class PrintPreviewDialog : Window
         var fromPageBox = new TextBox
         {
             Width = 34,
-            Text = "1",
+            Text = rangePlan.FromPageText,
             Margin = new Thickness(0, 0, 4, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
-            IsEnabled = false
+            IsEnabled = rangePlan.PageBoxesEnabled
         };
         var toPageBox = new TextBox
         {
             Width = 34,
-            Text = totalPages.ToString(CultureInfo.InvariantCulture),
+            Text = rangePlan.ToPageText,
             Margin = new Thickness(0, 0, 8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
-            IsEnabled = false
+            IsEnabled = rangePlan.PageBoxesEnabled
         };
         void SetPageRangeBoxesEnabled(bool enabled)
         {
@@ -400,7 +405,13 @@ public sealed partial class PrintPreviewDialog : Window
         AutomationProperties.SetName(fromPageBox, UiText.Get("PrintPreview_FromPageAutomationName"));
         AutomationProperties.SetName(toPageBox, UiText.Get("PrintPreview_ToPageAutomationName"));
 
-        return new PrintRangeControls(allPagesButton, currentPageButton, pagesButton, fromPageBox, toPageBox);
+        return new PrintRangeControls(
+            allPagesButton,
+            currentPageButton,
+            pagesButton,
+            fromPageBox,
+            toPageBox,
+            rangePlan.ToSeparatorText);
     }
 
     private static void AddPrintRangeControlsToToolbar(ToolBar toolbar, PrintRangeControls controls)
@@ -409,7 +420,7 @@ public sealed partial class PrintPreviewDialog : Window
         toolbar.Items.Add(controls.CurrentPageButton);
         toolbar.Items.Add(controls.PagesButton);
         toolbar.Items.Add(controls.FromPageBox);
-        toolbar.Items.Add(new TextBlock { Text = UiText.Get("PrintPreview_PageRangeToText"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+        toolbar.Items.Add(new TextBlock { Text = controls.ToSeparatorText, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
         toolbar.Items.Add(controls.ToPageBox);
         toolbar.Items.Add(new Separator());
     }
@@ -513,25 +524,26 @@ public sealed partial class PrintPreviewDialog : Window
 
     private static ComboBox CreateZoomControl(DocumentViewer viewer)
     {
+        var zoomOptions = PrintPreviewToolbarStatePlanner.CreateZoomOptions(WpfPrintSettingsTextResolver.Instance);
         var zoomBox = new ComboBox
         {
             Width = 82,
-            SelectedIndex = 2
+            SelectedIndex = PrintPreviewToolbarStatePlanner.DefaultZoomOptionIndex
         };
         AutomationProperties.SetAutomationId(zoomBox, "PrintPreviewZoomBox");
         AutomationProperties.SetName(zoomBox, UiText.Get("PrintPreview_ZoomAutomationName"));
         AutomationProperties.SetHelpText(zoomBox, UiText.Get("PrintPreview_ZoomHelpText"));
-        var pageWidthZoomText = UiText.Get("PrintPreview_ZoomPageWidth");
-        foreach (var zoom in new[] { "50%", "75%", "100%", "125%", pageWidthZoomText })
-            zoomBox.Items.Add(zoom);
+        foreach (var option in zoomOptions)
+            zoomBox.Items.Add(option.Text);
         zoomBox.SelectionChanged += (_, _) =>
         {
-            if (zoomBox.SelectedItem is not string value)
+            if (zoomBox.SelectedIndex < 0 || zoomBox.SelectedIndex >= zoomOptions.Count)
                 return;
 
-            if (value == pageWidthZoomText)
+            var option = zoomOptions[zoomBox.SelectedIndex];
+            if (option.FitToWidth)
                 viewer.FitToWidth();
-            else if (double.TryParse(value.TrimEnd('%'), out var zoom))
+            else if (option.Percent is { } zoom)
                 viewer.Zoom = zoom;
         };
 
@@ -667,7 +679,8 @@ public sealed partial class PrintPreviewDialog : Window
         RadioButton currentPageButton,
         RadioButton pagesButton,
         TextBox fromPageBox,
-        TextBox toPageBox)
+        TextBox toPageBox,
+        string toSeparatorText)
     {
         public RadioButton AllPagesButton { get; } = allPagesButton;
 
@@ -678,6 +691,8 @@ public sealed partial class PrintPreviewDialog : Window
         public TextBox FromPageBox { get; } = fromPageBox;
 
         public TextBox ToPageBox { get; } = toPageBox;
+
+        public string ToSeparatorText { get; } = toSeparatorText;
     }
 
     private sealed class NavigationControls(
