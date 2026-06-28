@@ -16,8 +16,15 @@ public sealed class PageLayoutCommandSourceTests
             "MainWindow.Startup.cs",
             "MainWindow.Viewport.cs");
 
-        source.Should().Contain("WorkbookThemeWorkflow.CreateColorfulTheme()");
-        source.Should().Contain("WorkbookThemeWorkflow.CreateGrayscaleTheme()");
+        source.Should().Contain("WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme()");
+        source.Should().Contain("WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme()");
+        source.Should().Contain("WorkbookThemeCatalog.OfficeColorPreset.ApplyColors(_workbook.Theme)");
+        source.Should().Contain("WorkbookThemeCatalog.ArialFontPreset.ApplyFonts(_workbook.Theme)");
+        source.Should().Contain("WorkbookThemeCatalog.SubtleEffectPreset.ApplyEffects(_workbook.Theme)");
+        source.Should().NotContain("WorkbookThemeWorkflow.CreateColorfulTheme()");
+        source.Should().NotContain("WorkbookThemeWorkflow.CreateGrayscaleTheme()");
+        source.Should().NotContain(".WithFonts(\"Arial\", \"Arial\")");
+        source.Should().NotContain(".WithEffects(\"Subtle\")");
         source.Should().Contain("new WorkbookThemeDialog(_workbook.Theme, mode)");
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Theme)");
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Colors)");

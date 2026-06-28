@@ -29,13 +29,13 @@ public partial class MainWindow
     }
 
     private void ThemeOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(WorkbookTheme.Office);
+        ApplyWorkbookTheme(WorkbookThemeCatalog.OfficeThemePreset.CreateTheme());
 
     private void ThemeColorfulMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(WorkbookThemeWorkflow.CreateColorfulTheme());
+        ApplyWorkbookTheme(WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme());
 
     private void ThemeGrayscaleMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(WorkbookThemeWorkflow.CreateGrayscaleTheme());
+        ApplyWorkbookTheme(WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme());
 
     private void ThemeCustomizeMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -56,13 +56,13 @@ public partial class MainWindow
     }
 
     private void ThemeColorsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyOfficeColors(_workbook.Theme).WithName(_workbook.Theme.Name));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.OfficeColorPreset.ApplyColors(_workbook.Theme));
 
     private void ThemeColorsColorfulMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyColorfulColors(_workbook.Theme).WithName(_workbook.Theme.Name));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.FreeXColorfulColorPreset.ApplyColors(_workbook.Theme));
 
     private void ThemeColorsGrayscaleMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyGrayscaleColors(_workbook.Theme).WithName(_workbook.Theme.Name));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.GrayscaleColorPreset.ApplyColors(_workbook.Theme));
 
     private void ThemeColorsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
         ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Colors);
@@ -74,13 +74,13 @@ public partial class MainWindow
     }
 
     private void ThemeFontsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(_workbook.Theme.WithFonts(WorkbookTheme.Office.MajorFontName, WorkbookTheme.Office.MinorFontName));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.OfficeFontPreset.ApplyFonts(_workbook.Theme));
 
     private void ThemeFontsArialMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(_workbook.Theme.WithFonts("Arial", "Arial"));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.ArialFontPreset.ApplyFonts(_workbook.Theme));
 
     private void ThemeFontsTimesMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(_workbook.Theme.WithFonts("Times New Roman", "Times New Roman"));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.TimesNewRomanFontPreset.ApplyFonts(_workbook.Theme));
 
     private void ThemeFontsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
         ThemeCustomizeMenuItem_Click(sender, e);
@@ -92,13 +92,13 @@ public partial class MainWindow
     }
 
     private void ThemeEffectsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(_workbook.Theme.WithEffects(WorkbookTheme.Office.EffectsName));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.OfficeEffectPreset.ApplyEffects(_workbook.Theme));
 
     private void ThemeEffectsSubtleMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(_workbook.Theme.WithEffects("Subtle"));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.SubtleEffectPreset.ApplyEffects(_workbook.Theme));
 
     private void ThemeEffectsRefinedMenuItem_Click(object sender, RoutedEventArgs e) =>
-        ApplyWorkbookTheme(_workbook.Theme.WithEffects("Refined"));
+        ApplyWorkbookTheme(WorkbookThemeCatalog.RefinedEffectPreset.ApplyEffects(_workbook.Theme));
 
     private void ThemeEffectsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
         ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Effects);
