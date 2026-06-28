@@ -1,34 +1,12 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using FreeX.Core.Commands;
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Model;
+using SharedDataTableInputParser = FreeX.App.Presentation.DataTools.DataTableInputParser;
 
 namespace FreeX.App.Host;
-
-public enum DataTableMode
-{
-    OneVariable,
-    TwoVariable
-}
-
-public sealed record DataTableDialogResult(
-    DataTableMode Mode,
-    DataTableInputOrientation Orientation,
-    CellAddress FormulaCell,
-    CellAddress? RowInputCell,
-    CellAddress? ColumnInputCell);
-
-public enum DataTableRangeSelectionTarget
-{
-    RowInputCell,
-    ColumnInputCell
-}
-
-public sealed record DataTableRangeSelectionRequest(
-    DataTableRangeSelectionTarget Target,
-    string CurrentText,
-    bool CollapseDialog = true);
 
 public sealed class DataTableDialog : Window
 {
@@ -92,19 +70,19 @@ public sealed class DataTableDialog : Window
         string? rowInputCellText,
         string? columnInputCellText,
         out DataTableDialogResult result,
-        out string? error) =>
-        DataTableInputParser.TryParse(
+        out DataTableInputParseIssue issue) =>
+        SharedDataTableInputParser.TryParse(
             currentSheetId,
             range,
             rowInputCellText,
             columnInputCellText,
             out result,
-            out error);
+            out issue);
 
     public static DataTableRangeSelectionRequest CreateRangeSelectionRequest(
         DataTableRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        SharedDataTableInputParser.CreateRangeSelectionRequest(target, currentText);
 
     private DockPanel CreateReferenceEditor(
         TextBox textBox,
@@ -154,12 +132,15 @@ public sealed class DataTableDialog : Window
 
     public void ApplyRangeSelection(DataTableRangeSelectionTarget target, CellAddress address)
     {
-        var textBox = target == DataTableRangeSelectionTarget.ColumnInputCell
-            ? _columnInputBox
-            : _rowInputBox;
+        var textBox = GetInputBox(target);
         textBox.Text = address.ToA1();
         FocusRangeSelectionInput(textBox);
     }
+
+    private TextBox GetInputBox(DataTableRangeSelectionTarget target) =>
+        target == DataTableRangeSelectionTarget.ColumnInputCell
+            ? _columnInputBox
+            : _rowInputBox;
 
     private static void FocusRangeSelectionInput(TextBox target)
     {
@@ -171,22 +152,19 @@ public sealed class DataTableDialog : Window
         FocusRangeSelectionInput(_rowInputBox);
     }
 
-    private void FocusInvalidInput(string? error)
+    private void FocusInvalidInput(DataTableInputParseIssue issue)
     {
-        var target = string.Equals(error, UiText.Get("DataTable_InvalidColumnInputMessage"), StringComparison.Ordinal) ||
-            string.Equals(error, UiText.Get("DataTable_ColumnInputInsideRangeMessage"), StringComparison.Ordinal) ||
-            string.Equals(error, UiText.Get("DataTable_SameInputCellMessage"), StringComparison.Ordinal)
-            ? _columnInputBox
-            : _rowInputBox;
-        DialogFocus.FocusAndSelect(target);
+        var target = SharedDataTableInputParser.GetErrorFocusTarget(issue);
+        DialogFocus.FocusAndSelect(GetInputBox(target));
     }
 
     private void Accept()
     {
-        if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var error))
+        if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var issue))
         {
+            var error = DataTableInputParser.DescribeIssue(issue);
             DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("DataTable_InvalidCellsMessage"), Title);
-            FocusInvalidInput(error);
+            FocusInvalidInput(issue);
             return;
         }
 

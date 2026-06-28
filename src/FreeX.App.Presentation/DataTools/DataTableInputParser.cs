@@ -4,12 +4,6 @@ using FreeX.App.Presentation;
 
 namespace FreeX.App.Presentation.DataTools;
 
-public enum DataTableInputMode
-{
-    OneVariable,
-    TwoVariable
-}
-
 public enum DataTableInputParseIssue
 {
     None,
@@ -20,13 +14,6 @@ public enum DataTableInputParseIssue
     ColumnInputCellInsideTableRange,
     InputCellsMustBeDifferent
 }
-
-public sealed record DataTableInputParseResult(
-    DataTableInputMode Mode,
-    DataTableInputOrientation Orientation,
-    CellAddress FormulaCell,
-    CellAddress? RowInputCell,
-    CellAddress? ColumnInputCell);
 
 public static class DataTableInputParser
 {
@@ -52,12 +39,26 @@ public static class DataTableInputParser
     public static bool TryParseCell(string input, SheetId sheetId, out CellAddress address) =>
         CellReferenceInputParser.TryParseCell(input, sheetId, out address);
 
+    public static DataTableRangeSelectionRequest CreateRangeSelectionRequest(
+        DataTableRangeSelectionTarget target,
+        string? currentText) =>
+        new(target, NormalizeInput(currentText), CollapseDialog: true);
+
+    public static DataTableRangeSelectionTarget GetErrorFocusTarget(DataTableInputParseIssue issue) =>
+        issue switch
+        {
+            DataTableInputParseIssue.InvalidColumnInputCell => DataTableRangeSelectionTarget.ColumnInputCell,
+            DataTableInputParseIssue.ColumnInputCellInsideTableRange => DataTableRangeSelectionTarget.ColumnInputCell,
+            DataTableInputParseIssue.InputCellsMustBeDifferent => DataTableRangeSelectionTarget.ColumnInputCell,
+            _ => DataTableRangeSelectionTarget.RowInputCell
+        };
+
     public static bool TryParse(
         SheetId currentSheetId,
         GridRange range,
         string? rowInputCellText,
         string? columnInputCellText,
-        out DataTableInputParseResult result,
+        out DataTableDialogResult result,
         out DataTableInputParseIssue issue)
     {
         result = default!;
@@ -102,14 +103,14 @@ public static class DataTableInputParser
         }
 
         var mode = hasRowInput && hasColumnInput
-            ? DataTableInputMode.TwoVariable
-            : DataTableInputMode.OneVariable;
+            ? DataTableMode.TwoVariable
+            : DataTableMode.OneVariable;
         var orientation = hasRowInput && !hasColumnInput
             ? DataTableInputOrientation.Row
             : DataTableInputOrientation.Column;
-        var formulaCell = GetDefaultFormulaCell(range, orientation, mode == DataTableInputMode.TwoVariable);
+        var formulaCell = GetDefaultFormulaCell(range, orientation, mode == DataTableMode.TwoVariable);
 
-        result = new DataTableInputParseResult(mode, orientation, formulaCell, rowInputCell, columnInputCell);
+        result = new DataTableDialogResult(mode, orientation, formulaCell, rowInputCell, columnInputCell);
         return true;
     }
 
@@ -129,4 +130,6 @@ public static class DataTableInputParser
         address = parsed;
         return true;
     }
+
+    private static string NormalizeInput(string? input) => input?.Trim() ?? "";
 }
