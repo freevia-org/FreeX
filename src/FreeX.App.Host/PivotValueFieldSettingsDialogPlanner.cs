@@ -3,50 +3,19 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-// Localized labels, localized validation text, and number-format helpers stay here. Option order,
+// WPF localization and number-format helpers stay here. Option order, fallback labels, validation metadata,
 // index/base-field/show-values-as resolution, caption generation, and result building delegate to the
 // portable PivotValueFieldPlanner so the logic is single-sourced for Avalonia/macOS.
 public static class PivotValueFieldSettingsDialogPlanner
 {
-    public static string AutomaticBaseFieldLabel => UiText.Get("PivotValueFieldSettings_AutomaticBaseField");
-
-    private static readonly string[] SummaryFunctionResourceKeys =
-    [
-        "PivotValueFieldSettings_SummarySum",
-        "PivotValueFieldSettings_SummaryCount",
-        "PivotValueFieldSettings_SummaryAverage",
-        "PivotValueFieldSettings_SummaryMax",
-        "PivotValueFieldSettings_SummaryMin",
-        "PivotValueFieldSettings_SummaryProduct",
-        "PivotValueFieldSettings_SummaryCountNumbers",
-        "PivotValueFieldSettings_SummaryStdDev",
-        "PivotValueFieldSettings_SummaryStdDevp",
-        "PivotValueFieldSettings_SummaryVar",
-        "PivotValueFieldSettings_SummaryVarp"
-    ];
-
-    private static readonly string[] ShowValuesAsResourceKeys =
-    [
-        "PivotValueFieldSettings_ShowNoCalculation",
-        "PivotValueFieldSettings_ShowPercentOfGrandTotal",
-        "PivotValueFieldSettings_ShowPercentOfRowTotal",
-        "PivotValueFieldSettings_ShowPercentOfColumnTotal",
-        "PivotValueFieldSettings_ShowRunningTotalIn",
-        "PivotValueFieldSettings_ShowDifferenceFrom",
-        "PivotValueFieldSettings_ShowPercentDifferenceFrom",
-        "PivotValueFieldSettings_ShowRankSmallest",
-        "PivotValueFieldSettings_ShowRankLargest",
-        "PivotValueFieldSettings_ShowIndex",
-        "PivotValueFieldSettings_ShowPercentOfParentRowTotal",
-        "PivotValueFieldSettings_ShowPercentOfParentColumnTotal",
-        "PivotValueFieldSettings_ShowPercentOfParentTotal"
-    ];
+    public static string AutomaticBaseFieldLabel =>
+        UiText.Get(PivotValueFieldPlanner.AutomaticBaseField.ResourceKey);
 
     public static readonly (string Label, string Value)[] SummaryFunctions =
-        LocalizeOptions(PivotValueFieldPlanner.SummaryFunctions, SummaryFunctionResourceKeys);
+        LocalizeOptions(PivotValueFieldPlanner.SummaryFunctions);
 
     public static readonly (string Label, PivotShowValuesAs Value)[] ShowValuesAsOptions =
-        LocalizeOptions(PivotValueFieldPlanner.ShowValuesAsOptions, ShowValuesAsResourceKeys);
+        LocalizeOptions(PivotValueFieldPlanner.ShowValuesAsOptions);
 
     public static int FindSummaryFunctionIndex(string? summaryFunction) =>
         PivotValueFieldPlanner.FindSummaryFunctionIndex(summaryFunction);
@@ -90,20 +59,16 @@ public static class PivotValueFieldSettingsDialogPlanner
         string? baseItem,
         out string? error)
     {
-        switch (PivotValueFieldPlanner.ValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem))
+        var validationError = PivotValueFieldPlanner.ValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem);
+        var errorPlan = PivotValueFieldPlanner.DescribeValidationError(validationError);
+        if (errorPlan is null)
         {
-            case PivotShowValuesAsValidationError.None:
-                error = null;
-                return true;
-            case PivotShowValuesAsValidationError.MissingBaseField:
-                error = UiText.Get("PivotValueFieldSettings_SelectBaseFieldMessage");
-                return false;
-            case PivotShowValuesAsValidationError.MissingBaseItem:
-                error = UiText.Get("PivotValueFieldSettings_EnterBaseItemMessage");
-                return false;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(showValuesAs));
+            error = null;
+            return true;
         }
+
+        error = UiText.Get(errorPlan.ResourceKey);
+        return false;
     }
 
     public static PivotDataFieldModel CreateResult(
@@ -173,14 +138,8 @@ public static class PivotValueFieldSettingsDialogPlanner
         PivotValueFieldPlanner.CreateDefaultCaption(sourceCaption, summaryFunction);
 
     private static (string Label, TValue Value)[] LocalizeOptions<TValue>(
-        IReadOnlyList<(string Label, TValue Value)> sharedOptions,
-        IReadOnlyList<string> resourceKeys)
-    {
-        if (sharedOptions.Count != resourceKeys.Count)
-            throw new InvalidOperationException("Pivot value-field localized option catalogs must match the shared catalog order.");
-
-        return sharedOptions
-            .Select((option, index) => (UiText.Get(resourceKeys[index]), option.Value))
+        IReadOnlyList<PivotValueFieldOption<TValue>> sharedOptions) =>
+        sharedOptions
+            .Select(option => (UiText.Get(option.ResourceKey), option.Value))
             .ToArray();
-    }
 }

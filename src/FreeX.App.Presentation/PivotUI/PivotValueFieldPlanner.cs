@@ -2,6 +2,24 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
 
+public sealed record PivotValueFieldText(string ResourceKey, string FallbackText);
+
+public sealed record PivotValueFieldOption<TValue>(string ResourceKey, string FallbackLabel, TValue Value)
+{
+    public string Label => FallbackLabel;
+
+    public void Deconstruct(out string label, out TValue value)
+    {
+        label = Label;
+        value = Value;
+    }
+}
+
+public sealed record PivotValueFieldValidationErrorPlan(
+    PivotShowValuesAsValidationError Error,
+    string ResourceKey,
+    string FallbackMessage);
+
 public enum PivotShowValuesAsValidationError
 {
     None,
@@ -19,40 +37,55 @@ public enum PivotShowValuesAsValidationError
 public static class PivotValueFieldPlanner
 {
     /// <summary>The "(Automatic)" sentinel label shown at the top of the base-field selector.</summary>
-    public const string AutomaticBaseFieldLabel = "(Automatic)";
+    public static readonly PivotValueFieldText AutomaticBaseField =
+        new("PivotValueFieldSettings_AutomaticBaseField", "(Automatic)");
+
+    public static string AutomaticBaseFieldLabel => AutomaticBaseField.FallbackText;
 
     /// <summary>Summary functions in display order; <c>Value</c> is the OOXML <c>subtotal</c> token.</summary>
-    public static readonly IReadOnlyList<(string Label, string Value)> SummaryFunctions =
+    public static readonly IReadOnlyList<PivotValueFieldOption<string>> SummaryFunctions =
     [
-        ("Sum", "sum"),
-        ("Count", "count"),
-        ("Average", "average"),
-        ("Max", "max"),
-        ("Min", "min"),
-        ("Product", "product"),
-        ("Count Numbers", "countNums"),
-        ("StdDev", "stdDev"),
-        ("StdDevp", "stdDevP"),
-        ("Var", "var"),
-        ("Varp", "varP"),
+        new("PivotValueFieldSettings_SummarySum", "Sum", "sum"),
+        new("PivotValueFieldSettings_SummaryCount", "Count", "count"),
+        new("PivotValueFieldSettings_SummaryAverage", "Average", "average"),
+        new("PivotValueFieldSettings_SummaryMax", "Max", "max"),
+        new("PivotValueFieldSettings_SummaryMin", "Min", "min"),
+        new("PivotValueFieldSettings_SummaryProduct", "Product", "product"),
+        new("PivotValueFieldSettings_SummaryCountNumbers", "Count Numbers", "countNums"),
+        new("PivotValueFieldSettings_SummaryStdDev", "StdDev", "stdDev"),
+        new("PivotValueFieldSettings_SummaryStdDevp", "StdDevp", "stdDevP"),
+        new("PivotValueFieldSettings_SummaryVar", "Var", "var"),
+        new("PivotValueFieldSettings_SummaryVarp", "Varp", "varP"),
     ];
 
     /// <summary>Show-values-as options in display order.</summary>
-    public static readonly IReadOnlyList<(string Label, PivotShowValuesAs Value)> ShowValuesAsOptions =
+    public static readonly IReadOnlyList<PivotValueFieldOption<PivotShowValuesAs>> ShowValuesAsOptions =
     [
-        ("No Calculation", PivotShowValuesAs.None),
-        ("% of Grand Total", PivotShowValuesAs.PercentOfGrandTotal),
-        ("% of Row Total", PivotShowValuesAs.PercentOfRowTotal),
-        ("% of Column Total", PivotShowValuesAs.PercentOfColumnTotal),
-        ("Running Total In", PivotShowValuesAs.RunningTotalIn),
-        ("Difference From", PivotShowValuesAs.DifferenceFrom),
-        ("% Difference From", PivotShowValuesAs.PercentDifferenceFrom),
-        ("Rank Smallest to Largest", PivotShowValuesAs.RankSmallest),
-        ("Rank Largest to Smallest", PivotShowValuesAs.RankLargest),
-        ("Index", PivotShowValuesAs.Index),
-        ("% of Parent Row Total", PivotShowValuesAs.PercentOfParentRowTotal),
-        ("% of Parent Column Total", PivotShowValuesAs.PercentOfParentColumnTotal),
-        ("% of Parent Total", PivotShowValuesAs.PercentOfParentTotal),
+        new("PivotValueFieldSettings_ShowNoCalculation", "No Calculation", PivotShowValuesAs.None),
+        new("PivotValueFieldSettings_ShowPercentOfGrandTotal", "% of Grand Total", PivotShowValuesAs.PercentOfGrandTotal),
+        new("PivotValueFieldSettings_ShowPercentOfRowTotal", "% of Row Total", PivotShowValuesAs.PercentOfRowTotal),
+        new("PivotValueFieldSettings_ShowPercentOfColumnTotal", "% of Column Total", PivotShowValuesAs.PercentOfColumnTotal),
+        new("PivotValueFieldSettings_ShowRunningTotalIn", "Running Total In", PivotShowValuesAs.RunningTotalIn),
+        new("PivotValueFieldSettings_ShowDifferenceFrom", "Difference From", PivotShowValuesAs.DifferenceFrom),
+        new("PivotValueFieldSettings_ShowPercentDifferenceFrom", "% Difference From", PivotShowValuesAs.PercentDifferenceFrom),
+        new("PivotValueFieldSettings_ShowRankSmallest", "Rank Smallest to Largest", PivotShowValuesAs.RankSmallest),
+        new("PivotValueFieldSettings_ShowRankLargest", "Rank Largest to Smallest", PivotShowValuesAs.RankLargest),
+        new("PivotValueFieldSettings_ShowIndex", "Index", PivotShowValuesAs.Index),
+        new("PivotValueFieldSettings_ShowPercentOfParentRowTotal", "% of Parent Row Total", PivotShowValuesAs.PercentOfParentRowTotal),
+        new("PivotValueFieldSettings_ShowPercentOfParentColumnTotal", "% of Parent Column Total", PivotShowValuesAs.PercentOfParentColumnTotal),
+        new("PivotValueFieldSettings_ShowPercentOfParentTotal", "% of Parent Total", PivotShowValuesAs.PercentOfParentTotal),
+    ];
+
+    public static readonly IReadOnlyList<PivotValueFieldValidationErrorPlan> ValidationErrors =
+    [
+        new(
+            PivotShowValuesAsValidationError.MissingBaseField,
+            "PivotValueFieldSettings_SelectBaseFieldMessage",
+            "Select a base field for the chosen calculation."),
+        new(
+            PivotShowValuesAsValidationError.MissingBaseItem,
+            "PivotValueFieldSettings_EnterBaseItemMessage",
+            "Enter a base item for the chosen calculation."),
     ];
 
     public static int FindSummaryFunctionIndex(string? summaryFunction)
@@ -127,26 +160,37 @@ public static class PivotValueFieldPlanner
         return PivotShowValuesAsValidationError.None;
     }
 
+    public static PivotValueFieldValidationErrorPlan? DescribeValidationError(
+        PivotShowValuesAsValidationError error)
+    {
+        if (error == PivotShowValuesAsValidationError.None)
+            return null;
+
+        for (var index = 0; index < ValidationErrors.Count; index++)
+        {
+            if (ValidationErrors[index].Error == error)
+                return ValidationErrors[index];
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(error), error, null);
+    }
+
     public static bool TryValidateShowValuesAs(
         PivotShowValuesAs showValuesAs,
         int? baseFieldIndex,
         string? baseItem,
         out string? error)
     {
-        switch (ValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem))
+        var validationError = ValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem);
+        var errorPlan = DescribeValidationError(validationError);
+        if (errorPlan is null)
         {
-            case PivotShowValuesAsValidationError.None:
-                error = null;
-                return true;
-            case PivotShowValuesAsValidationError.MissingBaseField:
-                error = "Select a base field for the chosen calculation.";
-                return false;
-            case PivotShowValuesAsValidationError.MissingBaseItem:
-                error = "Enter a base item for the chosen calculation.";
-                return false;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(showValuesAs));
+            error = null;
+            return true;
         }
+
+        error = errorPlan.FallbackMessage;
+        return false;
     }
 
     /// <summary>Builds the updated data field from the dialog's collected input.</summary>
