@@ -45,6 +45,13 @@ public enum FillSeriesInputError
     InvalidStop,
 }
 
+/// <summary>The Fill Series input that should receive focus after a validation error.</summary>
+public enum FillSeriesInputFocusTarget
+{
+    StepValue,
+    StopValue,
+}
+
 /// <summary>
 /// Portable (no UI) backing logic for the Fill ▸ Series dialog (Home ▸ Fill ▸ Series). It parses and
 /// validates the step/stop inputs and builds the linear / growth / date cell edits over a range, reading the
@@ -53,6 +60,23 @@ public enum FillSeriesInputError
 /// </summary>
 public static class FillSeriesPlanner
 {
+    public static FillSeriesOptions DefaultOptions { get; } = new(
+        Step: 1,
+        SeriesIn: FillSeriesDirection.Columns,
+        Type: FillSeriesType.Linear,
+        DateUnit: FillSeriesDateUnit.Day);
+
+    public static FillSeriesOptions CreateDefaultOptions(double step) =>
+        DefaultOptions with { Step = step };
+
+    public static bool IsDateUnitEnabled(FillSeriesType type) =>
+        type == FillSeriesType.Date;
+
+    public static FillSeriesInputFocusTarget FocusTargetFor(FillSeriesInputError error) =>
+        error == FillSeriesInputError.InvalidStop
+            ? FillSeriesInputFocusTarget.StopValue
+            : FillSeriesInputFocusTarget.StepValue;
+
     /// <summary>
     /// Parses a step value, accepting the invariant decimal form and the current UI culture (so a typed
     /// <c>1.5</c> or a locale's <c>1,5</c> both work). Rejects non-finite values.

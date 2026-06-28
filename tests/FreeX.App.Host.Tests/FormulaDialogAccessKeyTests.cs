@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.DefinedNames;
 
 namespace FreeX.App.Host.Tests;
 
@@ -100,7 +101,7 @@ public sealed class FormulaDialogAccessKeyTests
             .Should()
             .BeTrue(error);
 
-        result.Should().Be(new CreateNamesFromSelectionDialogResult(
+        result.Should().Be(new CreateNamesFromSelectionOptions(
             UseTopRow: false,
             UseLeftColumn: true,
             UseBottomRow: false,
@@ -114,10 +115,14 @@ public sealed class FormulaDialogAccessKeyTests
 
         source.Should().Contain("DialogButtonRowFactory.Create(Accept");
         source.Should().Contain("if (!TryCreateResult(");
+        source.Should().Contain("CreateNamesFromSelectionPlanner.TryCreateOptions(");
         source.Should().Contain("DialogMessageHelper.ShowWarning(");
         source.Should().Contain("this,");
         source.Should().Contain("FocusInitialKeyboardTarget();");
         source.Should().Contain("DialogResult = true;");
+        source.Should().Contain("CreateNamesFromSelectionPlanner.DefaultOptions");
+        source.Should().NotContain("CreateNamesFromSelectionDialogResult");
+        source.Should().NotContain("!useTopRow && !useLeftColumn && !useBottomRow && !useRightColumn");
         source.Should().NotContain("MessageBox.Show(");
     }
 

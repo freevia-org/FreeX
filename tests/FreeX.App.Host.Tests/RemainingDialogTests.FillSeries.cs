@@ -24,6 +24,8 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("FillSeriesType.Date");
         source.Should().Contain("FillSeriesDateUnit.Month");
         source.Should().Contain("StopValue");
+        source.Should().Contain("FillSeriesPlanner.DefaultOptions");
+        source.Should().Contain("FillSeriesPlanner.CreateDefaultOptions");
         source.Should().NotContain("enum FillSeriesDirection");
         source.Should().NotContain("enum FillSeriesType");
         source.Should().NotContain("enum FillSeriesDateUnit");
@@ -108,6 +110,7 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("error ?? UiText.Get(\"FillSeriesStep_InvalidStepMessage\")");
         source.Should().Contain("FocusInvalidStepInput();");
+        source.Should().Contain("FocusInvalidInput(inputError);");
         source.Should().Contain("private void FocusInvalidStepInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_stepBox);");
     }
@@ -138,6 +141,8 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("private void FocusInvalidStopInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_stopBox);");
         source.Should().Contain("UiText.Get(\"FillSeriesStep_InvalidStopMessage\")");
+        source.Should().Contain("FillSeriesPlanner.FocusTargetFor(inputError) == FillSeriesInputFocusTarget.StopValue");
+        source.Should().NotContain("string.Equals(error, UiText.Get(\"FillSeriesStep_InvalidStopMessage\")");
     }
 
     [Fact]
@@ -150,7 +155,7 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("_dateButton.Checked += (_, _) => UpdateDateUnitAvailability();");
         source.Should().Contain("_autoFillButton.Checked += (_, _) => UpdateDateUnitAvailability();");
         source.Should().Contain("private void UpdateDateUnitAvailability()");
-        source.Should().Contain("var isDateSeries = _dateButton.IsChecked == true;");
+        source.Should().Contain("var isDateSeries = FillSeriesPlanner.IsDateUnitEnabled(SelectedSeriesType());");
         foreach (var button in new[] { "_dayButton", "_weekdayButton", "_monthButton", "_yearButton" })
             source.Should().Contain($"{button}.IsEnabled = isDateSeries;");
     }

@@ -12,21 +12,21 @@ public sealed class FillSeriesStepDialog : Window
     private readonly TextBox _stepBox = new();
     private readonly TextBox _stopBox = new();
     private readonly RadioButton _rowsButton = new() { Content = UiText.Get("FillSeriesStep_Rows"), GroupName = "SeriesIn" };
-    private readonly RadioButton _columnsButton = new() { Content = UiText.Get("FillSeriesStep_Columns"), GroupName = "SeriesIn", IsChecked = true };
-    private readonly RadioButton _linearButton = new() { Content = UiText.Get("FillSeriesStep_Linear"), GroupName = "SeriesType", IsChecked = true };
+    private readonly RadioButton _columnsButton = new() { Content = UiText.Get("FillSeriesStep_Columns"), GroupName = "SeriesIn", IsChecked = FillSeriesPlanner.DefaultOptions.SeriesIn == FillSeriesDirection.Columns };
+    private readonly RadioButton _linearButton = new() { Content = UiText.Get("FillSeriesStep_Linear"), GroupName = "SeriesType", IsChecked = FillSeriesPlanner.DefaultOptions.Type == FillSeriesType.Linear };
     private readonly RadioButton _growthButton = new() { Content = UiText.Get("FillSeriesStep_Growth"), GroupName = "SeriesType" };
     private readonly RadioButton _dateButton = new() { Content = UiText.Get("FillSeriesStep_Date"), GroupName = "SeriesType" };
     private readonly RadioButton _autoFillButton = new() { Content = UiText.Get("FillSeriesStep_AutoFill"), GroupName = "SeriesType" };
-    private readonly RadioButton _dayButton = new() { Content = UiText.Get("FillSeriesStep_Day"), GroupName = "DateUnit", IsChecked = true };
+    private readonly RadioButton _dayButton = new() { Content = UiText.Get("FillSeriesStep_Day"), GroupName = "DateUnit", IsChecked = FillSeriesPlanner.DefaultOptions.DateUnit == FillSeriesDateUnit.Day };
     private readonly RadioButton _weekdayButton = new() { Content = UiText.Get("FillSeriesStep_Weekday"), GroupName = "DateUnit" };
     private readonly RadioButton _monthButton = new() { Content = UiText.Get("FillSeriesStep_Month"), GroupName = "DateUnit" };
     private readonly RadioButton _yearButton = new() { Content = UiText.Get("FillSeriesStep_Year"), GroupName = "DateUnit" };
 
-    public FillSeriesOptions Result { get; private set; } = new(1);
+    public FillSeriesOptions Result { get; private set; } = FillSeriesPlanner.DefaultOptions;
 
     public FillSeriesStepDialog(double step = 1)
     {
-        Result = new FillSeriesOptions(step);
+        Result = FillSeriesPlanner.CreateDefaultOptions(step);
         Title = UiText.Get("FillSeriesStep_Title");
         Width = 380;
         Height = 356;
@@ -68,7 +68,7 @@ public sealed class FillSeriesStepDialog : Window
 
     private void UpdateDateUnitAvailability()
     {
-        var isDateSeries = _dateButton.IsChecked == true;
+        var isDateSeries = FillSeriesPlanner.IsDateUnitEnabled(SelectedSeriesType());
         _dayButton.IsEnabled = isDateSeries;
         _weekdayButton.IsEnabled = isDateSeries;
         _monthButton.IsEnabled = isDateSeries;
@@ -77,7 +77,7 @@ public sealed class FillSeriesStepDialog : Window
 
     public static bool TryCreateResult(string? input, out FillSeriesOptions result, out string? error)
     {
-        result = new FillSeriesOptions(1);
+        result = FillSeriesPlanner.DefaultOptions;
         error = null;
         if (input is null || !FillSeriesPlanner.TryParseStep(input, CultureInfo.CurrentCulture, out var step))
         {
@@ -85,25 +85,8 @@ public sealed class FillSeriesStepDialog : Window
             return false;
         }
 
-        result = new FillSeriesOptions(step);
+        result = FillSeriesPlanner.CreateDefaultOptions(step);
         return true;
-    }
-
-    public static FillSeriesOptions CreateResult(
-        FillSeriesDirection seriesIn,
-        FillSeriesType type,
-        FillSeriesDateUnit dateUnit,
-        string? stepText,
-        string? stopText)
-    {
-        var step = FillSeriesPlanner.TryParseStep(stepText ?? "", CultureInfo.CurrentCulture, out var parsedStep)
-            ? parsedStep
-            : 1;
-        var stopValue = TryParseOptionalStep(stopText, out var parsedStop)
-            ? parsedStop
-            : (double?)null;
-
-        return new FillSeriesOptions(step, seriesIn, type, dateUnit, stopValue);
     }
 
     public static bool TryCreateResult(
@@ -113,7 +96,18 @@ public sealed class FillSeriesStepDialog : Window
         string? stepText,
         string? stopText,
         out FillSeriesOptions result,
-        out string? error)
+        out string? error) =>
+        TryCreateResult(seriesIn, type, dateUnit, stepText, stopText, out result, out error, out _);
+
+    public static bool TryCreateResult(
+        FillSeriesDirection seriesIn,
+        FillSeriesType type,
+        FillSeriesDateUnit dateUnit,
+        string? stepText,
+        string? stopText,
+        out FillSeriesOptions result,
+        out string? error,
+        out FillSeriesInputError inputError)
     {
         if (FillSeriesPlanner.TryCreateOptions(
                 seriesIn,
@@ -123,13 +117,13 @@ public sealed class FillSeriesStepDialog : Window
                 stopText,
                 CultureInfo.CurrentCulture,
                 out result,
-                out var inputError))
+                out inputError))
         {
             error = null;
             return true;
         }
 
-        result = new FillSeriesOptions(1, seriesIn, type, dateUnit);
+        result = FillSeriesPlanner.DefaultOptions with { SeriesIn = seriesIn, Type = type, DateUnit = dateUnit };
         error = ToErrorMessage(inputError);
         return false;
     }
@@ -166,13 +160,11 @@ public sealed class FillSeriesStepDialog : Window
                 _stepBox.Text,
                 _stopBox.Text,
                 out var result,
-                out var error))
+                out var error,
+                out var inputError))
         {
             DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("FillSeriesStep_InvalidStepMessage"), Title);
-            if (string.Equals(error, UiText.Get("FillSeriesStep_InvalidStopMessage"), StringComparison.Ordinal))
-                FocusInvalidStopInput();
-            else
-                FocusInvalidStepInput();
+            FocusInvalidInput(inputError);
             return;
         }
 
@@ -192,13 +184,12 @@ public sealed class FillSeriesStepDialog : Window
         _yearButton.IsChecked == true ? FillSeriesDateUnit.Year :
         FillSeriesDateUnit.Day;
 
-    private static bool TryParseOptionalStep(string? input, out double value)
+    private void FocusInvalidInput(FillSeriesInputError inputError)
     {
-        value = 0;
-        // Parse with the same culture as the Step field; otherwise a locale whose decimal separator is ','
-        // rejects a Stop value the user typed in the same format the Step field just accepted.
-        return !string.IsNullOrWhiteSpace(input) &&
-               FillSeriesPlanner.TryParseStep(input, CultureInfo.CurrentCulture, out value);
+        if (FillSeriesPlanner.FocusTargetFor(inputError) == FillSeriesInputFocusTarget.StopValue)
+            FocusInvalidStopInput();
+        else
+            FocusInvalidStepInput();
     }
 
     private static StackPanel CreateHorizontalRow(params UIElement[] children)
