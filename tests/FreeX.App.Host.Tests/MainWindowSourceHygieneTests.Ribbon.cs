@@ -1117,11 +1117,12 @@ public sealed partial class MainWindowSourceHygieneTests
         var routeSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCommandRouter.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
         var actionPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellActionPlanner.cs");
+        var operationPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisHostOperationPlanner.cs");
         var shellPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
-        hostSource.Should().Contain("var action = item.Action;");
+        hostSource.Should().Contain("var operation = QuickAnalysisHostOperationPlanner.Plan(item);");
         hostSource.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DialogBacked)");
-        hostSource.Should().Contain("QuickAnalysisShellActionKind.OpenConditionalFormatDialog");
+        hostSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
         hostSource.Should().Contain("ShowCfDialog(title)");
         hostSource.Should().NotContain("QuickAnalysisConditionalFormatDialogTitle(");
 
@@ -1149,6 +1150,7 @@ public sealed partial class MainWindowSourceHygieneTests
         actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Bottom10Percent => \"Bottom 10%\"");
         actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.AboveAverage => \"Above Average\"");
         actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.BelowAverage => \"Below Average\"");
+        operationPlannerSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
     }
 
     [Fact]
@@ -1157,7 +1159,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
 
-        hostSource.Should().Contain("case QuickAnalysisShellActionKind.OpenChartPicker:");
+        hostSource.Should().Contain("case QuickAnalysisHostOperationKind.OpenChartPicker:");
         hostSource.Should().Contain("InsertChartPickerBtn_Click(sender, e);");
         catalogSource.Should().Contain("QuickAnalysisCommand.MoreCharts");
         catalogSource.Should().Contain("new QuickAnalysisCommandRoute(QuickAnalysisCommandKind.MoreCharts)");
@@ -1169,9 +1171,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
         var actionPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellActionPlanner.cs");
+        var operationPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisHostOperationPlanner.cs");
 
-        hostSource.Should().Contain("QuickAnalysisShellActionKind.InsertPercentTotalFormula");
-        hostSource.Should().Contain("QuickAnalysisShellActionKind.InsertRunningTotalFormula");
+        hostSource.Should().Contain("QuickAnalysisHostOperationKind.InsertPercentTotalFormula");
+        hostSource.Should().Contain("QuickAnalysisHostOperationKind.InsertRunningTotalFormula");
         hostSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
         hostSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
         catalogSource.Should().Contain("QuickAnalysisCommand.PercentTotal");
@@ -1182,6 +1185,8 @@ public sealed partial class MainWindowSourceHygieneTests
         catalogSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal");
         actionPlannerSource.Should().Contain("QuickAnalysisShellActionKind.InsertPercentTotalFormula");
         actionPlannerSource.Should().Contain("QuickAnalysisShellActionKind.InsertRunningTotalFormula");
+        operationPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis % Total\"");
+        operationPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis Running Total\"");
     }
 
     [Fact]

@@ -144,32 +144,34 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var action = item.Action;
-        switch (action.Kind)
+        var operation = QuickAnalysisHostOperationPlanner.Plan(item);
+        switch (operation.Kind)
         {
-            case QuickAnalysisShellActionKind.ApplyConditionalFormat when action.ConditionalFormatPreset is { } preset:
+            case QuickAnalysisHostOperationKind.ApplyConditionalFormat
+                when operation.ConditionalFormatPreset is { } preset:
                 ApplyConditionalFormatPreset(preset);
                 break;
 
-            case QuickAnalysisShellActionKind.InsertAggregateTotalFormula
-                when action.TotalFunction is { } function:
+            case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula
+                when operation.TotalFunction is { } function:
                 InsertAutoSumFormula(function);
                 break;
 
-            case QuickAnalysisShellActionKind.InsertSparkline when action.SparklineKind is { } sparklineKind:
+            case QuickAnalysisHostOperationKind.InsertSparkline
+                when operation.SparklineKind is { } sparklineKind:
                 InsertQuickAnalysisSparklines(sparklineKind);
                 break;
 
-            case QuickAnalysisShellActionKind.InsertChart when action.ChartType is { } chartType:
+            case QuickAnalysisHostOperationKind.InsertChart when operation.ChartType is { } chartType:
                 InsertChartFromSelection(chartType);
                 break;
 
-            case QuickAnalysisShellActionKind.CreateTable:
+            case QuickAnalysisHostOperationKind.CreateTable:
                 _ = InsertTableFromSelectionAsync();
                 break;
 
-            case QuickAnalysisShellActionKind.Deferred:
-                RefreshShell(action.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
+            case QuickAnalysisHostOperationKind.Deferred:
+                RefreshShell(operation.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
                 break;
         }
     }
