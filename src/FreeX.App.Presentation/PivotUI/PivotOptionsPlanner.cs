@@ -19,6 +19,49 @@ public sealed record PivotOptionsValues(
     bool MergeAndCenterLabels);
 
 /// <summary>
+/// Portable carrier for the full PivotTable Options dialog result. Desktop shells own widgets and dialog
+/// chrome; this type owns the normalized option values handed to PivotTable option commands.
+/// </summary>
+public sealed record PivotOptionsDialogValues(
+    bool ShowRowGrandTotals,
+    bool ShowColumnGrandTotals,
+    bool ShowSubtotals,
+    PivotSubtotalPlacement SubtotalPlacement,
+    bool RepeatItemLabels,
+    bool BlankLineAfterItems,
+    string StyleName,
+    bool ShowRowHeaders,
+    bool ShowColumnHeaders,
+    bool ShowRowStripes,
+    bool ShowColumnStripes,
+    PivotReportLayout ReportLayout,
+    string? EmptyValueText = null,
+    bool RefreshOnOpen = false,
+    bool SaveSourceData = true,
+    bool EnableRefresh = true,
+    bool PreserveSourceSortFilter = true,
+    int? MissingItemsLimit = null,
+    bool PrintTitles = false,
+    bool PrintExpandCollapseButtons = false,
+    string? AltTextTitle = null,
+    string? AltTextDescription = null,
+    int CompactRowLabelIndent = 1,
+    bool ShowExpandCollapseButtons = true,
+    bool AutofitColumnsOnUpdate = true,
+    bool PreserveFormattingOnUpdate = true,
+    bool ShowFieldHeaders = true,
+    bool ShowContextualTooltips = true,
+    bool ShowPropertiesInTooltips = true,
+    bool ShowClassicLayout = false,
+    bool MergeAndCenterLabels = false,
+    bool ShowItemsWithNoDataOnRows = false,
+    bool ShowItemsWithNoDataOnColumns = false,
+    bool PageOverThenDown = false,
+    int PageWrap = 0,
+    string? ErrorValueText = null,
+    bool EnableDrill = true);
+
+/// <summary>
 /// Portable, UI-free planning for the PivotTable Options dialog: the report-layout and subtotal-placement
 /// display catalogs (English labels), capturing the current option values off a <see cref="PivotTableModel"/>,
 /// validating the compact-row-label indent box, and applying the dialog's collected values back onto a
@@ -30,9 +73,15 @@ public static class PivotOptionsPlanner
 {
     public const int MinCompactRowLabelIndent = 0;
     public const int MaxCompactRowLabelIndent = 15;
+    public const int MinPageWrap = 0;
+    public const int MaxPageWrap = 255;
+    public const int MaxMissingItemsLimit = 1_048_576;
 
     public const string CompactIndentRangeMessage =
         "Enter a compact-form row-label indent between 0 and 15.";
+
+    public const string PageWrapRangeMessage =
+        "Enter the number of report filter fields per column between 0 and 255.";
 
     /// <summary>Report layouts in display order, with the English label the dialog shows.</summary>
     public static readonly IReadOnlyList<(string Label, PivotReportLayout Value)> ReportLayouts =
@@ -112,6 +161,47 @@ public static class PivotOptionsPlanner
     public static string CompactRowLabelIndentText(int indent) =>
         indent.ToString(CultureInfo.CurrentCulture);
 
+    /// <summary>Validates the report-filter fields-per-column box; parses it on success.</summary>
+    public static bool TryParsePageWrap(string? text, out int pageWrap, out string? error)
+    {
+        error = null;
+        if (int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out pageWrap) &&
+            pageWrap is >= MinPageWrap and <= MaxPageWrap)
+        {
+            return true;
+        }
+
+        pageWrap = MinPageWrap;
+        error = PageWrapRangeMessage;
+        return false;
+    }
+
+    /// <summary>The report-filter fields-per-column box text for the current value.</summary>
+    public static string PageWrapText(int pageWrap) =>
+        pageWrap.ToString(CultureInfo.CurrentCulture);
+
+    public static int NormalizeCompactRowLabelIndent(int indent) =>
+        Math.Clamp(indent, MinCompactRowLabelIndent, MaxCompactRowLabelIndent);
+
+    public static int NormalizePageWrap(int pageWrap) =>
+        Math.Clamp(pageWrap, MinPageWrap, MaxPageWrap);
+
+    public static int? NormalizeMissingItemsLimit(int? value) =>
+        value switch
+        {
+            null => null,
+            <= 0 => 0,
+            _ => MaxMissingItemsLimit
+        };
+
+    public static string? NormalizeOptionalText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return text.Trim();
+    }
+
     /// <summary>Builds the resulting option values from the dialog's collected input.</summary>
     public static PivotOptionsValues CreateResult(
         bool showRowGrandTotals,
@@ -129,8 +219,131 @@ public static class PivotOptionsPlanner
             showSubtotals,
             SubtotalPlacementFromIndex(subtotalPlacementIndex),
             ReportLayoutFromIndex(reportLayoutIndex),
-            Math.Clamp(compactRowLabelIndent, MinCompactRowLabelIndent, MaxCompactRowLabelIndent),
+            NormalizeCompactRowLabelIndent(compactRowLabelIndent),
             repeatItemLabels,
             blankLineAfterItems,
             mergeAndCenterLabels);
+
+    /// <summary>Snapshots the current full dialog option values off a pivot and its optional connected cache.</summary>
+    public static PivotOptionsDialogValues CaptureDialogValues(PivotTableModel pivotTable, PivotCacheModel? cache = null)
+    {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+
+        return CreateDialogValues(
+            pivotTable.ShowRowGrandTotals,
+            pivotTable.ShowColumnGrandTotals,
+            pivotTable.ShowSubtotals,
+            pivotTable.SubtotalPlacement,
+            pivotTable.RepeatItemLabels,
+            pivotTable.BlankLineAfterItems,
+            pivotTable.StyleName,
+            pivotTable.ShowRowHeaders,
+            pivotTable.ShowColumnHeaders,
+            pivotTable.ShowRowStripes,
+            pivotTable.ShowColumnStripes,
+            pivotTable.ReportLayout,
+            pivotTable.EmptyValueText,
+            refreshOnOpen: cache?.RefreshOnLoad ?? false,
+            saveSourceData: cache?.SaveData ?? true,
+            enableRefresh: cache?.EnableRefresh ?? true,
+            preserveSourceSortFilter: cache?.PreserveSourceSortFilter ?? true,
+            missingItemsLimit: cache?.MissingItemsLimit,
+            printTitles: pivotTable.PrintTitles,
+            printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
+            altTextTitle: pivotTable.AltTextTitle,
+            altTextDescription: pivotTable.AltTextDescription,
+            compactRowLabelIndent: pivotTable.CompactRowLabelIndent,
+            showExpandCollapseButtons: pivotTable.ShowExpandCollapseButtons,
+            autofitColumnsOnUpdate: pivotTable.AutofitColumnsOnUpdate,
+            preserveFormattingOnUpdate: pivotTable.PreserveFormattingOnUpdate,
+            showFieldHeaders: pivotTable.ShowFieldHeaders,
+            showContextualTooltips: pivotTable.ShowContextualTooltips,
+            showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips,
+            showClassicLayout: pivotTable.ShowClassicLayout,
+            mergeAndCenterLabels: pivotTable.MergeAndCenterLabels,
+            showItemsWithNoDataOnRows: pivotTable.ShowItemsWithNoDataOnRows,
+            showItemsWithNoDataOnColumns: pivotTable.ShowItemsWithNoDataOnColumns,
+            pageOverThenDown: pivotTable.PageOverThenDown,
+            pageWrap: pivotTable.PageWrap,
+            errorValueText: pivotTable.ErrorCaption,
+            enableDrill: pivotTable.EnableDrill);
+    }
+
+    /// <summary>Builds the normalized full dialog values from collected input.</summary>
+    public static PivotOptionsDialogValues CreateDialogValues(
+        bool showRowGrandTotals,
+        bool showColumnGrandTotals,
+        bool showSubtotals,
+        PivotSubtotalPlacement subtotalPlacement,
+        bool repeatItemLabels,
+        bool blankLineAfterItems,
+        string? styleName,
+        bool showRowHeaders,
+        bool showColumnHeaders,
+        bool showRowStripes,
+        bool showColumnStripes,
+        PivotReportLayout reportLayout,
+        string? emptyValueText = null,
+        bool refreshOnOpen = false,
+        bool saveSourceData = true,
+        bool enableRefresh = true,
+        bool preserveSourceSortFilter = true,
+        int? missingItemsLimit = null,
+        bool printTitles = false,
+        bool printExpandCollapseButtons = false,
+        string? altTextTitle = null,
+        string? altTextDescription = null,
+        int compactRowLabelIndent = 1,
+        bool showExpandCollapseButtons = true,
+        bool autofitColumnsOnUpdate = true,
+        bool preserveFormattingOnUpdate = true,
+        bool showFieldHeaders = true,
+        bool showContextualTooltips = true,
+        bool showPropertiesInTooltips = true,
+        bool showClassicLayout = false,
+        bool mergeAndCenterLabels = false,
+        bool showItemsWithNoDataOnRows = false,
+        bool showItemsWithNoDataOnColumns = false,
+        bool pageOverThenDown = false,
+        int pageWrap = 0,
+        string? errorValueText = null,
+        bool enableDrill = true) =>
+        new(
+            showRowGrandTotals,
+            showColumnGrandTotals,
+            showSubtotals,
+            subtotalPlacement,
+            repeatItemLabels,
+            blankLineAfterItems,
+            PivotStyleGalleryPlanner.NormalizeStyleName(styleName),
+            showRowHeaders,
+            showColumnHeaders,
+            showRowStripes,
+            showColumnStripes,
+            reportLayout,
+            NormalizeOptionalText(emptyValueText),
+            refreshOnOpen,
+            saveSourceData,
+            enableRefresh,
+            preserveSourceSortFilter,
+            NormalizeMissingItemsLimit(missingItemsLimit),
+            printTitles,
+            printExpandCollapseButtons,
+            NormalizeOptionalText(altTextTitle),
+            NormalizeOptionalText(altTextDescription),
+            NormalizeCompactRowLabelIndent(compactRowLabelIndent),
+            showExpandCollapseButtons,
+            autofitColumnsOnUpdate,
+            preserveFormattingOnUpdate,
+            showFieldHeaders,
+            showContextualTooltips,
+            showPropertiesInTooltips,
+            showClassicLayout,
+            mergeAndCenterLabels,
+            showItemsWithNoDataOnRows,
+            showItemsWithNoDataOnColumns,
+            pageOverThenDown,
+            NormalizePageWrap(pageWrap),
+            NormalizeOptionalText(errorValueText),
+            enableDrill);
 }

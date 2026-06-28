@@ -86,12 +86,14 @@ public sealed partial class PivotWorkflowDialogTests
             "internal static class PivotDialogLayout");
         var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotCommands.cs");
 
-        source.Should().Contain("if (!ValidateInputs())");
-        source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _)");
+        source.Should().Contain("if (!TryValidateInputs(out var change))");
+        source.Should().Contain("PivotDataSourcePlanner.TryCreateChange(_sourceBox.Text, _resolveReference, out change, out _)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTableDataSource_EnterValidSourceRange\"), _sourceBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
         source.Should().Contain("FocusRangeSelectionInput(target);");
         commandSource.Should().Contain("sheetId: sheet.Id");
+        commandSource.Should().Contain("resolveReference: (string reference, out GridRange range) => TryParseWorkbookRange(sheet.Id, reference, out range)");
+        commandSource.Should().Contain("dialog.Result.SourceRange is not { } sourceRange");
     }
 
     [Fact]
@@ -156,5 +158,18 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("request.CollapseDialog");
         source.Should().Contain("FormatWorkbookRange(selectedRange)");
         source.Should().Contain("selectedRange => dialog.ApplyRangeSelection(FormatWorkbookRange(selectedRange))");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceDialog_DelegatesResultAndRequestNormalizationToSharedPlanner()
+    {
+        var source = ReadClassSource(
+            "PivotTableDataSourceDialog.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+
+        source.Should().Contain("PivotDataSourcePlanner.NormalizeReferenceText(sourceRangeText)");
+        source.Should().Contain("PivotDataSourcePlanner.NormalizeReferenceText(currentText)");
+        source.Should().Contain("public static PivotTableDataSourceDialogResult CreateResult(PivotDataSourceChange change)");
     }
 }

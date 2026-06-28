@@ -1,11 +1,12 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record PivotTableDataSourceDialogResult(string SourceRangeText);
+public sealed record PivotTableDataSourceDialogResult(string SourceRangeText, GridRange? SourceRange = null);
 public sealed record PivotTableDataSourceRangeSelectionRequest(
     string CurrentText,
     bool CollapseDialog = true);
@@ -15,6 +16,7 @@ public sealed class PivotTableDataSourceDialog : Window
     private readonly SheetId _sheetId;
     private readonly TextBox _sourceBox = new();
     private readonly Func<string, SheetId?> _resolveSheetId;
+    private readonly PivotDataSourcePlanner.ReferenceResolver _resolveReference;
     private readonly Action<PivotTableDataSourceRangeSelectionRequest>? _requestRangeSelection;
 
     public PivotTableDataSourceDialogResult Result { get; private set; }
@@ -24,10 +26,12 @@ public sealed class PivotTableDataSourceDialog : Window
         string sourceRangeText,
         Action<PivotTableDataSourceRangeSelectionRequest>? requestRangeSelection = null,
         SheetId sheetId = default,
-        Func<string, SheetId?>? resolveSheetId = null)
+        Func<string, SheetId?>? resolveSheetId = null,
+        PivotDataSourcePlanner.ReferenceResolver? resolveReference = null)
     {
         _sheetId = sheetId;
         _resolveSheetId = resolveSheetId ?? (_ => null);
+        _resolveReference = resolveReference ?? TryResolveReference;
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText);
         Title = UiText.Get("PivotTableDataSource_ChangePivotTableDataSource");
@@ -42,10 +46,13 @@ public sealed class PivotTableDataSourceDialog : Window
     }
 
     public static PivotTableDataSourceDialogResult CreateResult(string sourceRangeText) =>
-        new(sourceRangeText.Trim());
+        new(PivotDataSourcePlanner.NormalizeReferenceText(sourceRangeText));
+
+    public static PivotTableDataSourceDialogResult CreateResult(PivotDataSourceChange change) =>
+        new(change.SourceRangeText, change.SourceRange);
 
     public static PivotTableDataSourceRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
-        new(currentText.Trim(), CollapseDialog: true);
+        new(PivotDataSourcePlanner.NormalizeReferenceText(currentText), CollapseDialog: true);
 
     public void ApplyRangeSelection(string rangeText)
     {
@@ -64,10 +71,10 @@ public sealed class PivotTableDataSourceDialog : Window
             new Thickness(0, 0, 0, 16));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(() =>
         {
-            if (!ValidateInputs())
+            if (!TryValidateInputs(out var change))
                 return;
 
-            Result = CreateResult(_sourceBox.Text);
+            Result = CreateResult(change!);
             DialogResult = true;
         }));
         return stack;
@@ -84,9 +91,9 @@ public sealed class PivotTableDataSourceDialog : Window
                 FocusRangeSelectionInput(request.Target);
             });
 
-    private bool ValidateInputs()
+    private bool TryValidateInputs(out PivotDataSourceChange? change)
     {
-        if (!WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _))
+        if (!PivotDataSourcePlanner.TryCreateChange(_sourceBox.Text, _resolveReference, out change, out _))
         {
             ShowInvalidInputWarning(UiText.Get("PivotTableDataSource_EnterValidSourceRange"), _sourceBox);
             return false;
@@ -96,6 +103,9 @@ public sealed class PivotTableDataSourceDialog : Window
     }
 
     private SheetId? ResolveSheetIdByName(string sheetName) => _resolveSheetId(sheetName);
+
+    private bool TryResolveReference(string referenceText, out GridRange range) =>
+        WorkbookRangeTextCodec.TryParse(_sheetId, referenceText, ResolveSheetIdByName, out range);
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {

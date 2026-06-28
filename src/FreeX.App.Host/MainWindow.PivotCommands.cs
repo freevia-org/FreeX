@@ -416,11 +416,11 @@ public partial class MainWindow
             FormatWorkbookRange(pivotTable.SourceRange),
             request => ApplyPivotTableDataSourceRangeSelection(dialog, request),
             sheetId: sheet.Id,
-            resolveSheetId: ResolveSheetIdByName)
+            resolveSheetId: ResolveSheetIdByName,
+            resolveReference: (string reference, out GridRange range) => TryParseWorkbookRange(sheet.Id, reference, out range))
         { Owner = this };
         if (dialog.ShowDialog() != true ||
-            string.IsNullOrWhiteSpace(dialog.Result.SourceRangeText) ||
-            !TryParseWorkbookRange(sheet.Id, dialog.Result.SourceRangeText, out var sourceRange))
+            dialog.Result.SourceRange is not { } sourceRange)
             return;
 
         if (!TryExecuteCommand(
