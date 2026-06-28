@@ -1,4 +1,4 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public static class WatchWindowMessageFormatter
 {

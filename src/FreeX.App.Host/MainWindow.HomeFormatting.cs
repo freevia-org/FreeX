@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
