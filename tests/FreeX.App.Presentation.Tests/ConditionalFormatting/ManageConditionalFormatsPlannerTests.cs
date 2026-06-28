@@ -2,7 +2,7 @@ using FluentAssertions;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.ConditionalFormatting;
 
 public sealed class ManageConditionalFormatsPlannerTests
 {
