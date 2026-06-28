@@ -196,6 +196,10 @@ public partial class ExportPlannerTests
         source.Should().Contain("AddLabel(UiText.Get(\"PageSetup_PaperSize\"), paperBox);");
         source.Should().Contain("AddLabel(UiText.Get(\"PageSetup_Margins\"), marginsBox);");
         source.Should().Contain("AddLabel(UiText.Get(\"PrintPreview_ScalingLabel\"), scaleBox);");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.Build(");
+        source.Should().NotContain("UiText.Get(\"PrintPreview_PrintWhatActiveSheets\")");
+        source.Should().NotContain("UiText.Get(\"PrintPreview_ScaleFitColumns\")");
+        source.Should().NotContain("PrintSettingsPlanner.ScaleIndexToScaleToFit(scaleBox.SelectedIndex)");
     }
 
     [Fact]
@@ -265,11 +269,11 @@ public partial class ExportPlannerTests
 
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrinterLabel\")");
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_CopiesLabel\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CollatedLabel\")");
+        source.Should().Contain("PrintPreview_CollatedLabel");
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_SidesLabel\")");
-        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesOneSided\"))");
-        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesFlipLongEdge\"))");
-        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesFlipShortEdge\"))");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreateToolbarCollatedText(WpfPrintSettingsTextResolver.Instance)");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreateSidesOptions(WpfPrintSettingsTextResolver.Instance)");
+        source.Should().Contain("sidesBox.Items.Add(option.Text)");
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
         source.Should().Contain("collatedBox");
@@ -297,9 +301,10 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_AllPagesLabel\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CurrentPageLabel\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PagesLabel\")");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreatePageRangeToolbarPlan(");
+        source.Should().Contain("Content = allPagesChoice.Text");
+        source.Should().Contain("Content = currentPageChoice.Text");
+        source.Should().Contain("Content = pagesChoice.Text");
         source.Should().Contain("fromPageBox");
         source.Should().Contain("toPageBox");
         source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
@@ -327,9 +332,9 @@ public partial class ExportPlannerTests
 
         source.Should().ContainAll(
             [
-                "Content = UiText.Get(\"PrintPreview_AllPagesLabel\")",
-                "Content = UiText.Get(\"PrintPreview_CurrentPageLabel\")",
-                "Content = UiText.Get(\"PrintPreview_PagesLabel\")"
+                "PrintPreview_AllPagesLabel",
+                "PrintPreview_CurrentPageLabel",
+                "PrintPreview_PagesLabel"
             ]);
         accessKeys.Should().OnlyHaveUniqueItems("Print Preview range choices share one access-key scope");
     }
@@ -343,7 +348,11 @@ public partial class ExportPlannerTests
             "PrintPreviewSettingsPanelFactory.cs",
             "WpfPrintPreviewToolbarPlanner.cs")
         + Environment.NewLine
-        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs");
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewToolbarStatePlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewSettingsPanelPlanner.cs");
 
     private static char ExtractAccessKey(string label)
     {

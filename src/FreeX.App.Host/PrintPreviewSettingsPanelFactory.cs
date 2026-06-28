@@ -30,6 +30,12 @@ internal static class PrintPreviewSettingsPanelFactory
 
         // Tracks the current backstage settings; rebuilt whenever a control changes.
         var currentSettings = new PrintPreviewSettings();
+        var panelPlan = PrintPreviewSettingsPanelPlanner.Build(
+            sheet,
+            currentSettings,
+            hasSelection,
+            setPrintPreviewSettings is not null,
+            WpfPrintSettingsTextResolver.Instance);
 
         void AddSectionLabel(string text) =>
             panel.Children.Add(new TextBlock
@@ -49,11 +55,20 @@ internal static class PrintPreviewSettingsPanelFactory
                 FontWeight = FontWeights.SemiBold
             });
 
-        static ComboBox MakeComboBox(string[] items, int selectedIndex)
+        static ComboBox MakeComboBox<TValue>(
+            IReadOnlyList<PrintPreviewChoice<TValue>> items,
+            int selectedIndex)
         {
             var box = new ComboBox { Margin = new Thickness(0, 0, 0, 2) };
             foreach (var item in items)
-                box.Items.Add(item);
+            {
+                box.Items.Add(new ComboBoxItem
+                {
+                    Content = item.Text,
+                    IsEnabled = item.IsEnabled
+                });
+            }
+
             box.SelectedIndex = selectedIndex;
             return box;
         }
@@ -65,10 +80,10 @@ internal static class PrintPreviewSettingsPanelFactory
             refreshPreview();
         }
 
-        // ── 1. COPIES ─────────────────────────────────────────────────────────
+        // 1. Copies
         var copiesUpDown = new TextBox
         {
-            Text = currentSettings.Copies.ToString(CultureInfo.InvariantCulture),
+            Text = panelPlan.Copies.ToString(CultureInfo.InvariantCulture),
             Margin = new Thickness(0, 0, 0, 2),
             VerticalContentAlignment = VerticalAlignment.Center,
             Width = 60,
@@ -89,7 +104,7 @@ internal static class PrintPreviewSettingsPanelFactory
         };
         panel.Children.Add(copiesUpDown);
 
-        // ── 2. PRINTER ────────────────────────────────────────────────────────
+        // 2. Printer
         var printerBox = new ComboBox
         {
             Margin = new Thickness(0, 0, 0, 2),
@@ -122,26 +137,10 @@ internal static class PrintPreviewSettingsPanelFactory
             NativePrintDialogService.ShowPrinterOptionsDialog();
         panel.Children.Add(printerPropertiesBtn);
 
-        // ── 3. PRINT WHAT ─────────────────────────────────────────────────────
+        // 3. Print what
         var printWhatBox = MakeComboBox(
-            [
-                UiText.Get("PrintPreview_PrintWhatActiveSheets"),
-                UiText.Get("PrintPreview_PrintWhatEntireWorkbook"),
-                UiText.Get("PrintPreview_PrintWhatSelection")
-            ],
-            (int)currentSettings.PrintWhat);
-        // Disable "Print Selection" when there is no current selection.
-        if (!hasSelection && printWhatBox.Items.Count > 2)
-        {
-            if (printWhatBox.ItemContainerGenerator.ContainerFromIndex(2) is ComboBoxItem selItem)
-                selItem.IsEnabled = false;
-        }
-        // Post-render hook so container is ready.
-        printWhatBox.Loaded += (_, _) =>
-        {
-            if (!hasSelection && printWhatBox.ItemContainerGenerator.ContainerFromIndex(2) is ComboBoxItem selItem)
-                selItem.IsEnabled = false;
-        };
+            panelPlan.PrintWhatOptions,
+            panelPlan.PrintWhatSelectedIndex);
         AutomationProperties.SetName(printWhatBox, UiText.Get("PrintPreview_PrintWhatAutomationName"));
         AutomationProperties.SetHelpText(printWhatBox, UiText.Get("PrintPreview_PrintWhatHelpText"));
         AddLabel(UiText.Get("PrintPreview_PrintWhatLabel"), printWhatBox);
@@ -149,12 +148,16 @@ internal static class PrintPreviewSettingsPanelFactory
         {
             if (setPrintPreviewSettings is null || printWhatBox.SelectedIndex < 0)
                 return;
-            var what = (PrintWhat)printWhatBox.SelectedIndex;
-            ApplySettings(currentSettings with { PrintWhat = what });
+
+            var option = panelPlan.PrintWhatOptions[printWhatBox.SelectedIndex];
+            if (!option.IsEnabled)
+                return;
+
+            ApplySettings(currentSettings with { PrintWhat = option.Value });
         };
         panel.Children.Add(printWhatBox);
 
-        // ── 4. PAGE RANGE ─────────────────────────────────────────────────────
+        // 4. Page range
         var pageRangePanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -208,14 +211,10 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PrintPreview_PageRangeFromLabel"), fromBox);
         panel.Children.Add(pageRangePanel);
 
-        // ── 5. PRINT SIDES ────────────────────────────────────────────────────
+        // 5. Print sides
         var sidesBox = MakeComboBox(
-            [
-                UiText.Get("PrintPreview_SidesOneSided"),
-                UiText.Get("PrintPreview_SidesFlipLongEdge"),
-                UiText.Get("PrintPreview_SidesFlipShortEdge")
-            ],
-            PrintSettingsPlanner.SidesModeToIndex(currentSettings.Sides));
+            panelPlan.SidesOptions,
+            panelPlan.SidesSelectedIndex);
         AutomationProperties.SetName(sidesBox, UiText.Get("PrintPreview_SidesAutomationName"));
         AutomationProperties.SetHelpText(sidesBox, UiText.Get("PrintPreview_SidesHelpText"));
         AddLabel(UiText.Get("PrintPreview_SidesSectionLabel"), sidesBox);
@@ -223,17 +222,15 @@ internal static class PrintPreviewSettingsPanelFactory
         {
             if (setPrintPreviewSettings is null || sidesBox.SelectedIndex < 0)
                 return;
-            ApplySettings(currentSettings with { Sides = PrintSettingsPlanner.SidesIndexToMode(sidesBox.SelectedIndex) });
+
+            ApplySettings(currentSettings with { Sides = panelPlan.SidesOptions[sidesBox.SelectedIndex].Value });
         };
         panel.Children.Add(sidesBox);
 
-        // ── 6. COLLATION ──────────────────────────────────────────────────────
+        // 6. Collation
         var collatedBox = MakeComboBox(
-            [
-                UiText.Get("PrintPreview_CollatedOption"),
-                UiText.Get("PrintPreview_UncollatedOption")
-            ],
-            currentSettings.Collated ? 0 : 1);
+            panelPlan.CollationOptions,
+            panelPlan.CollationSelectedIndex);
         AutomationProperties.SetName(collatedBox, UiText.Get("PrintPreview_CollatedSectionAutomationName"));
         AutomationProperties.SetHelpText(collatedBox, UiText.Get("PrintPreview_CollatedSectionHelpText"));
         AddLabel(UiText.Get("PrintPreview_CollatedSectionLabel"), collatedBox);
@@ -241,136 +238,90 @@ internal static class PrintPreviewSettingsPanelFactory
         {
             if (setPrintPreviewSettings is null || collatedBox.SelectedIndex < 0)
                 return;
-            ApplySettings(currentSettings with { Collated = collatedBox.SelectedIndex == 0 });
+
+            ApplySettings(currentSettings with { Collated = panelPlan.CollationOptions[collatedBox.SelectedIndex].Value });
         };
         panel.Children.Add(collatedBox);
 
-        // ── 7. ORIENTATION ────────────────────────────────────────────────────
-        var orientIndex = sheet?.PageOrientation == WorksheetPageOrientation.Landscape ? 1 : 0;
-        var orientBox = MakeComboBox([UiText.Get("PageSetup_Portrait"), UiText.Get("PageSetup_Landscape")], orientIndex);
+        // 7. Orientation
+        var orientBox = MakeComboBox(panelPlan.OrientationOptions, panelPlan.OrientationSelectedIndex);
         AddLabel(UiText.Get("PrintPreview_OrientationLabel"), orientBox);
         orientBox.SelectionChanged += (_, _) =>
         {
             if (orientBox.SelectedIndex < 0 || executeCommand is null)
                 return;
 
-            var orient = orientBox.SelectedIndex == 1
-                ? WorksheetPageOrientation.Landscape
-                : WorksheetPageOrientation.Portrait;
+            var orient = panelPlan.OrientationOptions[orientBox.SelectedIndex].Value;
             executeCommand(new SetPageOrientationCommand(sheetId, orient));
             refreshPreview();
         };
         panel.Children.Add(orientBox);
 
-        // ── 7b. PAPER SIZE ────────────────────────────────────────────────────
-        var paperIndex = sheet?.PaperSize switch
-        {
-            WorksheetPaperSize.Letter => 1,
-            WorksheetPaperSize.Legal => 2,
-            _ => 0
-        };
-        var paperBox = MakeComboBox(
-            [
-                UiText.Get("MainWindow_Header_A4"),
-                UiText.Get("MainWindow_Header_Letter"),
-                UiText.Get("MainWindow_Header_Legal")
-            ],
-            paperIndex);
+        // 7b. Paper size
+        var paperBox = MakeComboBox(panelPlan.PaperSizeOptions, panelPlan.PaperSizeSelectedIndex);
         AddLabel(UiText.Get("PageSetup_PaperSize"), paperBox);
         paperBox.SelectionChanged += (_, _) =>
         {
             if (paperBox.SelectedIndex < 0 || executeCommand is null)
                 return;
 
-            var size = paperBox.SelectedIndex switch
-            {
-                1 => WorksheetPaperSize.Letter,
-                2 => WorksheetPaperSize.Legal,
-                _ => WorksheetPaperSize.A4
-            };
+            var size = panelPlan.PaperSizeOptions[paperBox.SelectedIndex].Value;
             executeCommand(new SetPaperSizeCommand(sheetId, size));
             refreshPreview();
         };
         panel.Children.Add(paperBox);
 
-        // ── 7c. MARGINS (with Custom Margins…) ────────────────────────────────
-        var marginsIndex = sheet?.PageMargins == WorksheetPageMargins.Normal
-            ? 1
-            : sheet?.PageMargins == WorksheetPageMargins.Wide
-                ? 2
-                : 0;
-        var marginsBox = MakeComboBox(
-            [
-                UiText.Get("MainWindow_Header_Narrow"),
-                UiText.Get("MainWindow_Header_Normal"),
-                UiText.Get("MainWindow_Header_Wide"),
-                UiText.Get("PrintPreview_CustomMarginsOption")
-            ],
-            marginsIndex);
+        // 7c. Margins with Custom Margins option
+        var marginsBox = MakeComboBox(panelPlan.MarginOptions, panelPlan.MarginsSelectedIndex);
         AddLabel(UiText.Get("PageSetup_Margins"), marginsBox);
         marginsBox.SelectionChanged += (_, _) =>
         {
             if (marginsBox.SelectedIndex < 0 || executeCommand is null)
                 return;
 
-            // Index 3 = "Custom Margins..." — open Page Setup on Margins tab and reset combo.
-            if (marginsBox.SelectedIndex == 3)
+            // The placeholder opens Page Setup on the Margins tab and then resets the combo.
+            var option = panelPlan.MarginOptions[marginsBox.SelectedIndex];
+            if (option.IsPlaceholder)
             {
                 showCustomMargins?.Invoke();
                 // Reset to neutral selection so if user cancels, combo doesn't stay on placeholder.
-                marginsBox.SelectedIndex = marginsIndex;
+                marginsBox.SelectedIndex = panelPlan.MarginsSelectedIndex;
                 return;
             }
 
-            var margins = marginsBox.SelectedIndex switch
-            {
-                1 => WorksheetPageMargins.Normal,
-                2 => WorksheetPageMargins.Wide,
-                _ => WorksheetPageMargins.Narrow
-            };
-            executeCommand(new SetPageMarginsCommand(sheetId, margins));
+            executeCommand(new SetPageMarginsCommand(sheetId, option.Value));
             refreshPreview();
         };
         panel.Children.Add(marginsBox);
 
-        // ── 8. SCALING (expanded) ─────────────────────────────────────────────
-        var stf = sheet?.ScaleToFit ?? WorksheetScaleToFit.Default;
-        var scaleIndex = PrintSettingsPlanner.ScaleToFitToIndex(stf);
-        var scaleBox = MakeComboBox(
-            [
-                UiText.Get("PrintPreview_ScaleNoScaling"),
-                UiText.Get("PrintPreview_ScaleFitSheet"),
-                UiText.Get("PrintPreview_ScaleFitColumns"),
-                UiText.Get("PrintPreview_ScaleFitRows"),
-                UiText.Get("PrintPreview_ScaleCustomOptions")
-            ],
-            scaleIndex);
+        // 8. Scaling
+        var scaleBox = MakeComboBox(panelPlan.ScalingOptions, panelPlan.ScalingSelectedIndex);
         AddLabel(UiText.Get("PrintPreview_ScalingLabel"), scaleBox);
         scaleBox.SelectionChanged += (_, _) =>
         {
             if (scaleBox.SelectedIndex < 0 || executeCommand is null)
                 return;
 
-            // Index 4 = "Custom Scaling Options…" — open Page Setup, reset combo.
-            if (scaleBox.SelectedIndex == 4)
+            // The placeholder opens Page Setup and then resets the combo.
+            var option = panelPlan.ScalingOptions[scaleBox.SelectedIndex];
+            if (option.IsPlaceholder)
             {
                 showPageSetup?.Invoke();
-                scaleBox.SelectedIndex = scaleIndex;
+                scaleBox.SelectedIndex = panelPlan.ScalingSelectedIndex;
                 return;
             }
 
-            var scale = PrintSettingsPlanner.ScaleIndexToScaleToFit(scaleBox.SelectedIndex);
-            executeCommand(new SetScaleToFitCommand(sheetId, scale));
+            executeCommand(new SetScaleToFitCommand(sheetId, option.Value));
             refreshPreview();
         };
         panel.Children.Add(scaleBox);
 
-        // ── IGNORE PRINT AREA ─────────────────────────────────────────────────
+        // Ignore print area
         var ignorePrintAreaBox = new CheckBox
         {
             Content = UiText.Get("PrintPreview_IgnorePrintArea"),
-            IsChecked = currentSettings.IgnorePrintArea,
-            IsEnabled = sheet?.PrintArea is not null && setPrintPreviewSettings is not null,
+            IsChecked = panelPlan.IgnorePrintAreaChecked,
+            IsEnabled = panelPlan.IgnorePrintAreaEnabled,
             Margin = new Thickness(0, 6, 0, 4),
             ToolTip = UiText.Get("PrintPreview_IgnorePrintAreaToolTip")
         };
@@ -390,18 +341,18 @@ internal static class PrintPreviewSettingsPanelFactory
         };
         panel.Children.Add(ignorePrintAreaBox);
 
-        // ── PRINT OPTIONS ─────────────────────────────────────────────────────
+        // Print options
         AddSectionLabel(UiText.Get("PrintPreview_PrintOptionsSection"));
         var gridlinesBox = new CheckBox
         {
             Content = UiText.Get("PageSetup_PrintGridlines"),
-            IsChecked = sheet?.PrintGridlines ?? false,
+            IsChecked = panelPlan.PrintGridlines,
             Margin = new Thickness(0, 0, 0, 4)
         };
         var headingsBox = new CheckBox
         {
             Content = UiText.Get("PageSetup_PrintRowAndColumnHeadings"),
-            IsChecked = sheet?.PrintHeadings ?? false,
+            IsChecked = panelPlan.PrintHeadings,
             Margin = new Thickness(0, 0, 0, 4)
         };
 
@@ -420,7 +371,7 @@ internal static class PrintPreviewSettingsPanelFactory
         panel.Children.Add(gridlinesBox);
         panel.Children.Add(headingsBox);
 
-        // ── PAGE SETUP LINK ───────────────────────────────────────────────────
+        // Page Setup link
         var pageSetupLink = new Button
         {
             Content = UiText.Get("PrintPreview_PageSetupLink"),
