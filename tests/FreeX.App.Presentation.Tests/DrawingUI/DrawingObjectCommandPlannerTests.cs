@@ -104,6 +104,72 @@ public sealed class DrawingObjectCommandPlannerTests
         GetAltText(sheet, kind, id).Should().Be("Object text");
     }
 
+    [Theory]
+    [InlineData(DrawingObjectTargetKind.Shape, true)]
+    [InlineData(DrawingObjectTargetKind.Shape, false)]
+    [InlineData(DrawingObjectTargetKind.TextBox, true)]
+    [InlineData(DrawingObjectTargetKind.TextBox, false)]
+    public void BuildFillColorCommand_UpdatesFillOrNoFillForShapesAndTextBoxes(
+        DrawingObjectTargetKind kind,
+        bool hasFill)
+    {
+        var (workbook, sheet, id) = CreateWorkbook(kind);
+        var originalOutline = new CellColor(40, 50, 60);
+        SetColors(sheet, kind, id, new CellColor(10, 20, 30), originalOutline);
+        CellColor? fillColor = hasFill ? new CellColor(100, 110, 120) : null;
+
+        var command = DrawingObjectCommandPlanner.BuildFillColorCommand(sheet.Id, kind, id, fillColor);
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+
+        GetHasFill(sheet, kind, id).Should().Be(hasFill);
+        GetFillColor(sheet, kind, id).Should().Be(fillColor);
+        GetOutlineColor(sheet, kind, id).Should().Be(originalOutline);
+    }
+
+    [Theory]
+    [InlineData(DrawingObjectTargetKind.Shape, true)]
+    [InlineData(DrawingObjectTargetKind.Shape, false)]
+    [InlineData(DrawingObjectTargetKind.TextBox, true)]
+    [InlineData(DrawingObjectTargetKind.TextBox, false)]
+    public void BuildOutlineColorCommand_UpdatesOutlineOrNoOutlineForShapesAndTextBoxes(
+        DrawingObjectTargetKind kind,
+        bool hasOutline)
+    {
+        var (workbook, sheet, id) = CreateWorkbook(kind);
+        var originalFill = new CellColor(10, 20, 30);
+        SetColors(sheet, kind, id, originalFill, new CellColor(40, 50, 60));
+        CellColor? outlineColor = hasOutline ? new CellColor(100, 110, 120) : null;
+
+        var command = DrawingObjectCommandPlanner.BuildOutlineColorCommand(sheet.Id, kind, id, outlineColor);
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+
+        GetHasFill(sheet, kind, id).Should().BeTrue();
+        GetFillColor(sheet, kind, id).Should().Be(originalFill);
+        GetOutlineColor(sheet, kind, id).Should().Be(outlineColor);
+    }
+
+    [Fact]
+    public void BuildFillAndOutlineColorCommands_RejectPictures()
+    {
+        var workbook = new Workbook("drawing");
+        var sheet = workbook.AddSheet("Sheet1");
+        var id = Guid.NewGuid();
+
+        Action fill = () => DrawingObjectCommandPlanner.BuildFillColorCommand(
+            sheet.Id,
+            DrawingObjectTargetKind.Picture,
+            id,
+            new CellColor(1, 2, 3));
+        Action outline = () => DrawingObjectCommandPlanner.BuildOutlineColorCommand(
+            sheet.Id,
+            DrawingObjectTargetKind.Picture,
+            id,
+            null);
+
+        fill.Should().Throw<ArgumentOutOfRangeException>();
+        outline.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     [Fact]
     public void BuildZOrderCommand_RoutesSelectionPaneKind()
     {
@@ -216,6 +282,56 @@ public sealed class DrawingObjectCommandPlannerTests
             DrawingObjectTargetKind.Picture => sheet.Pictures.Single(item => item.Id == id).AltText,
             DrawingObjectTargetKind.Shape => sheet.DrawingShapes.Single(item => item.Id == id).AltText,
             DrawingObjectTargetKind.TextBox => sheet.TextBoxes.Single(item => item.Id == id).AltText,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
+
+    private static void SetColors(
+        Sheet sheet,
+        DrawingObjectTargetKind kind,
+        Guid id,
+        CellColor? fillColor,
+        CellColor? outlineColor)
+    {
+        switch (kind)
+        {
+            case DrawingObjectTargetKind.Shape:
+                var shape = sheet.DrawingShapes.Single(item => item.Id == id);
+                shape.HasFill = fillColor is not null;
+                shape.FillColor = fillColor;
+                shape.OutlineColor = outlineColor;
+                break;
+            case DrawingObjectTargetKind.TextBox:
+                var textBox = sheet.TextBoxes.Single(item => item.Id == id);
+                textBox.HasFill = fillColor is not null;
+                textBox.FillColor = fillColor;
+                textBox.OutlineColor = outlineColor;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
+    }
+
+    private static bool GetHasFill(Sheet sheet, DrawingObjectTargetKind kind, Guid id) =>
+        kind switch
+        {
+            DrawingObjectTargetKind.Shape => sheet.DrawingShapes.Single(item => item.Id == id).HasFill,
+            DrawingObjectTargetKind.TextBox => sheet.TextBoxes.Single(item => item.Id == id).HasFill,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
+
+    private static CellColor? GetFillColor(Sheet sheet, DrawingObjectTargetKind kind, Guid id) =>
+        kind switch
+        {
+            DrawingObjectTargetKind.Shape => sheet.DrawingShapes.Single(item => item.Id == id).FillColor,
+            DrawingObjectTargetKind.TextBox => sheet.TextBoxes.Single(item => item.Id == id).FillColor,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
+
+    private static CellColor? GetOutlineColor(Sheet sheet, DrawingObjectTargetKind kind, Guid id) =>
+        kind switch
+        {
+            DrawingObjectTargetKind.Shape => sheet.DrawingShapes.Single(item => item.Id == id).OutlineColor,
+            DrawingObjectTargetKind.TextBox => sheet.TextBoxes.Single(item => item.Id == id).OutlineColor,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
         };
 }

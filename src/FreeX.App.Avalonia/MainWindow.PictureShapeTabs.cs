@@ -243,7 +243,11 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new SetDrawingShapeColorsCommand(_session.ActiveSheet.Id, current.Id, fillColor: chosen, outlineColor: null, updateFill: true, updateOutline: false),
+            DrawingObjectCommandPlanner.BuildFillColorCommand(
+                _session.ActiveSheet.Id,
+                DrawingObjectTargetKind.Shape,
+                current.Id,
+                chosen),
             UiText.Format("InsertLoc_ShapeFillSet", FormatHex(chosen)),
             UiText.Get("InsertLoc_ShapeFillTitle"));
     }
@@ -263,7 +267,11 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            new SetDrawingShapeColorsCommand(_session.ActiveSheet.Id, current.Id, fillColor: null, outlineColor: chosen, updateFill: false, updateOutline: true),
+            DrawingObjectCommandPlanner.BuildOutlineColorCommand(
+                _session.ActiveSheet.Id,
+                DrawingObjectTargetKind.Shape,
+                current.Id,
+                chosen),
             UiText.Format("InsertLoc_ShapeOutlineSet", FormatHex(chosen)),
             UiText.Get("InsertLoc_ShapeOutlineTitle"));
     }

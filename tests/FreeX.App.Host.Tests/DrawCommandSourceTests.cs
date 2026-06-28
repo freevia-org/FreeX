@@ -52,10 +52,12 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildMoveCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
         source.Should().Contain("new ObjectSizeDialog(target.Width, target.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
         source.Should().Contain("new RotationDialog(target.RotationDegrees, UiText.Get(\"MainWindowMessage_RotateObjectTitle\"))");
-        source.Should().Contain("new SetDrawingShapeColorsCommand(");
-        source.Should().Contain("new SetTextBoxColorsCommand(");
+        source.Should().NotContain("new SetDrawingShapeColorsCommand(");
+        source.Should().NotContain("new SetTextBoxColorsCommand(");
         source.Should().Contain("new ShapeGradientDialog");
         source.Should().Contain("new SetDrawingShapeGradientCommand(");
         source.Should().Contain("new SetDrawingShapeEffectCommand(");
@@ -86,9 +88,11 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("RememberCurrentShapeColor(target.Kind, isFill, color);");
         source.Should().Contain("target.FillThemeColor?.Resolve(_workbook.Theme)");
         source.Should().Contain("target.OutlineThemeColor?.Resolve(_workbook.Theme)");
-        source.Should().Contain("hasFill: hasFill");
-        source.Should().Contain("updateFill: isFill");
-        source.Should().Contain("updateOutline: !isFill");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
+        source.Should().NotContain("hasFill: hasFill");
+        source.Should().NotContain("updateFill: isFill");
+        source.Should().NotContain("updateOutline: !isFill");
     }
 
     [Fact]
