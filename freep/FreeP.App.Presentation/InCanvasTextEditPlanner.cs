@@ -159,6 +159,19 @@ public sealed class InCanvasTextEditPlanner
 
     public static bool TextBodiesEqualForRichTextCommit(TextBody? a, TextBody? b)
     {
+        return TextBodiesEqualForRichTextCommitCore(a, b, compareParagraphAlignment: true);
+    }
+
+    public static bool TextBodiesEqualForTableCellCommit(TextBody? a, TextBody? b)
+    {
+        return TextBodiesEqualForRichTextCommitCore(a, b, compareParagraphAlignment: false);
+    }
+
+    private static bool TextBodiesEqualForRichTextCommitCore(
+        TextBody? a,
+        TextBody? b,
+        bool compareParagraphAlignment)
+    {
         if (a is null && b is null)
             return true;
         if (a is null || b is null)
@@ -172,7 +185,7 @@ public sealed class InCanvasTextEditPlanner
             var pb = b.Paragraphs[pi];
             if (pa.Runs.Count != pb.Runs.Count)
                 return false;
-            if (pa.Align != pb.Align)
+            if (compareParagraphAlignment && pa.Align != pb.Align)
                 return false;
 
             for (int ri = 0; ri < pa.Runs.Count; ri++)
@@ -192,6 +205,56 @@ public sealed class InCanvasTextEditPlanner
         }
 
         return true;
+    }
+}
+
+/// <summary>
+/// Shared in-canvas rich-text commit policy for table-cell overlays.
+/// Renderers own framework controls; this planner owns snapshot, equality, and command creation.
+/// </summary>
+public sealed class InCanvasTableCellTextEditPlanner
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly int _row;
+    private readonly int _col;
+    private readonly TextBody? _originalBody;
+
+    private InCanvasTableCellTextEditPlanner(
+        int slideIndex,
+        uint shapeId,
+        int row,
+        int col,
+        TextBody? originalBody)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _row = row;
+        _col = col;
+        _originalBody = TextBodyModelCloner.CloneTextBody(originalBody);
+    }
+
+    public static InCanvasTableCellTextEditPlanner BeginRichText(
+        int slideIndex,
+        uint shapeId,
+        int row,
+        int col,
+        TextBody? originalBody) =>
+        new(slideIndex, shapeId, row, col, originalBody);
+
+    public InCanvasTextEditDecision Cancel() =>
+        new(InCanvasTextEditOutcome.Canceled, null);
+
+    public InCanvasTextEditDecision CommitRichText(TextBody editedBody)
+    {
+        ArgumentNullException.ThrowIfNull(editedBody);
+
+        if (InCanvasTextEditPlanner.TextBodiesEqualForTableCellCommit(_originalBody, editedBody))
+            return new(InCanvasTextEditOutcome.Unchanged, null);
+
+        return new(
+            InCanvasTextEditOutcome.Commit,
+            new SetTableCellTextCommand(_slideIndex, _shapeId, _row, _col, editedBody));
     }
 }
 
