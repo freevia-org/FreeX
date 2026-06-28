@@ -20,8 +20,10 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("_workflow.Open(");
         source.Should().Contain("_workflow.Save(");
         source.Should().Contain("_workflow.ConfirmCloseAllowed(");
-        source.Should().Contain("FileCommandMessageBox.PromptSaveChanges(");
-        source.Should().Contain("FileCommandMessageBox.ShowError(");
+        source.Should().Contain("IUserMessageService? messageService = null");
+        source.Should().Contain("_messageService = messageService ?? new WpfUserMessageService();");
+        source.Should().Contain("_messageService.PromptSaveChanges(DisplayName, action");
+        source.Should().Contain("_messageService.ShowFileCommandError(summary, ex");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         if (appFolder == "freew")
@@ -37,9 +39,35 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().NotContain("new FileCommandSession");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         source.Should().NotContain(".ConfirmDiscardOrSave(action");
+        source.Should().NotContain("FileCommandMessageBox.PromptSaveChanges(");
+        source.Should().NotContain("FileCommandMessageBox.ShowError(");
+        source.Should().NotContain("UserMessageButtons.YesNoCancel");
+        source.Should().NotContain("UserMessageButtons.Ok");
         source.Should().NotContain("MessageBox.Show(");
         source.Should().NotContain("new OpenFileDialog");
         source.Should().NotContain("new SaveFileDialog");
+    }
+
+    [Fact]
+    public void SharedUserMessageServiceOwnsFileCommandPromptPolicy()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "shared",
+            "Free.Shared.AppServices",
+            "IUserMessageService.cs"));
+
+        source.Should().Contain("public static class UserMessageServiceFileCommandExtensions");
+        source.Should().Contain("PromptSaveChanges(");
+        source.Should().Contain("ShowFileCommandError(");
+        source.Should().Contain("Do you want to save changes to {displayName} before {action}?");
+        source.Should().Contain("UserMessageButtons.YesNoCancel");
+        source.Should().Contain("UserMessageIcon.Warning");
+        source.Should().Contain("UserMessageButtons.Ok");
+        source.Should().Contain("UserMessageIcon.Error");
+        source.Should().Contain("UserMessageResult.Yes => SaveChangesPrompt.Save");
+        source.Should().Contain("UserMessageResult.No => SaveChangesPrompt.DontSave");
+        source.Should().Contain("_ => SaveChangesPrompt.Cancel");
     }
 
     private static string FindRepositoryRoot()
