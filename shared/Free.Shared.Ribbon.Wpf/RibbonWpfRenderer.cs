@@ -617,8 +617,8 @@ public static class RibbonWpfRenderer
     }
 
     // Passes the actual clicked WPF element to the command so host handlers that inspect their sender
-    // (MenuItem.Tag/Header, ToggleButton.IsChecked) see the real rendered control. ReflectiveHandlerCommand
-    // prefers this over its backplane sender when present.
+    // (MenuItem.Tag/Header, ToggleButton.IsChecked) see the real rendered control. WPF command adapters
+    // prefer this over their fallback sender when present.
     public const string SenderKey = "wpf.sender";
 
     private static RibbonCommandContext SenderContext(object? sender) =>
