@@ -18,12 +18,21 @@ public sealed partial class ChartDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("ChartTypeFormatDialogs.cs");
 
         source.Should().Contain("ChartBarFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartBarFormatPlanner.Normalize(input)");
+        source.Should().Contain("ChartBarFormatPlanner.TryParseDialogInput(");
         source.Should().Contain("ChartBarFormatPlanner.Plan(ToInput())");
         source.Should().Contain("ChartPieFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartPieFormatPlanner.Normalize(input)");
+        source.Should().Contain("ChartPieFormatPlanner.TryParseDialogInput(");
+        source.Should().Contain("ChartPieFormatPlanner.ToDisplayPercent(");
         source.Should().Contain("ChartPieFormatPlanner.Plan(ToInput())");
         source.Should().Contain("ChartBubbleFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartBubbleFormatPlanner.Normalize(input)");
+        source.Should().Contain("ChartBubbleFormatPlanner.TryParseDialogInput(");
         source.Should().Contain("ChartBubbleFormatPlanner.Plan(ToInput())");
         source.Should().Contain("ChartStockFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartStockFormatPlanner.Normalize(input)");
+        source.Should().Contain("ChartStockFormatPlanner.TryParseDialogInput(");
         source.Should().Contain("ChartStockFormatPlanner.Plan(ToInput())");
         source.Should().Contain("ChartBubbleFormatPlanner.GetSizeRepresentsChoices()");
 
@@ -32,6 +41,12 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("Enum.GetValues<ChartBubbleSizeRepresents>()");
         source.Should().NotContain("new(BarGapWidth: BarGapWidth");
         source.Should().NotContain("new(BubbleScale: BubbleScale");
+        source.Should().NotContain("TryReadClampedInt");
+        source.Should().NotContain("int.TryParse");
+        source.Should().NotContain("double.TryParse");
+        source.Should().NotContain("NumberStyles.Integer");
+        source.Should().NotContain("NumberStyles.Float");
+        source.Should().NotContain("private static int Percent");
     }
 
     [Fact]

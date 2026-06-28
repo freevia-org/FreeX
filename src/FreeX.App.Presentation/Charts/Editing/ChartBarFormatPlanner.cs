@@ -1,10 +1,18 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Globalization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
 /// <summary>The bar/column gap-width and overlap state read from a chart and edited back through the dialog.</summary>
 public readonly record struct ChartBarFormatInput(int BarGapWidth, int BarOverlap);
+
+public enum ChartBarFormatParseIssue
+{
+    None,
+    GapWidth,
+    Overlap
+}
 
 /// <summary>
 /// Portable (no UI) planner for the "Format Bar/Column" editing dialog: the inter-category gap width and the
@@ -35,7 +43,7 @@ public static class ChartBarFormatPlanner
     public static ChartBarFormatInput Read(ChartModel chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
-        return new ChartBarFormatInput(chart.BarGapWidth ?? 150, chart.BarOverlap ?? 0);
+        return Normalize(new ChartBarFormatInput(chart.BarGapWidth ?? 150, chart.BarOverlap ?? 0));
     }
 
     /// <summary>Validates the edited input. Returns null when valid, else an English reason.</summary>
@@ -50,9 +58,49 @@ public static class ChartBarFormatPlanner
         return null;
     }
 
-    /// <summary>Builds the <see cref="ChartLayoutOptions"/> delta for the edited bar/column format.</summary>
-    public static ChartLayoutOptions Plan(ChartBarFormatInput input) =>
+    public static bool TryParseDialogInput(
+        string gapWidthText,
+        string overlapText,
+        out ChartBarFormatInput input,
+        out ChartBarFormatParseIssue issue)
+    {
+        if (!TryParseClampedInt(gapWidthText, MinGapWidth, MaxGapWidth, out var gapWidth))
+        {
+            input = default;
+            issue = ChartBarFormatParseIssue.GapWidth;
+            return false;
+        }
+
+        if (!TryParseClampedInt(overlapText, MinOverlap, MaxOverlap, out var overlap))
+        {
+            input = default;
+            issue = ChartBarFormatParseIssue.Overlap;
+            return false;
+        }
+
+        input = new ChartBarFormatInput(gapWidth, overlap);
+        issue = ChartBarFormatParseIssue.None;
+        return true;
+    }
+
+    public static ChartBarFormatInput Normalize(ChartBarFormatInput input) =>
         new(
-            BarGapWidth: Math.Clamp(input.BarGapWidth, MinGapWidth, MaxGapWidth),
-            BarOverlap: Math.Clamp(input.BarOverlap, MinOverlap, MaxOverlap));
+            Math.Clamp(input.BarGapWidth, MinGapWidth, MaxGapWidth),
+            Math.Clamp(input.BarOverlap, MinOverlap, MaxOverlap));
+
+    /// <summary>Builds the <see cref="ChartLayoutOptions"/> delta for the edited bar/column format.</summary>
+    public static ChartLayoutOptions Plan(ChartBarFormatInput input)
+    {
+        var normalized = Normalize(input);
+        return new(
+            BarGapWidth: normalized.BarGapWidth,
+            BarOverlap: normalized.BarOverlap);
+    }
+
+    private static bool TryParseClampedInt(string text, int min, int max, out int value) =>
+        TryParseInt(text, out value) && value >= min && value <= max;
+
+    private static bool TryParseInt(string text, out int value) =>
+        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value)
+        || int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
 }
