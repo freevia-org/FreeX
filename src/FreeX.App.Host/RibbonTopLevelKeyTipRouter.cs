@@ -1,3 +1,5 @@
+using Free.Shared.Ribbon.KeyTips;
+
 namespace FreeX.App.Host;
 
 public static class RibbonTopLevelKeyTipRouter
@@ -9,7 +11,10 @@ public static class RibbonTopLevelKeyTipRouter
         if (string.IsNullOrWhiteSpace(keyTip))
             return null;
 
-        var normalizedKeyTip = NormalizeKeyTip(keyTip);
+        var normalizedKeyTip = RibbonKeyTipText.Normalize(keyTip);
+        if (normalizedKeyTip is null)
+            return null;
+
         var candidates = entries
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Header) &&
                             !string.IsNullOrWhiteSpace(entry.KeyTip))
@@ -17,7 +22,7 @@ public static class RibbonTopLevelKeyTipRouter
 
         foreach (var entry in candidates)
         {
-            if (string.Equals(NormalizeKeyTip(entry.KeyTip!), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(RibbonKeyTipText.Normalize(entry.KeyTip!), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
                 return CreateAction(entry.Header);
         }
 
@@ -42,11 +47,14 @@ public static class RibbonTopLevelKeyTipRouter
         if (string.IsNullOrWhiteSpace(keyTipPrefix))
             return false;
 
-        var normalizedPrefix = keyTipPrefix.Trim();
+        var normalizedPrefix = RibbonKeyTipText.Normalize(keyTipPrefix);
+        if (normalizedPrefix is null)
+            return false;
+
         return keyTips
             .Where(keyTip => !string.IsNullOrWhiteSpace(keyTip))
             .Any(keyTip =>
-                NormalizeKeyTip(keyTip!) is { } candidate &&
+                RibbonKeyTipText.Normalize(keyTip!) is { } candidate &&
                 candidate.Length > normalizedPrefix.Length &&
                 candidate.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase));
     }
@@ -56,8 +64,6 @@ public static class RibbonTopLevelKeyTipRouter
             ? RibbonTopLevelKeyTipAction.BackstageFile
             : RibbonTopLevelKeyTipAction.RibbonTab(header);
 
-    private static string NormalizeKeyTip(string keyTip) =>
-        keyTip.Trim().ToUpperInvariant();
 }
 
 public readonly record struct RibbonTopLevelKeyTipEntry(string Header, string? KeyTip);

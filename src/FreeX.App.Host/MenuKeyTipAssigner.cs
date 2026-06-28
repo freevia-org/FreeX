@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using Free.Shared.Ribbon.KeyTips;
 
 namespace FreeX.App.Host;
 
@@ -21,11 +22,11 @@ public static class MenuKeyTipAssigner
 
     private static void PreserveExistingKeyTip(MenuItem item, HashSet<string> used)
     {
-        var existing = NormalizeKeyTip(RibbonTooltip.GetKeyTip(item));
+        var existing = RibbonKeyTipText.NormalizeOrEmpty(RibbonTooltip.GetKeyTip(item));
         if (string.IsNullOrWhiteSpace(existing))
             return;
 
-        if (IsTypeableKeyTip(existing) && IsAvailable(existing, used))
+        if (RibbonKeyTipText.IsTypeableKeyTip(existing) && RibbonKeyTipText.IsAvailable(existing, used))
         {
             RibbonTooltip.SetKeyTip(item, existing);
             used.Add(existing);
@@ -40,7 +41,7 @@ public static class MenuKeyTipAssigner
         if (!string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)))
             return;
 
-        var keyTip = CreateKeyTip(ExtractHeaderText(item.Header), used);
+        var keyTip = RibbonKeyTipText.CreateUniqueKeyTip(ExtractHeaderText(item.Header), used);
         RibbonTooltip.SetKeyTip(item, keyTip);
         used.Add(keyTip);
     }
@@ -56,96 +57,4 @@ public static class MenuKeyTipAssigner
             _ => header.ToString() ?? ""
         };
 
-    private static string CreateKeyTip(string? header, IReadOnlyCollection<string> used)
-    {
-        foreach (var character in EnumerateCandidateCharacters(header))
-        {
-            var candidate = NormalizeKeyTip(character.ToString());
-            if (IsAvailable(candidate, used))
-                return candidate;
-        }
-
-        for (var index = 1; index <= 99; index++)
-        {
-            var candidate = index.ToString();
-            if (IsAvailable(candidate, used))
-                return candidate;
-        }
-
-        foreach (var candidate in EnumerateFallbackKeyTips())
-        {
-            if (IsAvailable(candidate, used))
-                return candidate;
-        }
-
-        throw new InvalidOperationException("Unable to assign a unique menu keytip.");
-    }
-
-    private static string NormalizeKeyTip(string? keyTip) =>
-        keyTip?.Trim().ToUpperInvariant() ?? "";
-
-    private static bool IsAvailable(string candidate, IEnumerable<string> used) =>
-        used.All(existing =>
-            !string.Equals(existing, candidate, StringComparison.OrdinalIgnoreCase) &&
-            !existing.StartsWith(candidate, StringComparison.OrdinalIgnoreCase) &&
-            !candidate.StartsWith(existing, StringComparison.OrdinalIgnoreCase));
-
-    private static IEnumerable<char> EnumerateCandidateCharacters(string? header)
-    {
-        if (string.IsNullOrWhiteSpace(header))
-            yield break;
-
-        foreach (var character in EnumerateAccessKeyCharacters(header))
-            yield return character;
-
-        foreach (var character in header)
-        {
-            if (IsTypeableKeyTipCharacter(character))
-                yield return character;
-        }
-    }
-
-    private static IEnumerable<char> EnumerateAccessKeyCharacters(string header)
-    {
-        for (var index = 0; index < header.Length - 1; index++)
-        {
-            if (header[index] != '_')
-                continue;
-
-            index++;
-            if (header[index] == '_')
-                continue;
-
-            if (IsTypeableKeyTipCharacter(header[index]))
-                yield return header[index];
-        }
-    }
-
-    private static bool IsTypeableKeyTipCharacter(char character) =>
-        character is >= '0' and <= '9' or
-            >= 'A' and <= 'Z' or
-            >= 'a' and <= 'z';
-
-    private static bool IsTypeableKeyTip(string keyTip) =>
-        keyTip.All(IsTypeableKeyTipCharacter);
-
-    private static IEnumerable<string> EnumerateFallbackKeyTips()
-    {
-        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-        foreach (var first in alphabet)
-        {
-            foreach (var second in alphabet)
-                yield return $"{first}{second}";
-        }
-
-        foreach (var first in alphabet)
-        {
-            foreach (var second in alphabet)
-            {
-                foreach (var third in alphabet)
-                    yield return $"{first}{second}{third}";
-            }
-        }
-    }
 }

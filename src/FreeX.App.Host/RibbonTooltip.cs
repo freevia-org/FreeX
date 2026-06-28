@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Free.Shared.Ribbon.KeyTips;
 using SharedRibbonTooltip = Free.Shared.Ribbon.Wpf.RibbonTooltip;
 
 namespace FreeX.App.Host;
@@ -61,7 +62,7 @@ public static class RibbonTooltip
         string? scopePrefix,
         out MenuItem? openedSubmenu)
     {
-        var normalizedKeyTip = NormalizeKeyTip(keyTip);
+        var normalizedKeyTip = RibbonKeyTipText.Normalize(keyTip);
         if (normalizedKeyTip is null)
         {
             openedSubmenu = null;
@@ -103,13 +104,10 @@ public static class RibbonTooltip
         return false;
     }
 
-    private static string? NormalizeKeyTip(string? keyTip) =>
-        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim().ToUpperInvariant();
-
     private static void OnKeyTipChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is MenuItem menuItem)
-            menuItem.InputGestureText = NormalizeKeyTip(e.NewValue as string) ?? "";
+            menuItem.InputGestureText = RibbonKeyTipText.NormalizeOrEmpty(e.NewValue as string);
     }
 
     private static void OnChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
