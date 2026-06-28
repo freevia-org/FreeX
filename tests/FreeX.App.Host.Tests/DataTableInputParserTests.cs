@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -9,7 +10,7 @@ public sealed class DataTableInputParserTests
     private static readonly GridRange Range = new(new CellAddress(SheetId, 3, 2), new CellAddress(SheetId, 8, 5));
 
     [Fact]
-    public void TryParse_ProjectsSharedResultToHostDialogResult()
+    public void TryParse_ReturnsSharedDialogResult()
     {
         DataTableInputParser.TryParse(
                 SheetId,
@@ -58,5 +59,8 @@ public sealed class DataTableInputParserTests
         source.Should().Contain("FreeX.App.Presentation.DataTools.DataTableInputParser");
         source.Should().Contain("SharedDataTableInputParser.TryParse");
         source.Should().NotContain("CellReferenceInputParser.TryParseCell");
+        source.Should().NotContain("GetDefaultFormulaCell");
+        source.Should().NotContain("ToHostMode");
+        source.Should().NotContain("DataTableInputMode");
     }
 }

@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -24,9 +25,9 @@ public sealed partial class DataToolDialogTests
             rowInputCellText: "",
             columnInputCellText: "C1",
             out var oneVariable,
-            out var oneVariableError);
+            out var oneVariableIssue);
 
-        oneVariableParsed.Should().BeTrue(oneVariableError);
+        oneVariableParsed.Should().BeTrue(oneVariableIssue.ToString());
         oneVariable.Mode.Should().Be(DataTableMode.OneVariable);
         oneVariable.Orientation.Should().Be(DataTableInputOrientation.Column);
         oneVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 3));
@@ -39,9 +40,9 @@ public sealed partial class DataToolDialogTests
             rowInputCellText: "A1",
             columnInputCellText: "",
             out var rowInput,
-            out var rowInputError);
+            out var rowInputIssue);
 
-        rowInputParsed.Should().BeTrue(rowInputError);
+        rowInputParsed.Should().BeTrue(rowInputIssue.ToString());
         rowInput.Mode.Should().Be(DataTableMode.OneVariable);
         rowInput.Orientation.Should().Be(DataTableInputOrientation.Row);
         rowInput.FormulaCell.Should().Be(new CellAddress(sheetId, 3, 2));
@@ -52,9 +53,9 @@ public sealed partial class DataToolDialogTests
             rowInputCellText: "A1",
             columnInputCellText: "C1",
             out var twoVariable,
-            out var twoVariableError);
+            out var twoVariableIssue);
 
-        twoVariableParsed.Should().BeTrue(twoVariableError);
+        twoVariableParsed.Should().BeTrue(twoVariableIssue.ToString());
         twoVariable.Mode.Should().Be(DataTableMode.TwoVariable);
         twoVariable.Orientation.Should().Be(DataTableInputOrientation.Column);
         twoVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 2));
@@ -76,9 +77,9 @@ public sealed partial class DataToolDialogTests
             rowInputCellText: "$A$1",
             columnInputCellText: "R1C6",
             out var result,
-            out var error);
+            out var issue);
 
-        parsed.Should().BeTrue(error);
+        parsed.Should().BeTrue(issue.ToString());
         result.RowInputCell.Should().Be(new CellAddress(sheetId, 1, 1));
         result.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 6));
     }
@@ -97,10 +98,11 @@ public sealed partial class DataToolDialogTests
             rowInputCellText: "",
             columnInputCellText: "",
             out _,
-            out var error);
+            out var issue);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Enter either a row input cell or a column input cell.");
+        issue.Should().Be(DataTableInputParseIssue.MissingInputCell);
+        DataTableInputParser.DescribeIssue(issue).Should().Be("Enter either a row input cell or a column input cell.");
     }
 
     [Fact]
@@ -117,18 +119,20 @@ public sealed partial class DataToolDialogTests
             rowInputCellText: "",
             columnInputCellText: "not-a-cell",
             out _,
-            out var error);
+            out var issue);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid column input cell.");
+        issue.Should().Be(DataTableInputParseIssue.InvalidColumnInputCell);
+        DataTableInputParser.DescribeIssue(issue).Should().Be("Enter a valid column input cell.");
     }
 
     [Theory]
-    [InlineData("B2", "", "Row input cell cannot be inside the data table range.")]
-    [InlineData("", "C3", "Column input cell cannot be inside the data table range.")]
+    [InlineData("B2", "", DataTableInputParseIssue.RowInputCellInsideTableRange, "Row input cell cannot be inside the data table range.")]
+    [InlineData("", "C3", DataTableInputParseIssue.ColumnInputCellInsideTableRange, "Column input cell cannot be inside the data table range.")]
     public void DataTableDialog_RejectsInputCellInsideTableRange(
         string rowInputCellText,
         string columnInputCellText,
+        DataTableInputParseIssue expectedIssue,
         string expectedError)
     {
         var sheetId = SheetId.New();
@@ -142,10 +146,11 @@ public sealed partial class DataToolDialogTests
             rowInputCellText,
             columnInputCellText,
             out _,
-            out var error);
+            out var issue);
 
         parsed.Should().BeFalse();
-        error.Should().Be(expectedError);
+        issue.Should().Be(expectedIssue);
+        DataTableInputParser.DescribeIssue(issue).Should().Be(expectedError);
     }
 
     [Fact]
@@ -162,10 +167,11 @@ public sealed partial class DataToolDialogTests
             rowInputCellText: "A1",
             columnInputCellText: "A1",
             out _,
-            out var error);
+            out var issue);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Row and column input cells must be different.");
+        issue.Should().Be(DataTableInputParseIssue.InputCellsMustBeDifferent);
+        DataTableInputParser.DescribeIssue(issue).Should().Be("Row and column input cells must be different.");
     }
 
     [Fact]
@@ -187,7 +193,7 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("Target = textBox");
         source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
         source.Should().NotContain("Header = \"Inputs\"");
-        source.Should().Contain("DataTableInputParser.TryParse(");
+        source.Should().Contain("SharedDataTableInputParser.TryParse(");
     }
 
     [Fact]
@@ -247,11 +253,11 @@ public sealed partial class DataToolDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("DataTableDialog.cs");
 
-        source.Should().Contain("FocusInvalidInput(error);");
-        source.Should().Contain("private void FocusInvalidInput(string? error)");
-        source.Should().Contain("UiText.Get(\"DataTable_ColumnInputInsideRangeMessage\")");
-        source.Should().Contain("UiText.Get(\"DataTable_SameInputCellMessage\")");
-        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+        source.Should().Contain("FocusInvalidInput(issue);");
+        source.Should().Contain("private void FocusInvalidInput(DataTableInputParseIssue issue)");
+        source.Should().Contain("SharedDataTableInputParser.GetErrorFocusTarget(issue)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(GetInputBox(target));");
+        source.Should().NotContain("StringComparison.Ordinal");
     }
 
     [Fact]

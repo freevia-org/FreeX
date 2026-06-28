@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -63,7 +64,7 @@ public sealed class DataTableInputParserTests
                 out var oneVariableIssue)
             .Should().BeTrue(oneVariableIssue.ToString());
 
-        oneVariable.Mode.Should().Be(DataTableInputMode.OneVariable);
+        oneVariable.Mode.Should().Be(DataTableMode.OneVariable);
         oneVariable.Orientation.Should().Be(DataTableInputOrientation.Column);
         oneVariable.FormulaCell.Should().Be(new CellAddress(SheetId, 3, 3));
         oneVariable.RowInputCell.Should().BeNull();
@@ -78,7 +79,7 @@ public sealed class DataTableInputParserTests
                 out var twoVariableIssue)
             .Should().BeTrue(twoVariableIssue.ToString());
 
-        twoVariable.Mode.Should().Be(DataTableInputMode.TwoVariable);
+        twoVariable.Mode.Should().Be(DataTableMode.TwoVariable);
         twoVariable.Orientation.Should().Be(DataTableInputOrientation.Column);
         twoVariable.FormulaCell.Should().Be(new CellAddress(SheetId, 3, 2));
         twoVariable.RowInputCell.Should().Be(new CellAddress(SheetId, 1, 1));
@@ -107,5 +108,30 @@ public sealed class DataTableInputParserTests
             .Should().BeFalse();
 
         issue.Should().Be(expectedIssue);
+    }
+
+    [Fact]
+    public void CreateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        DataTableInputParser.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
+            .Should()
+            .Be(new DataTableRangeSelectionRequest(
+                DataTableRangeSelectionTarget.ColumnInputCell,
+                "$C$1",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData(DataTableInputParseIssue.InvalidRowInputCell, DataTableRangeSelectionTarget.RowInputCell)]
+    [InlineData(DataTableInputParseIssue.MissingInputCell, DataTableRangeSelectionTarget.RowInputCell)]
+    [InlineData(DataTableInputParseIssue.RowInputCellInsideTableRange, DataTableRangeSelectionTarget.RowInputCell)]
+    [InlineData(DataTableInputParseIssue.InvalidColumnInputCell, DataTableRangeSelectionTarget.ColumnInputCell)]
+    [InlineData(DataTableInputParseIssue.ColumnInputCellInsideTableRange, DataTableRangeSelectionTarget.ColumnInputCell)]
+    [InlineData(DataTableInputParseIssue.InputCellsMustBeDifferent, DataTableRangeSelectionTarget.ColumnInputCell)]
+    public void GetErrorFocusTarget_MapsParserIssuesToInputTargets(
+        DataTableInputParseIssue issue,
+        DataTableRangeSelectionTarget expectedTarget)
+    {
+        DataTableInputParser.GetErrorFocusTarget(issue).Should().Be(expectedTarget);
     }
 }
