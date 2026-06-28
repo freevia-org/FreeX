@@ -2,6 +2,13 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
 
+public enum PivotShowValuesAsValidationError
+{
+    None,
+    MissingBaseField,
+    MissingBaseItem
+}
+
 /// <summary>
 /// Portable, UI-free planning for the PivotTable "Value Field Settings" dialog: the summary-function and
 /// show-values-as option catalogs, index resolution, base-field validation, the auto-generated caption
@@ -100,30 +107,46 @@ public static class PivotValueFieldPlanner
             ? null
             : text.Trim();
 
+    public static PivotShowValuesAsValidationError ValidateShowValuesAs(
+        PivotShowValuesAs showValuesAs,
+        int? baseFieldIndex,
+        string? baseItem)
+    {
+        if (!ShowValuesAsRequiresBaseField(showValuesAs))
+            return PivotShowValuesAsValidationError.None;
+
+        if (baseFieldIndex is null)
+            return PivotShowValuesAsValidationError.MissingBaseField;
+
+        if (showValuesAs is PivotShowValuesAs.DifferenceFrom or PivotShowValuesAs.PercentDifferenceFrom &&
+            string.IsNullOrWhiteSpace(baseItem))
+        {
+            return PivotShowValuesAsValidationError.MissingBaseItem;
+        }
+
+        return PivotShowValuesAsValidationError.None;
+    }
+
     public static bool TryValidateShowValuesAs(
         PivotShowValuesAs showValuesAs,
         int? baseFieldIndex,
         string? baseItem,
         out string? error)
     {
-        error = null;
-        if (!ShowValuesAsRequiresBaseField(showValuesAs))
-            return true;
-
-        if (baseFieldIndex is null)
+        switch (ValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem))
         {
-            error = "Select a base field for the chosen calculation.";
-            return false;
+            case PivotShowValuesAsValidationError.None:
+                error = null;
+                return true;
+            case PivotShowValuesAsValidationError.MissingBaseField:
+                error = "Select a base field for the chosen calculation.";
+                return false;
+            case PivotShowValuesAsValidationError.MissingBaseItem:
+                error = "Enter a base item for the chosen calculation.";
+                return false;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(showValuesAs));
         }
-
-        if (showValuesAs is PivotShowValuesAs.DifferenceFrom or PivotShowValuesAs.PercentDifferenceFrom &&
-            string.IsNullOrWhiteSpace(baseItem))
-        {
-            error = "Enter a base item for the chosen calculation.";
-            return false;
-        }
-
-        return true;
     }
 
     /// <summary>Builds the updated data field from the dialog's collected input.</summary>

@@ -24,7 +24,7 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
-        pivotSource.Should().Contain("PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange)");
+        pivotSource.Should().Contain("PivotCreatePlanner.CreateSourceRangePlan(sheet, SheetGrid.SelectedRange)");
         pivotSource.Should().Contain("ShowPivotTableSourceRangeError(sourcePlan.Error)");
         pivotSource.Should().Contain("new PivotTableDialog(");
         pivotSource.Should().Contain("PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange)");

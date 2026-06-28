@@ -1,5 +1,7 @@
 using FluentAssertions;
 using FreeX.Core.Model;
+using PivotFieldListPanePlan = FreeX.App.Presentation.PivotUI.PivotFieldListPanePlan;
+using PivotShowDetailsTarget = FreeX.App.Presentation.PivotUI.PivotShowDetailsTarget;
 
 namespace FreeX.App.Host.Tests;
 

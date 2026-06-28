@@ -220,7 +220,9 @@ public sealed partial class MainWindowXamlKeyTipTests
             "PivotValueFieldSettings_ShowRankSmallest"
         };
         foreach (var key in expectedShowValuesAsKeys)
-            plannerSource.Should().Contain($"UiText.Get(\"{key}\")");
+            plannerSource.Should().Contain($"\"{key}\"");
+        plannerSource.Should().Contain("LocalizeOptions(PivotValueFieldPlanner.ShowValuesAsOptions, ShowValuesAsResourceKeys)");
+        plannerSource.Should().Contain("UiText.Get(resourceKeys[index])");
         PivotValueFieldSettingsDialogPlanner.ShowValuesAsOptions
             .Select(option => option.Label)
             .Should()
