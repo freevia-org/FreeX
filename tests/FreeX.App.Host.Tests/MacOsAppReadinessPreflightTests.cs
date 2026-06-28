@@ -768,7 +768,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
-        script.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await CreateNewWorkbookAsync();");
+        script.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
         script.Should().Contain("_openRecentMenuItem.Header = UiText.Get(`\"AvaloniaNativeMenu_OpenRecent`\");");
         script.Should().Contain("_selectAllMenuItem.Header = `\"Select All`\";");
         script.Should().Contain("_fillCellsButton.Content = `\"Fill Cells`\";");
@@ -783,7 +783,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_identity`\", status, grantKind)");
         script.Should().Contain("RecordFileAccessEvent(`\"workbook_file_access_scope`\", status, grantKind)");
         script.Should().Contain("[\"payloadRedacted\"] = string.IsNullOrWhiteSpace(grantKind) ? null : \"true\"");
-        script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();");
+        script.Should().Contain("_closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);");
         script.Should().Contain("_sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true)");
         script.Should().Contain("RefreshViewportSizeForZoom();");
         script.Should().Contain("private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)");
@@ -2166,7 +2166,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
                     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
-                    _newWorkbookMenuItem.Click += async (_, _) => await CreateNewWorkbookAsync();
+                    _newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
                     _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
                     fileMenu.Items.Add(_openRecentMenuItem);
@@ -2202,7 +2202,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     private readonly NativeMenuItem _optionsMenuItem = new();
                     _optionsMenuItem.Header = UiText.Get("Options_Title");
                     _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
-                    _optionsMenuItem.Click += (_, _) => ShowOptions();
+                    _optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);
                     fileMenu.Items.Add(_optionsMenuItem);
                     Text = UiText.Get("FormatCells_ProtectionExplanation"),
                     CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox)
@@ -2213,9 +2213,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
                     _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
                     _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
-                    _backstageExportMenuItem.Click += (_, _) => ShowBackstageExport();
+                    _backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);
                     _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
-                    _backstageAccountMenuItem.Click += (_, _) => ShowBackstageAccount();
+                    _backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);
                     fileMenu.Items.Add(_backstageExportMenuItem);
                     fileMenu.Items.Add(_backstageInfoMenuItem);
                     fileMenu.Items.Add(_backstageAccountMenuItem);
@@ -2527,7 +2527,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
                     RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
                     RecordRecentWorkbook(target.Path, fileAccessIdentity);
-                    _closeWorkbookMenuItem.Click += async (_, _) => await CloseWorkbookAsync();
+                    _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
                     fileMenu.Items.Add(_newWorkbookMenuItem);
                     fileMenu.Items.Add(_closeWorkbookMenuItem);
                     _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
