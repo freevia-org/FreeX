@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
@@ -275,13 +276,13 @@ public sealed partial class PrintPreviewDialog : Window
                 return;
             }
             if (selectedPageRangeMode == PrintPreviewPageRangeMode.Pages &&
-                !ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError))
+                !ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError, WpfExportPlannerTextResolver.Instance))
             {
                 ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError);
                 return;
             }
             if (selectedPageRangeMode == PrintPreviewPageRangeMode.Pages &&
-                !ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError))
+                !ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError, WpfExportPlannerTextResolver.Instance))
             {
                 ShowInvalidPageRangeWarning(fromPageBox, toPageBox, validatedPageRangeError);
                 return;

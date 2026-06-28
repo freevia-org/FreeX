@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -50,13 +51,13 @@ public sealed partial class PrintPreviewDialog
         PrintPreviewPageRangeMode pageRangeMode,
         int currentPage,
         ExportPageRange? pageRange = null) =>
-        PrintPreviewToolbarPlanner.ResolvePrintPaginator(document, pageRangeMode, currentPage, pageRange);
+        WpfPrintPreviewToolbarPlanner.ResolvePrintPaginator(document, pageRangeMode, currentPage, pageRange);
 
     internal static Duplexing ResolvePrintTicketDuplexing(PrintPreviewSidesMode mode) =>
-        PrintPreviewToolbarPlanner.ResolvePrintTicketDuplexing(mode);
+        WpfPrintPreviewToolbarPlanner.ResolvePrintTicketDuplexing(mode);
 
     internal static PrintPreviewNavigationState CreateNavigationState(int currentPage, int totalPages) =>
-        PrintPreviewToolbarPlanner.CreateNavigationState(currentPage, totalPages);
+        PrintPreviewToolbarStatePlanner.CreateNavigationState(currentPage, totalPages);
 
     private static PrintPreviewSidesMode ResolveSelectedSidesMode(ComboBox sidesBox) =>
         PrintPreviewToolbarStatePlanner.SidesIndexToMode(sidesBox.SelectedIndex);

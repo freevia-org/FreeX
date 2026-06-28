@@ -36,7 +36,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void PdfFallbackMessage_ExplainsWindowsPrintPipelineAndXpsConversion()
     {
-        ExportPlanner.PdfFallbackMessage.Should().Be(
+        WpfExportDescriptionPlanner.PdfFallbackMessage.Should().Be(
             UiText.Get("Export_PdfFallbackMessage"));
     }
 
@@ -416,8 +416,10 @@ public partial class ExportPlannerTests
             sheet.Hyperlinks[secondPageAddress] = "https://example.com/second";
             sheet.PrintArea = new GridRange(firstPageAddress, secondPageAddress);
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var secondLinkPageNumber = FindPageNumberContainingLink(document, "https://example.com/second");
+            secondLinkPageNumber.Should().BeGreaterThan(1);
 
-            PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2));
+            PdfDocumentExporter.Save(document, path, null, new ExportPageRange(secondLinkPageNumber, secondLinkPageNumber));
 
             using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
             pdf.PageCount.Should().Be(1);
@@ -801,6 +803,18 @@ public partial class ExportPlannerTests
 
     private static FixedDocument CreateOnePageDocument()
         => CreateDocument(pageCount: 1);
+
+    private static int FindPageNumberContainingLink(FixedDocument document, string target)
+    {
+        for (var index = 0; index < document.Pages.Count; index++)
+        {
+            var fixedPage = document.Pages[index].GetPageRoot(forceReload: false)!;
+            if (PdfLinkOverlayExtractor.Extract(fixedPage).Any(overlay => overlay.Target == target))
+                return index + 1;
+        }
+
+        return -1;
+    }
 
     private static IReadOnlyList<string> ReadLinkAnnotationUris(PdfPage page)
     {

@@ -1,28 +1,28 @@
 using System.Globalization;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
-internal enum ExportFormat
+public enum ExportFormat
 {
     Xps,
     Pdf
 }
 
-internal enum ExportContentScope
+public enum ExportContentScope
 {
     ActiveSheet,
     Selection,
     EntireWorkbook
 }
 
-internal enum ExportQuality
+public enum ExportQuality
 {
     Standard,
     MinimumSize
 }
 
-internal enum PdfBookmarkMode
+public enum PdfBookmarkMode
 {
     None,
     SheetNames,
@@ -30,7 +30,7 @@ internal enum PdfBookmarkMode
     PageNumbers
 }
 
-internal enum PdfInitialView
+public enum PdfInitialView
 {
     SinglePage,
     OneColumn,
@@ -38,28 +38,26 @@ internal enum PdfInitialView
     TwoColumnRight
 }
 
-internal enum PdfOpenMode
+public enum PdfOpenMode
 {
     Normal,
     Outlines,
     FullScreen
 }
 
-internal enum PdfConformance
+public enum PdfConformance
 {
     Standard,
     PdfA1b
 }
 
-internal sealed record ExportPageRange(int FromPage, int ToPage)
+public sealed record ExportPageRange(int FromPage, int ToPage)
 {
     public override string ToString() =>
-        FromPage == ToPage
-            ? UiText.Format("Export_PageRangeSingle", FromPage)
-            : UiText.Format("Export_PageRangeMultiple", FromPage, ToPage);
+        ExportPlanner.FormatPageRange(this);
 }
 
-internal sealed record ExportOptions(
+public sealed record ExportOptions(
     ExportContentScope Scope,
     bool IncludeDocumentProperties,
     bool OpenAfterPublish,
@@ -86,7 +84,7 @@ internal sealed record ExportOptions(
                 : PdfBookmarkMode.None;
 }
 
-internal sealed record ExportRequest(
+public sealed record ExportRequest(
     string Path,
     ExportFormat Format,
     ExportOptions Options,
@@ -96,14 +94,51 @@ internal sealed record ExportRequest(
     public string ActualPath => FallbackPath ?? Path;
 }
 
-internal static partial class ExportPlanner
+public sealed class ExportPlannerTextResolver
+{
+    private static readonly IReadOnlyDictionary<string, string> EnglishText = new Dictionary<string, string>
+    {
+        ["Export_InvalidPdfLanguage"] = "Enter a valid PDF language tag, for example {0}.",
+        ["Export_NoExportablePagesError"] = "There are no exportable pages.",
+        ["Export_PageRangeEndsAfterLastPage"] = "Page range ends after the last exportable page ({0}).",
+        ["Export_PageRangeFromLessThanToError"] = "From page must be less than or equal to To page.",
+        ["Export_PageRangeMultiple"] = "pages {0}-{1}",
+        ["Export_PageRangePositiveError"] = "Page numbers must be 1 or greater.",
+        ["Export_PageRangeSingle"] = "page {0}",
+        ["Export_PageRangeStartsAfterLastPage"] = "Page range starts after the last exportable page ({0}).",
+        ["Export_PageRangeWholeNumbersError"] = "Page range must include whole-number From and To values.",
+        ["Export_PdfAUnsupportedError"] = "PDF/A compliance is not supported by the current PDF exporter.",
+        ["Export_TaggedPdfUnsupportedError"] = "Tagged PDF structure is not supported by the current PDF exporter."
+    };
+
+    public static ExportPlannerTextResolver InvariantEnglish { get; } =
+        new(
+            key => EnglishText.TryGetValue(key, out var text) ? text : key,
+            (key, args) => string.Format(
+                CultureInfo.CurrentCulture,
+                EnglishText.TryGetValue(key, out var text) ? text : key,
+                args));
+
+    private readonly Func<string, string> _get;
+    private readonly Func<string, object?[], string> _format;
+
+    public ExportPlannerTextResolver(Func<string, string> get, Func<string, object?[], string> format)
+    {
+        _get = get ?? throw new ArgumentNullException(nameof(get));
+        _format = format ?? throw new ArgumentNullException(nameof(format));
+    }
+
+    public string Get(string key) => _get(key);
+
+    public string Format(string key, params object?[] args) => _format(key, args);
+}
+
+public static class ExportPlanner
 {
     public const string DefaultPdfLanguage = "en-US";
 
-    public static string PdfFallbackMessage => UiText.Get("Export_PdfFallbackMessage");
-
     public static ExportFormat InferExportFormat(string path) =>
-        ToHostFormat(ExportPathPlanner.InferFormat(path));
+        FromExportFileFormat(ExportPathPlanner.InferFormat(path));
 
     public static ExportRequest PlanExport(string path) =>
         PlanExport(path, ExportOptions.ExcelLikeDefault);
@@ -111,12 +146,12 @@ internal static partial class ExportPlanner
     public static ExportRequest PlanExport(string path, ExportOptions options)
     {
         var plan = ExportPathPlanner.Plan(path);
-        return new ExportRequest(plan.Path, ToHostFormat(plan.Format), options, plan.FallbackPath);
+        return new ExportRequest(plan.Path, FromExportFileFormat(plan.Format), options, plan.FallbackPath);
     }
 
     public static ExportRequest PlanExport(string path, ExportFormat format, ExportOptions options)
     {
-        var plan = ExportPathPlanner.Plan(path, ToCoreFormat(format));
+        var plan = ExportPathPlanner.Plan(path, ToExportFileFormat(format));
         return new ExportRequest(plan.Path, format, options, plan.FallbackPath);
     }
 
@@ -127,19 +162,19 @@ internal static partial class ExportPlanner
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var plan = new ExportPathPlan(request.Path, ToCoreFormat(request.Format), request.FallbackPath);
+        var plan = new ExportPathPlan(request.Path, ToExportFileFormat(request.Format), request.FallbackPath);
         return ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, plan, pathExists);
     }
 
     public static string GetFallbackXpsPath(string requestedPath) =>
         ExportPathPlanner.GetFallbackXpsPath(requestedPath);
 
-    private static ExportFormat ToHostFormat(ExportFileFormat format) =>
+    public static ExportFormat FromExportFileFormat(ExportFileFormat format) =>
         format == ExportFileFormat.Xps
             ? ExportFormat.Xps
             : ExportFormat.Pdf;
 
-    private static ExportFileFormat ToCoreFormat(ExportFormat format) =>
+    public static ExportFileFormat ToExportFileFormat(ExportFormat format) =>
         format == ExportFormat.Xps
             ? ExportFileFormat.Xps
             : ExportFileFormat.Pdf;
@@ -151,8 +186,13 @@ internal static partial class ExportPlanner
             : DefaultPdfLanguage;
     }
 
-    public static bool TryNormalizePdfLanguage(string? pdfLanguage, out string normalized, out string? error)
+    public static bool TryNormalizePdfLanguage(
+        string? pdfLanguage,
+        out string normalized,
+        out string? error,
+        ExportPlannerTextResolver? textResolver = null)
     {
+        var text = textResolver ?? ExportPlannerTextResolver.InvariantEnglish;
         normalized = DefaultPdfLanguage;
         error = null;
         if (string.IsNullOrWhiteSpace(pdfLanguage))
@@ -170,13 +210,19 @@ internal static partial class ExportPlanner
         }
         catch (CultureNotFoundException)
         {
-            error = UiText.Format("Export_InvalidPdfLanguage", DefaultPdfLanguage);
+            error = text.Format("Export_InvalidPdfLanguage", DefaultPdfLanguage);
             return false;
         }
     }
 
-    public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
+    public static bool TryCreatePageRange(
+        string fromText,
+        string toText,
+        out ExportPageRange? range,
+        out string? error,
+        ExportPlannerTextResolver? textResolver = null)
     {
+        var text = textResolver ?? ExportPlannerTextResolver.InvariantEnglish;
         range = null;
         error = null;
 
@@ -188,19 +234,19 @@ internal static partial class ExportPlanner
         if (!int.TryParse(fromText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fromPage) ||
             !int.TryParse(toText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var toPage))
         {
-            error = UiText.Get("Export_PageRangeWholeNumbersError");
+            error = text.Get("Export_PageRangeWholeNumbersError");
             return false;
         }
 
         if (fromPage < 1 || toPage < 1)
         {
-            error = UiText.Get("Export_PageRangePositiveError");
+            error = text.Get("Export_PageRangePositiveError");
             return false;
         }
 
         if (fromPage > toPage)
         {
-            error = UiText.Get("Export_PageRangeFromLessThanToError");
+            error = text.Get("Export_PageRangeFromLessThanToError");
             return false;
         }
 
@@ -208,13 +254,18 @@ internal static partial class ExportPlanner
         return true;
     }
 
-    public static bool TryValidatePageRange(ExportPageRange? range, int pageCount, out string? error)
+    public static bool TryValidatePageRange(
+        ExportPageRange? range,
+        int pageCount,
+        out string? error,
+        ExportPlannerTextResolver? textResolver = null)
     {
+        var text = textResolver ?? ExportPlannerTextResolver.InvariantEnglish;
         error = null;
 
         if (pageCount <= 0)
         {
-            error = UiText.Get("Export_NoExportablePagesError");
+            error = text.Get("Export_NoExportablePagesError");
             return false;
         }
 
@@ -223,21 +274,26 @@ internal static partial class ExportPlanner
 
         if (range.FromPage > pageCount)
         {
-            error = UiText.Format("Export_PageRangeStartsAfterLastPage", pageCount);
+            error = text.Format("Export_PageRangeStartsAfterLastPage", pageCount);
             return false;
         }
 
         if (range.ToPage > pageCount)
         {
-            error = UiText.Format("Export_PageRangeEndsAfterLastPage", pageCount);
+            error = text.Format("Export_PageRangeEndsAfterLastPage", pageCount);
             return false;
         }
 
         return true;
     }
 
-    public static bool TryValidatePublishOptions(ExportOptions options, ExportFormat format, out string? error)
+    public static bool TryValidatePublishOptions(
+        ExportOptions options,
+        ExportFormat format,
+        out string? error,
+        ExportPlannerTextResolver? textResolver = null)
     {
+        var text = textResolver ?? ExportPlannerTextResolver.InvariantEnglish;
         error = null;
 
         if (format == ExportFormat.Xps)
@@ -245,13 +301,13 @@ internal static partial class ExportPlanner
 
         if (options.PdfConformance != PdfConformance.Standard)
         {
-            error = UiText.Get("Export_PdfAUnsupportedError");
+            error = text.Get("Export_PdfAUnsupportedError");
             return false;
         }
 
         if (options.IncludeDocumentStructureTags)
         {
-            error = UiText.Get("Export_TaggedPdfUnsupportedError");
+            error = text.Get("Export_TaggedPdfUnsupportedError");
             return false;
         }
 
@@ -282,4 +338,15 @@ internal static partial class ExportPlanner
         };
     }
 
+    public static string FormatPageRange(
+        ExportPageRange range,
+        ExportPlannerTextResolver? textResolver = null)
+    {
+        ArgumentNullException.ThrowIfNull(range);
+
+        var text = textResolver ?? ExportPlannerTextResolver.InvariantEnglish;
+        return range.FromPage == range.ToPage
+            ? text.Format("Export_PageRangeSingle", range.FromPage)
+            : text.Format("Export_PageRangeMultiple", range.FromPage, range.ToPage);
+    }
 }

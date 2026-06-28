@@ -377,7 +377,7 @@ public partial class MainWindow
             ExportedPdfPageCount: pdf.PageCount,
             ExportedPdfPageLayout: pdf.Internals.Catalog.Elements.GetName("/PageLayout"),
             ExportedPdfPageMode: pdf.Internals.Catalog.Elements.GetName("/PageMode"),
-            ExportRequestSummary: ExportPlanner.DescribeRequest(request));
+            ExportRequestSummary: WpfExportDescriptionPlanner.DescribeRequest(request));
     }
 
     private async Task<FileBackstageWorkflowsTourManifestCapture> CaptureFileBackstageWorkflowWindowAsync(
