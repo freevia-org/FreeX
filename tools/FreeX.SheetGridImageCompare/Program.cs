@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.Filtering;
 using FreeX.App.UI;
 using FreeX.App.Presentation.Sparklines;
 using FreeX.Core.Calc;
@@ -513,7 +514,7 @@ internal static class Program
         // Surface the sheet's AutoFilter range (worksheet-level OR carried inside a structured table)
         // so the GridView draws the filter-arrow dropdown buttons on the header row, matching Excel.
         grid.AutoFilterRange =
-            FreeX.App.Host.AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
+            AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
                 ? autoFilterRange
                 : null;
         grid.PivotHeaderDropdowns = FreeX.App.Host.PivotHeaderDropdownPlanner.BuildTargets(workbook, sheet)

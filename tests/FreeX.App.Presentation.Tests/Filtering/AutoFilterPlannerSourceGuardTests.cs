@@ -33,6 +33,9 @@ public sealed class AutoFilterPlannerSourceGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterToggleRangePlanner.cs"))
             .Should()
             .BeFalse("WPF Host should use the shared range planner instead of carrying a local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterDropdownPlanner.cs"))
+            .Should()
+            .BeFalse("WPF Host should call the shared dropdown planner directly and keep only UI text resources local");
     }
 
     [Fact]
@@ -42,12 +45,20 @@ public sealed class AutoFilterPlannerSourceGuardTests
         var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
             ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
         var avaloniaSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
+        var hostDropdownSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.EditingDropdowns.cs"));
+        var hostResourcesSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterMenuResources.cs"));
         var hostClearSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ClearFilterRangePlanner.cs"));
 
         avaloniaSource.Should().Contain("AutoFilterHeaderButtonPlanner.IsFilterButtonCell");
         avaloniaSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
         avaloniaSource.Should().Contain("InvariantAutoFilterMenuTextProvider.Instance");
         avaloniaSource.Should().NotContain("RangeHasActiveFilter(");
+        hostDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange");
+        hostDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        hostDropdownSource.Should().Contain("AutoFilterMenuResources.TextProvider");
+        hostDropdownSource.Should().NotContain("AutoFilterDropdownPlanner.");
+        hostResourcesSource.Should().Contain("IAutoFilterMenuTextProvider");
+        hostResourcesSource.Should().NotContain("AutoFilterDropdownMenuPlanner.");
         hostClearSource.Should().Contain("AutoFilterToggleRangePlanner.Create");
         hostClearSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter");
         hostClearSource.Should().NotContain("SelectionRangeService.GetCurrentRegion");

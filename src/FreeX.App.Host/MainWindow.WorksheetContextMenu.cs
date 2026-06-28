@@ -512,7 +512,7 @@ public partial class MainWindow
         sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
         var hasAutoFilterHeaderTarget =
             SelectionRangeService.GetCurrentRegion(sheet, address) is { } currentRegion &&
-            AutoFilterDropdownPlanner.TryPlan(currentRegion, address, out _);
+            AutoFilterDropdownMenuPlanner.TryPlan(currentRegion, address, out _);
         var hasValidationDropdown =
             sheet.DataValidations.Count > 0 &&
             DataValidationService.GetApplicable(sheet, address)

@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class AutoFilterDropdownPlannerTests
+public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
 {
     [Fact]
     public void CreateChecklistItems_ReturnsDistinctBodyValuesAndSkipsHeader()
@@ -21,7 +21,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 4, 1)),
             FilterColumnOffset: 0);
 
-        var items = AutoFilterDropdownPlanner.CreateChecklistItems(sheet, plan);
+        var items = CreateChecklistItems(sheet, plan);
 
         items.Should().Equal(
             new AutoFilterChecklistItem("Apple", "Apple"),
@@ -45,7 +45,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 3, 3)),
             FilterColumnOffset: 1);
 
-        var items = AutoFilterDropdownPlanner.CreateChecklistItems(sheet, plan);
+        var items = CreateChecklistItems(sheet, plan);
 
         items.Select(item => item.Value).Should().Equal("Closed", "Open");
     }
@@ -66,7 +66,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 6, 1)),
             FilterColumnOffset: 0);
 
-        var items = AutoFilterDropdownPlanner.CreateChecklistItems(sheet, plan);
+        var items = CreateChecklistItems(sheet, plan);
 
         items.Should().Equal(
             new AutoFilterChecklistItem("12.5", "12.5"),
@@ -92,7 +92,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 5, 1)),
             FilterColumnOffset: 0);
 
-        var items = AutoFilterDropdownPlanner.CreateChecklistItems(sheet, plan);
+        var items = CreateChecklistItems(sheet, plan);
 
         items.Should().Equal(
             new AutoFilterChecklistItem("ACME, Inc.", "ACME, Inc."),

@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class AutoFilterDropdownPlannerTests
+public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
 {
     [Fact]
     public void CreateMenuPlan_ProvidesNestedFilterFamilySubmenuCommands()
@@ -17,7 +17,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
             new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 3, 1)),
             FilterColumnOffset: 0);
 
-        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var menu = CreateMenuPlan(sheet, plan);
 
         var family = menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily);
         family.Header.Should().Be(UiText.Get("AutoFilter_FilterFamily_Number"));
@@ -54,15 +54,15 @@ public sealed partial class AutoFilterDropdownPlannerTests
             new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 3, 1)),
             FilterColumnOffset: 0);
 
-        AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
+        CreateMenuPlan(numberSheet, numberPlan)
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Number);
-        AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
+        CreateMenuPlan(numberSheet, numberPlan)
             .Entries.Single(entry => entry.Header == UiText.Get("AutoFilter_FilterFamily_Number"))
             .CriteriaSuggestions.Should().Equal("=", "<>", ">", ">=", "<", "<=", "between:", "top:", "bottom:", "toppercent:", "bottompercent:", "above average", "below average", "blank", "nonblank");
 
-        AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
+        CreateMenuPlan(dateSheet, datePlan)
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Date);
-        AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
+        CreateMenuPlan(dateSheet, datePlan)
             .Entries.Single(entry => entry.Header == UiText.Get("AutoFilter_FilterFamily_Date"))
             .CriteriaSuggestions.Should().Equal("date=", "date<>", "date>", "date>=", "date<", "date<=", "datebetween:", "blank", "nonblank");
     }
@@ -91,13 +91,13 @@ public sealed partial class AutoFilterDropdownPlannerTests
             new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 2, 1)),
             FilterColumnOffset: 0);
 
-        AutoFilterDropdownPlanner.CreateMenuPlan(textSheet, textPlan)
+        CreateMenuPlan(textSheet, textPlan)
             .Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
             .CriteriaSuggestions.Should().ContainInOrder("blank", "nonblank");
-        AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
+        CreateMenuPlan(numberSheet, numberPlan)
             .Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
             .CriteriaSuggestions.Should().ContainInOrder("blank", "nonblank");
-        AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
+        CreateMenuPlan(dateSheet, datePlan)
             .Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
             .CriteriaSuggestions.Should().ContainInOrder("blank", "nonblank");
     }
