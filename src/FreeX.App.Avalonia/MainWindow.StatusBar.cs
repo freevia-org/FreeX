@@ -35,7 +35,7 @@ public sealed partial class MainWindow
         AvaloniaStatusBarSource.BuildModel(
             _session.SelectionStats,
             ClampZoomPercent(_session.ZoomPercent),
-            NormalizeStatusBarReadyText(readyText),
+            StatusBarReadyTextPlanner.NormalizeTransientReadyText(readyText, "Ready"),
             _session.ActiveSheet.ViewMode);
 
     /// <summary>
@@ -46,8 +46,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void ApplyStatusBarModel(string status)
     {
-        var normalizedStatus = NormalizeStatusBarReadyText(status);
-        var model = BuildStatusBarViewModel(normalizedStatus);
+        var model = BuildStatusBarViewModel(status);
 
         // Render the neutral StatusBarViewModel: the readout is the model's visible aggregate readouts
         // (filtered by the customize toggles); zoom comes from the model; CellMode/Zoom toggles gate the
@@ -88,15 +87,6 @@ public sealed partial class MainWindow
         {
             _isUpdatingStatusZoomSlider = false;
         }
-    }
-
-    private static string NormalizeStatusBarReadyText(string status)
-    {
-        if (status.StartsWith("Showing ", StringComparison.OrdinalIgnoreCase) ||
-            status.StartsWith("Hiding ", StringComparison.OrdinalIgnoreCase))
-            return "Ready";
-
-        return string.IsNullOrWhiteSpace(status) ? "Ready" : status;
     }
 
     // ── "Customize Status Bar" right-click menu ───────────────────────────────

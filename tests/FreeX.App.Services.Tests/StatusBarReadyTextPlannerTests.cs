@@ -6,6 +6,25 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class StatusBarReadyTextPlannerTests
 {
+    [Theory]
+    [InlineData(null, "Ready")]
+    [InlineData("", "Ready")]
+    [InlineData("   ", "Ready")]
+    [InlineData("Showing gridlines", "Ready")]
+    [InlineData("Hiding headings", "Ready")]
+    [InlineData("showing formulas", "Ready")]
+    [InlineData("hiding formulas", "Ready")]
+    [InlineData("Edit", "Edit")]
+    [InlineData("Input: Use a number", "Input: Use a number")]
+    public void NormalizeTransientReadyText_FoldsRendererToggleMessagesToFallback(
+        string? status,
+        string expected)
+    {
+        var text = StatusBarReadyTextPlanner.NormalizeTransientReadyText(status, "Ready");
+
+        text.Should().Be(expected);
+    }
+
     [Fact]
     public void BuildReadyText_ReturnsFallback_WhenActiveCellHasNoInputPrompt()
     {
