@@ -52,6 +52,64 @@ public sealed class SlideCanvasAvaloniaTests
         return p;
     }
 
+    private static TextBody MakeTextBody(string text)
+    {
+        var body = new TextBody { Wrap = true };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text, FontFamily = "Aptos", FontSizePt = 18 });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_CommitPlainText_UsesSharedPlannerCommand()
+    {
+        Presentation? presentation = null;
+        SlideShape? shape = null;
+        EditingSession? editor = null;
+
+        await Run(() =>
+        {
+            presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 1,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeTextBody("Original"),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+            textEditor.IsActive.Should().BeTrue();
+            overlay.Children.Should().ContainSingle();
+
+            var box = overlay.Children[0].Should().BeOfType<global::Avalonia.Controls.TextBox>().Subject;
+            box.Text = "Changed\nText";
+
+            textEditor.Commit();
+        });
+
+        editor!.CanUndo.Should().BeTrue("changed text should commit through the shared command");
+        shape!.TextBody!.Paragraphs.Should().HaveCount(2);
+        shape.TextBody.Paragraphs[0].Runs[0].Text.Should().Be("Changed");
+        shape.TextBody.Paragraphs[1].Runs[0].Text.Should().Be("Text");
+
+        editor.Undo();
+        shape.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
     // ── 1. Geometry factory round-trip ────────────────────────────────────────
 
     [Fact]
