@@ -46,7 +46,7 @@ public sealed class CanvasGestureHandler
     private uint                    _resizeShapeId;
     private long                    _resizeOrigX, _resizeOrigY, _resizeOrigCx, _resizeOrigCy;
     private double                  _resizeOrigRotationDeg;
-    private SelectionAdorner.HandleKind _resizeHandle;
+    private CanvasGestureHandleKind     _resizeHandle;
 
     // ── Rotate ────────────────────────────────────────────────────────────────────────────────
     private uint   _rotateShapeId;
@@ -417,7 +417,7 @@ public sealed class CanvasGestureHandler
         _resizeOrigCx          = s.ExtentCxEmu;
         _resizeOrigCy          = s.ExtentCyEmu;
         _resizeOrigRotationDeg = s.RotationDeg;
-        _resizeHandle          = handle;
+        _resizeHandle          = ToCanvasGestureHandle(handle);
         _canvas.CaptureMouse();
     }
 
@@ -445,272 +445,24 @@ public sealed class CanvasGestureHandler
     public (long newX, long newY, long newCx, long newCy) ComputeResizeBounds(
         Point screenPt, SlideTransform xf)
     {
-        double dxPx = screenPt.X - _dragStartScreen.X;
-        double dyPx = screenPt.Y - _dragStartScreen.Y;
+        var result = CanvasGesturePlanner.ComputeResizeBounds(new CanvasResizeRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            Transform: ToCoreTransform(xf),
+            State: new CanvasResizeState(
+                _resizeShapeId,
+                _resizeOrigX,
+                _resizeOrigY,
+                _resizeOrigCx,
+                _resizeOrigCy,
+                _resizeOrigRotationDeg,
+                _resizeHandle),
+            CurrentSlide: _editor.CurrentSlide,
+            SnapToGrid: SnapToGrid,
+            SnapToShapes: SnapToShapes,
+            BypassSnap: (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
 
-        // Work in DIP so we can apply snap before the final EMU conversion.
-        double origXDip  = SlideTransform.EmuToDip(_resizeOrigX);
-        double origYDip  = SlideTransform.EmuToDip(_resizeOrigY);
-        double origCxDip = SlideTransform.EmuToDip(_resizeOrigCx);
-        double origCyDip = SlideTransform.EmuToDip(_resizeOrigCy);
-        double dxDip     = xf.ScaleScreenToDip(dxPx);
-        double dyDip     = xf.ScaleScreenToDip(dyPx);
-
-        // AD3: Un-rotate the drag delta from world (screen-aligned) space into the shape's
-        // local frame so that dragging a handle moves the correct local edge regardless of
-        // rotation.  For a 0° shape this is an exact no-op.
-        double rot = _resizeOrigRotationDeg;
-        if (rot != 0)
-            (dxDip, dyDip) = SlideTransformCore.UnRotateDelta(dxDip, dyDip, rot);
-
-        // Wave 12B: snap the dragged edge if snap is enabled.
-        // Alt disables snapping (PowerPoint convention), same as move.
-        bool altHeld     = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
-        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
-
-        // Snapping is applied in the UN-ROTATED (local) frame — the dragged local edge position.
-        if (snapEnabled && _editor.CurrentSlide is not null)
-        {
-            var slide      = _editor.CurrentSlide;
-            var candidates = SnapToShapes
-                ? SnapEngine.BuildShapeCandidates(slide, new[] { _resizeShapeId })
-                : null;
-            double slideW  = xf.SlideWidthDip;
-            double slideH  = xf.SlideHeightDip;
-            double pitch   = SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0;
-
-            // Snap only the dragged edge(s).  Pass a degenerate rect whose left=right
-            // (or top=bottom) equals the dragged edge so all three probes collapse to
-            // that single value, giving the cleanest snap delta for that edge alone.
-            switch (_resizeHandle)
-            {
-                // ── horizontal (Y) dragged edges ─────────────────────────────────
-                case SelectionAdorner.HandleKind.ResizeN:
-                {
-                    double draggedY = origYDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (origXDip, draggedY, origXDip + origCxDip, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeS:
-                {
-                    double draggedY = origYDip + origCyDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (origXDip, draggedY, origXDip + origCxDip, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                // ── vertical (X) dragged edges ────────────────────────────────────
-                case SelectionAdorner.HandleKind.ResizeW:
-                {
-                    double draggedX = origXDip + dxDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, origYDip, draggedX, origYDip + origCyDip),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeE:
-                {
-                    double draggedX = origXDip + origCxDip + dxDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, origYDip, draggedX, origYDip + origCyDip),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    break;
-                }
-                // ── corner handles: snap both dragged edges ───────────────────────
-                case SelectionAdorner.HandleKind.ResizeNE:
-                {
-                    double draggedX = origXDip + origCxDip + dxDip;
-                    double draggedY = origYDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, draggedY, draggedX, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeNW:
-                {
-                    double draggedX = origXDip + dxDip;
-                    double draggedY = origYDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, draggedY, draggedX, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeSE:
-                {
-                    double draggedX = origXDip + origCxDip + dxDip;
-                    double draggedY = origYDip + origCyDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, draggedY, draggedX, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-                case SelectionAdorner.HandleKind.ResizeSW:
-                {
-                    double draggedX = origXDip + dxDip;
-                    double draggedY = origYDip + origCyDip + dyDip;
-                    var snap = SnapEngine.Snap(
-                        (draggedX, draggedY, draggedX, draggedY),
-                        candidates, slideW, slideH, true, pitch);
-                    dxDip += snap.SnapDx;
-                    dyDip += snap.SnapDy;
-                    break;
-                }
-            }
-        }
-
-        // Convert snapped DIP deltas to EMU.
-        long dx = xf.ScreenDeltaToEmu(dxDip * xf.Scale);
-        long dy = xf.ScreenDeltaToEmu(dyDip * xf.Scale);
-
-        long x  = _resizeOrigX;
-        long y  = _resizeOrigY;
-        long cx = _resizeOrigCx;
-        long cy = _resizeOrigCy;
-
-        const long MinEmu = 91440L; // 0.1 inch minimum size
-
-        switch (_resizeHandle)
-        {
-            case SelectionAdorner.HandleKind.ResizeN:
-                y  = _resizeOrigY  + dy;
-                cy = Math.Max(MinEmu, _resizeOrigCy - dy);
-                break;
-            case SelectionAdorner.HandleKind.ResizeS:
-                cy = Math.Max(MinEmu, _resizeOrigCy + dy);
-                break;
-            case SelectionAdorner.HandleKind.ResizeW:
-                x  = _resizeOrigX  + dx;
-                cx = Math.Max(MinEmu, _resizeOrigCx - dx);
-                break;
-            case SelectionAdorner.HandleKind.ResizeE:
-                cx = Math.Max(MinEmu, _resizeOrigCx + dx);
-                break;
-            case SelectionAdorner.HandleKind.ResizeNE:
-                y  = _resizeOrigY  + dy;
-                cy = Math.Max(MinEmu, _resizeOrigCy - dy);
-                cx = Math.Max(MinEmu, _resizeOrigCx + dx);
-                break;
-            case SelectionAdorner.HandleKind.ResizeNW:
-                x  = _resizeOrigX  + dx;
-                y  = _resizeOrigY  + dy;
-                cx = Math.Max(MinEmu, _resizeOrigCx - dx);
-                cy = Math.Max(MinEmu, _resizeOrigCy - dy);
-                break;
-            case SelectionAdorner.HandleKind.ResizeSE:
-                cx = Math.Max(MinEmu, _resizeOrigCx + dx);
-                cy = Math.Max(MinEmu, _resizeOrigCy + dy);
-                break;
-            case SelectionAdorner.HandleKind.ResizeSW:
-                x  = _resizeOrigX  + dx;
-                cx = Math.Max(MinEmu, _resizeOrigCx - dx);
-                cy = Math.Max(MinEmu, _resizeOrigCy + dy);
-                break;
-        }
-
-        // AD3: Anchor-fixed correction for rotated shapes.
-        // The bounds x,y,cx,cy are computed in the shape's LOCAL (un-rotated) frame.
-        // After rotation, the anchor corner (opposite to the dragged handle) must stay at
-        // the same WORLD position it occupied before the drag began.
-        if (rot != 0)
-        {
-            // Anchor corner in original LOCAL frame (the corner that must NOT move).
-            (double anchorLocalX, double anchorLocalY) = _resizeHandle switch
-            {
-                SelectionAdorner.HandleKind.ResizeSE =>
-                    (SlideTransform.EmuToDip(_resizeOrigX),
-                     SlideTransform.EmuToDip(_resizeOrigY)),
-                SelectionAdorner.HandleKind.ResizeNW =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy)),
-                SelectionAdorner.HandleKind.ResizeNE =>
-                    (SlideTransform.EmuToDip(_resizeOrigX),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy)),
-                SelectionAdorner.HandleKind.ResizeSW =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx),
-                     SlideTransform.EmuToDip(_resizeOrigY)),
-                SelectionAdorner.HandleKind.ResizeN =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx / 2),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy)),
-                SelectionAdorner.HandleKind.ResizeS =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx / 2),
-                     SlideTransform.EmuToDip(_resizeOrigY)),
-                SelectionAdorner.HandleKind.ResizeW =>
-                    (SlideTransform.EmuToDip(_resizeOrigX + _resizeOrigCx),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy / 2)),
-                SelectionAdorner.HandleKind.ResizeE =>
-                    (SlideTransform.EmuToDip(_resizeOrigX),
-                     SlideTransform.EmuToDip(_resizeOrigY + _resizeOrigCy / 2)),
-                _ => (SlideTransform.EmuToDip(_resizeOrigX),
-                      SlideTransform.EmuToDip(_resizeOrigY))
-            };
-
-            // Original shape centre in DIP.
-            double origCx = SlideTransform.EmuToDip(_resizeOrigX) + SlideTransform.EmuToDip(_resizeOrigCx) / 2.0;
-            double origCy = SlideTransform.EmuToDip(_resizeOrigY) + SlideTransform.EmuToDip(_resizeOrigCy) / 2.0;
-
-            // World position of the anchor corner BEFORE resize (rotate local → world).
-            var (anchorWorldX, anchorWorldY) =
-                SlideTransformCore.RotatePoint(anchorLocalX, anchorLocalY, origCx, origCy, rot);
-
-            // New bounds in local frame (in DIP).
-            double newXDip  = SlideTransform.EmuToDip(x);
-            double newYDip  = SlideTransform.EmuToDip(y);
-            double newCxDip = SlideTransform.EmuToDip(cx);
-            double newCyDip = SlideTransform.EmuToDip(cy);
-
-            // New local anchor corner position (in the resized local bounding box).
-            (double newAnchorLocalX, double newAnchorLocalY) = _resizeHandle switch
-            {
-                SelectionAdorner.HandleKind.ResizeSE =>
-                    (newXDip, newYDip),
-                SelectionAdorner.HandleKind.ResizeNW =>
-                    (newXDip + newCxDip, newYDip + newCyDip),
-                SelectionAdorner.HandleKind.ResizeNE =>
-                    (newXDip, newYDip + newCyDip),
-                SelectionAdorner.HandleKind.ResizeSW =>
-                    (newXDip + newCxDip, newYDip),
-                SelectionAdorner.HandleKind.ResizeN =>
-                    (newXDip + newCxDip / 2, newYDip + newCyDip),
-                SelectionAdorner.HandleKind.ResizeS =>
-                    (newXDip + newCxDip / 2, newYDip),
-                SelectionAdorner.HandleKind.ResizeW =>
-                    (newXDip + newCxDip, newYDip + newCyDip / 2),
-                SelectionAdorner.HandleKind.ResizeE =>
-                    (newXDip, newYDip + newCyDip / 2),
-                _ => (newXDip, newYDip)
-            };
-
-            // New shape centre in local frame.
-            double newCenLocalX = newXDip + newCxDip / 2.0;
-            double newCenLocalY = newYDip + newCyDip / 2.0;
-
-            // Where does the anchor corner end up in world space after rotating around the
-            // new (local-frame) centre?
-            var (newAnchorWorldX, newAnchorWorldY) =
-                SlideTransformCore.RotatePoint(newAnchorLocalX, newAnchorLocalY,
-                                               newCenLocalX, newCenLocalY, rot);
-
-            // Shift the bounding-box origin so the anchor returns to its pre-drag world position.
-            double shiftX = anchorWorldX - newAnchorWorldX;
-            double shiftY = anchorWorldY - newAnchorWorldY;
-
-            x = SlideTransform.DipToEmu(newXDip + shiftX);
-            y = SlideTransform.DipToEmu(newYDip + shiftY);
-        }
-
-        return (x, y, cx, cy);
+        return (result.XEmu, result.YEmu, result.CxEmu, result.CyEmu);
     }
 
     // ── Rotate gesture ────────────────────────────────────────────────────────────────────────
@@ -761,18 +513,12 @@ public sealed class CanvasGestureHandler
     /// </summary>
     public double ComputeRotationAngle(Point screenPt, SlideTransform xf)
     {
-        // Center in screen space
-        double cx = _rotateCenterSlide.X * xf.Scale + xf.OffsetX;
-        double cy = _rotateCenterSlide.Y * xf.Scale + xf.OffsetY;
-
-        double angle = Math.Atan2(screenPt.Y - cy, screenPt.X - cx) * (180.0 / Math.PI) + 90.0;
-        angle = ((angle % 360) + 360) % 360; // normalize to [0,360)
-        angle = _rotateOrigDeg + (angle - _rotateOrigDeg); // keep relative
-
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-            angle = Math.Round(angle / 15.0) * 15.0;
-
-        return angle;
+        return CanvasGesturePlanner.ComputeRotationAngle(new CanvasRotationRequest(
+            CurrentScreen: ToGesturePoint(screenPt),
+            CenterSlide: ToGesturePoint(_rotateCenterSlide),
+            Transform: ToCoreTransform(xf),
+            OriginalRotationDeg: _rotateOrigDeg,
+            SnapToFifteenDegrees: (Keyboard.Modifiers & ModifierKeys.Shift) != 0));
     }
 
     // ── Marquee gesture ───────────────────────────────────────────────────────────────────────
@@ -926,6 +672,29 @@ public sealed class CanvasGestureHandler
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────
+
+    private static CanvasGesturePoint ToGesturePoint(Point point)
+        => new(point.X, point.Y);
+
+    private static SlideTransformCore ToCoreTransform(SlideTransform xf)
+        => new(xf.Scale, xf.OffsetX, xf.OffsetY, xf.SlideWidthDip, xf.SlideHeightDip);
+
+    private static CanvasGestureHandleKind ToCanvasGestureHandle(SelectionAdorner.HandleKind handle)
+        => handle switch
+        {
+            SelectionAdorner.HandleKind.None => CanvasGestureHandleKind.None,
+            SelectionAdorner.HandleKind.Body => CanvasGestureHandleKind.Body,
+            SelectionAdorner.HandleKind.ResizeN => CanvasGestureHandleKind.ResizeN,
+            SelectionAdorner.HandleKind.ResizeNE => CanvasGestureHandleKind.ResizeNE,
+            SelectionAdorner.HandleKind.ResizeE => CanvasGestureHandleKind.ResizeE,
+            SelectionAdorner.HandleKind.ResizeSE => CanvasGestureHandleKind.ResizeSE,
+            SelectionAdorner.HandleKind.ResizeS => CanvasGestureHandleKind.ResizeS,
+            SelectionAdorner.HandleKind.ResizeSW => CanvasGestureHandleKind.ResizeSW,
+            SelectionAdorner.HandleKind.ResizeW => CanvasGestureHandleKind.ResizeW,
+            SelectionAdorner.HandleKind.ResizeNW => CanvasGestureHandleKind.ResizeNW,
+            SelectionAdorner.HandleKind.Rotate => CanvasGestureHandleKind.Rotate,
+            _ => CanvasGestureHandleKind.None
+        };
 
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransform xf)
     {
