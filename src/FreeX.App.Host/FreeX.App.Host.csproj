@@ -99,5 +99,7 @@
     <Using Include="FreeX.App.Presentation.PageLayout" />
     <Using Include="FreeX.App.Presentation.DrawingInteraction" />
     <Using Include="FreeX.App.Presentation.TextToColumns" />
+    <Using Include="FreeX.App.Presentation.NamedRanges" />
+    <Using Include="FreeX.App.Presentation.Protection" />
   </ItemGroup>
 </Project>

@@ -1,7 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Presentation.NamedRanges;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.NamedRanges;
 
 public sealed class NamedRangeInputParserTests
 {

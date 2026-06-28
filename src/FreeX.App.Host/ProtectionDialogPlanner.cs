@@ -1,3 +1,6 @@
+using ProtectionResultPlanner = FreeX.App.Presentation.Protection.ProtectionDialogPlanner;
+using ProtectionRangeInputParser = FreeX.App.Presentation.Protection.ProtectionInputParser;
+using FreeX.App.Presentation.Protection;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -36,19 +39,17 @@ public static class ProtectionDialogPlanner
         Sheet sheet,
         string? password,
         IReadOnlyList<string> selectedSheetPermissions) =>
-        sheet.IsProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, password, [])
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, selectedSheetPermissions);
+        ProtectionResultPlanner.CreateSheetResult(sheet.IsProtected, password, selectedSheetPermissions);
 
     public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password, string? confirmation) =>
-        sheet.IsProtected || PasswordsMatch(password, confirmation)
-            ? CreateSheetResult(sheet, password)
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, null, GetDefaultSelectedSheetPermissions());
+        ProtectionResultPlanner.CreateSheetResult(
+            sheet.IsProtected,
+            password,
+            confirmation,
+            GetDefaultSelectedSheetPermissions());
 
     public static ProtectionDialogResult CreateWorkbookResult(Workbook workbook, string? password) =>
-        workbook.IsStructureProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, password, [])
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, []);
+        ProtectionResultPlanner.CreateWorkbookResult(workbook.IsStructureProtected, password);
 
     public static IReadOnlyList<string> GetDefaultSheetPermissions() =>
         SheetPermissionChoices.Select(choice => choice.Label).ToList();
@@ -75,10 +76,10 @@ public static class ProtectionDialogPlanner
     }
 
     public static bool PasswordsMatch(string? password, string? confirmation) =>
-        string.Equals(password ?? "", confirmation ?? "", StringComparison.Ordinal);
+        ProtectionResultPlanner.PasswordsMatch(password, confirmation);
 
     public static bool TryParseAllowEditRange(string text, SheetId sheetId, out GridRange range) =>
-        ProtectionInputParser.TryParseAllowEditRange(text, sheetId, out range);
+        ProtectionRangeInputParser.TryParseAllowEditRange(text, sheetId, out range);
 
     private static SheetProtectionPermission? ParseSheetPermission(string label)
     {

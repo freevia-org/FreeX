@@ -1,6 +1,6 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Protection;
 
 public static class ProtectionInputParser
 {

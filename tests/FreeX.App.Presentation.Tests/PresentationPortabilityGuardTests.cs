@@ -168,4 +168,53 @@ public sealed class PresentationPortabilityGuardTests
             .And
             .NotContain("public sealed record PageBreakDialogResult");
     }
+
+    [Fact]
+    public void NamedRangeDialogPlanning_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "NamedRanges", "NamedRangeInputParser.cs"))
+            .Should()
+            .BeTrue("named-range reference parsing should be shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "NamedRanges", "NamedRangeDialogPlanner.cs"))
+            .Should()
+            .BeTrue("named-range filtering and row models should be shared by renderers");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "NamedRangeInputParser.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared named-range parser instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "NamedRangeDialogPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared named-range planner instead of carrying a renderer-local copy");
+    }
+
+    [Fact]
+    public void ProtectionDialogParsingAndResults_AreSharedPresentationImplementations()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var hostProtectionPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionDialogPlanner.cs");
+        var hostProtectionDialogsPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionDialogs.cs");
+
+        File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionInputParser.cs"))
+            .Should()
+            .BeTrue("allow-edit-range parsing should be shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionDialogPlanner.cs"))
+            .Should()
+            .BeTrue("protect/unprotect result creation should be shared by renderers");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionInputParser.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared protection parser instead of carrying a renderer-local copy");
+        File.ReadAllText(hostProtectionPlannerPath)
+            .Should()
+            .NotContain("new ProtectionDialogResult");
+        File.ReadAllText(hostProtectionDialogsPath)
+            .Should()
+            .NotContain("public enum ProtectionDialogMode")
+            .And
+            .NotContain("public sealed record ProtectionDialogResult");
+    }
 }

@@ -116,4 +116,18 @@ public sealed partial class ProtectionDialogTests
     {
         ProtectionDialogPlanner.TryParseAllowEditRange("A1:B2:C3", SheetId.New(), out _).Should().BeFalse();
     }
+
+    [Fact]
+    public void ProtectionDialogPlanner_DelegatesPortableResultAndParserLogic()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ProtectionDialogPlanner.cs");
+
+        source.Should().Contain("using ProtectionResultPlanner = FreeX.App.Presentation.Protection.ProtectionDialogPlanner;");
+        source.Should().Contain("using ProtectionRangeInputParser = FreeX.App.Presentation.Protection.ProtectionInputParser;");
+        source.Should().Contain("ProtectionResultPlanner.CreateSheetResult(");
+        source.Should().Contain("ProtectionResultPlanner.CreateWorkbookResult(");
+        source.Should().Contain("ProtectionRangeInputParser.TryParseAllowEditRange(");
+        source.Should().NotContain("new ProtectionDialogResult");
+        source.Should().Contain("UiText.Get(");
+    }
 }

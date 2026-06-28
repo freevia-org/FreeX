@@ -2,20 +2,10 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Protection;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public enum ProtectionDialogMode
-{
-    Protect,
-    Unprotect
-}
-
-public sealed record ProtectionDialogResult(
-    ProtectionDialogMode Mode,
-    string? Password,
-    IReadOnlyList<string> SelectedSheetPermissions);
 
 public sealed class PasswordProtectionDialog : Window
 {
