@@ -81,15 +81,6 @@ public sealed partial class MainWindow : Window
         ConcatenateAllCells
     }
 
-    private enum ShellFocusRegion
-    {
-        Worksheet,
-        Toolbar,
-        FormulaBar,
-        SheetTabs,
-        StatusBar
-    }
-
     private enum FindDialogAction
     {
         FindNext,
@@ -341,14 +332,6 @@ public sealed partial class MainWindow : Window
     private const string NativeWorkbookExtension = ".fxl";
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
     private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
-    private static readonly ShellFocusRegion[] ShellFocusCycle =
-    [
-        ShellFocusRegion.Worksheet,
-        ShellFocusRegion.Toolbar,
-        ShellFocusRegion.FormulaBar,
-        ShellFocusRegion.SheetTabs,
-        ShellFocusRegion.StatusBar
-    ];
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush HeaderBackground = Brush(242, 242, 242);
     private static readonly IBrush HeaderForeground = Brushes.Black;
@@ -6499,7 +6482,7 @@ public sealed partial class MainWindow : Window
                 _session.MoveActiveCell(rowDelta, colDelta);
 
             RefreshShell("Ready");
-            FocusShellRegion(ShellFocusRegion.Worksheet);
+            FocusShellRegion(ShellFocusTarget.Worksheet);
         }
     }
 
@@ -6509,7 +6492,7 @@ public sealed partial class MainWindow : Window
         _formulaBoxEditOriginalText = null;
         ClearInlineCellEditorState();
         RefreshShell("Ready");
-        FocusShellRegion(ShellFocusRegion.Worksheet);
+        FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
     private void ClearInlineCellEditorState()
@@ -13048,7 +13031,7 @@ public sealed partial class MainWindow : Window
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
             RefreshShell("Ready");
-            FocusShellRegion(ShellFocusRegion.Worksheet);
+            FocusShellRegion(ShellFocusTarget.Worksheet);
             e.Handled = true;
             return;
         }
@@ -13084,7 +13067,7 @@ public sealed partial class MainWindow : Window
                 var colDelta = GetCellIndexDelta(current.Col, target.Col);
                 _session.MoveActiveCell(rowDelta, colDelta);
                 RefreshShell("Ready");
-                FocusShellRegion(ShellFocusRegion.Worksheet);
+                FocusShellRegion(ShellFocusTarget.Worksheet);
             }
             else
             {
@@ -19326,7 +19309,7 @@ public sealed partial class MainWindow : Window
 
     internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()
     {
-        FocusShellRegion(ShellFocusRegion.Worksheet);
+        FocusShellRegion(ShellFocusTarget.Worksheet);
         _launchSmokeLiveCommandKeySnapshot = MacOsLaunchSmokeLiveCommandKeySnapshot.Ready(
             _session.IsSelectedRangeStartBold,
             _session.IsSelectedRangeStartItalic,
@@ -20208,50 +20191,43 @@ public sealed partial class MainWindow : Window
 
     private void CycleShellFocus(bool reverse)
     {
-        var current = GetCurrentShellFocusRegion();
-        for (var attempt = 0; attempt < ShellFocusCycle.Length; attempt++)
+        var current = GetCurrentShellFocusTarget();
+        for (var attempt = 0; attempt < Enum.GetValues<ShellFocusTarget>().Length; attempt++)
         {
-            current = GetNextShellFocusRegion(current, reverse);
+            current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
             if (FocusShellRegion(current))
                 return;
         }
     }
 
-    private static ShellFocusRegion GetNextShellFocusRegion(ShellFocusRegion current, bool reverse)
-    {
-        var index = Array.IndexOf(ShellFocusCycle, current);
-        if (index < 0)
-            index = 0;
+    private static bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
+        target != ShellFocusTarget.TaskPane;
 
-        var offset = reverse ? -1 : 1;
-        var nextIndex = (index + offset + ShellFocusCycle.Length) % ShellFocusCycle.Length;
-        return ShellFocusCycle[nextIndex];
-    }
-
-    private ShellFocusRegion GetCurrentShellFocusRegion()
+    private ShellFocusTarget GetCurrentShellFocusTarget()
     {
         if (_formulaBox.IsFocused)
-            return ShellFocusRegion.FormulaBar;
+            return ShellFocusTarget.FormulaBar;
 
         if (IsAnySheetTabFocused())
-            return ShellFocusRegion.SheetTabs;
+            return ShellFocusTarget.SheetTabs;
 
         if (_zoomText.IsFocused)
-            return ShellFocusRegion.StatusBar;
+            return ShellFocusTarget.StatusBar;
 
         if (IsAnyToolbarControlFocused())
-            return ShellFocusRegion.Toolbar;
+            return ShellFocusTarget.Ribbon;
 
-        return ShellFocusRegion.Worksheet;
+        return ShellFocusTarget.Worksheet;
     }
 
-    private bool FocusShellRegion(ShellFocusRegion region) =>
-        region switch
+    private bool FocusShellRegion(ShellFocusTarget target) =>
+        target switch
         {
-            ShellFocusRegion.Toolbar => FocusFirstEnabledToolbarControl(),
-            ShellFocusRegion.FormulaBar => FocusControl(_formulaBox),
-            ShellFocusRegion.SheetTabs => FocusActiveSheetTab(),
-            ShellFocusRegion.StatusBar => FocusControl(_zoomText),
+            ShellFocusTarget.Ribbon => FocusFirstEnabledToolbarControl(),
+            ShellFocusTarget.FormulaBar => FocusControl(_formulaBox),
+            ShellFocusTarget.SheetTabs => FocusActiveSheetTab(),
+            ShellFocusTarget.TaskPane => false,
+            ShellFocusTarget.StatusBar => FocusControl(_zoomText),
             _ => FocusControl(_sheetGridHost)
         };
 
