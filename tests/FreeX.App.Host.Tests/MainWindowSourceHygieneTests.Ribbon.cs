@@ -1020,7 +1020,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = ReadPivotCommandSource();
 
-        source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        source.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
         source.Should().Contain("command.CreatedSheetId");
         source.Should().NotContain("New chart-style PivotTable sheets are tracked for Wave 2");
     }

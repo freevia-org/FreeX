@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -128,18 +129,7 @@ public static class PivotUiPlanner
         workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? fallbackSheet;
 
     public static int ChooseDefaultDataField(Sheet sheet, GridRange sourceRange)
-    {
-        for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
-        {
-            for (var row = sourceRange.Start.Row + 1; row <= sourceRange.End.Row; row++)
-            {
-                if (sheet.GetValue(row, col) is NumberValue or DateTimeValue)
-                    return checked((int)(col - sourceRange.Start.Col));
-            }
-        }
-
-        return checked((int)Math.Min(1, sourceRange.ColCount - 1));
-    }
+        => PivotCreatePlanner.ChooseDefaultDataField(sheet, sourceRange);
 
     public static GridRange DefaultTargetRange(Sheet sheet, GridRange sourceRange)
     {
@@ -155,16 +145,7 @@ public static class PivotUiPlanner
     }
 
     public static string GenerateUniquePivotTableName(Sheet sheet)
-    {
-        for (var index = sheet.PivotTables.Count + 1; index <= 10000; index++)
-        {
-            var name = $"PivotTable{index}";
-            if (sheet.PivotTables.All(pivot => !PivotTableNameEquals(pivot, name)))
-                return name;
-        }
-
-        return $"PivotTable{Guid.NewGuid():N}"[..31];
-    }
+        => PivotCreatePlanner.SuggestName(sheet);
 
     public static string NormalizePivotTableName(string? name) => name?.Trim() ?? string.Empty;
 

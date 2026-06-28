@@ -27,8 +27,10 @@ public sealed class InsertCommandSourceTests
         pivotSource.Should().Contain("PivotTableSourceRangePlanner.CreatePlan(sheet, SheetGrid.SelectedRange)");
         pivotSource.Should().Contain("ShowPivotTableSourceRangeError(sourcePlan.Error)");
         pivotSource.Should().Contain("new PivotTableDialog(");
-        pivotSource.Should().Contain("new AddPivotTableCommand(");
-        pivotSource.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        pivotSource.Should().Contain("PivotCreatePlanner.CreateDefaultLayout(sourceSheet, dialogSourceRange)");
+        pivotSource.Should().Contain("PivotCreatePlanner.SuggestName(_workbook)");
+        pivotSource.Should().Contain("PivotCreatePlanner.BuildInPlaceCommand(");
+        pivotSource.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
         pivotSource.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
         pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
