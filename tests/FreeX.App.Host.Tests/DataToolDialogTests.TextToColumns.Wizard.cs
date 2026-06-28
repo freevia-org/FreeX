@@ -59,7 +59,7 @@ public sealed partial class DataToolDialogTests
             "TextToColumns",
             "TextToColumnsWizardSurfacePlanner.cs");
 
-        source.Should().Contain("UiText.Format(\"TextToColumns_TextWizardStepOf3\", normalizedStep)");
+        source.Should().Contain("UiText.Format(TextToColumnsWizardSurfacePlanner.HeaderFormatKey, normalizedStep)");
         source.Should().Contain("TextToColumnsWizardSurfacePlanner.CreateStepPlan");
         source.Should().Contain("CreateWizardButtonRow");
         source.Should().Contain("Content = UiText.Get(\"TextToColumns_BackButton\")");

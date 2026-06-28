@@ -298,7 +298,7 @@ public sealed partial class TextToColumnsDialog : Window
             {
                 var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
                 rows = _previewRows
-                    .Select(row => TextToColumnsPlanner.SplitFixedWidthText(row, positions).ToArray())
+                    .Select(row => TextToColumnsApplyPlanner.SplitFixedWidthText(row, positions).ToArray())
                     .ToList();
             }
             else
@@ -310,7 +310,7 @@ public sealed partial class TextToColumnsDialog : Window
                     _treatConsecutiveDelimitersBox.IsChecked == true,
                     _defaultDestination);
                 rows = _previewRows
-                    .Select(row => TextToColumnsPlanner.SplitText(
+                    .Select(row => TextToColumnsApplyPlanner.SplitText(
                         row,
                         result.Delimiters,
                         result.TextQualifierChar,
@@ -321,7 +321,7 @@ public sealed partial class TextToColumnsDialog : Window
         catch
         {
             rows = _previewRows
-                .Select(row => TextToColumnsPlanner.SplitText(row, ",").ToArray())
+                .Select(row => TextToColumnsApplyPlanner.SplitText(row, ",").ToArray())
                 .ToList();
         }
 
