@@ -1,8 +1,9 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.Editing;
 
 public sealed class InsertCopiedCellsPlannerTests
 {
@@ -60,4 +61,11 @@ public sealed class InsertCopiedCellsPlannerTests
         sheet.GetValue(new CellAddress(sheet.Id, 2, 4)).Should().Be(new TextValue("right"));
     }
 
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
+    }
 }

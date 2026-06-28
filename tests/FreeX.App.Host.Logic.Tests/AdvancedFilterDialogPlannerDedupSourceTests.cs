@@ -10,6 +10,8 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
         var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterDialogPlanner.cs");
+        var hostDefaultListPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterDefaultListRangePlanner.cs");
+        var mainDataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
         var dialogSource = DialogSourceTestSupport.ReadHostSources(
             "AdvancedFilterDialog.cs",
             "AdvancedFilterDialog.Planning.cs");
@@ -17,6 +19,11 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
 
         File.Exists(hostPlannerPath)
             .Should().BeFalse("the WPF dialog should call the portable AdvancedFilterPlanner directly");
+        File.Exists(hostDefaultListPlannerPath)
+            .Should().BeFalse("default Advanced Filter list range selection should stay in the portable AdvancedFilterPlanner");
+
+        mainDataCommandsSource.Should().Contain("AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected)");
+        mainDataCommandsSource.Should().NotContain("AdvancedFilterDefaultListRangePlanner.");
 
         dialogSource.Should().Contain(
             "using ServicesAdvancedFilterPlanner = FreeX.App.Services.AdvancedFilterPlanner;");

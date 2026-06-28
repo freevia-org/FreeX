@@ -1,8 +1,9 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.Filtering;
 
 public sealed class FilterPromptPlannerTests
 {
@@ -16,7 +17,7 @@ public sealed class FilterPromptPlannerTests
     {
         FilterPromptPlanner.TryPlan(input, out var plan, out var error).Should().BeTrue();
 
-        error.Should().BeNull();
+        error.Should().Be(FilterPromptPlanError.None);
         plan.Should().NotBeNull();
         plan!.Kind.Should().Be(expectedKind);
         plan.Top.Should().Be(expectedTop);
@@ -31,7 +32,7 @@ public sealed class FilterPromptPlannerTests
     {
         FilterPromptPlanner.TryPlan(input, out var plan, out var error).Should().BeTrue();
 
-        error.Should().BeNull();
+        error.Should().Be(FilterPromptPlanError.None);
         plan.Should().NotBeNull();
         plan!.Kind.Should().Be(FilterPromptPlanKind.Average);
         plan.AboveAverage.Should().Be(expectedAbove);
@@ -53,7 +54,7 @@ public sealed class FilterPromptPlannerTests
     {
         FilterPromptPlanner.TryPlan(input, out var plan, out var error).Should().BeTrue();
 
-        error.Should().BeNull();
+        error.Should().Be(FilterPromptPlanError.None);
         plan.Should().NotBeNull();
         plan!.Kind.Should().Be(FilterPromptPlanKind.Condition);
         plan.Criterion.Should().BeOfType(criterionType);
@@ -65,7 +66,7 @@ public sealed class FilterPromptPlannerTests
     {
         FilterPromptPlanner.TryPlan("East, West;East", out var plan, out var error).Should().BeTrue();
 
-        error.Should().BeNull();
+        error.Should().Be(FilterPromptPlanError.None);
         plan.Should().NotBeNull();
         plan!.Kind.Should().Be(FilterPromptPlanKind.AllowedValues);
         plan.AllowedValues.Should().Equal("East", "West");
@@ -73,9 +74,9 @@ public sealed class FilterPromptPlannerTests
     }
 
     [Theory]
-    [InlineData("top:0", "Enter a positive item count.")]
-    [InlineData("contains:", "Enter text to match.")]
-    public void TryPlan_ReturnsParserErrorsForMalformedStructuredFilters(string input, string expectedError)
+    [InlineData("top:0", FilterPromptPlanError.PositiveItemCount)]
+    [InlineData("contains:", FilterPromptPlanError.TextToMatch)]
+    public void TryPlan_ReturnsParserErrorsForMalformedStructuredFilters(string input, FilterPromptPlanError expectedError)
     {
         FilterPromptPlanner.TryPlan(input, out var plan, out var error).Should().BeFalse();
 
