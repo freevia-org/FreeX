@@ -34,40 +34,6 @@ internal sealed record AutoFilterMenuModel(string Header, IReadOnlyList<AutoFilt
 /// </summary>
 internal static class AutoFilterMenuPlanner
 {
-    internal const string BlankDisplayText = "(Blanks)";
-
-    /// <summary>
-    /// Builds the menu for <paramref name="header"/> over the already planned checklist items.
-    /// <paramref name="hasActiveFilter"/> enables the Clear Filter entry.
-    /// </summary>
-    public static AutoFilterMenuModel Build(
-        string header,
-        IReadOnlyList<AutoFilterChecklistItem> checklistItems,
-        bool hasActiveFilter)
-    {
-        ArgumentNullException.ThrowIfNull(checklistItems);
-
-        var items = new List<AutoFilterMenuItem>
-        {
-            new(AutoFilterMenuItemKind.SortAscending, "Sort A to Z"),
-            new(AutoFilterMenuItemKind.SortDescending, "Sort Z to A"),
-            new(AutoFilterMenuItemKind.Separator, string.Empty),
-            new(AutoFilterMenuItemKind.ClearFilter, $"Clear Filter from \"{header}\"", IsEnabled: hasActiveFilter),
-            new(AutoFilterMenuItemKind.Separator, string.Empty),
-            new(AutoFilterMenuItemKind.SelectAll, "(Select All)"),
-        };
-
-        foreach (var item in checklistItems)
-        {
-            items.Add(new AutoFilterMenuItem(
-                AutoFilterMenuItemKind.ChecklistItem,
-                item.DisplayText,
-                item.Value));
-        }
-
-        return new AutoFilterMenuModel(header, items);
-    }
-
     public static AutoFilterMenuModel Build(AutoFilterMenuPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);

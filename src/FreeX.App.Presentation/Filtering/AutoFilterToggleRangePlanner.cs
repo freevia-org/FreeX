@@ -1,14 +1,14 @@
-using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.AutoFilter;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Filtering;
 
-internal static class AutoFilterToggleRangePlanner
+public static class AutoFilterToggleRangePlanner
 {
     public static GridRange Create(Sheet sheet, GridRange selectedRange)
     {
-        if (AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange))
+        if (AutoFilterRangeResolver.TryGetAutoFilterRange(sheet, out var autoFilterRange))
             return autoFilterRange;
 
         if (selectedRange.RowCount == 1 &&
