@@ -24,7 +24,7 @@ public sealed class ChartObjectSelectionScreenshotTourTests
         tourSource.Should().Contain("new ChartTitlesDialog(");
         tourSource.Should().Contain("new ChartAreaLegendDialog(");
         tourSource.Should().Contain("OnGridContextMenuRequested(context.Shape.Anchor");
-        tourSource.Should().Contain("new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet))");
+        tourSource.Should().Contain("new SelectionPaneDialog(SelectionPaneDialog.BuildItems(context.Sheet))");
         tourSource.Should().Contain("new RenameSelectionPaneObjectCommand(");
         tourSource.Should().Contain("new SetSelectionPaneObjectVisibilityCommand(");
         tourSource.Should().Contain("new MoveSelectionPaneObjectCommand(");

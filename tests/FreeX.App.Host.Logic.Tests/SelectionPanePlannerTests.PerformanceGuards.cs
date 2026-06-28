@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.Core.Model;
 using System.Diagnostics;
+using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -91,5 +92,32 @@ public sealed partial class SelectionPanePlannerTests
         serviceSource.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
         serviceSource.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
         serviceSource.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_BuildItemsUsesPortablePlannerWithLocalizedText()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "SelectionPanePlanner.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("SelectionPaneDialog.Planning.cs");
+        var serviceSource = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Services",
+            "SelectionPanePlanner.cs");
+
+        File.Exists(hostPlannerPath)
+            .Should()
+            .BeFalse("the WPF Selection Pane should use the portable planner through the dialog edge");
+
+        dialogSource.Should().Contain("SharedSelectionPanePlanner.BuildItems(sheet, CreateLocalizedPlannerText())");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultChartName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultPictureName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultTextBoxName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultShapeNameFormat\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultEllipseName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultLineName\")");
+        dialogSource.Should().Contain("UiText.Get(\"SelectionPane_DefaultRectangleName\")");
+        serviceSource.Should().Contain("SelectionPanePlannerText.Default");
+        serviceSource.Should().NotContain("UiText.Get(");
     }
 }

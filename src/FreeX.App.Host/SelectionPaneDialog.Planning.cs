@@ -160,6 +160,9 @@ internal static class SelectionPaneDialogStatePlanner
 
 public sealed partial class SelectionPaneDialog
 {
+    public static IReadOnlyList<SelectionPaneItem> BuildItems(Sheet sheet) =>
+        SharedSelectionPanePlanner.BuildItems(sheet, CreateLocalizedPlannerText());
+
     public static IReadOnlyList<SelectionPaneVisibilityChange> CreateVisibilityChanges(
         IReadOnlyList<SelectionPaneItem> originalItems,
         IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates) =>
@@ -210,6 +213,16 @@ public sealed partial class SelectionPaneDialog
         Guid targetId,
         SelectionPaneDropPlacement placement = SelectionPaneDropPlacement.Before) =>
         SelectionPaneDialogStatePlanner.CreateDragMoveChanges(currentOrder, draggedId, targetId, placement);
+
+    private static SelectionPanePlannerText CreateLocalizedPlannerText() =>
+        new(
+            UiText.Get("SelectionPane_DefaultChartName"),
+            UiText.Get("SelectionPane_DefaultPictureName"),
+            UiText.Get("SelectionPane_DefaultTextBoxName"),
+            UiText.Get("SelectionPane_DefaultShapeNameFormat"),
+            UiText.Get("SelectionPane_DefaultEllipseName"),
+            UiText.Get("SelectionPane_DefaultLineName"),
+            UiText.Get("SelectionPane_DefaultRectangleName"));
 
     private static IReadOnlyList<SelectionPaneDialogItemState> ToDialogItemStates(
         IReadOnlyList<SelectionPaneItem> originalItems,
