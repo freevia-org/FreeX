@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -48,7 +49,7 @@ public sealed class ForecastSheetDialog : Window
     {
         result = new ForecastSheetDialogResult(3);
         error = null;
-        if (!ForecastSheetInputParser.TryParsePeriods(input, out var periods))
+        if (!ForecastSheetPlanner.TryParseForecastPeriods(input, out var periods))
         {
             error = UiText.Get("ForecastSheet_InvalidPeriodsMessage");
             return false;

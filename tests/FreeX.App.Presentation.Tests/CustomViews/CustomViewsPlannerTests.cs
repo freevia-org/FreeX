@@ -69,6 +69,20 @@ public sealed class CustomViewsPlannerTests
     }
 
     [Fact]
+    public void CreateNameSubmission_TrimsViewNameAndKeepsIncludeFlags()
+    {
+        CustomViewsPlanner.CreateNameSubmission(
+                "  Quarter Close  ",
+                includePrintSettings: false,
+                includeHiddenRowsColumnsAndFilterSettings: true)
+            .Should()
+            .Be(new CustomViewsPlanner.NameSubmission(
+                "Quarter Close",
+                IncludePrintSettings: false,
+                IncludeHiddenRowsColumnsAndFilterSettings: true));
+    }
+
+    [Fact]
     public void ValidateName_RejectsBlankTooLongAndDuplicate()
     {
         var wb = NewWorkbook();
@@ -144,10 +158,17 @@ public sealed class CustomViewsPlannerTests
             "src",
             "FreeX.App.Host",
             "CustomViewsDialog.xaml.cs"));
+        var hostNameDialogSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "CustomViewNameDialog.cs"));
 
         plannerSource.Should().Contain("public readonly record struct DialogRow");
         plannerSource.Should().Contain("public static IReadOnlyList<DialogRow> BuildDialogRows");
         plannerSource.Should().Contain("public static string SuggestDefaultName(int customViewCount");
+        plannerSource.Should().Contain("public readonly record struct NameSubmission");
+        plannerSource.Should().Contain("public static NameSubmission CreateNameSubmission(");
         plannerSource.Should().NotContain("UiText");
 
         hostPlanningSource.Should().Contain("CustomViewsPlanner.BuildDialogRows(");
@@ -163,6 +184,9 @@ public sealed class CustomViewsPlannerTests
         hostDialogSource.Should().NotContain("new SaveCustomViewCommand(");
         hostDialogSource.Should().NotContain("new ApplyCustomViewCommand(");
         hostDialogSource.Should().NotContain("new DeleteCustomViewCommand(");
+
+        hostNameDialogSource.Should().Contain("CustomViewsPlanner.CreateNameSubmission(");
+        hostNameDialogSource.Should().NotContain("viewName.Trim()");
     }
 
     private static ICommandContext Ctx(Workbook workbook) => new TestCommandContext(workbook);

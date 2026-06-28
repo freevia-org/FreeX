@@ -58,6 +58,12 @@ public static class CustomViewsPlanner
         string PrintSettingsIndicator,
         string FilterSettingsIndicator);
 
+    /// <summary>The app-neutral submission shape collected by the add-custom-view dialogs.</summary>
+    public readonly record struct NameSubmission(
+        string ViewName,
+        bool IncludePrintSettings = true,
+        bool IncludeHiddenRowsColumnsAndFilterSettings = true);
+
     /// <summary>
     /// Projects the workbook's stored custom views into manager rows, in workbook order. Pure: reads the model
     /// only.
@@ -122,6 +128,18 @@ public static class CustomViewsPlanner
         ArgumentNullException.ThrowIfNull(format);
         return string.Format(System.Globalization.CultureInfo.CurrentCulture, format, customViewCount + 1);
     }
+
+    /// <summary>
+    /// Normalizes the add-view dialog submission before each host maps it to its local dialog result type.
+    /// </summary>
+    public static NameSubmission CreateNameSubmission(
+        string? viewName,
+        bool includePrintSettings = true,
+        bool includeHiddenRowsColumnsAndFilterSettings = true) =>
+        new(
+            viewName?.Trim() ?? string.Empty,
+            includePrintSettings,
+            includeHiddenRowsColumnsAndFilterSettings);
 
     /// <summary>
     /// Validates a proposed new-view name against the workbook's existing views: non-blank, within
