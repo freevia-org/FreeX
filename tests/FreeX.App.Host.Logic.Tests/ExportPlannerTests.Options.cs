@@ -14,7 +14,7 @@ public partial class ExportPlannerTests
             IgnorePrintAreas: false,
             Quality: ExportQuality.Standard));
 
-        ExportPlanner.DescribeOptions(ExportOptions.ExcelLikeDefault)
+        WpfExportDescriptionPlanner.DescribeOptions(ExportOptions.ExcelLikeDefault)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeActiveSheet"),
                 UiText.Get("Export_QualityStandard"),
@@ -34,7 +34,7 @@ public partial class ExportPlannerTests
             BookmarkMode: PdfBookmarkMode.SheetNames,
             BitmapTextWhenFontsMayNotBeEmbedded: true);
 
-        ExportPlanner.DescribeOptions(options)
+        WpfExportDescriptionPlanner.DescribeOptions(options)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeSelection"),
                 UiText.Format("Export_PageRangeMultiple", 2, 4),
@@ -64,7 +64,7 @@ public partial class ExportPlannerTests
             OpenAfterPublish: false,
             BookmarkMode: bookmarkMode);
 
-        ExportPlanner.DescribeOptions(options)
+        WpfExportDescriptionPlanner.DescribeOptions(options)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeEntireWorkbook"),
                 UiText.Get("Export_QualityStandard"),
@@ -82,7 +82,7 @@ public partial class ExportPlannerTests
             InitialView: PdfInitialView.OneColumn,
             OpenMode: PdfOpenMode.FullScreen);
 
-        ExportPlanner.DescribeOptions(options)
+        WpfExportDescriptionPlanner.DescribeOptions(options)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeActiveSheet"),
                 UiText.Get("Export_QualityStandard"),
@@ -100,7 +100,7 @@ public partial class ExportPlannerTests
             OpenAfterPublish: false,
             PdfLanguage: "uk-UA");
 
-        ExportPlanner.DescribeOptions(options)
+        WpfExportDescriptionPlanner.DescribeOptions(options)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeActiveSheet"),
                 UiText.Get("Export_QualityStandard"),
@@ -118,7 +118,7 @@ public partial class ExportPlannerTests
             PdfConformance: PdfConformance.PdfA1b,
             IncludeDocumentStructureTags: true);
 
-        ExportPlanner.DescribeOptions(options)
+        WpfExportDescriptionPlanner.DescribeOptions(options)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeActiveSheet"),
                 UiText.Get("Export_QualityStandard"),
@@ -135,7 +135,7 @@ public partial class ExportPlannerTests
             IncludeDocumentProperties: true,
             OpenAfterPublish: true);
 
-        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+        WpfExportDescriptionPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeSelection"),
                 UiText.Get("Export_QualityStandard"),
@@ -152,7 +152,7 @@ public partial class ExportPlannerTests
             OpenAfterPublish: false,
             BookmarkMode: PdfBookmarkMode.PrintTitles);
 
-        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+        WpfExportDescriptionPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeEntireWorkbook"),
                 UiText.Get("Export_QualityStandard"),
@@ -169,7 +169,7 @@ public partial class ExportPlannerTests
             OpenAfterPublish: false,
             PdfLanguage: "uk-UA");
 
-        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+        WpfExportDescriptionPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeEntireWorkbook"),
                 UiText.Get("Export_QualityStandard"),
@@ -187,7 +187,7 @@ public partial class ExportPlannerTests
             InitialView: PdfInitialView.TwoColumnLeft,
             OpenMode: PdfOpenMode.FullScreen);
 
-        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+        WpfExportDescriptionPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeActiveSheet"),
                 UiText.Get("Export_QualityStandard"),
@@ -205,7 +205,7 @@ public partial class ExportPlannerTests
             OpenAfterPublish: false,
             Quality: ExportQuality.MinimumSize);
 
-        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+        WpfExportDescriptionPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeSelection"),
                 UiText.Get("Export_QualityMinimumSizePdfOnly"),
@@ -220,7 +220,7 @@ public partial class ExportPlannerTests
             IncludeDocumentProperties: false,
             OpenAfterPublish: false);
 
-        ExportPlanner.DescribeOptions(options)
+        WpfExportDescriptionPlanner.DescribeOptions(options)
             .Should().Be(ExportSummary(
                 UiText.Get("Export_ScopeEntireWorkbook"),
                 UiText.Get("Export_QualityStandard"),

@@ -2925,7 +2925,7 @@ public partial class MainWindow
         MarkWorkbookDirty();
 
         var unsavedSharePlan = ShareWorkbookPlanner.CreatePlan(null);
-        var exportReadiness = ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null);
+        var exportReadiness = WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null);
         return new BackstageRecentExportShareTourContext(
             SheetName: sheet.Name,
             ActiveRange: SheetGrid?.SelectedRange?.ToString() ?? activeCell.ToA1(),
@@ -2986,7 +2986,7 @@ public partial class MainWindow
                 evidenceSummary,
                 dialog.ActualWidth,
                 dialog.ActualHeight,
-                ExportPlanner.DescribeRequest(request));
+                WpfExportDescriptionPlanner.DescribeRequest(request));
         }
         finally
         {
@@ -3051,7 +3051,7 @@ public partial class MainWindow
             CurrentFilePath: _currentFilePath,
             SharePlanKind: sharePlan.Kind.ToString(),
             ShareStatus: ShareWorkbookPlanner.FormatStatus(sharePlan),
-            ExportStatus: ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
+            ExportStatus: WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
             ExportRequestSummary: exportRequestSummary,
             EvidenceSummary: evidenceSummary);
     }
@@ -3110,7 +3110,7 @@ public partial class MainWindow
             CurrentFilePath: _currentFilePath,
             SharePlanKind: sharePlan.Kind.ToString(),
             ShareStatus: ShareWorkbookPlanner.FormatStatus(sharePlan),
-            ExportStatus: ExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
+            ExportStatus: WorkbookExportReadinessPlanner.Create(_workbook, hasSelection: SheetGrid?.SelectedRange is not null).StatusText,
             ExportRequestSummary: null,
             EvidenceSummary: evidenceSummary);
     }

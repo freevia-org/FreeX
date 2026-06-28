@@ -1,3 +1,4 @@
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;

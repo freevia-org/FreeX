@@ -52,7 +52,7 @@ public partial class ExportPlannerTests
             .BeTrue();
 
         error.Should().BeNull();
-        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+        WpfExportDescriptionPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should()
             .Be(ExportSummary(
                 UiText.Get("Export_ScopeActiveSheet"),
@@ -132,7 +132,7 @@ public partial class ExportPlannerTests
         var hidden = workbook.AddSheet("Hidden");
         hidden.IsHidden = true;
 
-        var result = ExportSheetSelectionPlanner.ResolveSheetIds(
+        var result = WorkbookExportSheetSelectionPlanner.ResolveSheetIds(
             workbook,
             new ExportOptions(ExportContentScope.ActiveSheet, false, false),
             second.Id,
@@ -146,7 +146,7 @@ public partial class ExportPlannerTests
     {
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
 
-        ExportPlanner.DescribeRequest(request).Should().Be(
+        WpfExportDescriptionPlanner.DescribeRequest(request).Should().Be(
             UiText.Format(
                 "Export_RequestDescription",
                 ExportSummary(
@@ -165,7 +165,7 @@ public partial class ExportPlannerTests
                 IncludeDocumentProperties: true,
                 OpenAfterPublish: false));
 
-        ExportPlanner.DescribeRequest(request).Should().Be(
+        WpfExportDescriptionPlanner.DescribeRequest(request).Should().Be(
             UiText.Format(
                 "Export_RequestDescription",
                 ExportSummary(

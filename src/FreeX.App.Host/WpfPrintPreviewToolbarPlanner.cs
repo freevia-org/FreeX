@@ -1,14 +1,12 @@
 using System.Printing;
 using System.Windows.Documents;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
-internal static class PrintPreviewToolbarPlanner
+internal static class WpfPrintPreviewToolbarPlanner
 {
-    public static PrintPreviewNavigationState CreateNavigationState(int currentPage, int totalPages)
-        => PrintPreviewToolbarStatePlanner.CreateNavigationState(currentPage, totalPages);
-
     public static DocumentPaginator ResolvePrintPaginator(
         FixedDocument document,
         PrintPreviewPageRangeMode pageRangeMode,
@@ -32,6 +30,4 @@ internal static class PrintPreviewToolbarPlanner
             PrintPreviewSidesMode.TwoSidedShortEdge => Duplexing.TwoSidedShortEdge,
             _ => Duplexing.OneSided
         };
-
 }
-
