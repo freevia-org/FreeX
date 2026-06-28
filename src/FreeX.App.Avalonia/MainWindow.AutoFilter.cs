@@ -31,7 +31,7 @@ public sealed partial class MainWindow
     /// </summary>
     private Border DecorateAutoFilterHeaderCell(Border cellBorder, CellAddress address)
     {
-        if (!AutoFilterHeaderPlanner.IsFilterButtonCell(_session.ActiveSheet, address.Row, address.Col))
+        if (!AutoFilterHeaderButtonPlanner.IsFilterButtonCell(_session.ActiveSheet, address.Row, address.Col))
             return cellBorder;
 
         var content = cellBorder.Child;
@@ -40,7 +40,7 @@ public sealed partial class MainWindow
         // Determine per-column active-filter state (mirrors WPF ActiveAutoFilterColumns logic).
         var sheet = _session.ActiveSheet;
         var isActive = false;
-        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is { } range)
+        if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is { } range)
         {
             var colOffset = (int)(address.Col - range.Start.Col);
             isActive = sheet.AutoFilter?.FilterColumns.Any(fc => fc.ColumnId == colOffset) == true;
@@ -121,21 +121,19 @@ public sealed partial class MainWindow
     private void OpenAutoFilterFlyout(Control anchor, CellAddress headerCell)
     {
         var sheet = _session.ActiveSheet;
-        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is not { } range)
+        if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is not { } range)
             return;
 
-        var columnOffset = headerCell.Col - range.Start.Col;
-        var headerText = AutoFilterChecklistPlanner.ToFilterText(sheet.GetValue(headerCell.Row, headerCell.Col));
-        if (string.IsNullOrWhiteSpace(headerText))
-            headerText = CellAddress.NumberToColumnName(headerCell.Col);
+        if (!AutoFilterDropdownMenuPlanner.TryPlan(range, headerCell, out var dropdownPlan))
+            return;
 
-        var checklistItems = AutoFilterChecklistPlanner.CreateItems(
+        var columnOffset = dropdownPlan.FilterColumnOffset;
+        var menuPlan = AutoFilterDropdownMenuPlanner.CreateMenuPlan(
             sheet,
-            range,
-            columnOffset,
-            AutoFilterMenuPlanner.BlankDisplayText);
-        var hasActiveFilter = RangeHasActiveFilter(sheet, range);
-        var model = AutoFilterMenuPlanner.Build(headerText, checklistItems, hasActiveFilter);
+            dropdownPlan,
+            InvariantAutoFilterMenuTextProvider.Instance,
+            InvariantAutoFilterMenuTextProvider.BlankDisplayText);
+        var model = AutoFilterMenuPlanner.Build(menuPlan);
 
         var panel = new StackPanel { Spacing = 2, MinWidth = 200 };
         var checkBoxes = new List<CheckBox>();
@@ -268,7 +266,7 @@ public sealed partial class MainWindow
     private void ClearActiveSheetFilters()
     {
         var sheet = _session.ActiveSheet;
-        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is not { } range)
+        if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is not { } range)
         {
             RefreshShell(UiText.Get("WTA_ContextFilter_NoFilter"));
             return;
@@ -309,17 +307,4 @@ public sealed partial class MainWindow
         RefreshShell(ascending ? UiText.Get("ShellLoc_SortedAToZ") : UiText.Get("ShellLoc_SortedZToA"));
     }
 
-    private static bool RangeHasActiveFilter(Sheet sheet, GridRange range)
-    {
-        if (sheet.FilterHiddenRows.Count == 0)
-            return false;
-
-        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
-        {
-            if (sheet.FilterHiddenRows.Contains(row))
-                return true;
-        }
-
-        return false;
-    }
 }

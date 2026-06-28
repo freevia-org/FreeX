@@ -332,10 +332,13 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void AutoFilterDropdownPlanner_SupportsCriteriaSuggestionsAndFilterFamilySubmenus()
     {
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("AutoFilterDropdownPlanner.cs");
+        var hostPlannerSource = DialogSourceTestSupport.ReadHostSources("AutoFilterDropdownPlanner.cs");
+        var plannerSource = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Presentation", "Filtering", "AutoFilterDropdownMenuPlanner.cs");
         var menuModelSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Presentation", "Filtering", "AutoFilterMenuModel.cs");
 
+        hostPlannerSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
         plannerSource.Should().ContainAll(
             "SortAscending",
             "ClearFilter");

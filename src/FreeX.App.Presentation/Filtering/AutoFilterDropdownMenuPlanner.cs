@@ -134,7 +134,7 @@ public static class AutoFilterDropdownMenuPlanner
         return workbook.GetStyle(styleId);
     }
 
-    private static bool HasActiveFilter(Sheet sheet, GridRange range)
+    public static bool HasActiveFilter(Sheet sheet, GridRange range)
     {
         var firstDataRow = range.Start.Row + 1;
         var lastDataRow = range.End.Row;
