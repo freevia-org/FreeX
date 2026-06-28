@@ -49,21 +49,4 @@ public sealed class ConditionalFormatDedupSourceTests
         presentationSource.Should().NotContain("UiText.Get(");
     }
 
-    [Fact]
-    public void ConditionalFormatDialogPlanner_StaysHostFacadeOverPresentationPlanner()
-    {
-        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("ConditionalFormatDialogPlanner.cs");
-        var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
-            "ConditionalFormatting",
-            "ConditionalFormatDialogPlanner.cs");
-
-        hostSource.Should().Contain(
-            "using PresentationPlanner = FreeX.App.Presentation.ConditionalFormatting.ConditionalFormatDialogPlanner;");
-        hostSource.Should().Contain("PresentationPlanner.CloneRule(source)");
-        hostSource.Should().Contain("PresentationPlanner.RuleTypeLabel(cf)");
-
-        hostSource.Should().NotContain("CfRuleType.Formula =>");
-        presentationSource.Should().Contain("CfRuleType.Formula =>");
-        presentationSource.Should().Contain("ManageConditionalFormatsPlanner.CloneWithPriority");
-    }
 }

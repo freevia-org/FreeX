@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;

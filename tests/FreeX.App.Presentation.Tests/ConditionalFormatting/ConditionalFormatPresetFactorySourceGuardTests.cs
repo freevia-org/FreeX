@@ -36,6 +36,9 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "Dialogs", "ConditionalFormatPresetFactory.cs"))
             .Should()
             .BeFalse("quick preset factories are portable presentation logic, not renderer dialog logic");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ConditionalFormatDialogPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared conditional-format dialog planner instead of carrying a pass-through facade");
     }
 
     [Fact]
