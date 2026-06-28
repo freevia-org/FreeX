@@ -1,17 +1,16 @@
 using FluentAssertions;
-using FreeX.App.Avalonia;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Presentation.Sparklines;
-using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia.Tests;
+namespace FreeX.App.Presentation.Tests.Sparklines;
 
 /// <summary>
 /// Tests for the non-UI sparkline render glue: reading a sparkline's data range off the sheet into
 /// its numeric series, and dispatching that series through the portable layout engine into the
-/// cell-local geometry the Avalonia panel draws. No running UI.
+/// cell-local geometry the renderer draws. No running UI.
 /// </summary>
 public sealed class SparklineRenderPlannerTests
 {

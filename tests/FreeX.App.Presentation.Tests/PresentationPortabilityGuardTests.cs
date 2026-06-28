@@ -152,6 +152,27 @@ public sealed class PresentationPortabilityGuardTests
     }
 
     [Fact]
+    public void SlicerTimelineAndSparklineRenderPlanners_AreSingleSharedPresentationImplementations()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "SlicerTimeline", "SlicerTimelineInteractionPlanner.cs"))
+            .Should()
+            .BeTrue("slicer/timeline hit-to-command planning is shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "SparklineUI", "SparklineRenderPlanner.cs"))
+            .Should()
+            .BeTrue("sparkline render instruction planning is shared by renderers");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "SlicerTimelineInteractionPlanner.cs"))
+            .Should()
+            .BeFalse("Avalonia should use the shared slicer/timeline interaction planner instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "SparklineRenderPlanner.cs"))
+            .Should()
+            .BeFalse("Avalonia should use the shared sparkline render planner instead of carrying a renderer-local copy");
+    }
+
+    [Fact]
     public void PageBreakDialogPlanner_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
