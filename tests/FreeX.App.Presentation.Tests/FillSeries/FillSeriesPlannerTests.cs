@@ -32,6 +32,40 @@ public sealed class FillSeriesPlannerTests
         step.Should().Be(1.5);
     }
 
+    [Fact]
+    public void DefaultOptions_MatchExcelSeriesDialogDefaults()
+    {
+        FillSeriesPlanner.DefaultOptions.Should().Be(new FillSeriesOptions(
+            Step: 1,
+            SeriesIn: FillSeriesDirection.Columns,
+            Type: FillSeriesType.Linear,
+            DateUnit: FillSeriesDateUnit.Day));
+
+        FillSeriesPlanner.CreateDefaultOptions(2.5).Should().Be(
+            FillSeriesPlanner.DefaultOptions with { Step = 2.5 });
+    }
+
+    [Theory]
+    [InlineData(FillSeriesType.Linear, false)]
+    [InlineData(FillSeriesType.Growth, false)]
+    [InlineData(FillSeriesType.Date, true)]
+    [InlineData(FillSeriesType.AutoFill, false)]
+    public void IsDateUnitEnabled_OnlyEnablesDateUnitsForDateSeries(FillSeriesType type, bool expected)
+    {
+        FillSeriesPlanner.IsDateUnitEnabled(type).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(FillSeriesInputError.InvalidStep, FillSeriesInputFocusTarget.StepValue)]
+    [InlineData(FillSeriesInputError.InvalidStop, FillSeriesInputFocusTarget.StopValue)]
+    [InlineData(FillSeriesInputError.None, FillSeriesInputFocusTarget.StepValue)]
+    public void FocusTargetFor_MapsValidationErrorsToDialogInput(
+        FillSeriesInputError error,
+        FillSeriesInputFocusTarget expected)
+    {
+        FillSeriesPlanner.FocusTargetFor(error).Should().Be(expected);
+    }
+
     [Theory]
     [InlineData(FillCellsDirection.Down, 2, 1, true)]
     [InlineData(FillCellsDirection.Up, 2, 1, true)]

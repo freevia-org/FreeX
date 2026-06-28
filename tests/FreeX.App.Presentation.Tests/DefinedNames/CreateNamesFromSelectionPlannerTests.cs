@@ -24,6 +24,53 @@ public sealed class CreateNamesFromSelectionPlannerTests
         new(new CellAddress(Sheet, r1, c1), new CellAddress(Sheet, r2, c2));
 
     [Fact]
+    public void DefaultOptions_SelectTopRowAndLeftColumn()
+    {
+        CreateNamesFromSelectionPlanner.DefaultOptions.Should().Be(
+            new CreateNamesFromSelectionOptions(
+                UseTopRow: true,
+                UseLeftColumn: true,
+                UseBottomRow: false,
+                UseRightColumn: false));
+    }
+
+    [Fact]
+    public void TryCreateOptions_RejectsNoSelectedEdges()
+    {
+        var ok = CreateNamesFromSelectionPlanner.TryCreateOptions(
+            useTopRow: false,
+            useLeftColumn: false,
+            useBottomRow: false,
+            useRightColumn: false,
+            out var options,
+            out var error);
+
+        ok.Should().BeFalse();
+        options.HasAnyEdge.Should().BeFalse();
+        error.Should().Be(CreateNamesFromSelectionInputError.NoSelectedEdge);
+    }
+
+    [Fact]
+    public void TryCreateOptions_ReturnsSelectedEdges()
+    {
+        var ok = CreateNamesFromSelectionPlanner.TryCreateOptions(
+            useTopRow: false,
+            useLeftColumn: true,
+            useBottomRow: false,
+            useRightColumn: true,
+            out var options,
+            out var error);
+
+        ok.Should().BeTrue();
+        error.Should().Be(CreateNamesFromSelectionInputError.None);
+        options.Should().Be(new CreateNamesFromSelectionOptions(
+            UseTopRow: false,
+            UseLeftColumn: true,
+            UseBottomRow: false,
+            UseRightColumn: true));
+    }
+
+    [Fact]
     public void Plan_NoEdges_ReturnsEmpty()
     {
         var plan = CreateNamesFromSelectionPlanner.Plan(
