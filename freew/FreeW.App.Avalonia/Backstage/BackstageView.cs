@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Backstage;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -38,6 +39,11 @@ internal sealed class BackstageView : Window
     internal static readonly IBrush PrimaryInk = new SolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28));
     internal static readonly IBrush SecondaryInk = new SolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74));
     private static readonly IBrush SeparatorBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
+    private static readonly AvaloniaBackstageChromeStyle BackstageChromeStyle = new(PrimaryInk, SecondaryInk)
+    {
+        SeparatorBrush = SeparatorBrush,
+        DetailLabelVerticalAlignment = VerticalAlignment.Top,
+    };
 
     private readonly BackstageCallbacks _callbacks;
     private readonly AvaloniaContentControl _contentHost = new();
@@ -196,17 +202,9 @@ internal sealed class BackstageView : Window
 
     private Border BuildContentArea()
     {
-        var area = new Border
-        {
-            Background = ContentBackground,
-            Child = new ScrollViewer
-            {
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Padding = new Thickness(32, 24),
-                Content = _contentHost,
-            },
-        };
+        var area = AvaloniaBackstageChrome.CreateContentArea(new AvaloniaBackstageContentAreaSpec(
+            _contentHost,
+            ContentBackground));
         AvaloniaGrid.SetColumn(area, 1);
         return area;
     }
@@ -322,38 +320,23 @@ internal sealed class BackstageView : Window
             content.Children.Add(BuildSectionHeader(group.Heading));
             foreach (var action in group.Actions)
             {
-                var btn = new Button
-                {
-                    Content = action.Label,
-                    Padding = new Thickness(12, 6),
-                    Margin = new Thickness(0, 0, 0, 4),
-                    IsEnabled = false,
-                };
-                AutomationProperties.SetAutomationId(btn, $"PrintAction_{action.Kind}");
-
-                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-                DockPanel.SetDock(btn, Dock.Left);
-                row.Children.Add(btn);
-                row.Children.Add(new TextBlock
-                {
-                    Text = action.Description,
-                    Foreground = SecondaryInk,
-                    TextWrapping = TextWrapping.Wrap,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(12, 0, 0, 0),
-                });
-                content.Children.Add(row);
+                content.Children.Add(AvaloniaBackstageChrome.CreateDescribedActionRow(
+                    new AvaloniaBackstageDescribedActionRowSpec(
+                        action.Label,
+                        action.Description,
+                        $"PrintAction_{action.Kind}")
+                    {
+                        IsEnabled = false,
+                    },
+                    BackstageChromeStyle));
             }
         }
 
-        content.Children.Add(new TextBlock
-        {
-            Text = "Note: Print is available in FreeW via Export to PDF (Ctrl+Shift+P). Direct printer output is planned for a future update.",
-            Foreground = SecondaryInk,
-            TextWrapping = TextWrapping.Wrap,
-            FontStyle = FontStyle.Italic,
-            Margin = new Thickness(0, 8, 0, 0),
-        });
+        content.Children.Add(AvaloniaBackstageChrome.CreateNote(
+            "Note: Print is available in FreeW via Export to PDF (Ctrl+Shift+P). Direct printer output is planned for a future update.",
+            BackstageChromeStyle,
+            fontStyle: FontStyle.Italic,
+            margin: new Thickness(0, 8, 0, 0)));
 
         return content;
     }
@@ -387,25 +370,15 @@ internal sealed class BackstageView : Window
 
         // PDF export action (real — wired to ExportPdf)
         content.Children.Add(BuildSectionHeader("Create PDF/XPS Document"));
-        var pdfRow = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var pdfBtn = new Button
-        {
-            Content = "Create PDF",
-            Padding = new Thickness(12, 6),
-        };
-        AutomationProperties.SetAutomationId(pdfBtn, "ExportCreatePdfButton");
-        pdfBtn.Click += (_, _) => { Close(); _callbacks.ExportPdf(); };
-        DockPanel.SetDock(pdfBtn, Dock.Left);
-        pdfRow.Children.Add(pdfBtn);
-        pdfRow.Children.Add(new TextBlock
-        {
-            Text = "Publish a fixed-layout PDF copy for sharing or printing.",
-            Foreground = SecondaryInk,
-            TextWrapping = TextWrapping.Wrap,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 0, 0),
-        });
-        content.Children.Add(pdfRow);
+        content.Children.Add(AvaloniaBackstageChrome.CreateDescribedActionRow(
+            new AvaloniaBackstageDescribedActionRowSpec(
+                "Create PDF",
+                "Publish a fixed-layout PDF copy for sharing or printing.",
+                "ExportCreatePdfButton")
+            {
+                Action = () => { Close(); _callbacks.ExportPdf(); },
+            },
+            BackstageChromeStyle));
 
         // Change file type group from the planner
         content.Children.Add(BuildActionGroup(changeFileTypeGroup, isLast: true));
@@ -447,25 +420,15 @@ internal sealed class BackstageView : Window
             content.Children.Add(BuildSectionHeader(group.Heading));
             foreach (var action in group.Actions)
             {
-                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-                var btn = new Button
-                {
-                    Content = action.Label,
-                    Padding = new Thickness(12, 6),
-                    IsEnabled = false,   // placeholder — not implemented in FreeW Avalonia yet
-                };
-                AutomationProperties.SetAutomationId(btn, $"InfoAction_{action.Kind}");
-                DockPanel.SetDock(btn, Dock.Left);
-                row.Children.Add(btn);
-                row.Children.Add(new TextBlock
-                {
-                    Text = action.Description,
-                    Foreground = SecondaryInk,
-                    TextWrapping = TextWrapping.Wrap,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(12, 0, 0, 0),
-                });
-                content.Children.Add(row);
+                content.Children.Add(AvaloniaBackstageChrome.CreateDescribedActionRow(
+                    new AvaloniaBackstageDescribedActionRowSpec(
+                        action.Label,
+                        action.Description,
+                        $"InfoAction_{action.Kind}")
+                    {
+                        IsEnabled = false,
+                    },
+                    BackstageChromeStyle));
             }
         }
 
@@ -534,118 +497,36 @@ internal sealed class BackstageView : Window
 
         if (!isLast)
         {
-            stack.Children.Add(new Border
-            {
-                Height = 1,
-                Background = SeparatorBrush,
-                Margin = new Thickness(0, 12, 0, 0),
-            });
+            stack.Children.Add(AvaloniaBackstageChrome.CreateSeparator(
+                BackstageChromeStyle,
+                new Thickness(0, 12, 0, 0)));
         }
 
         return stack;
     }
 
-    private Control BuildActionRow(BackstageActionRow action)
-    {
-        var label = new TextBlock
-        {
-            Text = action.Label,
-            Foreground = PrimaryInk,
-            FontWeight = FontWeight.Medium,
-            FontSize = 13,
-        };
-        var desc = new TextBlock
-        {
-            Text = action.Description,
-            Foreground = SecondaryInk,
-            TextWrapping = TextWrapping.Wrap,
-            FontSize = 12,
-        };
-        var inner = new StackPanel { Children = { label, desc } };
-
-        var btn = new Button
-        {
-            Content = inner,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(4, 6),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
-        };
-        AutomationProperties.SetAutomationId(btn, $"BackstageAction_{action.Label.Replace(' ', '_')}");
-        btn.Click += (_, _) => action.Invoke();
-        return btn;
-    }
+    private static Control BuildActionRow(BackstageActionRow action) =>
+        AvaloniaBackstageChrome.CreateStackedActionButton(
+            new AvaloniaBackstageStackedActionButtonSpec(
+                action.Label,
+                action.Description,
+                $"BackstageAction_{action.Label.Replace(' ', '_')}",
+                action.Invoke),
+            BackstageChromeStyle);
 
     // ── Chrome helpers ────────────────────────────────────────────────────────
 
-    private static Control BuildPaneHeader(string title, string description)
-    {
-        var stack = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 8) };
-        stack.Children.Add(new TextBlock
-        {
-            Text = title,
-            FontSize = 22,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = PrimaryInk,
-        });
-        stack.Children.Add(new TextBlock
-        {
-            Text = description,
-            FontSize = 13,
-            Foreground = SecondaryInk,
-            TextWrapping = TextWrapping.Wrap,
-        });
-        stack.Children.Add(new Border { Height = 1, Background = SeparatorBrush, Margin = new Thickness(0, 4, 0, 0) });
-        return stack;
-    }
+    private static Control BuildPaneHeader(string title, string description) =>
+        AvaloniaBackstageChrome.CreatePaneHeader(title, description, BackstageChromeStyle);
 
     internal static TextBlock BuildSectionHeader(string text) =>
-        new()
-        {
-            Text = text,
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 13,
-            Foreground = PrimaryInk,
-            Margin = new Thickness(0, 4, 0, 2),
-        };
+        AvaloniaBackstageChrome.CreateSectionHeader(text, BackstageChromeStyle);
 
     internal static AvaloniaGrid CreateDetailGrid() =>
-        new()
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Margin = new Thickness(0, 2, 0, 0),
-        };
+        AvaloniaBackstageChrome.CreateDetailGrid();
 
-    internal static void AddDetailRow(AvaloniaGrid grid, string label, string value, string automationId)
-    {
-        var rowIndex = grid.RowDefinitions.Count;
-        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-
-        var labelBlock = new TextBlock
-        {
-            Text = label,
-            Foreground = SecondaryInk,
-            Margin = new Thickness(0, 3, 16, 3),
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-        AvaloniaGrid.SetColumn(labelBlock, 0);
-        AvaloniaGrid.SetRow(labelBlock, rowIndex);
-
-        var valueBlock = new TextBlock
-        {
-            Text = value,
-            Foreground = PrimaryInk,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 3, 0, 3),
-        };
-        AutomationProperties.SetAutomationId(valueBlock, automationId);
-        AvaloniaGrid.SetColumn(valueBlock, 1);
-        AvaloniaGrid.SetRow(valueBlock, rowIndex);
-
-        grid.Children.Add(labelBlock);
-        grid.Children.Add(valueBlock);
-    }
+    internal static void AddDetailRow(AvaloniaGrid grid, string label, string value, string automationId) =>
+        AvaloniaBackstageChrome.AddDetailRow(grid, label, value, automationId, BackstageChromeStyle);
 
     private static string FormatFileSize(long bytes)
     {

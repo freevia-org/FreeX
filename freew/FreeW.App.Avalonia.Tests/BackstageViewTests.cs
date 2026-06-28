@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using Avalonia.Headless;
@@ -60,6 +61,43 @@ public class BackstageViewTests
     }
 
     // ── Planner output assertions ──────────────────────────────────────────────
+
+    [Fact]
+    public void BackstageView_sources_use_shared_avalonia_backstage_chrome()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "Backstage",
+            "BackstageView.cs"));
+        var project = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "FreeW.App.Avalonia.csproj"));
+        var sharedSource = File.ReadAllText(FindRepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaBackstageChrome.cs"));
+
+        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateContentArea(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateDescribedActionRow(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateStackedActionButton(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreatePaneHeader(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateSectionHeader(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateDetailGrid(");
+        source.Should().Contain("AvaloniaBackstageChrome.AddDetailRow(");
+        source.Should().NotContain("new ScrollViewer");
+        source.Should().NotContain("var rowIndex = grid.RowDefinitions.Count");
+        source.Should().NotContain("new RowDefinition(GridLength.Auto)");
+        source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*\")");
+
+        sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
+        sharedSource.Should().Contain("public static Border CreateContentArea(");
+        sharedSource.Should().Contain("public static Button CreateStackedActionButton(");
+    }
 
     [Fact]
     public void Home_planner_produces_New_group_and_Open_group()
@@ -229,6 +267,22 @@ public class BackstageViewTests
             SaveAsExtension: _ => { },
             OpenContainingFolder: _ => { },
             ExportPdf: () => { });
+
+    private static string FindRepoFile(params string[] parts) =>
+        Path.Combine(FindRepoRoot(), Path.Combine(parts));
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
+    }
 }
 
 // Local alias so the test can call the planner directly with the same name
