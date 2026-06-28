@@ -6767,13 +6767,11 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            var result = FilterSortRecipientsDialog.Ask(Window.GetWindow(editor), data);
-            if (result is null)
+            var updatedData = FilterSortRecipientsDialog.Ask(Window.GetWindow(editor), data);
+            if (updatedData is null)
                 return; // cancelled
 
-            // Rebuild the session data from the user's chosen (possibly re-ordered) rows. The MergeData
-            // constructor takes the same header and an enumerable of rows, so no model change is needed.
-            session.Data = new MergeData(data.Header, result.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
+            session.Data = updatedData;
             // Invalidate any in-progress preview so it re-reads the new filtered data.
             session.Template = null;
             session.CurrentIndex = 0;
@@ -7148,11 +7146,10 @@ internal static class FreeWRibbonCommands
     // order, or null if cancelled. Structural template: MergeDataDialog (same Window-building idiom).
     private static class FilterSortRecipientsDialog
     {
-        // Returns the filtered, ordered rows as dictionaries, or null if cancelled.
-        public static IReadOnlyList<IReadOnlyDictionary<string, string>>? Ask(
+        public static MergeData? Ask(
             Window? owner, MergeData data)
         {
-            IReadOnlyList<IReadOnlyDictionary<string, string>>? result = null;
+            MergeData? result = null;
 
             var dialog = new Window
             {
@@ -7186,9 +7183,7 @@ internal static class FreeWRibbonCommands
             sortPanel.Children.Add(descRadio);
 
             // --- Row list with checkboxes ---
-            // Show up to the first 8 columns as preview text so the dialog stays a reasonable width.
-            const int MaxPreviewCols = 8;
-            var previewCols = data.Header.Take(MaxPreviewCols).ToList();
+            var previewCols = MailMergeRecipientFilterSortPlanner.GetPreviewColumns(data.Header);
 
             var rowChecks = new List<System.Windows.Controls.CheckBox>();
             var rowList = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 0, 8) };
@@ -7196,7 +7191,7 @@ internal static class FreeWRibbonCommands
             // Header hint
             var headerHint = new System.Windows.Controls.TextBlock
             {
-                Text = "  " + string.Join("  |  ", previewCols),
+                Text = MailMergeRecipientFilterSortPlanner.FormatPreviewHeader(previewCols),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 2),
                 Foreground = Brushes.Gray
@@ -7206,10 +7201,9 @@ internal static class FreeWRibbonCommands
             for (var i = 0; i < data.Rows.Count; i++)
             {
                 var row = data.Rows[i];
-                var preview = string.Join("  |  ", previewCols.Select(h => row.TryGetValue(h, out var v) ? v : string.Empty));
                 var cb = new System.Windows.Controls.CheckBox
                 {
-                    Content = $"{i + 1}. {preview}",
+                    Content = MailMergeRecipientFilterSortPlanner.FormatPreviewRow(i, row, previewCols),
                     IsChecked = true,
                     Margin = new Thickness(0, 1, 0, 1),
                     Tag = i  // row index
@@ -7232,19 +7226,15 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                // Collect the indices of checked rows, then sort by the chosen column.
                 var sortCol  = sortColCombo.SelectedItem as string ?? string.Empty;
                 var ascending = ascRadio.IsChecked == true;
 
-                var chosen = rowChecks
+                var includedIndexes = rowChecks
                     .Where(cb => cb.IsChecked == true)
-                    .Select(cb => data.Rows[(int)cb.Tag!]);
-
-                result = (ascending
-                    ? chosen.OrderBy(r => r.TryGetValue(sortCol, out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase)
-                    : chosen.OrderByDescending(r => r.TryGetValue(sortCol, out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase))
+                    .Select(cb => (int)cb.Tag!)
                     .ToList();
 
+                result = MailMergeRecipientFilterSortPlanner.Apply(data, includedIndexes, sortCol, ascending);
                 dialog.DialogResult = true;
             };
 
