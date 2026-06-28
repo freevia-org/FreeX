@@ -8,6 +8,84 @@ public sealed class PivotValueFieldPlannerTests
 {
     private static readonly string[] Headers = ["Region", "Product", "Amount"];
 
+    [Fact]
+    public void AutomaticBaseField_CarriesResourceKeyAndFallback()
+    {
+        PivotValueFieldPlanner.AutomaticBaseField.ResourceKey
+            .Should().Be("PivotValueFieldSettings_AutomaticBaseField");
+        PivotValueFieldPlanner.AutomaticBaseField.FallbackText.Should().Be("(Automatic)");
+        PivotValueFieldPlanner.AutomaticBaseFieldLabel.Should().Be("(Automatic)");
+    }
+
+    [Fact]
+    public void SummaryFunctions_CarryResourceKeysFallbacksAndTokensInOrder()
+    {
+        PivotValueFieldPlanner.SummaryFunctions
+            .Select(option => (option.ResourceKey, option.Label, option.Value))
+            .Should()
+            .Equal([
+                ("PivotValueFieldSettings_SummarySum", "Sum", "sum"),
+                ("PivotValueFieldSettings_SummaryCount", "Count", "count"),
+                ("PivotValueFieldSettings_SummaryAverage", "Average", "average"),
+                ("PivotValueFieldSettings_SummaryMax", "Max", "max"),
+                ("PivotValueFieldSettings_SummaryMin", "Min", "min"),
+                ("PivotValueFieldSettings_SummaryProduct", "Product", "product"),
+                ("PivotValueFieldSettings_SummaryCountNumbers", "Count Numbers", "countNums"),
+                ("PivotValueFieldSettings_SummaryStdDev", "StdDev", "stdDev"),
+                ("PivotValueFieldSettings_SummaryStdDevp", "StdDevp", "stdDevP"),
+                ("PivotValueFieldSettings_SummaryVar", "Var", "var"),
+                ("PivotValueFieldSettings_SummaryVarp", "Varp", "varP"),
+            ]);
+
+        var (label, value) = PivotValueFieldPlanner.SummaryFunctions[0];
+        label.Should().Be("Sum");
+        value.Should().Be("sum");
+    }
+
+    [Fact]
+    public void ShowValuesAsOptions_CarryResourceKeysFallbacksAndValuesInOrder()
+    {
+        PivotValueFieldPlanner.ShowValuesAsOptions
+            .Select(option => (option.ResourceKey, option.Label, option.Value))
+            .Should()
+            .Equal([
+                ("PivotValueFieldSettings_ShowNoCalculation", "No Calculation", PivotShowValuesAs.None),
+                ("PivotValueFieldSettings_ShowPercentOfGrandTotal", "% of Grand Total", PivotShowValuesAs.PercentOfGrandTotal),
+                ("PivotValueFieldSettings_ShowPercentOfRowTotal", "% of Row Total", PivotShowValuesAs.PercentOfRowTotal),
+                ("PivotValueFieldSettings_ShowPercentOfColumnTotal", "% of Column Total", PivotShowValuesAs.PercentOfColumnTotal),
+                ("PivotValueFieldSettings_ShowRunningTotalIn", "Running Total In", PivotShowValuesAs.RunningTotalIn),
+                ("PivotValueFieldSettings_ShowDifferenceFrom", "Difference From", PivotShowValuesAs.DifferenceFrom),
+                ("PivotValueFieldSettings_ShowPercentDifferenceFrom", "% Difference From", PivotShowValuesAs.PercentDifferenceFrom),
+                ("PivotValueFieldSettings_ShowRankSmallest", "Rank Smallest to Largest", PivotShowValuesAs.RankSmallest),
+                ("PivotValueFieldSettings_ShowRankLargest", "Rank Largest to Smallest", PivotShowValuesAs.RankLargest),
+                ("PivotValueFieldSettings_ShowIndex", "Index", PivotShowValuesAs.Index),
+                ("PivotValueFieldSettings_ShowPercentOfParentRowTotal", "% of Parent Row Total", PivotShowValuesAs.PercentOfParentRowTotal),
+                ("PivotValueFieldSettings_ShowPercentOfParentColumnTotal", "% of Parent Column Total", PivotShowValuesAs.PercentOfParentColumnTotal),
+                ("PivotValueFieldSettings_ShowPercentOfParentTotal", "% of Parent Total", PivotShowValuesAs.PercentOfParentTotal),
+            ]);
+    }
+
+    [Fact]
+    public void ValidationErrors_CarryResourceKeysAndFallbacks()
+    {
+        PivotValueFieldPlanner.DescribeValidationError(PivotShowValuesAsValidationError.None).Should().BeNull();
+
+        PivotValueFieldPlanner.ValidationErrors.Should().Equal([
+            new PivotValueFieldValidationErrorPlan(
+                PivotShowValuesAsValidationError.MissingBaseField,
+                "PivotValueFieldSettings_SelectBaseFieldMessage",
+                "Select a base field for the chosen calculation."),
+            new PivotValueFieldValidationErrorPlan(
+                PivotShowValuesAsValidationError.MissingBaseItem,
+                "PivotValueFieldSettings_EnterBaseItemMessage",
+                "Enter a base item for the chosen calculation."),
+        ]);
+
+        PivotValueFieldPlanner.DescribeValidationError(PivotShowValuesAsValidationError.MissingBaseField)
+            .Should()
+            .Be(PivotValueFieldPlanner.ValidationErrors[0]);
+    }
+
     [Theory]
     [InlineData("sum", 0)]
     [InlineData("average", 2)]
