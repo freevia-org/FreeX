@@ -25,6 +25,31 @@ public sealed class PivotFieldFilterPlannerTests
     }
 
     [Fact]
+    public void LabelFilterKinds_CarryResourceKeysFallbacksAndKindsInOrder()
+    {
+        PivotFieldFilterPlanner.LabelFilterKinds
+            .Select(option => (option.ResourceKey, option.Label, option.Kind))
+            .Should()
+            .Equal([
+                ("PivotLabelFilter_Equals", "Equals", PivotLabelFilterKind.Equals),
+                ("PivotLabelFilter_DoesNotEqual", "Does Not Equal", PivotLabelFilterKind.DoesNotEqual),
+                ("PivotLabelFilter_BeginsWith", "Begins With", PivotLabelFilterKind.BeginsWith),
+                ("PivotLabelFilter_EndsWith", "Ends With", PivotLabelFilterKind.EndsWith),
+                ("PivotLabelFilter_Contains", "Contains", PivotLabelFilterKind.Contains),
+                ("PivotLabelFilter_DoesNotContain", "Does Not Contain", PivotLabelFilterKind.DoesNotContain),
+                ("PivotLabelFilter_GreaterThan", "Greater Than", PivotLabelFilterKind.GreaterThan),
+                ("PivotLabelFilter_GreaterThanOrEqualTo", "Greater Than Or Equal To", PivotLabelFilterKind.GreaterThanOrEqual),
+                ("PivotLabelFilter_LessThan", "Less Than", PivotLabelFilterKind.LessThan),
+                ("PivotLabelFilter_LessThanOrEqualTo", "Less Than Or Equal To", PivotLabelFilterKind.LessThanOrEqual),
+                ("PivotLabelFilter_Between", "Between", PivotLabelFilterKind.Between),
+            ]);
+
+        var (label, kind) = PivotFieldFilterPlanner.LabelFilterKinds[4];
+        label.Should().Be("Contains");
+        kind.Should().Be(PivotLabelFilterKind.Contains);
+    }
+
+    [Fact]
     public void ValueFilterKinds_CarryResourceKeysFallbacksAndKindsInOrder()
     {
         PivotFieldFilterPlanner.ValueFilterKinds
@@ -51,11 +76,37 @@ public sealed class PivotFieldFilterPlannerTests
     }
 
     [Fact]
+    public void LabelFilterDefaults_MatchWpfDialogInitialState()
+    {
+        PivotFieldFilterPlanner.DefaultLabelFilterKind.Should().Be(PivotLabelFilterKind.Contains);
+        PivotFieldFilterPlanner.DefaultLabelKindIndex.Should().Be(4);
+    }
+
+    [Fact]
     public void ValueFilterDefaults_MatchWpfDialogInitialState()
     {
         PivotFieldFilterPlanner.DefaultValueFilterKind.Should().Be(PivotValueFilterKind.GreaterThan);
         PivotFieldFilterPlanner.DefaultValueKindIndex.Should().Be(2);
         PivotFieldFilterPlanner.DefaultValueFilterPrimaryText.Should().Be("0");
+    }
+
+    [Fact]
+    public void LabelFilterValidationErrors_CarryResourceKeysAndFallbacks()
+    {
+        PivotFieldFilterPlanner.DescribeLabelFilterValidationError(PivotLabelFilterValidationError.None)
+            .Should()
+            .BeNull();
+
+        PivotFieldFilterPlanner.LabelFilterValidationErrors.Should().Equal([
+            new PivotLabelFilterValidationErrorPlan(
+                PivotLabelFilterValidationError.ValueRequired,
+                "PivotLabelFilter_ValueRequiredMessage",
+                PivotFieldFilterPlanner.LabelValueRequiredMessage),
+            new PivotLabelFilterValidationErrorPlan(
+                PivotLabelFilterValidationError.SecondValueRequired,
+                "PivotLabelFilter_EndingValueRequiredMessage",
+                PivotFieldFilterPlanner.LabelSecondValueRequiredMessage),
+        ]);
     }
 
     [Fact]
@@ -121,6 +172,45 @@ public sealed class PivotFieldFilterPlannerTests
         filter.Kind.Should().Be(PivotLabelFilterKind.Between);
         filter.Value.Should().Be("A");
         filter.Value2.Should().Be("Z");
+    }
+
+    [Fact]
+    public void TryCreateLabelFilter_ReportsValidationErrorsAndIgnoresStaleSecondValue()
+    {
+        PivotFieldFilterPlanner.TryCreateLabelFilterWithValidationError(
+                7,
+                PivotLabelFilterKind.Equals,
+                " ",
+                null,
+                out _,
+                out var missingValue)
+            .Should()
+            .BeFalse();
+        missingValue.Should().Be(PivotLabelFilterValidationError.ValueRequired);
+
+        PivotFieldFilterPlanner.TryCreateLabelFilterWithValidationError(
+                7,
+                PivotLabelFilterKind.Between,
+                "East",
+                " ",
+                out _,
+                out var missingSecondValue)
+            .Should()
+            .BeFalse();
+        missingSecondValue.Should().Be(PivotLabelFilterValidationError.SecondValueRequired);
+
+        PivotFieldFilterPlanner.TryCreateLabelFilterWithValidationError(
+                7,
+                PivotLabelFilterKind.Contains,
+                " East ",
+                " West ",
+                out var filter,
+                out var error)
+            .Should()
+            .BeTrue();
+
+        error.Should().Be(PivotLabelFilterValidationError.None);
+        filter.Should().Be(new PivotLabelFilterModel(7, PivotLabelFilterKind.Contains, "East", null));
     }
 
     [Fact]

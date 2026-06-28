@@ -407,17 +407,16 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Should().Contain(["LabelFilterKindBox", "LabelFilterValueBox", "LabelFilterValue2Box"]);
         DialogSourceTestSupport.ReadHostSources("PivotLabelFilterDialog.xaml.cs")
             .Should()
-            .Contain("PivotLabelFilterKind.Between")
-            .And.Contain("PivotLabelFilterKind.GreaterThan")
-            .And.Contain("PivotLabelFilterKind.LessThan");
+            .Contain("PivotFieldFilterPlanner.LabelFilterKinds")
+            .And.Contain("PivotFieldFilterPlanner.LabelKindNeedsSecondValue")
+            .And.Contain("PivotFieldFilterPlanner.TryCreateLabelFilterWithValidationError");
         valueDialog.Descendants().Select(element => element.Attribute(xaml + "Name")?.Value)
             .Should().Contain(["ValueFilterKindBox", "ValueFilterValueBox", "ValueFilterValue2Box"]);
         DialogSourceTestSupport.ReadHostSources("PivotValueFilterDialog.xaml.cs")
             .Should()
-            .Contain("PivotValueFilterKind.Between")
-            .And.Contain("PivotValueFilterKind.NotBetween")
-            .And.Contain("PivotValueFilterKind.AboveAverage")
-            .And.Contain("PivotValueFilterKind.BelowAverage");
+            .Contain("PivotFieldFilterPlanner.ValueFilterKinds")
+            .And.Contain("PivotFieldFilterPlanner.ValueKindNeedsPrimaryInput")
+            .And.Contain("PivotFieldFilterPlanner.ValueKindNeedsSecondValue");
     }
 
     [Fact]

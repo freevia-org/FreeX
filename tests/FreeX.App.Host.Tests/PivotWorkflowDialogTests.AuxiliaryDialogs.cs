@@ -229,6 +229,26 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotLabelFilterDialog_DelegatesOptionAndInputPolicyToPresentationPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PivotLabelFilterDialog.xaml.cs");
+
+        source.Should().Contain("PivotFieldFilterPlanner.LabelFilterKinds");
+        source.Should().Contain("PivotFieldFilterPlanner.DefaultLabelKindIndex");
+        source.Should().Contain("PivotFieldFilterPlanner.FindLabelKindIndex");
+        source.Should().Contain("PivotFieldFilterPlanner.TryCreateLabelFilterWithValidationError");
+        source.Should().Contain("PivotFieldFilterPlanner.LabelKindFromIndex");
+        source.Should().Contain("PivotFieldFilterPlanner.LabelKindNeedsSecondValue");
+        source.Should().Contain("PivotFieldFilterPlanner.DescribeLabelFilterValidationError");
+        source.Should().NotContain("new PivotLabelFilterModel");
+        source.Should().NotContain("LabelFilterValueBox.Text.Trim");
+        source.Should().NotContain("LabelFilterValue2Box.Text.Trim");
+        source.Should().NotContain("PivotLabelFilter_Equals");
+        source.Should().NotContain("PivotLabelFilter_Contains");
+        source.Should().NotContain("PivotLabelFilter_Between");
+    }
+
+    [Fact]
     public void PivotChartInsert_UsesTypeDialogInsteadOfHardCodedColumn()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotChartCommands.cs");

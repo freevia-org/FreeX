@@ -5,6 +5,17 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
 
+public sealed record PivotLabelFilterKindOption(string ResourceKey, string FallbackLabel, PivotLabelFilterKind Kind)
+{
+    public string Label => FallbackLabel;
+
+    public void Deconstruct(out string label, out PivotLabelFilterKind kind)
+    {
+        label = Label;
+        kind = Kind;
+    }
+}
+
 public sealed record PivotValueFilterKindOption(string ResourceKey, string FallbackLabel, PivotValueFilterKind Kind)
 {
     public string Label => FallbackLabel;
@@ -16,10 +27,22 @@ public sealed record PivotValueFilterKindOption(string ResourceKey, string Fallb
     }
 }
 
+public sealed record PivotLabelFilterValidationErrorPlan(
+    PivotLabelFilterValidationError Error,
+    string ResourceKey,
+    string FallbackMessage);
+
 public sealed record PivotValueFilterValidationErrorPlan(
     PivotValueFilterValidationError Error,
     string ResourceKey,
     string FallbackMessage);
+
+public enum PivotLabelFilterValidationError
+{
+    None,
+    ValueRequired,
+    SecondValueRequired
+}
 
 public enum PivotValueFilterValidationError
 {
@@ -52,24 +75,25 @@ public static class PivotFieldFilterPlanner
         "Enter a numeric comparison value.";
     public const string NumericSecondValueRequiredMessage =
         "Enter a numeric second value for a Between filter.";
+    public const PivotLabelFilterKind DefaultLabelFilterKind = PivotLabelFilterKind.Contains;
     public const PivotValueFilterKind DefaultValueFilterKind = PivotValueFilterKind.GreaterThan;
     public const string DefaultValueFilterPrimaryText = "0";
     public const string ValueFilterComparisonDisplayFormat = "0.########";
 
     /// <summary>Label-filter kinds in display order, with the English label the dialog shows.</summary>
-    public static readonly IReadOnlyList<(string Label, PivotLabelFilterKind Kind)> LabelFilterKinds =
+    public static readonly IReadOnlyList<PivotLabelFilterKindOption> LabelFilterKinds =
     [
-        ("Equals", PivotLabelFilterKind.Equals),
-        ("Does Not Equal", PivotLabelFilterKind.DoesNotEqual),
-        ("Begins With", PivotLabelFilterKind.BeginsWith),
-        ("Ends With", PivotLabelFilterKind.EndsWith),
-        ("Contains", PivotLabelFilterKind.Contains),
-        ("Does Not Contain", PivotLabelFilterKind.DoesNotContain),
-        ("Greater Than", PivotLabelFilterKind.GreaterThan),
-        ("Greater Than Or Equal To", PivotLabelFilterKind.GreaterThanOrEqual),
-        ("Less Than", PivotLabelFilterKind.LessThan),
-        ("Less Than Or Equal To", PivotLabelFilterKind.LessThanOrEqual),
-        ("Between", PivotLabelFilterKind.Between),
+        new("PivotLabelFilter_Equals", "Equals", PivotLabelFilterKind.Equals),
+        new("PivotLabelFilter_DoesNotEqual", "Does Not Equal", PivotLabelFilterKind.DoesNotEqual),
+        new("PivotLabelFilter_BeginsWith", "Begins With", PivotLabelFilterKind.BeginsWith),
+        new("PivotLabelFilter_EndsWith", "Ends With", PivotLabelFilterKind.EndsWith),
+        new("PivotLabelFilter_Contains", "Contains", PivotLabelFilterKind.Contains),
+        new("PivotLabelFilter_DoesNotContain", "Does Not Contain", PivotLabelFilterKind.DoesNotContain),
+        new("PivotLabelFilter_GreaterThan", "Greater Than", PivotLabelFilterKind.GreaterThan),
+        new("PivotLabelFilter_GreaterThanOrEqualTo", "Greater Than Or Equal To", PivotLabelFilterKind.GreaterThanOrEqual),
+        new("PivotLabelFilter_LessThan", "Less Than", PivotLabelFilterKind.LessThan),
+        new("PivotLabelFilter_LessThanOrEqualTo", "Less Than Or Equal To", PivotLabelFilterKind.LessThanOrEqual),
+        new("PivotLabelFilter_Between", "Between", PivotLabelFilterKind.Between),
     ];
 
     /// <summary>Value-filter kinds in display order, with the English label the dialog shows.</summary>
@@ -87,6 +111,18 @@ public static class PivotFieldFilterPlanner
         new("PivotValueFilter_NotBetween", "Not Between", PivotValueFilterKind.NotBetween),
         new("PivotValueFilter_AboveAverage", "Above Average", PivotValueFilterKind.AboveAverage),
         new("PivotValueFilter_BelowAverage", "Below Average", PivotValueFilterKind.BelowAverage),
+    ];
+
+    public static readonly IReadOnlyList<PivotLabelFilterValidationErrorPlan> LabelFilterValidationErrors =
+    [
+        new(
+            PivotLabelFilterValidationError.ValueRequired,
+            "PivotLabelFilter_ValueRequiredMessage",
+            LabelValueRequiredMessage),
+        new(
+            PivotLabelFilterValidationError.SecondValueRequired,
+            "PivotLabelFilter_EndingValueRequiredMessage",
+            LabelSecondValueRequiredMessage),
     ];
 
     public static readonly IReadOnlyList<PivotValueFilterValidationErrorPlan> ValueFilterValidationErrors =
@@ -135,6 +171,8 @@ public static class PivotFieldFilterPlanner
 
     public static int DefaultValueKindIndex => FindValueKindIndex(DefaultValueFilterKind);
 
+    public static int DefaultLabelKindIndex => FindLabelKindIndex(DefaultLabelFilterKind);
+
     /// <summary>True when the label-filter kind needs a second value box (Between).</summary>
     public static bool LabelKindNeedsSecondValue(PivotLabelFilterKind kind) =>
         kind == PivotLabelFilterKind.Between;
@@ -167,13 +205,26 @@ public static class PivotFieldFilterPlanner
         out PivotLabelFilterModel? filter,
         out string? error)
     {
+        var result = TryCreateLabelFilterWithValidationError(sourceFieldIndex, kind, value1, value2, out filter, out var validationError);
+        error = DescribeLabelFilterValidationError(validationError)?.FallbackMessage;
+        return result;
+    }
+
+    public static bool TryCreateLabelFilterWithValidationError(
+        int sourceFieldIndex,
+        PivotLabelFilterKind kind,
+        string? value1,
+        string? value2,
+        out PivotLabelFilterModel? filter,
+        out PivotLabelFilterValidationError error)
+    {
         filter = null;
-        error = null;
+        error = PivotLabelFilterValidationError.None;
 
         var first = value1?.Trim() ?? string.Empty;
         if (first.Length == 0)
         {
-            error = LabelValueRequiredMessage;
+            error = PivotLabelFilterValidationError.ValueRequired;
             return false;
         }
 
@@ -183,13 +234,28 @@ public static class PivotFieldFilterPlanner
             second = value2?.Trim() ?? string.Empty;
             if (second.Length == 0)
             {
-                error = LabelSecondValueRequiredMessage;
+                error = PivotLabelFilterValidationError.SecondValueRequired;
                 return false;
             }
         }
 
         filter = new PivotLabelFilterModel(sourceFieldIndex, kind, first, second);
         return true;
+    }
+
+    public static PivotLabelFilterValidationErrorPlan? DescribeLabelFilterValidationError(
+        PivotLabelFilterValidationError error)
+    {
+        if (error == PivotLabelFilterValidationError.None)
+            return null;
+
+        for (var index = 0; index < LabelFilterValidationErrors.Count; index++)
+        {
+            if (LabelFilterValidationErrors[index].Error == error)
+                return LabelFilterValidationErrors[index];
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(error), error, null);
     }
 
     /// <summary>
