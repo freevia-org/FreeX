@@ -6802,7 +6802,7 @@ internal static class FreeWRibbonCommands
                 // so the long dimension runs horizontally for printing, matching Word's envelope setup.
                 page.WidthPt   = envelope.WidthPt;
                 page.HeightPt  = envelope.HeightPt;
-                page.Landscape = true;
+                page.Landscape = envelope.Landscape;
                 // Narrow margins leave the maximum print area for the address block.
                 page.MarginLeftPt   = envelope.MarginPt;
                 page.MarginRightPt  = envelope.MarginPt;
@@ -6835,7 +6835,7 @@ internal static class FreeWRibbonCommands
             {
                 page.WidthPt        = label.PageWidthPt;
                 page.HeightPt       = label.PageHeightPt;
-                page.Landscape      = false;
+                page.Landscape      = label.Landscape;
                 page.MarginLeftPt   = label.MarginPt;
                 page.MarginRightPt  = label.MarginPt;
                 page.MarginTopPt    = label.MarginPt;
@@ -7267,37 +7267,20 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Standard envelope size preset for the Envelopes command.
-    private readonly record struct EnvelopeSize(string Name, double WidthPt, double HeightPt, double MarginPt);
-
-    // Result returned by EnvelopeSetupDialog.
-    private readonly record struct EnvelopeSetupResult(double WidthPt, double HeightPt, double MarginPt);
-
     // Mailings > Envelopes setup dialog. Offers a small set of standard ISO/US sizes (DL, C5, C6,
     // Comm-10, Monarch) matching Word's Envelopes and Labels dialog. Returns the chosen geometry, or null
     // if cancelled. The caller applies the settings via ApplyPageSettings (backed path).
     private static class EnvelopeSetupDialog
     {
-        // Standard sizes as portrait dimensions (width × height in points). Landscape is applied by the
-        // command so the long edge runs horizontally, matching Word's envelope-print orientation.
-        // 1 mm = 72/25.4 pt ≈ 2.8346 pt.
-        private static readonly EnvelopeSize[] Sizes =
-        [
-            new("DL  (110 × 220 mm)",  110 * 72 / 25.4,  220 * 72 / 25.4, 18),
-            new("C5  (162 × 229 mm)",  162 * 72 / 25.4,  229 * 72 / 25.4, 18),
-            new("C6  (114 × 162 mm)",  114 * 72 / 25.4,  162 * 72 / 25.4, 14),
-            new("Comm-10 (4.125 × 9.5 in)", 4.125 * 72, 9.5 * 72,        18),
-            new("Monarch (3.875 × 7.5 in)", 3.875 * 72, 7.5 * 72,        14),
-        ];
-
         public static EnvelopeSetupResult? Ask(Window? owner)
         {
             EnvelopeSetupResult? result = null;
 
+            var sizes = MailingsEnvelopeLabelPlanner.GetEnvelopeSizes();
             var combo = new System.Windows.Controls.ComboBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 12) };
-            foreach (var s in Sizes)
+            foreach (var s in sizes)
                 combo.Items.Add(s.Name);
-            combo.SelectedIndex = 0; // default: DL
+            combo.SelectedIndex = MailingsEnvelopeLabelPlanner.DefaultEnvelopeIndex;
 
             var dialog = new Window
             {
@@ -7313,8 +7296,7 @@ internal static class FreeWRibbonCommands
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var s = Sizes[combo.SelectedIndex];
-                result = new EnvelopeSetupResult(s.WidthPt, s.HeightPt, s.MarginPt);
+                result = MailingsEnvelopeLabelPlanner.PlanEnvelope(combo.SelectedIndex);
                 dialog.DialogResult = true;
             };
 
@@ -7346,37 +7328,20 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Standard label sheet preset for the Labels command.
-    private readonly record struct LabelPreset(string Name, int Rows, int Columns, double PageWidthPt, double PageHeightPt, double MarginPt);
-
-    // Result returned by LabelSetupDialog.
-    private readonly record struct LabelSetupResult(int Rows, int Columns, double PageWidthPt, double PageHeightPt, double MarginPt);
-
     // Mailings > Labels setup dialog. Offers a handful of common Avery-style presets plus a custom
     // rows × columns option on US Letter. Returns the chosen grid / page geometry, or null if cancelled.
     // The caller applies page settings via ApplyPageSettings then inserts the grid via InsertTable.
     private static class LabelSetupDialog
     {
-        // A curated set of common label layouts on standard sheets.  Dimensions: US Letter = 612 × 792 pt.
-        private static readonly LabelPreset[] Presets =
-        [
-            new("Avery 5160 — 3 × 10 (Letter)",  10, 3, 612, 792, 18),
-            new("Avery 5162 — 2 × 7  (Letter)",   7, 2, 612, 792, 18),
-            new("Avery 5163 — 2 × 5  (Letter)",   5, 2, 612, 792, 18),
-            new("Avery L7160 — 3 × 7 (A4)",        7, 3, 595.28, 841.89, 14),
-            new("Custom rows × columns (Letter)",   0, 0, 612, 792, 18),
-        ];
-
-        private const int CustomPresetIndex = 4;
-
         public static LabelSetupResult? Ask(Window? owner)
         {
             LabelSetupResult? result = null;
 
+            var presets = MailingsEnvelopeLabelPlanner.GetLabelPresets();
             var combo = new System.Windows.Controls.ComboBox { MinWidth = 280, Margin = new Thickness(0, 0, 0, 8) };
-            foreach (var p in Presets)
+            foreach (var p in presets)
                 combo.Items.Add(p.Name);
-            combo.SelectedIndex = 0;
+            combo.SelectedIndex = MailingsEnvelopeLabelPlanner.DefaultLabelIndex;
 
             // Custom rows/columns spinners (shown only when "Custom" is selected).
             var rowsBox = new System.Windows.Controls.TextBox { Text = "10", MinWidth = 50, Margin = new Thickness(4, 0, 12, 0) };
@@ -7393,7 +7358,9 @@ internal static class FreeWRibbonCommands
             customPanel.Children.Add(colsBox);
 
             combo.SelectionChanged += (_, _) =>
-                customPanel.Visibility = combo.SelectedIndex == CustomPresetIndex ? Visibility.Visible : Visibility.Collapsed;
+                customPanel.Visibility = combo.SelectedIndex == MailingsEnvelopeLabelPlanner.CustomLabelPresetIndex
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
 
             var dialog = new Window
             {
@@ -7409,22 +7376,14 @@ internal static class FreeWRibbonCommands
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var idx = combo.SelectedIndex;
-                if (idx == CustomPresetIndex)
+                var plan = MailingsEnvelopeLabelPlanner.PlanLabel(combo.SelectedIndex, rowsBox.Text, colsBox.Text);
+                if (plan.Result is not { } label)
                 {
-                    if (!int.TryParse(rowsBox.Text, out var rows) || rows < 1 ||
-                        !int.TryParse(colsBox.Text, out var cols) || cols < 1)
-                    {
-                        DialogMessageHelper.ShowError(dialog, "Enter valid positive integers for rows and columns.");
-                        return;
-                    }
-                    result = new LabelSetupResult(rows, cols, Presets[idx].PageWidthPt, Presets[idx].PageHeightPt, Presets[idx].MarginPt);
+                    DialogMessageHelper.ShowError(dialog, "Enter valid positive integers for rows and columns.");
+                    return;
                 }
-                else
-                {
-                    var p = Presets[idx];
-                    result = new LabelSetupResult(p.Rows, p.Columns, p.PageWidthPt, p.PageHeightPt, p.MarginPt);
-                }
+
+                result = label;
                 dialog.DialogResult = true;
             };
 
