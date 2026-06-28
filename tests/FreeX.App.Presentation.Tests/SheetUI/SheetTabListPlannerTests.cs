@@ -1,16 +1,20 @@
 using System.Diagnostics;
 using FluentAssertions;
-using FreeX.App.Host;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.SheetUI;
 
 public sealed class SheetTabListPlannerTests
 {
     [Fact]
     public void Build_AvoidsLinqMaterializationOnSheetTabRefreshPath()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("SheetTabListPlanner.cs");
+        var source = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Presentation",
+            "SheetUI",
+            "SheetTabListPlanner.cs"));
         var buildStart = source.IndexOf("public static SheetTabListPlan Build(", StringComparison.Ordinal);
         var groupedStart = source.IndexOf("public static bool IsWorkbookGrouped(", StringComparison.Ordinal);
         var buildSource = source[buildStart..groupedStart];
@@ -18,6 +22,8 @@ public sealed class SheetTabListPlannerTests
         var groupStart = source.IndexOf("public static SheetKeyboardGroupSelectionPlan? SelectAdjacentVisibleSheetGroup(", StringComparison.Ordinal);
         var adjacentSource = source[adjacentStart..groupStart];
 
+        source.Should().Contain("public sealed record SheetTabListEntry");
+        source.Should().NotContain("SheetTabViewModel");
         buildSource.Should().NotContain(".Where(");
         buildSource.Should().NotContain(".Select(");
         buildSource.Should().NotContain(".ToList(");
@@ -39,7 +45,7 @@ public sealed class SheetTabListPlannerTests
 
         first.IsHidden.Should().BeFalse();
         plan.CurrentSheetId.Should().Be(first.Id);
-        plan.Tabs.Should().ContainSingle().Which.Should().Match<SheetTabViewModel>(tab =>
+        plan.Tabs.Should().ContainSingle().Which.Should().Match<SheetTabListEntry>(tab =>
             tab.Id == first.Id && tab.IsActive && tab.IsGrouped);
         grouped.Should().Equal(first.Id);
     }

@@ -21,6 +21,7 @@ using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
