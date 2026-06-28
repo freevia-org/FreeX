@@ -236,7 +236,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var defaultList = SheetGrid.SelectedRange is { } selected && sheet is not null
-            ? FormatWorkbookRange(AdvancedFilterDefaultListRangePlanner.Create(sheet, selected))
+            ? FormatWorkbookRange(AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected))
             : "A1:C10";
         AdvancedFilterDialog? dialog = null;
         dialog = new AdvancedFilterDialog(

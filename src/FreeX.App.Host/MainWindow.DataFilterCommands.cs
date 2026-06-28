@@ -197,7 +197,7 @@ public partial class MainWindow
             if (!FilterPromptPlanner.TryPlan(value, out var promptPlan, out var promptError) || promptPlan is null)
             {
                 _messageService.ShowWarning(
-                    promptError ?? UiText.Get("MainWindowMessage_FilterUnsupportedCriterion"),
+                    FormatFilterPromptPlanError(promptError),
                     title);
                 return false;
             }
@@ -232,6 +232,21 @@ public partial class MainWindow
         RestoreAutoFilterRangeSelection(range);
         return true;
     }
+
+    private static string FormatFilterPromptPlanError(FilterPromptPlanError error) =>
+        error switch
+        {
+            FilterPromptPlanError.TopBottomSyntax => UiText.Get("FilterPrompt_ErrorTopBottomSyntax"),
+            FilterPromptPlanError.PercentageRange => UiText.Get("FilterPrompt_ErrorPercentageRange"),
+            FilterPromptPlanError.PositiveItemCount => UiText.Get("FilterPrompt_ErrorPositiveItemCount"),
+            FilterPromptPlanError.CompositeSyntax => UiText.Get("FilterPrompt_ErrorCompositeSyntax"),
+            FilterPromptPlanError.DateBetweenSyntax => UiText.Get("FilterPrompt_ErrorDateBetweenSyntax"),
+            FilterPromptPlanError.BetweenSyntax => UiText.Get("FilterPrompt_ErrorBetweenSyntax"),
+            FilterPromptPlanError.TextToMatch => UiText.Get("FilterPrompt_ErrorTextToMatch"),
+            FilterPromptPlanError.ComparisonNumber => UiText.Get("FilterPrompt_ErrorComparisonNumber"),
+            FilterPromptPlanError.DateFormat => UiText.Get("FilterPrompt_ErrorDateFormat"),
+            _ => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion")
+        };
 
     private void CfRuleButton_Click(object sender, RoutedEventArgs e)
     {
@@ -427,8 +442,8 @@ public partial class MainWindow
             return;
         }
 
-        var range = ClearFilterRangePlanner.Create(sheet, selectedRange);
-        if (!ClearFilterRangePlanner.HasActiveFilter(sheet, range))
+        var range = AutoFilterToggleRangePlanner.Create(sheet, selectedRange);
+        if (!AutoFilterDropdownMenuPlanner.HasActiveFilter(sheet, range))
         {
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_ClearFilterNoFilter"),
