@@ -155,6 +155,21 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTypePickerPlanner_DelegatesCatalogToPresentationAndKeepsHostLocalized()
+    {
+        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("ChartTypeDialogs.Planner.cs");
+        var sharedSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartTypeChangePlanner.cs");
+
+        hostSource.Should().Contain("ChartTypeChangePlanner.GetSupportedChoices()");
+        hostSource.Should().Contain("ChartTypeChangePlanner.GetCategories()");
+        hostSource.Should().Contain("ChartTypeChangePlanner.GetRecommendedTypes()");
+        hostSource.Should().Contain("UiText.Get(ChartTypeChangePlanner.DisplayNameKey(type))");
+        hostSource.Should().NotContain("new(ChartType.Column, UiText.Get(\"ChartType_ClusteredColumn\")");
+        sharedSource.Should().Contain("public static IReadOnlyList<ChartType> GetRecommendedTypes()");
+        sharedSource.Should().Contain("public static string DisplayNameKey(ChartType type)");
+    }
+
+    [Fact]
     public void ChartTypeDialogs_ExposeExcelInsertAndChangeSurfaces()
     {
         var source = ReadChartTypeDialogSource();

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
