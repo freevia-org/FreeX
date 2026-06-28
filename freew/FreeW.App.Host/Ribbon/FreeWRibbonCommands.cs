@@ -6996,28 +6996,12 @@ internal static class FreeWRibbonCommands
     // Window-building idiom as MergeDataDialog / FilterSortRecipientsDialog.
     private static class MatchFieldsDialog
     {
-        private static readonly FieldRole[] AllRoles = (FieldRole[])Enum.GetValues(typeof(FieldRole));
-
-        // Display labels for each role, matching Word's "Match Fields" dialog wording.
-        private static readonly Dictionary<FieldRole, string> RoleLabels = new()
-        {
-            [FieldRole.Title]      = "Title (Mr., Mrs., …)",
-            [FieldRole.FirstName]  = "First Name",
-            [FieldRole.MiddleName] = "Middle Name",
-            [FieldRole.LastName]   = "Last Name",
-            [FieldRole.Suffix]     = "Suffix (Jr., Sr., …)",
-            [FieldRole.Company]    = "Company",
-            [FieldRole.Address1]   = "Address 1",
-            [FieldRole.Address2]   = "Address 2",
-            [FieldRole.City]       = "City",
-            [FieldRole.State]      = "State",
-            [FieldRole.PostalCode] = "Postal Code",
-            [FieldRole.Country]    = "Country or Region",
-        };
-
         public static FieldMapping? Ask(Window? owner, IReadOnlyList<string> header, FieldMapping current)
         {
             FieldMapping? result = null;
+
+            var rolePlans = MailMergeMatchFieldsDialogPlanner.GetRolePlans(header, current);
+            var columnChoices = MailMergeMatchFieldsDialogPlanner.GetColumnChoices(header);
 
             // One ComboBox per role, keyed by role.
             var combos = new Dictionary<FieldRole, System.Windows.Controls.ComboBox>();
@@ -7026,15 +7010,15 @@ internal static class FreeWRibbonCommands
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            for (var i = 0; i < AllRoles.Length + 1; i++)
+            for (var i = 0; i < rolePlans.Count + 1; i++)
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            for (var i = 0; i < AllRoles.Length; i++)
+            for (var i = 0; i < rolePlans.Count; i++)
             {
-                var role = AllRoles[i];
+                var plan = rolePlans[i];
                 var label = new System.Windows.Controls.TextBlock
                 {
-                    Text = RoleLabels.TryGetValue(role, out var lbl) ? lbl : role.ToString(),
+                    Text = plan.Label,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 3, 12, 3)
                 };
@@ -7043,18 +7027,11 @@ internal static class FreeWRibbonCommands
                 grid.Children.Add(label);
 
                 var combo = new System.Windows.Controls.ComboBox { MinWidth = 180, Margin = new Thickness(0, 3, 0, 3) };
-                combo.Items.Add("(not matched)");
-                foreach (var h in header)
-                    combo.Items.Add(h);
+                foreach (var choice in columnChoices)
+                    combo.Items.Add(choice);
+                combo.SelectedItem = plan.SelectedChoice;
 
-                // Pre-select the currently mapped column (or "(not matched)").
-                var mapped = current[role];
-                if (mapped is not null && header.Contains(mapped, StringComparer.OrdinalIgnoreCase))
-                    combo.SelectedItem = header.First(h => h.Equals(mapped, StringComparison.OrdinalIgnoreCase));
-                else
-                    combo.SelectedIndex = 0;
-
-                combos[role] = combo;
+                combos[plan.Role] = combo;
                 Grid.SetRow(combo, i);
                 Grid.SetColumn(combo, 1);
                 grid.Children.Add(combo);
@@ -7071,7 +7048,7 @@ internal static class FreeWRibbonCommands
             };
             buttonRow.Children.Add(ok);
             buttonRow.Children.Add(cancel);
-            Grid.SetRow(buttonRow, AllRoles.Length);
+            Grid.SetRow(buttonRow, rolePlans.Count);
             Grid.SetColumnSpan(buttonRow, 2);
             grid.Children.Add(buttonRow);
 
@@ -7087,13 +7064,8 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                var mapping = new FieldMapping();
-                foreach (var (role, combo) in combos)
-                {
-                    var sel = combo.SelectedItem as string;
-                    mapping[role] = sel == "(not matched)" || sel is null ? null : sel;
-                }
-                result = mapping;
+                result = MailMergeMatchFieldsDialogPlanner.CreateResult(
+                    combos.ToDictionary(pair => pair.Key, pair => pair.Value.SelectedItem as string));
                 dialog.DialogResult = true;
             };
 
