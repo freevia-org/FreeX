@@ -31,7 +31,15 @@ public sealed class TextToColumnsSourceGuardTests
             .Should()
             .BeFalse("WPF host should localize the shared wizard surface plan at the dialog edge instead of carrying a duplicate planner");
 
-        var commandPlannerSource = File.ReadAllText(Path.Combine(hostRoot, "TextToColumnsCommandPlanner.cs"));
+        var commandPlannerPath = Path.Combine(presentationRoot, "TextToColumns", "TextToColumnsCommandPlanner.cs");
+        File.Exists(commandPlannerPath)
+            .Should()
+            .BeTrue("Text-to-Columns command creation should be shared by renderers");
+        File.Exists(Path.Combine(hostRoot, "TextToColumnsCommandPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should call the shared Text-to-Columns command planner instead of carrying a pure facade");
+
+        var commandPlannerSource = File.ReadAllText(commandPlannerPath);
         commandPlannerSource.Should().Contain("TextToColumnsApplyPlanner.BuildSheetPlans(");
         commandPlannerSource.Should().NotContain("FindOverwriteTargets(");
         commandPlannerSource.Should().NotContain(

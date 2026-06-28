@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -7,229 +8,89 @@ public static class ExcelWorksheetNavigationPlanner
 {
     public static bool TryToggleEndMode(Key key, ModifierKeys modifiers, bool current, out bool next)
     {
-        next = current;
-        if (key != Key.End || modifiers != ModifierKeys.None)
-            return false;
-
-        next = !current;
-        return true;
+        return FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.TryToggleEndMode(
+            MapKey(key),
+            MapModifiers(modifiers),
+            current,
+            out next);
     }
 
     public static bool ShouldUseDataBoundary(Key key, ModifierKeys modifiers, bool endMode) =>
-        key is Key.Up or Key.Down or Key.Left or Key.Right &&
-        (endMode
-            ? modifiers is ModifierKeys.None or ModifierKeys.Shift
-            : modifiers is ModifierKeys.Control or (ModifierKeys.Control | ModifierKeys.Shift));
+        FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(
+            MapKey(key),
+            MapModifiers(modifiers),
+            endMode);
 
     public static bool ShouldHandleWorksheetNavigationKey(
         Key key,
         Key systemKey,
         ModifierKeys modifiers,
-        bool endMode)
-    {
-        var effectiveKey = key == Key.None || key == Key.System ? systemKey : key;
-        return effectiveKey switch
-        {
-            Key.Up or Key.Down or Key.Left or Key.Right =>
-                endMode
-                    ? modifiers is ModifierKeys.None or ModifierKeys.Shift
-                    : modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Control or
-                        (ModifierKeys.Control | ModifierKeys.Shift),
-            Key.Home =>
-                modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Control or
-                    (ModifierKeys.Control | ModifierKeys.Shift),
-            Key.End =>
-                modifiers is ModifierKeys.Control or (ModifierKeys.Control | ModifierKeys.Shift),
-            Key.PageUp or Key.PageDown =>
-                modifiers is ModifierKeys.None or ModifierKeys.Shift or ModifierKeys.Alt or
-                    (ModifierKeys.Alt | ModifierKeys.Shift),
-            Key.Enter or Key.Tab =>
-                modifiers is ModifierKeys.None or ModifierKeys.Shift,
-            _ => false
-        };
-    }
+        bool endMode) =>
+        FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.ShouldHandleWorksheetNavigationKey(
+            MapKey(key),
+            MapKey(systemKey),
+            MapModifiers(modifiers),
+            endMode);
 
     public static CellAddress? GetHorizontalPageTarget(
         Key key,
         Key systemKey,
         ModifierKeys modifiers,
         CellAddress current,
-        int pageSize)
-    {
-        if (modifiers is not ModifierKeys.Alt and not (ModifierKeys.Alt | ModifierKeys.Shift))
-            return null;
-
-        var effectiveKey = key is Key.None or Key.System ? systemKey : key;
-        return effectiveKey switch
-        {
-            Key.PageDown => new CellAddress(
-                current.Sheet,
-                current.Row,
-                Math.Min(current.Col + (uint)Math.Max(1, pageSize), CellAddress.MaxCol)),
-            Key.PageUp => new CellAddress(
-                current.Sheet,
-                current.Row,
-                (uint)Math.Max(1, (int)current.Col - Math.Max(1, pageSize))),
-            _ => null
-        };
-    }
+        int pageSize) =>
+        FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
+            MapKey(key),
+            MapKey(systemKey),
+            MapModifiers(modifiers),
+            current,
+            pageSize);
 
     public static CellAddress FindVerticalDataBoundary(Sheet? sheet, CellAddress current, int rowDirection)
-    {
-        var startFull = CellHasData(sheet, current.Row, current.Col);
-        if (!startFull)
-            return FindVerticalDataBoundaryFromBlank(sheet, current, rowDirection);
-
-        var row = current.Row;
-        while (true)
-        {
-            var next = (long)row + rowDirection;
-            if (next is < 1 or > CellAddress.MaxRow)
-                break;
-
-            var nextRow = (uint)next;
-            var nextFull = CellHasData(sheet, nextRow, current.Col);
-            if (startFull && !nextFull && row == current.Row)
-            {
-                return FindVerticalDataBoundaryFromBlank(
-                    sheet,
-                    new CellAddress(current.Sheet, nextRow, current.Col),
-                    rowDirection);
-            }
-
-            if (startFull && !nextFull)
-                break;
-
-            row = nextRow;
-            if (!startFull && nextFull)
-                break;
-        }
-
-        return new CellAddress(current.Sheet, row, current.Col);
-    }
+        => FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+            sheet,
+            current,
+            rowDirection);
 
     public static CellAddress FindHorizontalDataBoundary(Sheet? sheet, CellAddress current, int columnDirection)
-    {
-        var startFull = CellHasData(sheet, current.Row, current.Col);
-        if (!startFull)
-            return FindHorizontalDataBoundaryFromBlank(sheet, current, columnDirection);
-
-        var column = current.Col;
-        while (true)
-        {
-            var next = (long)column + columnDirection;
-            if (next is < 1 or > CellAddress.MaxCol)
-                break;
-
-            var nextColumn = (uint)next;
-            var nextFull = CellHasData(sheet, current.Row, nextColumn);
-            if (startFull && !nextFull && column == current.Col)
-            {
-                return FindHorizontalDataBoundaryFromBlank(
-                    sheet,
-                    new CellAddress(current.Sheet, current.Row, nextColumn),
-                    columnDirection);
-            }
-
-            if (startFull && !nextFull)
-                break;
-
-            column = nextColumn;
-            if (!startFull && nextFull)
-                break;
-        }
-
-        return new CellAddress(current.Sheet, current.Row, column);
-    }
+        => FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(
+            sheet,
+            current,
+            columnDirection);
 
     public static CellAddress GetCtrlEndCell(Sheet? sheet, SheetId sheetId)
+        => FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, sheetId);
+
+    internal static ExcelWorksheetNavigationModifiers MapModifiers(ModifierKeys modifiers)
     {
-        var usedRangeEnd = sheet?.GetUsedRange()?.End;
-        return usedRangeEnd ?? new CellAddress(sheetId, 1, 1);
+        var mapped = ExcelWorksheetNavigationModifiers.None;
+
+        if ((modifiers & ModifierKeys.Shift) != 0)
+            mapped |= ExcelWorksheetNavigationModifiers.Shift;
+        if ((modifiers & ModifierKeys.Control) != 0)
+            mapped |= ExcelWorksheetNavigationModifiers.Control;
+        if ((modifiers & ModifierKeys.Alt) != 0)
+            mapped |= ExcelWorksheetNavigationModifiers.Alt;
+        if ((modifiers & ModifierKeys.Windows) != 0)
+            mapped |= ExcelWorksheetNavigationModifiers.Windows;
+
+        return mapped;
     }
 
-    private static bool CellHasData(Sheet? sheet, uint row, uint col)
-    {
-        if (sheet is null)
-            return false;
-
-        var value = sheet.GetValue(new CellAddress(sheet.Id, row, col));
-        return value is not null and not BlankValue;
-    }
-
-    private static CellAddress FindVerticalDataBoundaryFromBlank(Sheet? sheet, CellAddress current, int rowDirection)
-    {
-        if (sheet is null)
-            return new CellAddress(
-                current.Sheet,
-                rowDirection > 0 ? CellAddress.MaxRow : 1,
-                current.Col);
-
-        uint? targetRow = null;
-        foreach (var address in sheet.EnumerateValueBearingCells())
+    private static ExcelWorksheetNavigationKey MapKey(Key key) =>
+        key switch
         {
-            if (address.Col != current.Col)
-                continue;
-
-            if (rowDirection > 0)
-            {
-                if (address.Row <= current.Row)
-                    continue;
-
-                if (targetRow is null || address.Row < targetRow.Value)
-                    targetRow = address.Row;
-            }
-            else
-            {
-                if (address.Row >= current.Row)
-                    continue;
-
-                if (targetRow is null || address.Row > targetRow.Value)
-                    targetRow = address.Row;
-            }
-        }
-
-        return new CellAddress(
-            current.Sheet,
-            targetRow ?? (rowDirection > 0 ? CellAddress.MaxRow : 1),
-            current.Col);
-    }
-
-    private static CellAddress FindHorizontalDataBoundaryFromBlank(Sheet? sheet, CellAddress current, int columnDirection)
-    {
-        if (sheet is null)
-            return new CellAddress(
-                current.Sheet,
-                current.Row,
-                columnDirection > 0 ? CellAddress.MaxCol : 1);
-
-        uint? targetColumn = null;
-        foreach (var address in sheet.EnumerateValueBearingCells())
-        {
-            if (address.Row != current.Row)
-                continue;
-
-            if (columnDirection > 0)
-            {
-                if (address.Col <= current.Col)
-                    continue;
-
-                if (targetColumn is null || address.Col < targetColumn.Value)
-                    targetColumn = address.Col;
-            }
-            else
-            {
-                if (address.Col >= current.Col)
-                    continue;
-
-                if (targetColumn is null || address.Col > targetColumn.Value)
-                    targetColumn = address.Col;
-            }
-        }
-
-        return new CellAddress(
-            current.Sheet,
-            current.Row,
-            targetColumn ?? (columnDirection > 0 ? CellAddress.MaxCol : 1));
-    }
+            Key.None => ExcelWorksheetNavigationKey.None,
+            Key.System => ExcelWorksheetNavigationKey.System,
+            Key.Up => ExcelWorksheetNavigationKey.Up,
+            Key.Down => ExcelWorksheetNavigationKey.Down,
+            Key.Left => ExcelWorksheetNavigationKey.Left,
+            Key.Right => ExcelWorksheetNavigationKey.Right,
+            Key.Home => ExcelWorksheetNavigationKey.Home,
+            Key.End => ExcelWorksheetNavigationKey.End,
+            Key.PageUp => ExcelWorksheetNavigationKey.PageUp,
+            Key.PageDown => ExcelWorksheetNavigationKey.PageDown,
+            Key.Enter => ExcelWorksheetNavigationKey.Enter,
+            Key.Tab => ExcelWorksheetNavigationKey.Tab,
+            _ => ExcelWorksheetNavigationKey.Other
+        };
 }

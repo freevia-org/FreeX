@@ -198,7 +198,7 @@ public static class TextToColumnsApplyPlanner
         if (sheet is null)
             return null;
 
-        var sheetRange = RemapRangeToSheet(sourceRange, sheet.Id);
+        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(sourceRange, sheet.Id);
         var destination = RemapDestination(result.Destination ?? sourceRange.Start, sheet.Id);
         var edits = result.SplitMode == TextToColumnsSplitMode.FixedWidth
             ? BuildFixedWidthEdits(
@@ -220,11 +220,6 @@ public static class TextToColumnsApplyPlanner
 
         return new TextToColumnsSheetApplyPlan(sheet.Id, sheetRange, destination, edits);
     }
-
-    private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
-        new(
-            new CellAddress(sheetId, range.Start.Row, range.Start.Col),
-            new CellAddress(sheetId, range.End.Row, range.End.Col));
 
     private static CellAddress RemapDestination(CellAddress destination, SheetId sheetId) =>
         new(sheetId, destination.Row, destination.Col);
