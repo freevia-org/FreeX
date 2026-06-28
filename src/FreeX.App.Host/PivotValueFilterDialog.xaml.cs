@@ -1,27 +1,18 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public partial class PivotValueFilterDialog : Window
 {
-    private static readonly (string Label, PivotValueFilterKind Kind, bool UsesCount)[] Options =
-    [
-        (UiText.Get("PivotValueFilter_Top"), PivotValueFilterKind.Top, true),
-        (UiText.Get("PivotValueFilter_Bottom"), PivotValueFilterKind.Bottom, true),
-        (UiText.Get("PivotValueFilter_GreaterThan"), PivotValueFilterKind.GreaterThan, false),
-        (UiText.Get("PivotValueFilter_GreaterThanOrEqual"), PivotValueFilterKind.GreaterThanOrEqual, false),
-        (UiText.Get("PivotValueFilter_LessThan"), PivotValueFilterKind.LessThan, false),
-        (UiText.Get("PivotValueFilter_LessThanOrEqual"), PivotValueFilterKind.LessThanOrEqual, false),
-        (UiText.Get("PivotValueFilter_Equals"), PivotValueFilterKind.Equals, false),
-        (UiText.Get("PivotValueFilter_DoesNotEqual"), PivotValueFilterKind.DoesNotEqual, false),
-        (UiText.Get("PivotValueFilter_Between"), PivotValueFilterKind.Between, false),
-        (UiText.Get("PivotValueFilter_NotBetween"), PivotValueFilterKind.NotBetween, false),
-        (UiText.Get("PivotValueFilter_AboveAverage"), PivotValueFilterKind.AboveAverage, false),
-        (UiText.Get("PivotValueFilter_BelowAverage"), PivotValueFilterKind.BelowAverage, false)
-    ];
+    private static readonly (string Label, PivotValueFilterKind Kind)[] Options =
+        PivotFieldFilterPlanner.ValueFilterKinds
+            .Select(option => (UiText.Get(option.ResourceKey), option.Kind))
+            .ToArray();
 
     private readonly int _sourceFieldIndex;
     private readonly int _dataFieldIndex;
@@ -43,50 +34,43 @@ public partial class PivotValueFilterDialog : Window
     {
         if (filter is null)
         {
-            ValueFilterKindBox.SelectedIndex = 2;
-            ValueFilterValueBox.Text = "0";
+            ValueFilterKindBox.SelectedIndex = PivotFieldFilterPlanner.DefaultValueKindIndex;
+            ValueFilterValueBox.Text = PivotFieldFilterPlanner.DefaultValueFilterPrimaryText;
             return;
         }
 
-        ValueFilterKindBox.SelectedIndex = 2;
-        for (var index = 0; index < Options.Length; index++)
-        {
-            if (Options[index].Kind == filter.Kind)
-            {
-                ValueFilterKindBox.SelectedIndex = index;
-                break;
-            }
-        }
-
-        ValueFilterValueBox.Text = Options[Math.Max(0, ValueFilterKindBox.SelectedIndex)].UsesCount
-            ? filter.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : (filter.ComparisonValue ?? 0).ToString("0.########", System.Globalization.CultureInfo.InvariantCulture);
-        ValueFilterValue2Box.Text = filter.ComparisonValue2?.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        ValueFilterKindBox.SelectedIndex = PivotFieldFilterPlanner.FindValueKindIndex(filter.Kind);
+        ValueFilterValueBox.Text = PivotFieldFilterPlanner.PrimaryInputText(filter, CultureInfo.InvariantCulture);
+        ValueFilterValue2Box.Text = PivotFieldFilterPlanner.SecondaryInputText(filter, CultureInfo.InvariantCulture);
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
         var option = Options[Math.Max(0, ValueFilterKindBox.SelectedIndex)];
-        if (!PivotValueFilterInputParser.TryCreateFilter(
-                option.Kind,
-                option.UsesCount,
-                ValueFilterValueBox.Text,
-                ValueFilterValue2Box.Text,
+        if (!PivotFieldFilterPlanner.TryCreateValueFilter(
                 _sourceFieldIndex,
                 _dataFieldIndex,
+                option.Kind,
+                ValueFilterValueBox.Text,
+                ValueFilterValue2Box.Text,
+                CultureInfo.InvariantCulture,
                 out var filter,
                 out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("PivotValueFilter_InvalidValueMessage"), UiText.Get("PivotValueFilter_ValueFilter"));
+            var errorPlan = PivotFieldFilterPlanner.DescribeValueFilterValidationError(error);
+            DialogMessageHelper.ShowWarning(
+                this,
+                errorPlan is null ? UiText.Get("PivotValueFilter_InvalidValueMessage") : UiText.Get(errorPlan.ResourceKey),
+                UiText.Get("PivotValueFilter_ValueFilter"));
             FocusInvalidValueFilterInput(error);
             return;
         }
 
-        ResultFilter = filter;
+        ResultFilter = filter!;
         DialogResult = true;
     }
 
-    private (string Label, PivotValueFilterKind Kind, bool UsesCount) GetSelectedOption() =>
+    private (string Label, PivotValueFilterKind Kind) GetSelectedOption() =>
         Options[Math.Max(0, ValueFilterKindBox.SelectedIndex)];
 
     private void ValueFilterKindBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
@@ -95,9 +79,8 @@ public partial class PivotValueFilterDialog : Window
     private void UpdateValueInputState()
     {
         var option = GetSelectedOption();
-        var usesPrimaryValue = option.UsesCount ||
-            option.Kind is not (PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage);
-        var usesSecondValue = option.Kind is PivotValueFilterKind.Between or PivotValueFilterKind.NotBetween;
+        var usesPrimaryValue = PivotFieldFilterPlanner.ValueKindNeedsPrimaryInput(option.Kind);
+        var usesSecondValue = PivotFieldFilterPlanner.ValueKindNeedsSecondValue(option.Kind);
 
         SetInputState(ValueFilterValueLabel, ValueFilterValueBox, usesPrimaryValue);
         SetInputState(ValueFilterValue2Label, ValueFilterValue2Box, usesSecondValue);
@@ -117,9 +100,9 @@ public partial class PivotValueFilterDialog : Window
         Keyboard.Focus(ValueFilterKindBox);
     }
 
-    private void FocusInvalidValueFilterInput(string? error)
+    private void FocusInvalidValueFilterInput(PivotValueFilterValidationError error)
     {
-        var target = string.Equals(error, UiText.Get("PivotValueFilter_NumericEndingComparisonMessage"), StringComparison.Ordinal)
+        var target = error == PivotValueFilterValidationError.NumericSecondValueRequired
             ? ValueFilterValue2Box
             : ValueFilterValueBox;
         target.Focus();
