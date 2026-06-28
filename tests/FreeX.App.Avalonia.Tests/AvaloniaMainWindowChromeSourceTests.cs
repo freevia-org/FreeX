@@ -31,22 +31,28 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void QuickAnalysisShell_UsesSharedActionPlanning()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs"));
-        var plannerSource = File.ReadAllText(RepoFile(
+        var actionPlannerSource = File.ReadAllText(RepoFile(
             "src",
             "FreeX.App.Presentation",
             "QuickAnalysis",
             "QuickAnalysisShellActionPlanner.cs"));
+        var operationPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisHostOperationPlanner.cs"));
 
-        source.Should().Contain("var action = item.Action;");
+        source.Should().Contain("var operation = QuickAnalysisHostOperationPlanner.Plan(item);");
         source.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
-        source.Should().Contain("action.ConditionalFormatPreset is { } preset");
+        source.Should().Contain("operation.ConditionalFormatPreset is { } preset");
         source.Should().NotContain("TryMapQuickAnalysisConditionalFormatPreset(");
-        source.Should().Contain("QuickAnalysisShellActionKind.ApplyConditionalFormat");
-        source.Should().Contain("QuickAnalysisShellActionKind.Deferred");
+        source.Should().Contain("QuickAnalysisHostOperationKind.ApplyConditionalFormat");
+        source.Should().Contain("QuickAnalysisHostOperationKind.Deferred");
         source.Should().NotContain("IsQuickAnalysisAutoSumFunction(");
         source.Should().NotContain("QuickAnalysisCommandKind.PivotTable");
-        plannerSource.Should().Contain("This total is not yet available on {capabilities.DeferredPlatformName}.");
-        plannerSource.Should().Contain("Converting to a PivotTable is not yet available on {capabilities.DeferredPlatformName}.");
+        actionPlannerSource.Should().Contain("This total is not yet available on {capabilities.DeferredPlatformName}.");
+        actionPlannerSource.Should().Contain("Converting to a PivotTable is not yet available on {capabilities.DeferredPlatformName}.");
+        operationPlannerSource.Should().Contain("QuickAnalysisHostOperationKind.ApplyConditionalFormat");
     }
 
     [Fact]

@@ -147,44 +147,48 @@ public partial class MainWindow
         if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;
 
-        var action = item.Action;
-        switch (action.Kind)
+        var operation = QuickAnalysisHostOperationPlanner.Plan(item);
+        switch (operation.Kind)
         {
-            case QuickAnalysisShellActionKind.OpenConditionalFormatDialog
-                when action.ConditionalFormatDialogTitle is { } title:
+            case QuickAnalysisHostOperationKind.OpenConditionalFormatDialog
+                when operation.ConditionalFormatDialogTitle is { } title:
                 ShowCfDialog(title);
                 break;
-            case QuickAnalysisShellActionKind.ClearConditionalFormatting:
+            case QuickAnalysisHostOperationKind.ClearConditionalFormatting:
                 CfClearRulesMenuItem_Click(sender, e);
                 break;
-            case QuickAnalysisShellActionKind.InsertChart when action.ChartType is { } chartType:
+            case QuickAnalysisHostOperationKind.InsertChart when operation.ChartType is { } chartType:
                 InsertChartOfType(chartType);
                 break;
-            case QuickAnalysisShellActionKind.OpenChartPicker:
+            case QuickAnalysisHostOperationKind.OpenChartPicker:
                 InsertChartPickerBtn_Click(sender, e);
                 break;
-            case QuickAnalysisShellActionKind.InsertAggregateTotalFormula
-                when !string.IsNullOrWhiteSpace(action.TotalFunction):
+            case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula
+                when !string.IsNullOrWhiteSpace(operation.TotalFunction):
                 InsertQuickAnalysisTotalFormulas(
-                    range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, action.TotalFunction),
-                    $"Quick Analysis {item.Label}");
+                    range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, operation.TotalFunction),
+                    operation.TotalCommandTitle ?? "Quick Analysis Total");
                 break;
-            case QuickAnalysisShellActionKind.InsertPercentTotalFormula:
-                InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildPercentTotalEdits, "Quick Analysis % Total");
+            case QuickAnalysisHostOperationKind.InsertPercentTotalFormula:
+                InsertQuickAnalysisTotalFormulas(
+                    QuickAnalysisTotalsPlanner.BuildPercentTotalEdits,
+                    operation.TotalCommandTitle ?? "Quick Analysis % Total");
                 break;
-            case QuickAnalysisShellActionKind.InsertRunningTotalFormula:
-                InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildRunningTotalEdits, "Quick Analysis Running Total");
+            case QuickAnalysisHostOperationKind.InsertRunningTotalFormula:
+                InsertQuickAnalysisTotalFormulas(
+                    QuickAnalysisTotalsPlanner.BuildRunningTotalEdits,
+                    operation.TotalCommandTitle ?? "Quick Analysis Running Total");
                 break;
-            case QuickAnalysisShellActionKind.CreateTable:
+            case QuickAnalysisHostOperationKind.CreateTable:
                 TableBtn_Click(sender, e);
                 break;
-            case QuickAnalysisShellActionKind.CreatePivotTable:
+            case QuickAnalysisHostOperationKind.CreatePivotTable:
                 PivotTableBtn_Click(sender, e);
                 break;
-            case QuickAnalysisShellActionKind.InsertSparkline when action.SparklineDialogKind is { } sparklineDialogKind:
+            case QuickAnalysisHostOperationKind.InsertSparkline when operation.SparklineDialogKind is { } sparklineDialogKind:
                 InsertQuickAnalysisSparkline(sparklineDialogKind);
                 break;
-            case QuickAnalysisShellActionKind.Deferred when action.DeferredNote is { } note:
+            case QuickAnalysisHostOperationKind.Deferred when operation.DeferredNote is { } note:
                 StatusReadyText.Text = note;
                 break;
         }
