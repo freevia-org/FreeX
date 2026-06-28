@@ -1,7 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public static class SelectionStyleCommandPlanner
 {
@@ -31,7 +31,7 @@ public static class SelectionStyleCommandPlanner
                 ? new GroupedApplyStyleCommand(targetSheetIds, range, diff)
                 : new ApplyStyleCommand(
                     targetSheetIds[0],
-                    GroupedSheetRangePlanner.RemapRangeToSheet(range, targetSheetIds[0]),
+                    StyleSelectionRangePlanner.RemapRangeToSheet(range, targetSheetIds[0]),
                     diff));
         }
 
@@ -68,7 +68,7 @@ public static class SelectionStyleCommandPlanner
         foreach (var sheetId in targetSheetIds)
         {
             foreach (var range in ranges)
-                commands.Add(createCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId)));
+                commands.Add(createCommand(sheetId, StyleSelectionRangePlanner.RemapRangeToSheet(range, sheetId)));
         }
 
         return ToCommand(title, commands);
@@ -80,10 +80,6 @@ public static class SelectionStyleCommandPlanner
         Func<GridRange, CellAddress, StyleDiff> createDiff,
         Workbook? workbook = null)
     {
-        // Clamp the dense cell iteration to the used-range zone when a workbook is available.
-        // For whole-column or whole-row border selections this prevents building millions of
-        // single-cell commands.  The createDiff function still receives the full original range
-        // so that edge/interior border decisions remain correct.
         var iterRange = range;
         if (workbook is not null && targetSheetIds.Count > 0)
         {

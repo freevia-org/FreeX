@@ -721,8 +721,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "",
             "MainWindow.RibbonDeclarative.cs",
-            "MainWindow.HomeFormatting.cs",
-            "HomeNumberFormatDropdownPlanner.cs")
+            "MainWindow.HomeFormatting.cs")
+            + DialogSourceTestSupport.ReadAppServicesSource("HomeNumberFormatDropdownPlanner.cs")
             + DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberFormatPlanner.cs");
 
         source.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
@@ -1237,7 +1237,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("ApplyRangeBorderPreset");
         source.Should().Contain("SelectionStyleCommandPlanner.CreatePerCellStyleCommand");
-        var plannerSource = DialogSourceTestSupport.ReadHostSources("SelectionStyleCommandPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("SelectionStyleCommandPlanner.cs");
         plannerSource.Should().Contain("new CompositeWorkbookCommand(title, commands)");
         plannerSource.Should().Contain("MergeCompleteRectangularBands");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");

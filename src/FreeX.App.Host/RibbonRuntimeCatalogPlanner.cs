@@ -1,5 +1,6 @@
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.ThemeUI;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 

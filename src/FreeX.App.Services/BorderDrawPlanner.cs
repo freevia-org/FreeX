@@ -1,7 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public enum BorderDrawMode
 {
@@ -23,7 +23,7 @@ public static class BorderDrawPlanner
         if (mode == BorderDrawMode.None)
             throw new ArgumentException("Border draw mode must be active.", nameof(mode));
 
-        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+        var sheetRange = StyleSelectionRangePlanner.RemapRangeToSheet(range, sheetId);
         return mode == BorderDrawMode.Draw
             ? CreateDrawBorderCommand(sheetId, sheetRange, style, color)
             : new BorderDrawWorkbookCommand(

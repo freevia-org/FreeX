@@ -1,8 +1,8 @@
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
-internal sealed record HomeNumberFormatDropdownOption(string Label, string? Code, bool OpensFormatCellsDialog = false);
+public sealed record HomeNumberFormatDropdownOption(string Label, string? Code, bool OpensFormatCellsDialog = false);
 
-internal static class HomeNumberFormatDropdownPlanner
+public static class HomeNumberFormatDropdownPlanner
 {
     public const string AccountingNumberFormatCode = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)";
     public const string CommaStyleNumberFormatCode = "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)";
