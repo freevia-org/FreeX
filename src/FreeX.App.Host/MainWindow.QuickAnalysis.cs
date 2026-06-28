@@ -39,6 +39,10 @@ public partial class MainWindow
             return;
         }
 
+        var shellPlan = QuickAnalysisShellPlanner.BuildMenuPlan(
+            displayModel,
+            QuickAnalysisShellCapabilities.DialogBacked,
+            range);
         _preserveQuickAnalysisUnsupportedStatus = false;
         CloseQuickAnalysisMenu();
         var menu = new ContextMenu
@@ -67,14 +71,14 @@ public partial class MainWindow
             _suppressNextQuickAnalysisClosedStatusReset = false;
         };
 
-        foreach (var group in displayModel.Groups)
+        foreach (var group in shellPlan.Groups)
         {
             if (menu.Items.Count > 0)
                 menu.Items.Add(new Separator());
 
             menu.Items.Add(new MenuItem
             {
-                Header = QuickAnalysisShellPlanner.GroupTitleFallback(group.Group),
+                Header = group.TitleFallback,
                 IsEnabled = false
             });
 
@@ -84,7 +88,7 @@ public partial class MainWindow
                 {
                     Header = item.Label,
                     Tag = item,
-                    ToolTip = item.PreviewText,
+                    ToolTip = item.ToolTip,
                     Icon = QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)
                 };
                 menuItem.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
@@ -140,10 +144,10 @@ public partial class MainWindow
 
     private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisDisplayItem item })
+        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
             return;
 
-        var action = QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DialogBacked);
+        var action = item.Action;
         switch (action.Kind)
         {
             case QuickAnalysisShellActionKind.OpenConditionalFormatDialog
@@ -235,13 +239,13 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisPreview(object sender)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisDisplayItem item } ||
-            SheetGrid.SelectedRange is not { } range)
+        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item } ||
+            SheetGrid.SelectedRange is null)
         {
             return;
         }
 
-        var preview = QuickAnalysisPlanner.BuildHoverPreview(range, item);
+        var preview = item.HoverPreview;
         _preserveQuickAnalysisUnsupportedStatus = false;
         ApplyQuickAnalysisPreview(
             preview.Range,

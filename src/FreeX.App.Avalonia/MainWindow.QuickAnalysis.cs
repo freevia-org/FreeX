@@ -18,8 +18,8 @@ public sealed partial class MainWindow
     /// <summary>
     /// Opens the Quick Analysis popup for the current multi-cell selection. The selection is described by
     /// the UI-free <see cref="QuickAnalysisSelectionReader"/>, then turned into grouped display items by the
-    /// portable <see cref="QuickAnalysisModelBuilder"/>. Each item is a button wired through
-    /// <see cref="QuickAnalysisCommandRouter"/> to an existing shell command path; the few items
+    /// portable <see cref="QuickAnalysisModelBuilder"/>. Each item is materialized by the shared
+    /// <see cref="QuickAnalysisShellPlanner"/> and rendered as a native button; the few items
     /// without a shell command (PivotTable, running/percent totals) stay visible but report that they are
     /// not yet available.
     /// </summary>
@@ -44,6 +44,10 @@ public sealed partial class MainWindow
             return;
         }
 
+        var shellPlan = QuickAnalysisShellPlanner.BuildMenuPlan(
+            displayModel,
+            QuickAnalysisShellCapabilities.DirectApplyLimited,
+            range);
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_QaDialogTitle"),
@@ -57,11 +61,11 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "QuickAnalysisDialog");
 
         var groupsPanel = new StackPanel { Spacing = 14 };
-        foreach (var group in displayModel.Groups)
+        foreach (var group in shellPlan.Groups)
         {
             groupsPanel.Children.Add(new TextBlock
             {
-                Text = UiText.Get(QuickAnalysisShellPlanner.GroupTitleResourceKey(group.Group)),
+                Text = UiText.Get(group.TitleResourceKey),
                 Foreground = HeaderForeground,
                 FontWeight = FontWeight.SemiBold,
             });
@@ -76,7 +80,7 @@ public sealed partial class MainWindow
                     MinWidth = 116,
                     Margin = new Thickness(0, 0, 8, 8),
                 };
-                AutomationProperties.SetAutomationId(button, $"QuickAnalysis_{item.Id}");
+                AutomationProperties.SetAutomationId(button, item.AutomationId);
                 button.Click += (_, _) =>
                 {
                     dialog.Close();
@@ -136,12 +140,12 @@ public sealed partial class MainWindow
     /// command; the remaining deferred suggestions (PivotTable, running/percent totals) report a status note
     /// without changing the workbook.
     /// </summary>
-    private void ApplyQuickAnalysisItem(QuickAnalysisDisplayItem item)
+    private void ApplyQuickAnalysisItem(QuickAnalysisShellItemPlan item)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var action = QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited);
+        var action = item.Action;
         switch (action.Kind)
         {
             case QuickAnalysisShellActionKind.ApplyConditionalFormat
