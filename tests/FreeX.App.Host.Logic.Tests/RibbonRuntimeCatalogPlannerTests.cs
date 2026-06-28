@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using FluentAssertions;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.ThemeUI;
 
 namespace FreeX.App.Host.Tests;
@@ -87,7 +88,7 @@ public sealed class RibbonRuntimeCatalogPlannerTests
             .Be(ConditionalFormatPresetGalleryPlanner.DataBarOptions.Count);
         Surface(surfaces, "Conditional Formatting Color Scales").ItemCount.Should()
             .Be(ConditionalFormatPresetGalleryPlanner.ColorScaleOptions.Count);
-        Surface(surfaces, "Conditional Formatting Icon Sets").ItemCount.Should().Be(ConditionalFormatIconSetPlanner.Options.Count);
+        Surface(surfaces, "Conditional Formatting Icon Sets").ItemCount.Should().Be(ConditionalFormatIconSetCatalog.GalleryOptions.Count);
         Surface(surfaces, "Themes").ItemCount.Should().Be(
             WorkbookThemeCatalog.ThemePresets.Count +
             WorkbookThemeCatalog.ColorPresets.Count +

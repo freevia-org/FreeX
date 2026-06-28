@@ -34,24 +34,52 @@ public sealed class ConditionalFormatDedupSourceTests
     }
 
     [Fact]
-    public void ConditionalFormatPresetGalleryPlanner_StaysHostLocalizationFacade()
+    public void ConditionalFormatGalleryPlanners_AreSharedAndWpfLocalizesAtBindingEdges()
     {
-        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("ConditionalFormatPresetGalleryPlanner.cs");
-        var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var presetFacadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ConditionalFormatPresetGalleryPlanner.cs");
+        var iconSetFacadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ConditionalFormatIconSetPlanner.cs");
+        var mainWindowSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.HomeFormatting.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources(
+            "ConditionalFormatDialog.Catalog.cs",
+            "ConditionalFormatDialog.IconSets.cs",
+            "ConditionalFormatDialog.Result.cs");
+        var runtimeCatalogSource = DialogSourceTestSupport.ReadHostSourceFile("RibbonRuntimeCatalogPlanner.cs");
+        var presetPresentationSource = DialogSourceTestSupport.ReadPresentationSources(
             "ConditionalFormatting",
             "ConditionalFormatPresetGalleryPlanner.cs");
+        var iconSetPresentationSource = DialogSourceTestSupport.ReadPresentationSources(
+            "ConditionalFormatting",
+            "ConditionalFormatIconSetCatalog.cs");
 
-        hostSource.Should().Contain(
-            "using PresentationPlanner = FreeX.App.Presentation.ConditionalFormatting.ConditionalFormatPresetGalleryPlanner;");
-        hostSource.Should().Contain("UiText.Get(option.LabelKey)");
-        hostSource.Should().Contain("PresentationPlanner.CreateDataBarRule(style, range)");
-        hostSource.Should().Contain("PresentationPlanner.CreateColorScaleRule(style, range)");
+        File.Exists(presetFacadePath)
+            .Should()
+            .BeFalse("WPF should bind the shared preset gallery planner directly instead of carrying a host facade");
+        File.Exists(iconSetFacadePath)
+            .Should()
+            .BeFalse("WPF should bind the shared icon-set gallery planner directly instead of carrying a host facade");
 
-        hostSource.Should().NotContain("DataBar(\"GradientBlue\"");
-        hostSource.Should().NotContain("ColorScale(\"GreenYellowRed\"");
-        presentationSource.Should().Contain("DataBar(\"GradientBlue\"");
-        presentationSource.Should().Contain("ColorScale(\"GreenYellowRed\"");
-        presentationSource.Should().NotContain("UiText.Get(");
+        mainWindowSource.Should().Contain("using FreeX.App.Presentation.ConditionalFormatting;");
+        mainWindowSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateDataBarRule(style, range)");
+        mainWindowSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateColorScaleRule(style, range)");
+        mainWindowSource.Should().Contain("ConditionalFormatIconSetCatalog.CreateRule(style, range)");
+        mainWindowSource.Should().Contain("UiText.Get(group.CategoryKey)");
+        mainWindowSource.Should().Contain("UiText.Get(option.LabelKey)");
+
+        dialogSource.Should().Contain("ConditionalFormatIconSetCatalog.GalleryOptions");
+        dialogSource.Should().Contain("ConditionalFormatIconSetCatalog.CreateThresholds(cf.IconSetStyle)");
+        dialogSource.Should().Contain("UiText.Get(option.LabelKey)");
+
+        runtimeCatalogSource.Should().Contain("nameof(ConditionalFormatIconSetCatalog)");
+        runtimeCatalogSource.Should().Contain("UiText.Get(group.CategoryKey)");
+        runtimeCatalogSource.Should().Contain("UiText.Get(option.LabelKey)");
+
+        presetPresentationSource.Should().Contain("DataBar(\"GradientBlue\"");
+        presetPresentationSource.Should().Contain("ColorScale(\"GreenYellowRed\"");
+        presetPresentationSource.Should().NotContain("UiText.Get(");
+
+        iconSetPresentationSource.Should().Contain("GalleryOption(\"3Arrows\"");
+        iconSetPresentationSource.Should().Contain("CreateRule(string? style, GridRange range)");
+        iconSetPresentationSource.Should().NotContain("UiText.Get(");
     }
-
 }

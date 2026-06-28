@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.ThemeUI;
 
 namespace FreeX.App.Host;
@@ -75,8 +76,8 @@ internal static class RibbonRuntimeCatalogPlanner
             nameof(ConditionalFormatPresetGalleryPlanner),
             ConditionalFormatPresetGalleryPlanner.DataBarGroups
                 .Select(group => new RibbonRuntimeCatalogGroup(
-                    group.Name,
-                    group.Options.Select(option => option.Label).ToArray()))
+                    UiText.Get(group.CategoryKey),
+                    group.Options.Select(option => UiText.Get(option.LabelKey)).ToArray()))
                 .ToArray());
 
     private static RibbonRuntimeCatalogSurface CreateConditionalFormattingColorScaleSurface() =>
@@ -88,8 +89,8 @@ internal static class RibbonRuntimeCatalogPlanner
             nameof(ConditionalFormatPresetGalleryPlanner),
             ConditionalFormatPresetGalleryPlanner.ColorScaleGroups
                 .Select(group => new RibbonRuntimeCatalogGroup(
-                    group.Name,
-                    group.Options.Select(option => option.Label).ToArray()))
+                    UiText.Get(group.CategoryKey),
+                    group.Options.Select(option => UiText.Get(option.LabelKey)).ToArray()))
                 .ToArray());
 
     private static RibbonRuntimeCatalogSurface CreateConditionalFormattingIconSetSurface() =>
@@ -98,11 +99,11 @@ internal static class RibbonRuntimeCatalogPlanner
             "Conditional Formatting Icon Sets",
             "Home",
             "Conditional Formatting",
-            nameof(ConditionalFormatIconSetPlanner),
-            ConditionalFormatIconSetPlanner.GalleryGroups
+            nameof(ConditionalFormatIconSetCatalog),
+            ConditionalFormatIconSetCatalog.GalleryGroups
                 .Select(group => new RibbonRuntimeCatalogGroup(
-                    group.Name,
-                    group.Options.Select(option => option.Label).ToArray()))
+                    UiText.Get(group.CategoryKey),
+                    group.Options.Select(option => UiText.Get(option.LabelKey)).ToArray()))
                 .ToArray());
 
     private static RibbonRuntimeCatalogSurface CreatePageLayoutThemeSurface() =>

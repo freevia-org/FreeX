@@ -17,6 +17,7 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
             "ConditionalFormatRuleBuilder.cs",
             "ConditionalFormatPresetFactory.cs",
             "ConditionalFormatPresetGalleryPlanner.cs",
+            "ConditionalFormatIconSetCatalog.cs",
             "ConditionalFormatDialogPlanner.cs"
         };
 
@@ -42,22 +43,35 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
     }
 
     [Fact]
-    public void HostConditionalFormatGallery_StaysLocalizationFacade()
+    public void HostConditionalFormatGallery_UsesSharedPlannersAndLocalizesAtBindingEdges()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
         var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
             ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
 
-        var hostSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ConditionalFormatPresetGalleryPlanner.cs"));
-        var presentationSource = File.ReadAllText(Path.Combine(presentationRoot, "ConditionalFormatting", "ConditionalFormatPresetGalleryPlanner.cs"));
+        var hostSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+        var presetPresentationSource = File.ReadAllText(Path.Combine(presentationRoot, "ConditionalFormatting", "ConditionalFormatPresetGalleryPlanner.cs"));
+        var iconSetPresentationSource = File.ReadAllText(Path.Combine(presentationRoot, "ConditionalFormatting", "ConditionalFormatIconSetCatalog.cs"));
 
-        hostSource.Should().Contain("using PresentationPlanner = FreeX.App.Presentation.ConditionalFormatting.ConditionalFormatPresetGalleryPlanner;");
         hostSource.Should().Contain("UiText.Get(option.LabelKey)");
-        hostSource.Should().Contain("PresentationPlanner.CreateDataBarRule(style, range)");
-        hostSource.Should().Contain("PresentationPlanner.CreateColorScaleRule(style, range)");
+        hostSource.Should().Contain("UiText.Get(group.CategoryKey)");
+        hostSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateDataBarRule(style, range)");
+        hostSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.CreateColorScaleRule(style, range)");
+        hostSource.Should().Contain("ConditionalFormatIconSetCatalog.CreateRule(style, range)");
 
-        presentationSource.Should().NotContain("UiText.Get(");
-        presentationSource.Should().Contain("ConditionalFormatDataBar_Category_GradientFill");
-        presentationSource.Should().Contain("CreateDataBarRule");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ConditionalFormatPresetGalleryPlanner.cs"))
+            .Should()
+            .BeFalse("the WPF host should bind shared preset gallery metadata directly instead of keeping a facade");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ConditionalFormatIconSetPlanner.cs"))
+            .Should()
+            .BeFalse("the WPF host should bind shared icon-set gallery metadata directly instead of keeping a facade");
+
+        presetPresentationSource.Should().NotContain("UiText.Get(");
+        presetPresentationSource.Should().Contain("ConditionalFormatDataBar_Category_GradientFill");
+        presetPresentationSource.Should().Contain("CreateDataBarRule");
+
+        iconSetPresentationSource.Should().NotContain("UiText.Get(");
+        iconSetPresentationSource.Should().Contain("ConditionalFormatIconSet_Category_Directional");
+        iconSetPresentationSource.Should().Contain("CreateRule");
     }
 }
