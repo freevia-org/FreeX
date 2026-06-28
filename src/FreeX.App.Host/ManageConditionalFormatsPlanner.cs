@@ -1,5 +1,6 @@
-using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
+using ConditionalFormatRuleMoveDirection = FreeX.App.Presentation.ConditionalFormatting.ConditionalFormatRuleMoveDirection;
+using PresentationPlanner = FreeX.App.Presentation.ConditionalFormatting.ManageConditionalFormatsPlanner;
 
 namespace FreeX.App.Host;
 
@@ -9,136 +10,43 @@ public static class ManageConditionalFormatsPlanner
         IReadOnlyList<ConditionalFormat> sheetRules,
         GridRange? selection,
         bool filterToSelection,
-        IReadOnlyList<ConditionalFormat> editedRules)
-    {
-        if (!filterToSelection || selection is null)
-            return Reprioritize(editedRules);
-
-        var result = new List<ConditionalFormat>();
-        var matchingRuleCount = sheetRules.Count(rule => RangesOverlap(rule.AppliesTo, selection.Value));
-        var editedRuleIndex = 0;
-
-        foreach (var rule in sheetRules)
-        {
-            if (!RangesOverlap(rule.AppliesTo, selection.Value))
-            {
-                result.Add(rule);
-                continue;
-            }
-
-            matchingRuleCount--;
-
-            if (editedRuleIndex < editedRules.Count)
-                result.Add(editedRules[editedRuleIndex++]);
-
-            if (matchingRuleCount == 0)
-            {
-                while (editedRuleIndex < editedRules.Count)
-                    result.Add(editedRules[editedRuleIndex++]);
-            }
-        }
-
-        while (editedRuleIndex < editedRules.Count)
-            result.Add(editedRules[editedRuleIndex++]);
-
-        return Reprioritize(result);
-    }
+        IReadOnlyList<ConditionalFormat> editedRules) =>
+        PresentationPlanner.BuildResultRules(sheetRules, selection, filterToSelection, editedRules);
 
     public static IReadOnlyList<ConditionalFormat> DuplicateRule(
         IReadOnlyList<ConditionalFormat> rules,
         Guid ruleId,
-        Guid? newId = null)
-    {
-        var result = Reprioritize(rules).ToList();
-        var index = FindRuleIndex(result, ruleId);
-        if (index < 0)
-            return result;
-
-        result.Insert(index + 1, CloneWithPriority(result[index], index + 2, newId ?? Guid.NewGuid()));
-        return Reprioritize(result);
-    }
+        Guid? newId = null) =>
+        PresentationPlanner.DuplicateRule(rules, ruleId, newId);
 
     public static IReadOnlyList<ConditionalFormat> ReplaceRule(
         IReadOnlyList<ConditionalFormat> rules,
-        ConditionalFormat editedRule)
-    {
-        var result = Reprioritize(rules).ToList();
-        var index = FindRuleIndex(result, editedRule.Id);
-        if (index < 0)
-            return result;
-
-        result[index] = CloneWithPriority(editedRule, index + 1);
-        return Reprioritize(result);
-    }
+        ConditionalFormat editedRule) =>
+        PresentationPlanner.ReplaceRule(rules, editedRule);
 
     public static IReadOnlyList<ConditionalFormat> DeleteRule(
         IReadOnlyList<ConditionalFormat> rules,
-        Guid ruleId)
-    {
-        return Reprioritize(rules.Where(rule => rule.Id != ruleId).ToList());
-    }
+        Guid ruleId) =>
+        PresentationPlanner.DeleteRule(rules, ruleId);
 
     public static IReadOnlyList<ConditionalFormat> MoveRule(
         IReadOnlyList<ConditionalFormat> rules,
         Guid ruleId,
-        ConditionalFormatRuleMoveDirection direction)
-    {
-        var result = Reprioritize(rules).ToList();
-        var index = FindRuleIndex(result, ruleId);
-        if (index < 0)
-            return result;
-
-        var target = direction == ConditionalFormatRuleMoveDirection.Up ? index - 1 : index + 1;
-        if (target < 0 || target >= result.Count)
-            return result;
-
-        (result[index], result[target]) = (result[target], result[index]);
-        return Reprioritize(result);
-    }
+        ConditionalFormatRuleMoveDirection direction) =>
+        PresentationPlanner.MoveRule(rules, ruleId, direction);
 
     public static IReadOnlyList<ConditionalFormat> ApplyRuleRange(
         IReadOnlyList<ConditionalFormat> rules,
         Guid ruleId,
-        GridRange range)
-    {
-        var result = Reprioritize(rules).ToList();
-        var index = FindRuleIndex(result, ruleId);
-        if (index < 0)
-            return result;
-
-        var updated = CloneWithPriority(result[index], index + 1);
-        updated.AppliesTo = range;
-        result[index] = updated;
-        return result;
-    }
-
-    private static int FindRuleIndex(IReadOnlyList<ConditionalFormat> rules, Guid ruleId)
-    {
-        for (var i = 0; i < rules.Count; i++)
-        {
-            if (rules[i].Id == ruleId)
-                return i;
-        }
-
-        return -1;
-    }
+        GridRange range) =>
+        PresentationPlanner.ApplyRuleRange(rules, ruleId, range);
 
     public static IReadOnlyList<ConditionalFormat> Reprioritize(IReadOnlyList<ConditionalFormat> rules) =>
-        rules.Select((rule, index) => CloneWithPriority(rule, index + 1)).ToList();
+        PresentationPlanner.Reprioritize(rules);
 
-    public static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority, Guid? id = null)
-    {
-        var cf = src.Clone(id);
-        cf.Priority = priority;
-        return cf;
-    }
+    public static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority, Guid? id = null) =>
+        PresentationPlanner.CloneWithPriority(src, priority, id);
 
-    public static bool RangesOverlap(GridRange a, GridRange b)
-    {
-        if (a.Start.Sheet != b.Start.Sheet)
-            return false;
-
-        return a.Start.Row <= b.End.Row && a.End.Row >= b.Start.Row
-            && a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
-    }
+    public static bool RangesOverlap(GridRange a, GridRange b) =>
+        PresentationPlanner.RangesOverlap(a, b);
 }
