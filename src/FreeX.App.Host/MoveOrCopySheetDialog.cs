@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -23,7 +24,9 @@ public sealed class MoveOrCopySheetDialog : Window
     {
         _sheetCount = workbook.Sheets.Count;
         var sourceIndex = FindSheetIndexOrZero(workbook, sourceSheetId);
-        var targets = BuildTargets(workbook).ToList();
+        var targets = MoveCopySheetPlanner.BuildTargets(
+            workbook.Sheets.Select(sheet => sheet.Name).ToArray(),
+            UiText.Get("MoveOrCopySheet_MoveToEnd"));
         Result = CreateResult(sourceIndex, createCopy: false, _sheetCount);
 
         Title = UiText.Get("MoveOrCopySheet_Title");
@@ -41,7 +44,8 @@ public sealed class MoveOrCopySheetDialog : Window
         AutomationProperties.SetHelpText(_bookBox, UiText.Get("MoveOrCopySheet_ToBookHelpText"));
 
         _beforeSheetBox.ItemsSource = targets;
-        _beforeSheetBox.SelectedItem = FindTargetOrLast(targets, sourceIndex);
+        _beforeSheetBox.DisplayMemberPath = nameof(MoveCopySheetTarget.DisplayName);
+        _beforeSheetBox.SelectedIndex = MoveCopySheetPlanner.InitialTargetIndex(targets, sourceIndex);
         _beforeSheetBox.SelectionMode = SelectionMode.Single;
         _beforeSheetBox.MinHeight = 112;
         AutomationProperties.SetName(_beforeSheetBox, UiText.Get("MoveOrCopySheet_BeforeSheetAutomationName"));
@@ -71,8 +75,11 @@ public sealed class MoveOrCopySheetDialog : Window
     public static MoveOrCopySheetDialogResult CreateResult(
         int insertBeforeIndex,
         bool createCopy,
-        int sheetCount) =>
-        new(Math.Clamp(insertBeforeIndex, 0, Math.Max(0, sheetCount)), createCopy);
+        int sheetCount)
+    {
+        var plan = MoveCopySheetPlanner.CreatePlan(insertBeforeIndex, createCopy, sheetCount);
+        return new(plan.InsertBeforeIndex, plan.CreateCopy);
+    }
 
     private static int FindSheetIndexOrZero(Workbook workbook, SheetId sourceSheetId)
     {
@@ -83,29 +90,6 @@ public sealed class MoveOrCopySheetDialog : Window
         }
 
         return 0;
-    }
-
-    private static MoveOrCopySheetTarget? FindTargetOrLast(IReadOnlyList<MoveOrCopySheetTarget> targets, int sourceIndex)
-    {
-        MoveOrCopySheetTarget? fallback = null;
-        for (var index = 0; index < targets.Count; index++)
-        {
-            var target = targets[index];
-            if (target.InsertBeforeIndex == sourceIndex)
-                return target;
-
-            fallback = target;
-        }
-
-        return fallback;
-    }
-
-    private static IEnumerable<MoveOrCopySheetTarget> BuildTargets(Workbook workbook)
-    {
-        for (var index = 0; index < workbook.Sheets.Count; index++)
-            yield return new MoveOrCopySheetTarget(workbook.Sheets[index].Name, index);
-
-        yield return new MoveOrCopySheetTarget(UiText.Get("MoveOrCopySheet_MoveToEnd"), workbook.Sheets.Count);
     }
 
     private UIElement CreateContent()
@@ -162,12 +146,12 @@ public sealed class MoveOrCopySheetDialog : Window
 
     private void UpdateButtonState()
     {
-        _okButton.IsEnabled = _beforeSheetBox.SelectedItem is MoveOrCopySheetTarget;
+        _okButton.IsEnabled = _beforeSheetBox.SelectedItem is MoveCopySheetTarget;
     }
 
     private bool Accept()
     {
-        if (_beforeSheetBox.SelectedItem is not MoveOrCopySheetTarget target)
+        if (_beforeSheetBox.SelectedItem is not MoveCopySheetTarget target)
             return false;
 
         Result = CreateResult(target.InsertBeforeIndex, _createCopyBox.IsChecked == true, _sheetCount);
@@ -181,8 +165,4 @@ public sealed class MoveOrCopySheetDialog : Window
             e.Handled = true;
     }
 
-    private sealed record MoveOrCopySheetTarget(string DisplayName, int InsertBeforeIndex)
-    {
-        public override string ToString() => DisplayName;
-    }
 }
