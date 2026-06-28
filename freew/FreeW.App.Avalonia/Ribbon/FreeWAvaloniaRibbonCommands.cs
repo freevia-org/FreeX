@@ -68,148 +68,148 @@ internal static class FreeWAvaloniaRibbonCommands
         mailMerge = new MailMergeEngine(editor, callbacks);
 
         // ── File ─────────────────────────────────────────────────────────────
-        r.Register("freew.backstage", new RelayCommand(callbacks.Backstage));
-        r.Register("freew.new",       new RelayCommand(callbacks.NewDocument));
-        r.Register("freew.open",      new RelayCommand(callbacks.Open));
-        r.Register("freew.save",      new RelayCommand(callbacks.Save));
+        r.Register("freew.backstage", new ActionRibbonCommand(callbacks.Backstage));
+        r.Register("freew.new",       new ActionRibbonCommand(callbacks.NewDocument));
+        r.Register("freew.open",      new ActionRibbonCommand(callbacks.Open));
+        r.Register("freew.save",      new ActionRibbonCommand(callbacks.Save));
 
         // ── Clipboard ────────────────────────────────────────────────────────
-        r.Register("freew.cut",   new RelayCommand(callbacks.Cut));
-        r.Register("freew.copy",  new RelayCommand(callbacks.Copy));
-        r.Register("freew.paste", new RelayCommand(callbacks.Paste));
+        r.Register("freew.cut",   new ActionRibbonCommand(callbacks.Cut));
+        r.Register("freew.copy",  new ActionRibbonCommand(callbacks.Copy));
+        r.Register("freew.paste", new ActionRibbonCommand(callbacks.Paste));
 
         // ── Font ─────────────────────────────────────────────────────────────
-        r.Register("freew.font-family", new RelayValueCommand(value =>
+        r.Register("freew.font-family", new ValueRibbonCommand(value =>
         {
             if (!string.IsNullOrWhiteSpace(value))
                 editor.SetSelectionFontFamily(value);
         }));
-        r.Register("freew.font-size", new RelayValueCommand(value =>
+        r.Register("freew.font-size", new ValueRibbonCommand(value =>
         {
             if (double.TryParse(value, System.Globalization.NumberStyles.Any,
                     System.Globalization.CultureInfo.InvariantCulture, out var pts) && pts > 0)
                 editor.SetSelectionFontSize(pts);
         }));
-        r.Register("freew.bold",            new RelayCommand(editor.ToggleBold));
-        r.Register("freew.italic",           new RelayCommand(editor.ToggleItalic));
-        r.Register("freew.underline",        new RelayCommand(editor.ToggleUnderline));
-        r.Register("freew.strikethrough",    new RelayCommand(editor.ToggleStrikethrough));
-        r.Register("freew.superscript",      new RelayCommand(editor.ToggleSuperscript));
-        r.Register("freew.subscript",        new RelayCommand(editor.ToggleSubscript));
-        r.Register("freew.highlight",        new RelayValueCommand(value => editor.SetHighlightColor(value)));
-        r.Register("freew.grow-font",        new RelayCommand(editor.GrowFont));
-        r.Register("freew.shrink-font",      new RelayCommand(editor.ShrinkFont));
-        r.Register("freew.clear-formatting", new RelayCommand(editor.ClearFormatting));
+        r.Register("freew.bold",            new ActionRibbonCommand(editor.ToggleBold));
+        r.Register("freew.italic",           new ActionRibbonCommand(editor.ToggleItalic));
+        r.Register("freew.underline",        new ActionRibbonCommand(editor.ToggleUnderline));
+        r.Register("freew.strikethrough",    new ActionRibbonCommand(editor.ToggleStrikethrough));
+        r.Register("freew.superscript",      new ActionRibbonCommand(editor.ToggleSuperscript));
+        r.Register("freew.subscript",        new ActionRibbonCommand(editor.ToggleSubscript));
+        r.Register("freew.highlight",        new ValueRibbonCommand(value => editor.SetHighlightColor(value)));
+        r.Register("freew.grow-font",        new ActionRibbonCommand(editor.GrowFont));
+        r.Register("freew.shrink-font",      new ActionRibbonCommand(editor.ShrinkFont));
+        r.Register("freew.clear-formatting", new ActionRibbonCommand(editor.ClearFormatting));
         // Font Color — the ribbon control is a Dropdown whose button click opens the colour flyout.
         // Each palette entry is its own command so the button never executes with a null value.
         // "freew.font-color" itself is registered as a no-op so the registry completeness check
         // (which checks every ribbon control's CommandId) continues to pass.
-        r.Register("freew.font-color", new RelayCommand(() => { /* flyout opener — no direct action */ }));
+        r.Register("freew.font-color", new ActionRibbonCommand(() => { /* flyout opener — no direct action */ }));
         RegisterFontColorPalette(r, editor);
 
-        r.Register("freew.change-case",   new RelayCommand(editor.ChangeCase));
+        r.Register("freew.change-case",   new ActionRibbonCommand(editor.ChangeCase));
         // Dialog launchers — open modal dialogs via shell callbacks (no direct editor method).
-        r.Register("freew.font-dialog",      new RelayCommand(callbacks.OpenFontDialog));
+        r.Register("freew.font-dialog",      new ActionRibbonCommand(callbacks.OpenFontDialog));
 
         // ── Paragraph ────────────────────────────────────────────────────────
-        r.Register("freew.bullets",          new RelayCommand(() => editor.ToggleList(ListKind.Bullet)));
-        r.Register("freew.numbering",        new RelayCommand(() => editor.ToggleList(ListKind.Number)));
-        r.Register("freew.align-left",       new RelayCommand(() => editor.SetAlignment(TextAlignment.Left)));
-        r.Register("freew.align-center",     new RelayCommand(() => editor.SetAlignment(TextAlignment.Center)));
-        r.Register("freew.align-right",      new RelayCommand(() => editor.SetAlignment(TextAlignment.Right)));
-        r.Register("freew.align-justify",    new RelayCommand(() => editor.SetAlignment(TextAlignment.Justify)));
-        r.Register("freew.increase-indent",  new RelayCommand(editor.IncreaseIndent));
-        r.Register("freew.decrease-indent",  new RelayCommand(editor.DecreaseIndent));
-        r.Register("freew.show-hide-para",   new RelayCommand(() => editor.ShowParagraphMarks = !editor.ShowParagraphMarks));
+        r.Register("freew.bullets",          new ActionRibbonCommand(() => editor.ToggleList(ListKind.Bullet)));
+        r.Register("freew.numbering",        new ActionRibbonCommand(() => editor.ToggleList(ListKind.Number)));
+        r.Register("freew.align-left",       new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Left)));
+        r.Register("freew.align-center",     new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Center)));
+        r.Register("freew.align-right",      new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Right)));
+        r.Register("freew.align-justify",    new ActionRibbonCommand(() => editor.SetAlignment(TextAlignment.Justify)));
+        r.Register("freew.increase-indent",  new ActionRibbonCommand(editor.IncreaseIndent));
+        r.Register("freew.decrease-indent",  new ActionRibbonCommand(editor.DecreaseIndent));
+        r.Register("freew.show-hide-para",   new ActionRibbonCommand(() => editor.ShowParagraphMarks = !editor.ShowParagraphMarks));
         // Paragraph spacing commands (value = points as an invariant-culture decimal string).
-        r.Register("freew.space-before",     new RelayValueCommand(value =>
+        r.Register("freew.space-before",     new ValueRibbonCommand(value =>
         {
             if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt))
                 editor.SetSpaceBefore(pt);
         }));
-        r.Register("freew.space-after",      new RelayValueCommand(value =>
+        r.Register("freew.space-after",      new ValueRibbonCommand(value =>
         {
             if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt))
                 editor.SetSpaceAfter(pt);
         }));
         // Line-spacing commands — value = multiplier for Multiple, pt for Exact/AtLeast.
-        r.Register("freew.line-spacing-1",    new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.0)));
-        r.Register("freew.line-spacing-115",  new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.15)));
-        r.Register("freew.line-spacing-15",   new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
-        r.Register("freew.line-spacing-2",    new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 2.0)));
+        r.Register("freew.line-spacing-1",    new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.0)));
+        r.Register("freew.line-spacing-115",  new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.15)));
+        r.Register("freew.line-spacing-15",   new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
+        r.Register("freew.line-spacing-2",    new ActionRibbonCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 2.0)));
         // Paragraph dialog launcher.
-        r.Register("freew.paragraph-dialog",  new RelayCommand(callbacks.OpenParagraphDialog));
+        r.Register("freew.paragraph-dialog",  new ActionRibbonCommand(callbacks.OpenParagraphDialog));
 
         // ── Styles (AV-STYLES) ────────────────────────────────────────────────
         // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
         // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
-        r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyNamedStyle("Normal")));
-        r.Register("freew.style-heading1", new RelayCommand(() => editor.ApplyNamedStyle("Heading1")));
-        r.Register("freew.style-heading2", new RelayCommand(() => editor.ApplyNamedStyle("Heading2")));
-        r.Register("freew.style-heading3", new RelayCommand(() => editor.ApplyNamedStyle("Heading3")));
-        r.Register("freew.style-title",    new RelayCommand(() => editor.ApplyNamedStyle("Title")));
+        r.Register("freew.style-normal",   new ActionRibbonCommand(() => editor.ApplyNamedStyle("Normal")));
+        r.Register("freew.style-heading1", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading1")));
+        r.Register("freew.style-heading2", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading2")));
+        r.Register("freew.style-heading3", new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading3")));
+        r.Register("freew.style-title",    new ActionRibbonCommand(() => editor.ApplyNamedStyle("Title")));
 
         // Styles gallery dropdown — opener no-op; one freew.style.<id> command per built-in style applies
         // that named style (paragraph styles set StyleId; character styles overlay run formatting).
-        r.Register("freew.styles-gallery", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.styles-gallery", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         RegisterStyleGalleryCommands(r, editor);
 
         // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
-        r.Register("freew.style-clear", new RelayCommand(editor.ClearParagraphStyle));
+        r.Register("freew.style-clear", new ActionRibbonCommand(editor.ClearParagraphStyle));
 
         // ── Editing ──────────────────────────────────────────────────────────
-        r.Register("freew.undo",              new RelayCommand(editor.Undo));
-        r.Register("freew.redo",              new RelayCommand(editor.Redo));
-        r.Register("freew.select-all",        new RelayCommand(editor.SelectAll));
-        r.Register("freew.find-replace-dialog", new RelayCommand(callbacks.OpenFindReplaceDialog));
+        r.Register("freew.undo",              new ActionRibbonCommand(editor.Undo));
+        r.Register("freew.redo",              new ActionRibbonCommand(editor.Redo));
+        r.Register("freew.select-all",        new ActionRibbonCommand(editor.SelectAll));
+        r.Register("freew.find-replace-dialog", new ActionRibbonCommand(callbacks.OpenFindReplaceDialog));
 
         // ── Insert ───────────────────────────────────────────────────────────
         // AV-INSERT: Insert-tab depth. Table dropdown (default + sized presets), page break, picture
         // (file-picker via host callback), shape, text box, and a symbol palette.
-        r.Register("freew.insert-table", new RelayCommand(() => editor.InsertTable(3, 3)));
+        r.Register("freew.insert-table", new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
         // Table size presets (dropdown items). The top-level "freew.table" id opens the menu (no-op).
-        r.Register("freew.table", new RelayCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.table-2x2", new RelayCommand(() => editor.InsertTable(2, 2)));
-        r.Register("freew.table-3x3", new RelayCommand(() => editor.InsertTable(3, 3)));
-        r.Register("freew.table-4x4", new RelayCommand(() => editor.InsertTable(4, 4)));
-        r.Register("freew.table-5x2", new RelayCommand(() => editor.InsertTable(2, 5)));
+        r.Register("freew.table", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.table-2x2", new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
+        r.Register("freew.table-3x3", new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
+        r.Register("freew.table-4x4", new ActionRibbonCommand(() => editor.InsertTable(4, 4)));
+        r.Register("freew.table-5x2", new ActionRibbonCommand(() => editor.InsertTable(2, 5)));
 
         // Page break — empty paragraph forcing a page break before it, after the caret block.
-        r.Register("freew.page-break", new RelayCommand(editor.InsertPageBreak));
+        r.Register("freew.page-break", new ActionRibbonCommand(editor.InsertPageBreak));
 
         // Picture — open a file picker, load the bytes, insert as an inline image (host callback).
-        r.Register("freew.picture", new RelayCommand(callbacks.InsertPicture));
+        r.Register("freew.picture", new ActionRibbonCommand(callbacks.InsertPicture));
 
         // Shape / Text Box — floating drawing objects at the caret.
-        r.Register("freew.shape",    new RelayCommand(editor.InsertShape));
-        r.Register("freew.text-box", new RelayCommand(editor.InsertTextBox));
+        r.Register("freew.shape",    new ActionRibbonCommand(editor.InsertShape));
+        r.Register("freew.text-box", new ActionRibbonCommand(editor.InsertTextBox));
 
         // Symbol — palette dropdown; the opener is a no-op and each glyph is its own sub-command.
-        r.Register("freew.symbol", new RelayCommand(() => { /* flyout opener */ }));
+        r.Register("freew.symbol", new ActionRibbonCommand(() => { /* flyout opener */ }));
         RegisterSymbolPalette(r, editor);
 
         // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
-        r.Register("freew.header", new RelayCommand(editor.EnsureHeader));
-        r.Register("freew.footer", new RelayCommand(editor.EnsureFooter));
+        r.Register("freew.header", new ActionRibbonCommand(editor.EnsureHeader));
+        r.Register("freew.footer", new ActionRibbonCommand(editor.EnsureFooter));
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
         RegisterInsertDepth2Commands(r, editor, callbacks);
 
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
-        r.Register("freew.table-header-row",  new RelayCommand(editor.ToggleTableHeaderRow));
-        r.Register("freew.table-banded-rows", new RelayCommand(editor.ToggleBandedRows));
+        r.Register("freew.table-header-row",  new ActionRibbonCommand(editor.ToggleTableHeaderRow));
+        r.Register("freew.table-banded-rows", new ActionRibbonCommand(editor.ToggleBandedRows));
 
         // Table shading: apply a quick neutral fill. Full color picker is deferred.
-        r.Register("freew.table-shading", new RelayCommand(() => editor.SetCellShading("#D9D9D9")));
+        r.Register("freew.table-shading", new ActionRibbonCommand(() => editor.SetCellShading("#D9D9D9")));
 
         // Borders dropdown — opener no-op; sub-commands apply specific edges.
-        r.Register("freew.table-borders", new RelayCommand(() => { /* flyout opener */ }));
+        r.Register("freew.table-borders", new ActionRibbonCommand(() => { /* flyout opener */ }));
         RegisterTableBorderCommands(r, editor);
 
         // ── Table Layout contextual tab ───────────────────────────────────────
         // Selection helpers.
-        r.Register("freew.table-select-table", new RelayCommand(() =>
+        r.Register("freew.table-select-table", new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
             {
@@ -219,7 +219,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.SetCellBlockSelection(cc.TableBlock, 0, 0, lastRow, lastGridCol);
             }
         }));
-        r.Register("freew.table-select-row", new RelayCommand(() =>
+        r.Register("freew.table-select-row", new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
             {
@@ -227,7 +227,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.SetCellBlockSelection(cc.TableBlock, cc.Row, 0, cc.Row, lastGridCol);
             }
         }));
-        r.Register("freew.table-select-col", new RelayCommand(() =>
+        r.Register("freew.table-select-col", new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
             {
@@ -235,28 +235,28 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.SetCellBlockSelection(cc.TableBlock, 0, cc.Col, lastRow, cc.Col);
             }
         }));
-        r.Register("freew.table-select-cell", new RelayCommand(() =>
+        r.Register("freew.table-select-cell", new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
                 editor.SetCellBlockSelection(cc.TableBlock, cc.Row, cc.Col, cc.Row, cc.Col);
         }));
 
         // Row / column mutations.
-        r.Register("freew.table-insert-above",     new RelayCommand(editor.InsertTableRowAbove));
-        r.Register("freew.table-insert-below",     new RelayCommand(editor.InsertTableRowBelow));
-        r.Register("freew.table-insert-col-left",  new RelayCommand(editor.InsertTableColumnLeft));
-        r.Register("freew.table-insert-col-right", new RelayCommand(editor.InsertTableColumnRight));
-        r.Register("freew.table-delete-row",       new RelayCommand(editor.DeleteTableRow));
-        r.Register("freew.table-delete-col",       new RelayCommand(editor.DeleteTableColumn));
-        r.Register("freew.table-delete",           new RelayCommand(() =>
+        r.Register("freew.table-insert-above",     new ActionRibbonCommand(editor.InsertTableRowAbove));
+        r.Register("freew.table-insert-below",     new ActionRibbonCommand(editor.InsertTableRowBelow));
+        r.Register("freew.table-insert-col-left",  new ActionRibbonCommand(editor.InsertTableColumnLeft));
+        r.Register("freew.table-insert-col-right", new ActionRibbonCommand(editor.InsertTableColumnRight));
+        r.Register("freew.table-delete-row",       new ActionRibbonCommand(editor.DeleteTableRow));
+        r.Register("freew.table-delete-col",       new ActionRibbonCommand(editor.DeleteTableColumn));
+        r.Register("freew.table-delete",           new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
                 editor.DeleteTableBlock(cc.TableBlock);
         }));
 
         // Merge / split.
-        r.Register("freew.table-merge-cells", new RelayCommand(editor.MergeSelectedCells));
-        r.Register("freew.table-split-cell",  new RelayCommand(() => editor.SplitCurrentCell()));
+        r.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
+        r.Register("freew.table-split-cell",  new ActionRibbonCommand(() => editor.SplitCurrentCell()));
 
         // Cell alignment — 9 = 3 vertical (Top/Center/Bottom) × 3 horizontal (Left/Center/Right).
         // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).
@@ -264,51 +264,51 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
-        r.Register("freew.page-setup-dialog",   new RelayCommand(callbacks.OpenPageSetupDialog));
+        r.Register("freew.page-setup-dialog",   new ActionRibbonCommand(callbacks.OpenPageSetupDialog));
         // Toggle orientation (portrait ↔ landscape).
-        r.Register("freew.page-orientation",    new RelayCommand(callbacks.ToggleOrientation));
+        r.Register("freew.page-orientation",    new ActionRibbonCommand(callbacks.ToggleOrientation));
         // Margin presets.
-        r.Register("freew.page-margins-normal", new RelayCommand(() => callbacks.ApplyMarginPreset("normal")));
-        r.Register("freew.page-margins-narrow", new RelayCommand(() => callbacks.ApplyMarginPreset("narrow")));
-        r.Register("freew.page-margins-wide",   new RelayCommand(() => callbacks.ApplyMarginPreset("wide")));
+        r.Register("freew.page-margins-normal", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("normal")));
+        r.Register("freew.page-margins-narrow", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("narrow")));
+        r.Register("freew.page-margins-wide",   new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("wide")));
         // Quick paper-size selectors.
-        r.Register("freew.page-size-letter",    new RelayCommand(() => callbacks.ApplyPaperSize("letter")));
-        r.Register("freew.page-size-a4",        new RelayCommand(() => callbacks.ApplyPaperSize("a4")));
+        r.Register("freew.page-size-letter",    new ActionRibbonCommand(() => callbacks.ApplyPaperSize("letter")));
+        r.Register("freew.page-size-a4",        new ActionRibbonCommand(() => callbacks.ApplyPaperSize("a4")));
 
         // ── View ─────────────────────────────────────────────────────────────
-        r.Register("freew.printlayout",       new RelayCommand(callbacks.SetPrintLayout));
-        r.Register("freew.weblayout",         new RelayCommand(callbacks.SetWebLayout));
-        r.Register("freew.draftview",         new RelayCommand(callbacks.SetDraftView));
-        r.Register("freew.navigationpane",    new RelayCommand(callbacks.ToggleNavigationPane));
-        r.Register("freew.reveal-formatting", new RelayCommand(callbacks.ToggleRevealFormatting));
-        r.Register("freew.zoom-in",           new RelayCommand(() => callbacks.ApplyZoom(null, +0.1)));
-        r.Register("freew.zoom-out",          new RelayCommand(() => callbacks.ApplyZoom(null, -0.1)));
-        r.Register("freew.zoom-100",          new RelayCommand(() => callbacks.ApplyZoom(1.0, 0)));
+        r.Register("freew.printlayout",       new ActionRibbonCommand(callbacks.SetPrintLayout));
+        r.Register("freew.weblayout",         new ActionRibbonCommand(callbacks.SetWebLayout));
+        r.Register("freew.draftview",         new ActionRibbonCommand(callbacks.SetDraftView));
+        r.Register("freew.navigationpane",    new ActionRibbonCommand(callbacks.ToggleNavigationPane));
+        r.Register("freew.reveal-formatting", new ActionRibbonCommand(callbacks.ToggleRevealFormatting));
+        r.Register("freew.zoom-in",           new ActionRibbonCommand(() => callbacks.ApplyZoom(null, +0.1)));
+        r.Register("freew.zoom-out",          new ActionRibbonCommand(() => callbacks.ApplyZoom(null, -0.1)));
+        r.Register("freew.zoom-100",          new ActionRibbonCommand(() => callbacks.ApplyZoom(1.0, 0)));
         // AV-VIEW: Zoom dialog (presets + custom %) and layout gridlines / ruler toggles.
         // The three Window/Zoom-dialog callbacks are optional on RibbonHostCallbacks (default null so
         // test call sites stay terse); fall back to a safe no-op when the shell didn't supply one.
-        r.Register("freew.zoom-dialog",       new RelayCommand(callbacks.OpenZoomDialog ?? (() => { })));
-        r.Register("freew.view-gridlines",    new RelayCommand(() => editor.ShowGridlines = !editor.ShowGridlines));
-        r.Register("freew.view-ruler",        new RelayCommand(() => editor.ShowRuler = !editor.ShowRuler));
+        r.Register("freew.zoom-dialog",       new ActionRibbonCommand(callbacks.OpenZoomDialog ?? (() => { })));
+        r.Register("freew.view-gridlines",    new ActionRibbonCommand(() => editor.ShowGridlines = !editor.ShowGridlines));
+        r.Register("freew.view-ruler",        new ActionRibbonCommand(() => editor.ShowRuler = !editor.ShowRuler));
         // AV-VIEW: Window group — new window + split (shell callbacks; may note "deferred" in the status bar).
-        r.Register("freew.new-window",        new RelayCommand(callbacks.NewWindow ?? (() => { })));
-        r.Register("freew.split",             new RelayCommand(callbacks.ToggleSplit ?? (() => { })));
+        r.Register("freew.new-window",        new ActionRibbonCommand(callbacks.NewWindow ?? (() => { })));
+        r.Register("freew.split",             new ActionRibbonCommand(callbacks.ToggleSplit ?? (() => { })));
 
         // ── Review ───────────────────────────────────────────────────────────
-        r.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
+        r.Register("freew.reviewingpane", new ActionRibbonCommand(callbacks.ToggleReviewingPane));
         // AV-REVIEW: Track Changes toggle (flag only — keystroke-level recording is deferred; turning the
         // current selection into a tracked change is available via DocumentView.MarkSelectionAsRevision).
-        r.Register("freew.track-changes", new RelayCommand(() => editor.ToggleTrackChanges()));
+        r.Register("freew.track-changes", new ActionRibbonCommand(() => editor.ToggleTrackChanges()));
         // Accept / reject — current revision (at/after caret) and all, undoable + re-render.
-        r.Register("freew.accept-change", new RelayCommand(() => editor.AcceptCurrentRevision()));
-        r.Register("freew.reject-change", new RelayCommand(() => editor.RejectCurrentRevision()));
-        r.Register("freew.accept-all",    new RelayCommand(() => editor.AcceptAllRevisions()));
-        r.Register("freew.reject-all",    new RelayCommand(() => editor.RejectAllRevisions()));
+        r.Register("freew.accept-change", new ActionRibbonCommand(() => editor.AcceptCurrentRevision()));
+        r.Register("freew.reject-change", new ActionRibbonCommand(() => editor.RejectCurrentRevision()));
+        r.Register("freew.accept-all",    new ActionRibbonCommand(() => editor.AcceptAllRevisions()));
+        r.Register("freew.reject-all",    new ActionRibbonCommand(() => editor.RejectAllRevisions()));
         // Comments — new comment over the selection / delete the comment at the caret.
-        r.Register("freew.new-comment",    new RelayCommand(() => editor.NewComment()));
-        r.Register("freew.delete-comment", new RelayCommand(() => editor.DeleteCommentAtCaret()));
+        r.Register("freew.new-comment",    new ActionRibbonCommand(() => editor.NewComment()));
+        r.Register("freew.delete-comment", new ActionRibbonCommand(() => editor.DeleteCommentAtCaret()));
         // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
-        r.Register("freew.word-count", new RelayCommand(callbacks.OpenWordCountDialog));
+        r.Register("freew.word-count", new ActionRibbonCommand(callbacks.OpenWordCountDialog));
 
         // ── References (AV-REF) ──────────────────────────────────────────────
         RegisterReferencesCommands(r, editor);
@@ -339,7 +339,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // Maps command-id suffix → CSS hex colour (null = automatic/default).
         // Colours chosen to match Word's standard palette.
         static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
-            reg.Register(id, new RelayCommand(() => ed.SetFontColor(hex)));
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetFontColor(hex)));
 
         Add(r, editor, "freew.font-color.automatic", null);
         Add(r, editor, "freew.font-color.black",     "#000000");
@@ -372,7 +372,7 @@ internal static class FreeWAvaloniaRibbonCommands
         foreach (var descriptor in BuiltInStyles.Gallery)
         {
             var id = descriptor.Id;
-            r.Register(StyleCommandId(id), new RelayCommand(() => editor.ApplyNamedStyle(id)));
+            r.Register(StyleCommandId(id), new ActionRibbonCommand(() => editor.ApplyNamedStyle(id)));
         }
     }
 
@@ -391,7 +391,7 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void RegisterSymbolPalette(RibbonCommandRegistry r, DocumentView editor)
     {
         foreach (var (id, glyph, _) in Symbols)
-            r.Register(id, new RelayCommand(() => editor.InsertSymbol(glyph)));
+            r.Register(id, new ActionRibbonCommand(() => editor.InsertSymbol(glyph)));
     }
 
     /// <summary>
@@ -407,46 +407,46 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         // ── Links ────────────────────────────────────────────────────────────
         // Hyperlink / Bookmark open small dialogs (shell callbacks) that call InsertHyperlink / InsertBookmark.
-        r.Register("freew.insert-hyperlink", new RelayCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
-        r.Register("freew.insert-bookmark",  new RelayCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+        r.Register("freew.insert-hyperlink", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
+        r.Register("freew.insert-bookmark",  new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
 
         // ── Cover Page ───────────────────────────────────────────────────────
         // The top-level dropdown opener is a no-op; each preset prepends a cover-page block layout.
-        r.Register("freew.cover-page",         new RelayCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.cover-page.default", new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Default)));
-        r.Register("freew.cover-page.banded",  new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Banded)));
-        r.Register("freew.cover-page.motion",  new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Motion)));
+        r.Register("freew.cover-page",         new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.cover-page.default", new ActionRibbonCommand(() => editor.InsertCoverPage(CoverPagePreset.Default)));
+        r.Register("freew.cover-page.banded",  new ActionRibbonCommand(() => editor.InsertCoverPage(CoverPagePreset.Banded)));
+        r.Register("freew.cover-page.motion",  new ActionRibbonCommand(() => editor.InsertCoverPage(CoverPagePreset.Motion)));
 
         // ── Drop Cap ─────────────────────────────────────────────────────────
         // Dropped / In Margin both enlarge the leading letter (the in-margin float geometry is an
         // approximation — render-deferred); None clears the paragraph's run formatting.
-        r.Register("freew.drop-cap",           new RelayCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.drop-cap.dropped",   new RelayCommand(() => editor.ApplyDropCap()));
-        r.Register("freew.drop-cap.in-margin", new RelayCommand(() => editor.ApplyDropCap()));
-        r.Register("freew.drop-cap.none",      new RelayCommand(editor.ClearDropCap));
+        r.Register("freew.drop-cap",           new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.drop-cap.dropped",   new ActionRibbonCommand(() => editor.ApplyDropCap()));
+        r.Register("freew.drop-cap.in-margin", new ActionRibbonCommand(() => editor.ApplyDropCap()));
+        r.Register("freew.drop-cap.none",      new ActionRibbonCommand(editor.ClearDropCap));
 
         // ── Quick Parts ──────────────────────────────────────────────────────
         // Document-property / date fields insert directly; the snippet entry opens a dialog (shell callback).
-        r.Register("freew.quick-parts",         new RelayCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.quick-parts.title",   new RelayCommand(() => editor.InsertField(RunFieldKind.Title)));
-        r.Register("freew.quick-parts.author",  new RelayCommand(() => editor.InsertField(RunFieldKind.Author)));
-        r.Register("freew.quick-parts.subject", new RelayCommand(() => editor.InsertField(RunFieldKind.Subject)));
-        r.Register("freew.quick-parts.date",    new RelayCommand(() => editor.InsertField(RunFieldKind.Date)));
-        r.Register("freew.quick-parts.snippet", new RelayCommand(callbacks.OpenQuickPartDialog ?? (() => { })));
+        r.Register("freew.quick-parts",         new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.quick-parts.title",   new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Title)));
+        r.Register("freew.quick-parts.author",  new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Author)));
+        r.Register("freew.quick-parts.subject", new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Subject)));
+        r.Register("freew.quick-parts.date",    new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.Date)));
+        r.Register("freew.quick-parts.snippet", new ActionRibbonCommand(callbacks.OpenQuickPartDialog ?? (() => { })));
 
         // ── Equation ─────────────────────────────────────────────────────────
         // The opener no-op; each preset inserts an inline OMML equation (default = E=mc²).
-        r.Register("freew.equation",           new RelayCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.equation.default",   new RelayCommand(() => editor.InsertEquation()));
-        r.Register("freew.equation.fraction",  new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.Fraction("a", "b")]))));
-        r.Register("freew.equation.script",    new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
-        r.Register("freew.equation.radical",   new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.Radical("x")]))));
-        r.Register("freew.equation.integral",  new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
-        r.Register("freew.equation.summation", new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
+        r.Register("freew.equation",           new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.equation.default",   new ActionRibbonCommand(() => editor.InsertEquation()));
+        r.Register("freew.equation.fraction",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Fraction("a", "b")]))));
+        r.Register("freew.equation.script",    new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
+        r.Register("freew.equation.radical",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Radical("x")]))));
+        r.Register("freew.equation.integral",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
+        r.Register("freew.equation.summation", new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
 
         // ── Text from File ───────────────────────────────────────────────────
         // Opens a file picker (shell callback) and inserts the loaded document's text at the caret.
-        r.Register("freew.text-from-file", new RelayCommand(callbacks.InsertTextFromFile ?? (() => { })));
+        r.Register("freew.text-from-file", new ActionRibbonCommand(callbacks.InsertTextFromFile ?? (() => { })));
     }
 
     /// <summary>
@@ -457,7 +457,7 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void RegisterTableBorderCommands(RibbonCommandRegistry r, DocumentView editor)
     {
         static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, CellBorderEdges edges, bool clear = false) =>
-            reg.Register(id, new RelayCommand(() => ed.SetCellBorders(edges, clearEdges: clear)));
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetCellBorders(edges, clearEdges: clear)));
 
         Add(r, editor, "freew.table-borders.all",     CellBorderEdges.All);
         Add(r, editor, "freew.table-borders.outside", CellBorderEdges.Outside);
@@ -478,7 +478,7 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         static void Add(RibbonCommandRegistry reg, DocumentView ed, string id,
             TableCellVerticalAlignment vAlign, TextAlignment hAlign) =>
-            reg.Register(id, new RelayCommand(() => ed.SetCaretCellAlignment(vAlign, hAlign)));
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetCaretCellAlignment(vAlign, hAlign)));
 
         Add(r, editor, "freew.cell-align-top-left",       TableCellVerticalAlignment.Top,    TextAlignment.Left);
         Add(r, editor, "freew.cell-align-top-center",     TableCellVerticalAlignment.Top,    TextAlignment.Center);
@@ -508,26 +508,26 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void RegisterReferencesCommands(RibbonCommandRegistry r, DocumentView editor)
     {
         // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
-        r.Register("freew.insert-footnote", new RelayCommand(() => editor.InsertFootnote()));
-        r.Register("freew.insert-endnote",  new RelayCommand(() => editor.InsertEndnote()));
+        r.Register("freew.insert-footnote", new ActionRibbonCommand(() => editor.InsertFootnote()));
+        r.Register("freew.insert-endnote",  new ActionRibbonCommand(() => editor.InsertEndnote()));
 
         // Table of Contents — generate from the heading outline / regenerate in place.
-        r.Register("freew.insert-toc", new RelayCommand(editor.InsertTableOfContents));
-        r.Register("freew.update-toc", new RelayCommand(editor.UpdateTableOfContents));
+        r.Register("freew.insert-toc", new ActionRibbonCommand(editor.InsertTableOfContents));
+        r.Register("freew.update-toc", new ActionRibbonCommand(editor.UpdateTableOfContents));
 
         // Captions — auto-numbered Figure / Table caption paragraph after the caret block.
         // The top-level opener is a no-op; each label is its own command.
-        r.Register("freew.insert-caption",        new RelayCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.insert-caption.figure", new RelayCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
-        r.Register("freew.insert-caption.table",  new RelayCommand(() => editor.InsertCaption(CaptionLabel.Table)));
+        r.Register("freew.insert-caption",        new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.insert-caption.figure", new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
+        r.Register("freew.insert-caption.table",  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
 
         // Cross-reference — default to the first heading target (text reference, hyperlinked). A full
         // target-picker dialog is deferred; safely no-ops when the document has no headings.
-        r.Register("freew.cross-reference", new RelayCommand(() => InsertDefaultCrossReference(editor)));
+        r.Register("freew.cross-reference", new ActionRibbonCommand(() => InsertDefaultCrossReference(editor)));
 
         // Citations & Bibliography — in-text citation for the first source; back-matter bibliography block.
-        r.Register("freew.insert-citation", new RelayCommand(() => InsertDefaultCitation(editor)));
-        r.Register("freew.bibliography",    new RelayCommand(editor.InsertBibliography));
+        r.Register("freew.insert-citation", new ActionRibbonCommand(() => InsertDefaultCitation(editor)));
+        r.Register("freew.bibliography",    new ActionRibbonCommand(editor.InsertBibliography));
     }
 
     /// <summary>
@@ -572,34 +572,34 @@ internal static class FreeWAvaloniaRibbonCommands
         // Wrap modes (shared menu items, distinct ids per tab prefix).
         foreach (var prefix in new[] { "image", "shape" })
         {
-            r.Register($"freew.{prefix}-wrap",   new RelayCommand(() => { /* dropdown opener */ }));
-            r.Register($"freew.{prefix}-wrap-inline",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Inline)));
-            r.Register($"freew.{prefix}-wrap-square",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Square)));
-            r.Register($"freew.{prefix}-wrap-tight",      new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Tight)));
-            r.Register($"freew.{prefix}-wrap-top-bottom", new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.TopAndBottom)));
-            r.Register($"freew.{prefix}-wrap-behind",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Behind)));
-            r.Register($"freew.{prefix}-wrap-front",      new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.InFront)));
+            r.Register($"freew.{prefix}-wrap",   new ActionRibbonCommand(() => { /* dropdown opener */ }));
+            r.Register($"freew.{prefix}-wrap-inline",     new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.Inline)));
+            r.Register($"freew.{prefix}-wrap-square",     new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.Square)));
+            r.Register($"freew.{prefix}-wrap-tight",      new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.Tight)));
+            r.Register($"freew.{prefix}-wrap-top-bottom", new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.TopAndBottom)));
+            r.Register($"freew.{prefix}-wrap-behind",     new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.Behind)));
+            r.Register($"freew.{prefix}-wrap-front",      new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.InFront)));
 
             // Rotate / flip.
-            r.Register($"freew.{prefix}-rotate", new RelayCommand(() => { /* dropdown opener */ }));
-            r.Register($"freew.{prefix}-rotate-right90", new RelayCommand(() => editor.RotateSelectedFloating(+90)));
-            r.Register($"freew.{prefix}-rotate-left90",  new RelayCommand(() => editor.RotateSelectedFloating(-90)));
-            r.Register($"freew.{prefix}-flip-vertical",   new RelayCommand(() => editor.FlipSelectedFloating(horizontal: false)));
-            r.Register($"freew.{prefix}-flip-horizontal", new RelayCommand(() => editor.FlipSelectedFloating(horizontal: true)));
+            r.Register($"freew.{prefix}-rotate", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+            r.Register($"freew.{prefix}-rotate-right90", new ActionRibbonCommand(() => editor.RotateSelectedFloating(+90)));
+            r.Register($"freew.{prefix}-rotate-left90",  new ActionRibbonCommand(() => editor.RotateSelectedFloating(-90)));
+            r.Register($"freew.{prefix}-flip-vertical",   new ActionRibbonCommand(() => editor.FlipSelectedFloating(horizontal: false)));
+            r.Register($"freew.{prefix}-flip-horizontal", new ActionRibbonCommand(() => editor.FlipSelectedFloating(horizontal: true)));
 
             // Z-order.
-            r.Register($"freew.{prefix}-bring-to-front", new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringToFront)));
-            r.Register($"freew.{prefix}-send-to-back",   new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendToBack)));
-            r.Register($"freew.{prefix}-bring-forward",  new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringForward)));
-            r.Register($"freew.{prefix}-send-backward",  new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendBackward)));
+            r.Register($"freew.{prefix}-bring-to-front", new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringToFront)));
+            r.Register($"freew.{prefix}-send-to-back",   new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendToBack)));
+            r.Register($"freew.{prefix}-bring-forward",  new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringForward)));
+            r.Register($"freew.{prefix}-send-backward",  new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendBackward)));
 
             // Size — width/height combos (value = points as an invariant-culture decimal).
-            r.Register($"freew.{prefix}-width", new RelayValueCommand(value =>
+            r.Register($"freew.{prefix}-width", new ValueRibbonCommand(value =>
             {
                 if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0)
                     editor.SetFloatingWidth(pt);
             }));
-            r.Register($"freew.{prefix}-height", new RelayValueCommand(value =>
+            r.Register($"freew.{prefix}-height", new ValueRibbonCommand(value =>
             {
                 if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0)
                     editor.SetFloatingHeight(pt);
@@ -608,8 +608,8 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Shape Styles fill/outline — DEFERRED: no DocumentView setter for shape fill/outline yet.
         // Registered as safe no-op openers so the ribbon's registry-completeness guard passes.
-        r.Register("freew.shape-fill",    new RelayCommand(() => { /* deferred: shape fill edit */ }));
-        r.Register("freew.shape-outline", new RelayCommand(() => { /* deferred: shape outline edit */ }));
+        r.Register("freew.shape-fill",    new ActionRibbonCommand(() => { /* deferred: shape fill edit */ }));
+        r.Register("freew.shape-outline", new ActionRibbonCommand(() => { /* deferred: shape outline edit */ }));
     }
 
     /// <summary>
@@ -630,44 +630,44 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         // ── Chart Design ──────────────────────────────────────────────────────
         // Change Chart Type — dropdown opener + one command per ChartKind.
-        r.Register("freew.chart-type", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.chart-type", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (ChartKind kind in Enum.GetValues<ChartKind>())
         {
             var k = kind; // capture
             r.Register($"freew.chart-type-{k.ToString().ToLowerInvariant()}",
-                new RelayCommand(() => editor.SetChartType(k)));
+                new ActionRibbonCommand(() => editor.SetChartType(k)));
         }
 
         // Chart Styles — dropdown opener + one command per catalog style.
-        r.Register("freew.chart-style", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.chart-style", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (var style in ChartStyle.Catalog)
         {
             var s = style;
-            r.Register($"freew.chart-style-{s.Id}", new RelayCommand(() => editor.SetChartStyle(s.Id)));
+            r.Register($"freew.chart-style-{s.Id}", new ActionRibbonCommand(() => editor.SetChartStyle(s.Id)));
         }
 
         // Change Colors — dropdown opener + one command per catalog colour scheme.
-        r.Register("freew.chart-colors", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.chart-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (var scheme in ChartColorScheme.Catalog)
         {
             var sc = scheme;
-            r.Register($"freew.chart-colors-{sc.Id}", new RelayCommand(() => editor.SetChartColorScheme(sc.Id)));
+            r.Register($"freew.chart-colors-{sc.Id}", new ActionRibbonCommand(() => editor.SetChartColorScheme(sc.Id)));
         }
 
         // ── SmartArt Design ───────────────────────────────────────────────────
         // Layouts — the four Word families. Cycle maps to the model's Process kind (closest flat sequence).
-        r.Register("freew.smartart-layout", new RelayCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.smartart-layout-list",      new RelayCommand(() => editor.SetSmartArtLayout(SmartArtKind.List)));
-        r.Register("freew.smartart-layout-process",   new RelayCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
-        r.Register("freew.smartart-layout-cycle",     new RelayCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
-        r.Register("freew.smartart-layout-hierarchy", new RelayCommand(() => editor.SetSmartArtLayout(SmartArtKind.Hierarchy)));
+        r.Register("freew.smartart-layout", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.smartart-layout-list",      new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.List)));
+        r.Register("freew.smartart-layout-process",   new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
+        r.Register("freew.smartart-layout-cycle",     new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
+        r.Register("freew.smartart-layout-hierarchy", new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Hierarchy)));
 
         // Change Colors — reuse the chart colour-scheme catalog ids.
-        r.Register("freew.smartart-colors", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.smartart-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (var scheme in ChartColorScheme.Catalog)
         {
             var sc = scheme;
-            r.Register($"freew.smartart-colors-{sc.Id}", new RelayCommand(() => editor.SetSmartArtColor(sc.Id)));
+            r.Register($"freew.smartart-colors-{sc.Id}", new ActionRibbonCommand(() => editor.SetSmartArtColor(sc.Id)));
         }
     }
 
@@ -696,14 +696,14 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterMailingsCommands(RibbonCommandRegistry r, MailMergeEngine engine)
     {
-        r.Register("freew.select-recipients", new RelayCommand(engine.SelectRecipients));
-        r.Register("freew.merge-field",       new RelayCommand(engine.InsertMergeField));
-        r.Register("freew.address-block",     new RelayCommand(engine.InsertAddressBlock));
-        r.Register("freew.greeting-line",     new RelayCommand(engine.InsertGreetingLine));
-        r.Register("freew.preview-results",   new RelayCommand(engine.TogglePreview));
-        r.Register("freew.next-record",       new RelayCommand(engine.NextRecord));
-        r.Register("freew.prev-record",       new RelayCommand(engine.PreviousRecord));
-        r.Register("freew.finish-merge",      new RelayCommand(() => engine.FinishMerge()));
+        r.Register("freew.select-recipients", new ActionRibbonCommand(engine.SelectRecipients));
+        r.Register("freew.merge-field",       new ActionRibbonCommand(engine.InsertMergeField));
+        r.Register("freew.address-block",     new ActionRibbonCommand(engine.InsertAddressBlock));
+        r.Register("freew.greeting-line",     new ActionRibbonCommand(engine.InsertGreetingLine));
+        r.Register("freew.preview-results",   new ActionRibbonCommand(engine.TogglePreview));
+        r.Register("freew.next-record",       new ActionRibbonCommand(engine.NextRecord));
+        r.Register("freew.prev-record",       new ActionRibbonCommand(engine.PreviousRecord));
+        r.Register("freew.finish-merge",      new ActionRibbonCommand(() => engine.FinishMerge()));
     }
 
     /// <summary>
@@ -718,53 +718,53 @@ internal static class FreeWAvaloniaRibbonCommands
         RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
     {
         // ── Themes ───────────────────────────────────────────────────────────
-        r.Register("freew.theme", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.theme", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;
-            r.Register($"freew.theme.{t.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyTheme(t)));
+            r.Register($"freew.theme.{t.Name.ToLowerInvariant()}", new ActionRibbonCommand(() => editor.ApplyTheme(t)));
         }
 
         // ── Colors (palette only — preserves fonts) ──────────────────────────
-        r.Register("freew.theme-colors", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.theme-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;
-            r.Register($"freew.theme-colors.{t.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyThemeColors(t)));
+            r.Register($"freew.theme-colors.{t.Name.ToLowerInvariant()}", new ActionRibbonCommand(() => editor.ApplyThemeColors(t)));
         }
 
         // ── Fonts (heading/body pairing — preserves colours) ─────────────────
-        r.Register("freew.theme-fonts", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.theme-fonts", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (var fontSet in DocumentFontSet.Catalog)
         {
             var f = fontSet;
-            r.Register($"freew.theme-fonts.{f.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyDocumentFontSet(f)));
+            r.Register($"freew.theme-fonts.{f.Name.ToLowerInvariant()}", new ActionRibbonCommand(() => editor.ApplyDocumentFontSet(f)));
         }
 
         // ── Paragraph Spacing presets ────────────────────────────────────────
-        r.Register("freew.para-spacing", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.para-spacing", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
         {
             var s = spacingSet;
             r.Register($"freew.para-spacing.{FreeWRibbon.ParaSpacingId(s.Name)}",
-                new RelayCommand(() => editor.ApplyParagraphSpacingSet(s)));
+                new ActionRibbonCommand(() => editor.ApplyParagraphSpacingSet(s)));
         }
 
         // ── Page Color swatches (+ No Color) ─────────────────────────────────
-        r.Register("freew.page-color", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.page-color", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         RegisterPageColorPalette(r, editor);
 
         // ── Page Borders — dialog launcher (optional callback) ───────────────
-        r.Register("freew.page-borders", new RelayCommand(callbacks.OpenPageBordersDialog ?? (() => { })));
+        r.Register("freew.page-borders", new ActionRibbonCommand(callbacks.OpenPageBordersDialog ?? (() => { })));
 
         // ── Watermark — built-in presets + Custom (dialog) + Remove ──────────
-        r.Register("freew.watermark", new RelayCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.watermark.confidential", new RelayCommand(() => editor.SetWatermarkText("CONFIDENTIAL")));
-        r.Register("freew.watermark.do-not-copy",  new RelayCommand(() => editor.SetWatermarkText("DO NOT COPY")));
-        r.Register("freew.watermark.draft",        new RelayCommand(() => editor.SetWatermarkText("DRAFT")));
-        r.Register("freew.watermark.urgent",       new RelayCommand(() => editor.SetWatermarkText("URGENT")));
-        r.Register("freew.watermark.custom",       new RelayCommand(callbacks.OpenWatermarkDialog ?? (() => { })));
-        r.Register("freew.watermark.none",         new RelayCommand(() => editor.SetWatermark(null)));
+        r.Register("freew.watermark", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.watermark.confidential", new ActionRibbonCommand(() => editor.SetWatermarkText("CONFIDENTIAL")));
+        r.Register("freew.watermark.do-not-copy",  new ActionRibbonCommand(() => editor.SetWatermarkText("DO NOT COPY")));
+        r.Register("freew.watermark.draft",        new ActionRibbonCommand(() => editor.SetWatermarkText("DRAFT")));
+        r.Register("freew.watermark.urgent",       new ActionRibbonCommand(() => editor.SetWatermarkText("URGENT")));
+        r.Register("freew.watermark.custom",       new ActionRibbonCommand(callbacks.OpenWatermarkDialog ?? (() => { })));
+        r.Register("freew.watermark.none",         new ActionRibbonCommand(() => editor.SetWatermark(null)));
     }
 
     /// <summary>
@@ -775,7 +775,7 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void RegisterPageColorPalette(RibbonCommandRegistry r, DocumentView editor)
     {
         static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
-            reg.Register(id, new RelayCommand(() => ed.SetPageColor(hex)));
+            reg.Register(id, new ActionRibbonCommand(() => ed.SetPageColor(hex)));
 
         Add(r, editor, "freew.page-color.none",         null);
         Add(r, editor, "freew.page-color.white",        "#FFFFFF");

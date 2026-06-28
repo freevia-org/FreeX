@@ -484,9 +484,9 @@ public sealed class MainWindow : Window
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
         _mailMerge = mailMerge;
         registry.Register(new RibbonCommandId("freew.select-recipients"),
-            new RelayCommand(() => _ = SelectRecipientsAsync()));
+            new ActionRibbonCommand(() => _ = SelectRecipientsAsync()));
         registry.Register(new RibbonCommandId("freew.merge-field"),
-            new RelayCommand(() => _ = InsertMergeFieldAsync()));
+            new ActionRibbonCommand(() => _ = InsertMergeFieldAsync()));
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(

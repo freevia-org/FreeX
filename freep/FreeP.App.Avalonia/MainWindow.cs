@@ -335,30 +335,30 @@ public sealed class MainWindow : Window
         var r = new RibbonCommandRegistry();
 
         // File operations
-        r.Register("freep.file.new",     new RelayCommand(FileNew));
-        r.Register("freep.file.open",    new RelayCommand(() => _ = FileOpenAsync()));
-        r.Register("freep.file.save",    new RelayCommand(() => _ = FileSaveAsync()));
-        r.Register("freep.file.save-as", new RelayCommand(() => _ = FileSaveAsAsync()));
+        r.Register("freep.file.new",     new ActionRibbonCommand(FileNew));
+        r.Register("freep.file.open",    new ActionRibbonCommand(() => _ = FileOpenAsync()));
+        r.Register("freep.file.save",    new ActionRibbonCommand(() => _ = FileSaveAsync()));
+        r.Register("freep.file.save-as", new ActionRibbonCommand(() => _ = FileSaveAsAsync()));
 
         // Slide navigation/management
-        r.Register("freep.new-slide",       new RelayCommand(() => Editor.InsertSlide()));
-        r.Register("freep.duplicate-slide", new RelayCommand(() => Editor.DuplicateCurrentSlide()));
-        r.Register("freep.delete-slide",    new RelayCommand(() => Editor.DeleteCurrentSlide()));
+        r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
+        r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
+        r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
 
         // Insert shapes/text
-        r.Register("freep.text-box",        new RelayCommand(() => Editor.InsertDefaultTextBox()));
-        r.Register("freep.shape-rectangle", new RelayCommand(() => Editor.InsertDefaultRectangle()));
-        r.Register("freep.shape-ellipse",   new RelayCommand(() => Editor.InsertDefaultEllipse()));
+        r.Register("freep.text-box",        new ActionRibbonCommand(() => Editor.InsertDefaultTextBox()));
+        r.Register("freep.shape-rectangle", new ActionRibbonCommand(() => Editor.InsertDefaultRectangle()));
+        r.Register("freep.shape-ellipse",   new ActionRibbonCommand(() => Editor.InsertDefaultEllipse()));
 
         // Undo / Redo
-        r.Register("freep.undo", new RelayCommand(() => Editor.Undo()));
-        r.Register("freep.redo", new RelayCommand(() => Editor.Redo()));
+        r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
+        r.Register("freep.redo", new ActionRibbonCommand(() => Editor.Redo()));
 
         // Slide show
         r.Register("freep.slideshow.from-beginning",
-            new RelayCommand(() => StartSlideShow(fromStart: true)));
+            new ActionRibbonCommand(() => StartSlideShow(fromStart: true)));
         r.Register("freep.slideshow.from-current",
-            new RelayCommand(() => StartSlideShow(fromStart: false)));
+            new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
 
         return r;
     }
