@@ -106,7 +106,7 @@ public sealed partial class DataToolDialogTests
     {
         ConsolidateDialog.SplitSourceRangeText("A1:B3; D5:E7").Should().Equal("A1:B3", "D5:E7");
         ConsolidateDialog.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
-        ConsolidateDialogPlanner.JoinSourceRanges([" A1:B3 ", "", " D5:E7 "]).Should().Be("A1:B3; D5:E7");
+        ConsolidateDialog.JoinSourceRanges([" A1:B3 ", "", " D5:E7 "]).Should().Be("A1:B3; D5:E7");
     }
 
     [Fact]
@@ -555,8 +555,7 @@ public sealed partial class DataToolDialogTests
         DialogSourceTestSupport.ReadHostSourcesWithSeparator(
             "",
             "ConsolidateDialog.cs",
-            "ConsolidateDialog.Planning.cs",
-            "ConsolidateDialogPlanner.cs") +
+            "ConsolidateDialog.Planning.cs") +
         DialogSourceTestSupport.ReadPresentationSources("Consolidate", "ConsolidateDialogModels.cs");
 
     [Fact]
