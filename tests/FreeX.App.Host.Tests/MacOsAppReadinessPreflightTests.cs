@@ -353,8 +353,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_sortDescendingMenuItem.Header = `\"Sort Z to A`\";");
         script.Should().Contain("var dataMenu = new NativeMenu();");
         script.Should().Contain("dataMenu.Items.Add(_sortAscendingMenuItem);");
-        script.Should().Contain("Header = `\"Data`\",");
-        script.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(`\"Data`\");");
+        script.Should().Contain("[NativeMenuTopLevelId.Data] = dataMenu,");
+        script.Should().Contain("[NativeMenuTopLevelId.Review] = reviewMenu,");
+        script.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);");
+        script.Should().Contain("var hasNativeReviewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Review);");
         script.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         script.Should().Contain("HasNativeReviewMenu: hasNativeReviewMenu");
         script.Should().Contain("private readonly NativeMenuItem _flashFillMenuItem = new();");
@@ -476,11 +478,16 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeMergeAndCenterMenuItem &&");
         script.Should().Contain("HasNativeUnmergeCellsMenuItem &&");
         script.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
-        script.Should().Contain("_workbookStatisticsMenuItem.Header = UiText.Get(`\"AvaloniaNativeMenu_WorkbookStatistics`\");");
-        script.Should().Contain("_workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);");
+        script.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
         script.Should().Contain("_workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();");
-        script.Should().Contain("fileMenu.Items.Add(_workbookStatisticsMenuItem);");
-        script.Should().Contain("_workbookStatisticsMenuItem.IsEnabled = isIdle;");
+        script.Should().Contain("ApplyNativeFileMenuAvailability(isIdle);");
+        script.Should().Contain("src\\FreeX.App.Presentation\\Shell\\NativeMenuCatalog.cs");
+        script.Should().Contain("new(NativeMenuTopLevelId.View, `\"View`\")");
+        script.Should().Contain("new(NativeMenuTopLevelId.Sheet, `\"Sheet`\")");
+        script.Should().Contain("new(NativeMenuTopLevelId.Window, `\"Window`\")");
+        script.Should().Contain("new(NativeMenuTopLevelId.Help, `\"Help`\")");
+        script.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
+        script.Should().Contain("NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift");
         script.Should().Contain("e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)");
         script.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
         script.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
@@ -769,7 +776,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
         script.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
         script.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
-        script.Should().Contain("_openRecentMenuItem.Header = UiText.Get(`\"AvaloniaNativeMenu_OpenRecent`\");");
+        script.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
         script.Should().Contain("_selectAllMenuItem.Header = `\"Select All`\";");
         script.Should().Contain("_fillCellsButton.Content = `\"Fill Cells`\";");
         script.Should().Contain("_fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);");
@@ -2167,9 +2174,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     AddStyledCellBorderOverlay(content, style);
                     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
                     _newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
-                    _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
+                    ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);
                     _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
-                    fileMenu.Items.Add(_openRecentMenuItem);
+                    foreach (var entry in NativeMenuCatalog.FileMenuEntries)
+                    menu.Items.Add(GetNativeFileMenuItem(entry.Item!.Id));
                     RefreshNativeOpenRecentMenu(isIdle);
                     WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(
                     _session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
@@ -2177,11 +2185,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     path = plan.Path;
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
                     private readonly NativeMenuItem _exportPdfMenuItem = new();
-                    _exportPdfMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ExportPdf");
+                    ConfigureNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf);
                     _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
-                    fileMenu.Items.Add(_exportPdfMenuItem);
-                    _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
-                    HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get("AvaloniaNativeMenu_ExportPdf"), requireGesture: false)
+                    NativeFileMenuItemId.ExportPdf => _exportPdfMenuItem,
+                    HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)
                     private async Task ExportActiveSheetPdfAsync()
                     var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
                     ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)
@@ -2194,41 +2201,36 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
                     var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
-                    _workbookStatisticsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_WorkbookStatistics");
-                    _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
+                    ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
-                    fileMenu.Items.Add(_workbookStatisticsMenuItem);
-                    _workbookStatisticsMenuItem.IsEnabled = isIdle;
+                    ApplyNativeFileMenuAvailability(isIdle);
                     private readonly NativeMenuItem _optionsMenuItem = new();
-                    _optionsMenuItem.Header = UiText.Get("Options_Title");
-                    _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
+                    ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);
                     _optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);
-                    fileMenu.Items.Add(_optionsMenuItem);
+                    NativeFileMenuItemId.Options => _optionsMenuItem,
                     Text = UiText.Get("FormatCells_ProtectionExplanation"),
                     CreateFormatCellsField(UiText.Get("FormatCells_PatternStyle"), fillPatternStyleBox)
                     CreateFormatCellsField(UiText.Get("FormatCells_PatternColor"), fillPatternColorBox)
                     private readonly NativeMenuItem _backstageExportMenuItem = new();
                     private readonly NativeMenuItem _backstageInfoMenuItem = new();
                     private readonly NativeMenuItem _backstageAccountMenuItem = new();
-                    _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
+                    ConfigureNativeFileMenuItem(_backstageInfoMenuItem, NativeFileMenuItemId.BackstageInfo);
                     _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
-                    _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
+                    ConfigureNativeFileMenuItem(_backstageExportMenuItem, NativeFileMenuItemId.BackstageExport);
                     _backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);
-                    _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
+                    ConfigureNativeFileMenuItem(_backstageAccountMenuItem, NativeFileMenuItemId.BackstageAccount);
                     _backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);
-                    fileMenu.Items.Add(_backstageExportMenuItem);
-                    fileMenu.Items.Add(_backstageInfoMenuItem);
-                    fileMenu.Items.Add(_backstageAccountMenuItem);
+                    NativeFileMenuItemId.BackstageExport => _backstageExportMenuItem,
+                    NativeFileMenuItemId.BackstageInfo => _backstageInfoMenuItem,
+                    NativeFileMenuItemId.BackstageAccount => _backstageAccountMenuItem,
                     private readonly NativeMenuItem _printMenuItem = new();
-                    _printMenuItem.Header = UiText.Get("Print_MenuItem");
-                    _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+                    ConfigureNativeFileMenuItem(_printMenuItem, NativeFileMenuItemId.Print);
                     _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
-                    fileMenu.Items.Add(_printMenuItem);
+                    NativeFileMenuItemId.Print => _printMenuItem,
                     private readonly NativeMenuItem _printPreviewMenuItem = new();
-                    _printPreviewMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PrintPreview");
-                    _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
+                    ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
                     _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
-                    HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get("AvaloniaNativeMenu_WorkbookStatistics"))
+                    HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)
                     e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
                     private async Task ShowWorkbookStatisticsDialogAsync()
                     WorkbookStatisticsService.GetStatistics(_session.Workbook)
@@ -2305,8 +2307,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     dataMenu.Items.Add(_sortAscendingMenuItem);
                     dataMenu.Items.Add(_sortDescendingMenuItem);
                     dataMenu.Items.Add(_flashFillMenuItem);
-                    Header = "Data",
-                    Menu = dataMenu,
+                    [NativeMenuTopLevelId.Data] = dataMenu,
                     homeMenu.Items.Add(_findMenuItem);
                     homeMenu.Items.Add(_findNextMenuItem);
                     homeMenu.Items.Add(_replaceMenuItem);
@@ -2325,7 +2326,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _session.SortSelectedRange(ascending)
                     private void FlashFillSelectedRange()
                     _session.FlashFillSelectedRange()
-                    var hasNativeDataMenu = HasNativeTopLevelMenu("Data");
+                    var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);
                     HasNativeDataMenu: hasNativeDataMenu
                     HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, "Find...");
                     HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, "Find Next");
@@ -2383,9 +2384,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     reviewMenu.Items.Add(_previousNoteMenuItem);
                     reviewMenu.Items.Add(_nextCommentMenuItem);
                     reviewMenu.Items.Add(_previousCommentMenuItem);
-                    Header = "Review",
-                    Menu = reviewMenu,
-                    var hasNativeReviewMenu = HasNativeTopLevelMenu("Review");
+                    [NativeMenuTopLevelId.Review] = reviewMenu,
+                    var hasNativeReviewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Review);
                     HasNativeReviewMenu: hasNativeReviewMenu
                     _advancedFilterMenuItem.IsEnabled = isIdle;
                     _removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;
@@ -2528,8 +2528,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
                     RecordRecentWorkbook(target.Path, fileAccessIdentity);
                     _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
-                    fileMenu.Items.Add(_newWorkbookMenuItem);
-                    fileMenu.Items.Add(_closeWorkbookMenuItem);
+                    var fileMenu = CreateNativeFileMenu();
+                    NativeFileMenuItemId.NewWorkbook => _newWorkbookMenuItem,
+                    NativeFileMenuItemId.CloseWorkbook => _closeWorkbookMenuItem,
                     _sessionFactory.CreateNew(viewportHeight, viewportWidth, includeObjects: true);
                     RefreshViewportSizeForZoom();
                     Closing += MainWindow_Closing;
@@ -2609,8 +2610,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     viewMenu.Items.Add(_unfreezePanesMenuItem);
                     _showFormulasMenuItem.ToggleType = MenuItemToggleType.CheckBox;
                     _showFormulasMenuItem.Click += (_, _) => ToggleShowFormulas();
-                    Header = "View";
-                    var sheetItem = new NativeMenuItem { Header = "Sheet" };
+                    [NativeMenuTopLevelId.View] = viewMenu,
+                    [NativeMenuTopLevelId.Sheet] = sheetMenu,
                     var result = _session.AddSheet();
                     var result = _session.RenameActiveSheet(newName);
                     ShowRenameSheetDialogAsync(currentName).ToString();
@@ -2733,8 +2734,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     _minimizeWindowMenuItem.Click += (_, _) => WindowState = WindowState.Minimized;
                     _zoomWindowMenuItem.Header = "Zoom";
                     _bringAllToFrontMenuItem.Header = "Bring All to Front";
-                    var windowItem = new NativeMenuItem { Header = "Window" };
-                    var item = new NativeMenuItem { Header = "Help" };
+                    [NativeMenuTopLevelId.Window] = windowMenu,
+                    [NativeMenuTopLevelId.Help] = helpMenu,
                     TopLevel.GetTopLevel(this)?.Launcher.ToString();
                     AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary);
                     var documents = LegalNoticeProvider.GetDocuments();
@@ -3033,6 +3034,49 @@ public sealed class MacOsAppReadinessPreflightTests
                     ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length);
                     return new();
                 }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Presentation/Shell/NativeMenuCatalog.cs",
+            """
+            namespace FreeX.App.Presentation.Shell;
+
+            public static class NativeMenuCatalog
+            {
+                public static IReadOnlyList<NativeMenuTopLevelPlan> TopLevelMenus { get; } =
+                [
+                    new(NativeMenuTopLevelId.File, "File"),
+                    new(NativeMenuTopLevelId.Data, "Data"),
+                    new(NativeMenuTopLevelId.Review, "Review"),
+                    new(NativeMenuTopLevelId.View, "View"),
+                    new(NativeMenuTopLevelId.Sheet, "Sheet"),
+                    new(NativeMenuTopLevelId.Window, "Window"),
+                    new(NativeMenuTopLevelId.Help, "Help")
+                ];
+
+                public static IReadOnlyList<NativeFileMenuEntryPlan> FileMenuEntries { get; } =
+                [
+                    FileItem(NativeFileMenuItemId.NewWorkbook),
+                    FileItem(NativeFileMenuItemId.OpenRecent),
+                    FileItem(NativeFileMenuItemId.ShareWorkbook),
+                    FileItem(NativeFileMenuItemId.ExportPdf),
+                    FileItem(NativeFileMenuItemId.WorkbookStatistics),
+                    FileItem(NativeFileMenuItemId.CloseWorkbook)
+                ];
+
+                private static readonly object[] Metadata =
+                [
+                    "AvaloniaNativeMenu_OpenRecent",
+                    "AvaloniaNativeMenu_ExportPdf",
+                    "AvaloniaNativeMenu_WorkbookStatistics",
+                    new NativeMenuGesturePlan(
+                        NativeMenuGestureKey.G,
+                        NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift),
+                    new(NativeFileMenuItemId.WorkbookStatistics, context.IsIdle),
+                    new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)
+                ];
             }
             """);
 

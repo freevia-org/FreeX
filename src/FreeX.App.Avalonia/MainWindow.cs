@@ -27,6 +27,7 @@ using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -1820,61 +1821,52 @@ public sealed partial class MainWindow : Window
 
     private void ConfigureNativeMenu()
     {
-        _newWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewWorkbook");
-        _newWorkbookMenuItem.Gesture = new KeyGesture(Key.N, KeyModifiers.Meta);
+        ConfigureNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook);
         _newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
 
-        _openMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Open");
-        _openMenuItem.Gesture = new KeyGesture(Key.O, KeyModifiers.Meta);
+        ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);
         _openMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
 
-        _openRecentMenuItem.Header = UiText.Get("AvaloniaNativeMenu_OpenRecent");
+        ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
 
-        _saveMenuItem.Header = UiText.Get("AvaloniaNativeMenu_Save");
-        _saveMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta);
+        ConfigureNativeFileMenuItem(_saveMenuItem, NativeFileMenuItemId.Save);
         _saveMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save);
 
-        _saveAsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_SaveAs");
-        _saveAsMenuItem.Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift);
+        ConfigureNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs);
         _saveAsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);
 
-        _exportPdfMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ExportPdf");
+        ConfigureNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf);
         _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
 
-        _printMenuItem.Header = UiText.Get("Print_MenuItem");
-        _printMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta);
+        ConfigureNativeFileMenuItem(_printMenuItem, NativeFileMenuItemId.Print);
         _printMenuItem.Click += async (_, _) => await ShowPrintDialogAsync();
 
         ConfigurePageSetupNativeMenuItem(_filePageSetupMenuItem);
         ConfigurePageSetupNativeMenuItem(_pageSetupMenuItem);
 
-        _printPreviewMenuItem.Header = UiText.Get("AvaloniaNativeMenu_PrintPreview");
-        _printPreviewMenuItem.Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift);
+        ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
         _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
 
-        _shareWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_ShareWorkbook");
+        ConfigureNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook);
         _shareWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Share);
 
-        _workbookStatisticsMenuItem.Header = UiText.Get("AvaloniaNativeMenu_WorkbookStatistics");
-        _workbookStatisticsMenuItem.Gesture = new KeyGesture(Key.G, KeyModifiers.Control | KeyModifiers.Shift);
+        ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
         _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
 
-        _backstageInfoMenuItem.Header = UiText.Get("Backstage_Info_MenuItem");
+        ConfigureNativeFileMenuItem(_backstageInfoMenuItem, NativeFileMenuItemId.BackstageInfo);
         _backstageInfoMenuItem.Click += (_, _) => ShowBackstageInfo();
 
-        _backstageExportMenuItem.Header = UiText.Get("Backstage_Export_MenuItem");
+        ConfigureNativeFileMenuItem(_backstageExportMenuItem, NativeFileMenuItemId.BackstageExport);
         _backstageExportMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Export);
 
-        _backstageAccountMenuItem.Header = UiText.Get("Backstage_Account_MenuItem");
+        ConfigureNativeFileMenuItem(_backstageAccountMenuItem, NativeFileMenuItemId.BackstageAccount);
         _backstageAccountMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Account);
 
-        _optionsMenuItem.Header = UiText.Get("Options_Title");
-        _optionsMenuItem.Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta);
+        ConfigureNativeFileMenuItem(_optionsMenuItem, NativeFileMenuItemId.Options);
         _optionsMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Options);
 
-        _closeWorkbookMenuItem.Header = UiText.Get("AvaloniaNativeMenu_CloseWorkbook");
-        _closeWorkbookMenuItem.Gesture = new KeyGesture(Key.W, KeyModifiers.Meta);
+        ConfigureNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook);
         _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
 
         _newSheetMenuItem.Header = UiText.Get("AvaloniaNativeMenu_NewSheet");
@@ -2360,8 +2352,7 @@ public sealed partial class MainWindow : Window
         _legalNoticesMenuItem.Header = "Legal Notices";
         _legalNoticesMenuItem.Click += async (_, _) => await ShowLegalNoticesDialogAsync();
 
-        _quitMenuItem.Header = "Quit FreeX";
-        _quitMenuItem.Gesture = new KeyGesture(Key.Q, KeyModifiers.Meta);
+        ConfigureNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit);
         _quitMenuItem.Click += async (_, _) => await TryQuitApplicationAsync();
 
         _minimizeWindowMenuItem.Header = "Minimize";
@@ -2381,29 +2372,7 @@ public sealed partial class MainWindow : Window
             Activate();
         };
 
-        var fileMenu = new NativeMenu();
-        fileMenu.Items.Add(_newWorkbookMenuItem);
-        fileMenu.Items.Add(_openMenuItem);
-        fileMenu.Items.Add(_openRecentMenuItem);
-        fileMenu.Items.Add(_shareWorkbookMenuItem);
-        fileMenu.Items.Add(new NativeMenuItemSeparator());
-        fileMenu.Items.Add(_backstageInfoMenuItem);
-        fileMenu.Items.Add(_saveMenuItem);
-        fileMenu.Items.Add(_saveAsMenuItem);
-        fileMenu.Items.Add(new NativeMenuItemSeparator());
-        fileMenu.Items.Add(_printMenuItem);
-        fileMenu.Items.Add(_printPreviewMenuItem);
-        fileMenu.Items.Add(_backstageExportMenuItem);
-        fileMenu.Items.Add(_exportPdfMenuItem);
-        fileMenu.Items.Add(_workbookStatisticsMenuItem);
-        fileMenu.Items.Add(_filePageSetupMenuItem);
-        fileMenu.Items.Add(new NativeMenuItemSeparator());
-        fileMenu.Items.Add(_closeWorkbookMenuItem);
-        fileMenu.Items.Add(new NativeMenuItemSeparator());
-        fileMenu.Items.Add(_backstageAccountMenuItem);
-        fileMenu.Items.Add(_optionsMenuItem);
-        fileMenu.Items.Add(new NativeMenuItemSeparator());
-        fileMenu.Items.Add(_quitMenuItem);
+        var fileMenu = CreateNativeFileMenu();
 
         var homeMenu = new NativeMenu();
         homeMenu.Items.Add(_undoMenuItem);
@@ -2591,69 +2560,134 @@ public sealed partial class MainWindow : Window
         helpMenu.Items.Add(_legalNoticesMenuItem);
 
         _nativeMenu = new NativeMenu();
-        _nativeMenu.Items.Add(new NativeMenuItem
+        AddNativeTopLevelMenus(_nativeMenu, new Dictionary<NativeMenuTopLevelId, NativeMenu>
         {
-            Header = "File",
-            Menu = fileMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Home",
-            Menu = homeMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Insert",
-            Menu = insertMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Page Layout",
-            Menu = pageLayoutMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Formulas",
-            Menu = formulasMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Data",
-            Menu = dataMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Review",
-            Menu = reviewMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "View",
-            Menu = viewMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Sheet",
-            Menu = sheetMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Window",
-            Menu = windowMenu,
-        });
-        _nativeMenu.Items.Add(new NativeMenuItem
-        {
-            Header = "Help",
-            Menu = helpMenu,
+            [NativeMenuTopLevelId.File] = fileMenu,
+            [NativeMenuTopLevelId.Home] = homeMenu,
+            [NativeMenuTopLevelId.Insert] = insertMenu,
+            [NativeMenuTopLevelId.PageLayout] = pageLayoutMenu,
+            [NativeMenuTopLevelId.Formulas] = formulasMenu,
+            [NativeMenuTopLevelId.Data] = dataMenu,
+            [NativeMenuTopLevelId.Review] = reviewMenu,
+            [NativeMenuTopLevelId.View] = viewMenu,
+            [NativeMenuTopLevelId.Sheet] = sheetMenu,
+            [NativeMenuTopLevelId.Window] = windowMenu,
+            [NativeMenuTopLevelId.Help] = helpMenu,
         });
         _nativeMenu.NeedsUpdate += (_, _) => UpdateSaveButton();
 
         InstallNativeMenu(_nativeMenu);
     }
 
+    private NativeMenu CreateNativeFileMenu()
+    {
+        var menu = new NativeMenu();
+        foreach (var entry in NativeMenuCatalog.FileMenuEntries)
+        {
+            if (entry.Kind == NativeMenuEntryKind.Separator)
+            {
+                menu.Items.Add(new NativeMenuItemSeparator());
+                continue;
+            }
+
+            menu.Items.Add(GetNativeFileMenuItem(entry.Item!.Id));
+        }
+
+        return menu;
+    }
+
+    private NativeMenuItem GetNativeFileMenuItem(NativeFileMenuItemId id) =>
+        id switch
+        {
+            NativeFileMenuItemId.NewWorkbook => _newWorkbookMenuItem,
+            NativeFileMenuItemId.Open => _openMenuItem,
+            NativeFileMenuItemId.OpenRecent => _openRecentMenuItem,
+            NativeFileMenuItemId.ShareWorkbook => _shareWorkbookMenuItem,
+            NativeFileMenuItemId.BackstageInfo => _backstageInfoMenuItem,
+            NativeFileMenuItemId.Save => _saveMenuItem,
+            NativeFileMenuItemId.SaveAs => _saveAsMenuItem,
+            NativeFileMenuItemId.Print => _printMenuItem,
+            NativeFileMenuItemId.PrintPreview => _printPreviewMenuItem,
+            NativeFileMenuItemId.BackstageExport => _backstageExportMenuItem,
+            NativeFileMenuItemId.ExportPdf => _exportPdfMenuItem,
+            NativeFileMenuItemId.WorkbookStatistics => _workbookStatisticsMenuItem,
+            NativeFileMenuItemId.PageSetup => _filePageSetupMenuItem,
+            NativeFileMenuItemId.CloseWorkbook => _closeWorkbookMenuItem,
+            NativeFileMenuItemId.BackstageAccount => _backstageAccountMenuItem,
+            NativeFileMenuItemId.Options => _optionsMenuItem,
+            NativeFileMenuItemId.Quit => _quitMenuItem,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private static void ConfigureNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id)
+    {
+        var plan = NativeMenuCatalog.GetFileMenuItem(id);
+        item.Header = GetNativeFileMenuItemHeader(plan);
+        item.Gesture = plan.Gesture is null
+            ? null
+            : CreateNativeKeyGesture(plan.Gesture);
+    }
+
+    private static string GetNativeFileMenuItemHeader(NativeFileMenuItemId id) =>
+        GetNativeFileMenuItemHeader(NativeMenuCatalog.GetFileMenuItem(id));
+
+    private static string GetNativeFileMenuItemHeader(NativeFileMenuItemPlan plan) =>
+        plan.UsesResourceKey
+            ? UiText.Get(plan.Label)
+            : plan.Label;
+
+    private static KeyGesture CreateNativeKeyGesture(NativeMenuGesturePlan gesture) =>
+        new(ToAvaloniaKey(gesture.Key), ToAvaloniaKeyModifiers(gesture.Modifiers));
+
+    private static Key ToAvaloniaKey(NativeMenuGestureKey key) =>
+        key switch
+        {
+            NativeMenuGestureKey.N => Key.N,
+            NativeMenuGestureKey.O => Key.O,
+            NativeMenuGestureKey.S => Key.S,
+            NativeMenuGestureKey.P => Key.P,
+            NativeMenuGestureKey.G => Key.G,
+            NativeMenuGestureKey.W => Key.W,
+            NativeMenuGestureKey.Q => Key.Q,
+            NativeMenuGestureKey.OemComma => Key.OemComma,
+            _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
+        };
+
+    private static KeyModifiers ToAvaloniaKeyModifiers(NativeMenuGestureModifiers modifiers)
+    {
+        var result = KeyModifiers.None;
+        if (modifiers.HasFlag(NativeMenuGestureModifiers.Control))
+            result |= KeyModifiers.Control;
+        if (modifiers.HasFlag(NativeMenuGestureModifiers.Alt))
+            result |= KeyModifiers.Alt;
+        if (modifiers.HasFlag(NativeMenuGestureModifiers.Shift))
+            result |= KeyModifiers.Shift;
+        if (modifiers.HasFlag(NativeMenuGestureModifiers.Meta))
+            result |= KeyModifiers.Meta;
+
+        return result;
+    }
+
+    private static void AddNativeTopLevelMenus(
+        NativeMenu nativeMenu,
+        IReadOnlyDictionary<NativeMenuTopLevelId, NativeMenu> menusById)
+    {
+        foreach (var plan in NativeMenuCatalog.TopLevelMenus)
+        {
+            if (!menusById.TryGetValue(plan.Id, out var menu))
+                continue;
+
+            nativeMenu.Items.Add(new NativeMenuItem
+            {
+                Header = plan.Header,
+                Menu = menu,
+            });
+        }
+    }
+
     private void ConfigurePageSetupNativeMenuItem(NativeMenuItem item)
     {
-        item.Header = UiText.Get("AvaloniaNativeMenu_PageSetup");
+        ConfigureNativeFileMenuItem(item, NativeFileMenuItemId.PageSetup);
         item.Click += async (_, _) => await ShowPageSetupDialogAsync();
     }
 
@@ -3818,20 +3852,8 @@ public sealed partial class MainWindow : Window
         _decreaseIndentButton.IsEnabled = isIdle;
         _increaseIndentButton.IsEnabled = isIdle;
 
-        _newWorkbookMenuItem.IsEnabled = isIdle;
-        _openMenuItem.IsEnabled = _openButton.IsEnabled;
-        _openRecentMenuItem.IsEnabled = isIdle;
+        ApplyNativeFileMenuAvailability(isIdle);
         RefreshNativeOpenRecentMenu(isIdle);
-        _saveMenuItem.IsEnabled = _saveButton.IsEnabled;
-        _saveAsMenuItem.IsEnabled = _saveAsButton.IsEnabled;
-        _exportPdfMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
-        _printMenuItem.IsEnabled = isIdle;
-        _backstageExportMenuItem.IsEnabled = isIdle && StorageProvider.CanSave;
-        _shareWorkbookMenuItem.IsEnabled = isIdle;
-        _workbookStatisticsMenuItem.IsEnabled = isIdle;
-        _backstageInfoMenuItem.IsEnabled = isIdle;
-        _backstageAccountMenuItem.IsEnabled = isIdle;
-        _closeWorkbookMenuItem.IsEnabled = isIdle;
         var activeSheetTabIndex = FindActiveSheetTabIndex();
         _newSheetMenuItem.IsEnabled = _newSheetButton.IsEnabled;
         _renameSheetMenuItem.IsEnabled = isIdle;
@@ -3983,11 +4005,23 @@ public sealed partial class MainWindow : Window
         _unfreezePanesMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsEnabled = isIdle;
         _showFormulasMenuItem.IsChecked = _session.IsShowingFormulas;
-        _filePageSetupMenuItem.IsEnabled = isIdle;
         _pageSetupMenuItem.IsEnabled = isIdle;
-        _printPreviewMenuItem.IsEnabled = isIdle;
         _pageBreakPreviewMenuItem.IsEnabled = isIdle;
         _pageBreakPreviewMenuItem.IsChecked = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).PageBreakPreviewChecked;
+    }
+
+    private void ApplyNativeFileMenuAvailability(bool isIdle)
+    {
+        var plan = NativeMenuCatalog.PlanFileMenuAvailability(
+            new NativeFileMenuAvailabilityContext(
+                IsIdle: isIdle,
+                CanOpen: _openButton.IsEnabled,
+                CanSave: _saveButton.IsEnabled,
+                CanSaveAs: _saveAsButton.IsEnabled,
+                CanSaveThroughStorageProvider: StorageProvider.CanSave));
+
+        foreach (var item in plan.Items)
+            GetNativeFileMenuItem(item.Id).IsEnabled = item.IsEnabled;
     }
 
     private int FindActiveSheetTabIndex()
@@ -19582,19 +19616,19 @@ public sealed partial class MainWindow : Window
             : null;
         var nativeDockTopLevelMenuOrder = GetNativeTopLevelMenuOrder(nativeDockMenu);
         var hasNativeDockMenu = nativeDockMenu is not null;
-        var hasNativeDockFileMenu = HasNativeTopLevelMenu(nativeDockMenu, "File");
-        var nativeDockFileMenuItemCount = CountNativeTopLevelMenuItems(nativeDockMenu, "File");
-        var hasNativeFileMenu = HasNativeTopLevelMenu("File");
-        var hasNativeHomeMenu = HasNativeTopLevelMenu("Home");
-        var hasNativeInsertMenu = HasNativeTopLevelMenu("Insert");
-        var hasNativePageLayoutMenu = HasNativeTopLevelMenu("Page Layout");
-        var hasNativeFormulasMenu = HasNativeTopLevelMenu("Formulas");
-        var hasNativeDataMenu = HasNativeTopLevelMenu("Data");
-        var hasNativeReviewMenu = HasNativeTopLevelMenu("Review");
-        var hasNativeViewMenu = HasNativeTopLevelMenu("View");
-        var hasNativeSheetMenu = HasNativeTopLevelMenu("Sheet");
-        var hasNativeWindowMenu = HasNativeTopLevelMenu("Window");
-        var hasNativeHelpMenu = HasNativeTopLevelMenu("Help");
+        var hasNativeDockFileMenu = HasNativeTopLevelMenu(nativeDockMenu, NativeMenuTopLevelId.File);
+        var nativeDockFileMenuItemCount = CountNativeTopLevelMenuItems(nativeDockMenu, NativeMenuTopLevelId.File);
+        var hasNativeFileMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.File);
+        var hasNativeHomeMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Home);
+        var hasNativeInsertMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Insert);
+        var hasNativePageLayoutMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.PageLayout);
+        var hasNativeFormulasMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Formulas);
+        var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);
+        var hasNativeReviewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Review);
+        var hasNativeViewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.View);
+        var hasNativeSheetMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Sheet);
+        var hasNativeWindowMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Window);
+        var hasNativeHelpMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Help);
         var nativeCellStylesPresetCount = _cellStylesMenuItem.Menu?
             .Items
             .OfType<NativeMenuItem>()
@@ -19710,16 +19744,16 @@ public sealed partial class MainWindow : Window
             HasNativeSheetMenu: hasNativeSheetMenu,
             HasNativeWindowMenu: hasNativeWindowMenu,
             HasNativeHelpMenu: hasNativeHelpMenu,
-            HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_NewWorkbook")),
-            HasNativeOpenMenuItem: HasNativeMenuItem(_openMenuItem, UiText.Get("AvaloniaNativeMenu_Open")),
-            HasNativeOpenRecentMenuItem: HasNativeMenuItem(_openRecentMenuItem, UiText.Get("AvaloniaNativeMenu_OpenRecent"), requireGesture: false),
+            HasNativeNewWorkbookMenuItem: HasNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook),
+            HasNativeOpenMenuItem: HasNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open),
+            HasNativeOpenRecentMenuItem: HasNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent),
             NativeOpenRecentItemCount: nativeOpenRecentItemCount,
-            HasNativeSaveMenuItem: HasNativeMenuItem(_saveMenuItem, UiText.Get("AvaloniaNativeMenu_Save")),
-            HasNativeSaveAsMenuItem: HasNativeMenuItem(_saveAsMenuItem, UiText.Get("AvaloniaNativeMenu_SaveAs")),
-            HasNativeExportPdfMenuItem: HasNativeMenuItem(_exportPdfMenuItem, UiText.Get("AvaloniaNativeMenu_ExportPdf"), requireGesture: false),
-            HasNativeShareWorkbookMenuItem: HasEnabledNativeMenuItem(_shareWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_ShareWorkbook"), requireGesture: false),
-            HasNativeWorkbookStatisticsMenuItem: HasNativeMenuItem(_workbookStatisticsMenuItem, UiText.Get("AvaloniaNativeMenu_WorkbookStatistics")),
-            HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, UiText.Get("AvaloniaNativeMenu_CloseWorkbook")),
+            HasNativeSaveMenuItem: HasNativeFileMenuItem(_saveMenuItem, NativeFileMenuItemId.Save),
+            HasNativeSaveAsMenuItem: HasNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs),
+            HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf),
+            HasNativeShareWorkbookMenuItem: HasEnabledNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook),
+            HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics),
+            HasNativeCloseWorkbookMenuItem: HasNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook),
             HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, UiText.Get("AvaloniaNativeMenu_NewSheet")),
             HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, "Rename Sheet...", requireGesture: false),
             HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, "Duplicate Sheet", requireGesture: false),
@@ -19855,7 +19889,7 @@ public sealed partial class MainWindow : Window
             HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, "Check for Updates", requireGesture: false),
             HasNativeAboutMenuItem: HasNativeMenuItem(_aboutMenuItem, "About FreeX", requireGesture: false),
             HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, "Legal Notices", requireGesture: false),
-            HasNativeQuitMenuItem: HasNativeMenuItem(_quitMenuItem, "Quit FreeX"));
+            HasNativeQuitMenuItem: HasNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit));
     }
 
     private bool HasStatusBarAccessibleValue() =>
@@ -19865,8 +19899,11 @@ public sealed partial class MainWindow : Window
     private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal);
 
-    private bool HasNativeTopLevelMenu(string expectedHeader) =>
-        HasNativeTopLevelMenu(_nativeMenu, expectedHeader);
+    private bool HasNativeTopLevelMenu(NativeMenuTopLevelId id) =>
+        HasNativeTopLevelMenu(_nativeMenu, id);
+
+    private static bool HasNativeTopLevelMenu(NativeMenu? menu, NativeMenuTopLevelId id) =>
+        HasNativeTopLevelMenu(menu, GetNativeTopLevelHeader(id));
 
     private static bool HasNativeTopLevelMenu(NativeMenu? menu, string expectedHeader) =>
         FindNativeTopLevelSubmenu(menu, expectedHeader) is not null;
@@ -19881,17 +19918,33 @@ public sealed partial class MainWindow : Window
             string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
             item.Menu is not null)?.Menu;
 
+    private static int CountNativeTopLevelMenuItems(NativeMenu? menu, NativeMenuTopLevelId id) =>
+        CountNativeTopLevelMenuItems(menu, GetNativeTopLevelHeader(id));
+
     private static int CountNativeTopLevelMenuItems(NativeMenu? menu, string expectedHeader) =>
         FindNativeTopLevelSubmenu(menu, expectedHeader)?.Items.OfType<NativeMenuItem>()
             .Count(static item => !string.IsNullOrWhiteSpace(item.Header?.ToString())) ?? 0;
+
+    private static string GetNativeTopLevelHeader(NativeMenuTopLevelId id) =>
+        NativeMenuCatalog.TopLevelMenus.First(plan => plan.Id == id).Header;
 
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
         (!requireGesture || item.Gesture is not null);
 
+    private static bool HasNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id)
+    {
+        var plan = NativeMenuCatalog.GetFileMenuItem(id);
+        return HasNativeMenuItem(item, GetNativeFileMenuItemHeader(plan), plan.RequiresGestureInSmoke);
+    }
+
     private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         item.IsEnabled &&
         HasNativeMenuItem(item, expectedHeader, requireGesture);
+
+    private static bool HasEnabledNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id) =>
+        item.IsEnabled &&
+        HasNativeFileMenuItem(item, id);
 
     private bool HasSheetTabButton(Func<Button, bool> predicate) =>
         _sheetTabsHost.Content is StackPanel panel &&
