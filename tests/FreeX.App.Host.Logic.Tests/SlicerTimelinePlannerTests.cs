@@ -451,8 +451,11 @@ public sealed class SlicerTimelinePlannerTests
     [Fact]
     public void NativeVisualFilters_AvoidNestedPivotScans()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("SlicerTimelinePlanner.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("SlicerTimelinePlanner.cs");
+        var source = DialogSourceTestSupport.ReadPresentationSources("SlicerTimeline", "SlicerTimelinePanePlanner.cs");
 
+        hostSource.Should().Contain("SlicerTimelinePanePlanner.GetNativeVisualFilters(workbook, activeSheet)");
+        hostSource.Should().NotContain("ConditionalWeakTable<Sheet, ActivePivotNameSetCache>");
         source.Should().Contain("BuildActivePivotNameSet(activeSheet)");
         source.Should().Contain("public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)");
         source.Should().Contain("return Array.Empty<SlicerModel>();");
@@ -475,11 +478,13 @@ public sealed class SlicerTimelinePlannerTests
     [Fact]
     public void BuildSlicerTiles_AvoidsLinqMaterializationScaffolding()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("SlicerTimelinePlanner.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSourceFile("SlicerTimelinePlanner.cs");
+        var source = DialogSourceTestSupport.ReadPresentationSources("SlicerTimeline", "SlicerTimelinePanePlanner.cs");
         var buildSlicerTiles = source[
             source.IndexOf("public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles", StringComparison.Ordinal)..
             source.IndexOf("public static IReadOnlyList<string> ToggleSlicerSelection", StringComparison.Ordinal)];
 
+        hostSource.Should().Contain("SlicerTimelinePanePlanner.BuildSlicerTiles(slicer, sourceItems)");
         buildSlicerTiles.Should().Contain("new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase)");
         buildSlicerTiles.Should().Contain("new List<SlicerTileItem>(items.Count)");
         buildSlicerTiles.Should().NotContain(".ToList()");

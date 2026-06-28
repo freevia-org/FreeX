@@ -74,6 +74,26 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void TypeChange_RecommendedTypes_AreAuthorableAndStableForInsertPicker()
+    {
+        ChartTypeChangePlanner.GetRecommendedTypes().Should().Equal(
+            ChartType.Column,
+            ChartType.Line,
+            ChartType.Bar,
+            ChartType.Pie,
+            ChartType.Scatter);
+        ChartTypeChangePlanner.GetRecommendedTypes().Should().OnlyContain(type => ChartTypeSupport.IsAuthorable(type));
+    }
+
+    [Fact]
+    public void TypeChange_DisplayNameKeys_SurfaceShellLocalizationKeys()
+    {
+        ChartTypeChangePlanner.DisplayNameKey(ChartType.Column).Should().Be("ChartType_ClusteredColumn");
+        ChartTypeChangePlanner.DisplayNameKey(ChartType.BoxAndWhisker).Should().Be("MainWindow_TooltipTitle_BoxAndWhiskerChart");
+        ChartTypeChangePlanner.DisplayNameKey(ChartType.Map).Should().Be(nameof(ChartType.Map));
+    }
+
+    [Fact]
     public void TypeChange_Plan_ReturnsRequestedType_WhenDifferentAndAuthorable()
     {
         var plan = ChartTypeChangePlanner.Plan(ChartType.Column, ChartType.Line);
