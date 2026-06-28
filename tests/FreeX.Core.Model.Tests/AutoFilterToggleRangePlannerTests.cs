@@ -1,8 +1,8 @@
 using FluentAssertions;
-using FreeX.App.Presentation.Filtering;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Presentation.Tests.Filtering;
+namespace FreeX.Core.Model.Tests;
 
 public sealed class AutoFilterToggleRangePlannerTests
 {
@@ -17,6 +17,27 @@ public sealed class AutoFilterToggleRangePlannerTests
         var range = AutoFilterToggleRangePlanner.Create(sheet, new GridRange(selectedCell, selectedCell));
 
         range.Should().Be(new GridRange(Address(sheet, 1, 1), Address(sheet, 9, 3)));
+    }
+
+    [Fact]
+    public void Create_UsesStructuredTableAutoFilterRangeWhenPresent()
+    {
+        var sheet = CreateSheetWithList();
+        var tableRange = new GridRange(Address(sheet, 1, 1), Address(sheet, 4, 2));
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = tableRange,
+            HasAutoFilter = true,
+            HeaderRowCount = 1
+        });
+        var selectedCell = Address(sheet, 6, 5);
+
+        var range = AutoFilterToggleRangePlanner.Create(sheet, new GridRange(selectedCell, selectedCell));
+
+        range.Should().Be(tableRange);
     }
 
     [Fact]

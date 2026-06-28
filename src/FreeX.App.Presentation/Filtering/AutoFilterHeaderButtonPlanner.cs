@@ -1,4 +1,4 @@
-using FreeX.App.Presentation.AutoFilter;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Filtering;
@@ -6,7 +6,7 @@ namespace FreeX.App.Presentation.Filtering;
 public static class AutoFilterHeaderButtonPlanner
 {
     public static GridRange? TryGetAutoFilterRange(Sheet sheet) =>
-        AutoFilterRangeResolver.TryGetAutoFilterRange(sheet);
+        AutoFilterRangeResolver.TryGetEffectiveAutoFilterRange(sheet);
 
     public static IReadOnlyList<CellAddress> GetHeaderButtonCells(Sheet sheet)
     {

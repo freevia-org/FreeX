@@ -1,4 +1,3 @@
-using FreeX.App.Presentation.AutoFilter;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
 

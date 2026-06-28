@@ -40,7 +40,7 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
             return new CommandOutcome(true);
         }
 
-        if (TryGetAutoFilterRange(sheet, sheet.AutoFilter, out var autoFilterRange))
+        if (AutoFilterRangeResolver.TryGetWorksheetAutoFilterRange(sheet, out var autoFilterRange))
             FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, autoFilterRange);
         else
             FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
@@ -55,30 +55,6 @@ public sealed class ToggleWorksheetAutoFilterCommand : IWorkbookCommand, IEstima
         sheet.FilterHiddenRows.Clear();
         if (_previousFilterHiddenRows is not null)
             sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
-    }
-
-    private static bool TryGetAutoFilterRange(
-        Sheet sheet,
-        WorksheetAutoFilterModel autoFilter,
-        out GridRange range)
-    {
-        range = default;
-        if (string.IsNullOrWhiteSpace(autoFilter.Reference))
-            return false;
-
-        try
-        {
-            range = GridRange.Parse(autoFilter.Reference, sheet.Id);
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
     }
 
     private static WorksheetAutoFilterModel? CloneAutoFilter(WorksheetAutoFilterModel? autoFilter)
