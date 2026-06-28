@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using ManageConditionalFormatsPlanner = FreeX.App.Presentation.ConditionalFormatting.ManageConditionalFormatsPlanner;
 
 namespace FreeX.App.Host;
 
