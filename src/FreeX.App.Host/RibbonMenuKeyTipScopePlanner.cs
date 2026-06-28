@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.Ribbon.KeyTips;
 
 namespace FreeX.App.Host;
 
@@ -7,28 +8,14 @@ public static class RibbonMenuKeyTipScopePlanner
 {
     public static string? GetScopePrefix(ItemsControl scopeOwner) =>
         scopeOwner is MenuItem menuItem
-            ? NormalizeKeyTip(RibbonTooltip.GetKeyTip(menuItem))
+            ? RibbonKeyTipText.Normalize(RibbonTooltip.GetKeyTip(menuItem))
             : null;
 
     public static string? GetScopedKeyTip(DependencyObject element, ItemsControl scopeOwner) =>
         GetScopedKeyTip(element, GetScopePrefix(scopeOwner));
 
     public static string? GetScopedKeyTip(DependencyObject element, string? scopePrefix)
-    {
-        var keyTip = NormalizeKeyTip(RibbonTooltip.GetKeyTip(element));
-        if (keyTip is null)
-            return null;
-
-        var prefix = NormalizeKeyTip(scopePrefix);
-        if (prefix is { Length: > 0 } &&
-            keyTip.Length > prefix.Length &&
-            keyTip.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return keyTip[prefix.Length..];
-        }
-
-        return keyTip;
-    }
+        => RibbonKeyTipText.ApplyScopePrefix(RibbonTooltip.GetKeyTip(element), scopePrefix);
 
     public static void ApplyScopedInputGestureText(ItemsControl scopeOwner)
     {
@@ -48,6 +35,4 @@ public static class RibbonMenuKeyTipScopePlanner
         }
     }
 
-    private static string? NormalizeKeyTip(string? keyTip) =>
-        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim().ToUpperInvariant();
 }

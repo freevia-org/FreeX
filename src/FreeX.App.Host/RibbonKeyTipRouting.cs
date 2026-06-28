@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.Ribbon.KeyTips;
 
 namespace FreeX.App.Host;
 
@@ -10,10 +11,10 @@ public static class RibbonKeyTipRouting
             elements,
             keyTip,
             preferLongerPrefix: false,
-            element => NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)));
+            element => RibbonKeyTipText.Normalize(RibbonTooltip.GetKeyTip(element)));
 
     public static bool HasKeyTipPrefix(IEnumerable<FrameworkElement> elements, string keyTipPrefix) =>
-        HasPrefix(elements, keyTipPrefix, element => NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)));
+        HasPrefix(elements, keyTipPrefix, element => RibbonKeyTipText.Normalize(RibbonTooltip.GetKeyTip(element)));
 
     public static MenuItem? ResolveMenuItem(IEnumerable<MenuItem> menuItems, string keyTip) =>
         ResolveMenuItem(menuItems, keyTip, scopePrefix: null);
@@ -44,7 +45,10 @@ public static class RibbonKeyTipRouting
         if (string.IsNullOrWhiteSpace(keyTip))
             return null;
 
-        var normalizedKeyTip = keyTip.Trim();
+        var normalizedKeyTip = RibbonKeyTipText.Normalize(keyTip);
+        if (normalizedKeyTip is null)
+            return null;
+
         var candidates = elements.ToList();
         var matches = candidates
             .Where(element => string.Equals(keyTipSelector(element), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
@@ -71,14 +75,14 @@ public static class RibbonKeyTipRouting
         if (string.IsNullOrWhiteSpace(keyTipPrefix))
             return false;
 
-        var normalizedPrefix = keyTipPrefix.Trim();
+        var normalizedPrefix = RibbonKeyTipText.Normalize(keyTipPrefix);
+        if (normalizedPrefix is null)
+            return false;
+
         return elements.Any(element =>
             keyTipSelector(element) is { } keyTip &&
             keyTip.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase));
     }
-
-    private static string? NormalizeKeyTip(string? keyTip) =>
-        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim();
 
     private static IEnumerable<MenuItem> FlattenMenuItems(IEnumerable<MenuItem> menuItems)
     {

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Free.Shared.Ribbon.KeyTips;
 
 namespace Free.Shared.Ribbon.Wpf;
 
@@ -34,13 +35,10 @@ public static class RibbonTooltip
     public static void SetKeyTip(DependencyObject o, string v) => o.SetValue(KeyTipProperty, v);
     public static string? GetKeyTip(DependencyObject o) => (string?)o.GetValue(KeyTipProperty);
 
-    private static string? NormalizeKeyTip(string? keyTip) =>
-        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim().ToUpperInvariant();
-
     private static void OnKeyTipChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is MenuItem menuItem)
-            menuItem.InputGestureText = NormalizeKeyTip(e.NewValue as string) ?? "";
+            menuItem.InputGestureText = RibbonKeyTipText.NormalizeOrEmpty(e.NewValue as string);
     }
 
     private static void OnChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
