@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -42,14 +43,7 @@ public sealed partial class ScenarioManagerDialog
 
     public static bool TryParseAction(string text, out ScenarioManagerAction action)
     {
-        if (ScenarioManagerPlanner.TryParseAction(text, out var plannedAction) && plannedAction is { } parsed)
-        {
-            action = parsed;
-            return true;
-        }
-
-        action = default;
-        return false;
+        return ScenarioManagerPlanner.TryParseAction(text, out action);
     }
 
     public static bool RequiresScenarioName(ScenarioManagerAction action) =>

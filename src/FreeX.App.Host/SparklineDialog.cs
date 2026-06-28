@@ -7,19 +7,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public enum SparklineRangeSelectionTarget
-{
-    DataRange,
-    Location
-}
-
-public sealed record SparklineDialogResult(string DataRangeText, string LocationText, SparklineKind Kind);
-
-public sealed record SparklineRangeSelectionRequest(
-    SparklineRangeSelectionTarget Target,
-    string CurrentText,
-    bool CollapseDialog);
-
 public sealed class SparklineDialog : Window
 {
     private readonly SheetId _sheetId;
@@ -92,12 +79,12 @@ public sealed class SparklineDialog : Window
     }
 
     public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKind kind) =>
-        SparklineDialogPlanner.CreateResult(dataRangeText, locationText, kind);
+        SparklinePlanner.CreateDialogResult(dataRangeText, locationText, kind);
 
     public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
         SparklineRangeSelectionTarget target,
         string currentText) =>
-        SparklineDialogPlanner.CreateRangeSelectionRequest(target, currentText);
+        SparklinePlanner.CreateRangeSelectionRequest(target, currentText);
 
     private void Accept()
     {
@@ -113,11 +100,11 @@ public sealed class SparklineDialog : Window
 
     private bool ValidateInputs()
     {
-        return SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId) switch
+        return SparklinePlanner.ValidateDialogInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId) switch
         {
-            SparklineDialogValidationResult.InvalidDataRange =>
+            SparklineInputValidation.InvalidDataRange =>
                 ShowInvalidInputWarning(UiText.Get("Sparkline_InvalidDataRange"), _dataRangeBox),
-            SparklineDialogValidationResult.InvalidLocation =>
+            SparklineInputValidation.InvalidLocation =>
                 ShowInvalidInputWarning(UiText.Get("Sparkline_InvalidLocationCell"), _locationBox),
             _ => true
         };
@@ -131,7 +118,7 @@ public sealed class SparklineDialog : Window
     }
 
     public static string GetKindLabel(SparklineKind kind) =>
-        SparklineDialogPlanner.GetKindLabel(kind);
+        kind == SparklineKind.WinLoss ? UiText.Get("Sparkline_KindWinLoss") : SparklinePlanner.KindKey(kind);
 
     private static int GetKindIndex(SparklineKind kind)
     {

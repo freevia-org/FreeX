@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Windows;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;

@@ -14,6 +14,19 @@ public enum SparklineInputValidation
     InvalidLocation,
 }
 
+public enum SparklineRangeSelectionTarget
+{
+    DataRange,
+    Location,
+}
+
+public sealed record SparklineDialogResult(string DataRangeText, string LocationText, SparklineKind Kind);
+
+public sealed record SparklineRangeSelectionRequest(
+    SparklineRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog);
+
 /// <summary>
 /// The marker / point-emphasis flags a Sparkline edit can toggle, surfaced as a catalog so the shell
 /// can render one checkbox per entry without hard-coding the list.
@@ -69,6 +82,23 @@ public static class SparklinePlanner
 
     /// <summary>The neutral display label for a point toggle (used as a localization-key suffix too).</summary>
     public static string ToggleKey(SparklinePointToggle toggle) => toggle.ToString();
+
+    public static SparklineDialogResult CreateDialogResult(
+        string? dataRangeText,
+        string? locationText,
+        SparklineKind kind) =>
+        new((dataRangeText ?? string.Empty).Trim(), (locationText ?? string.Empty).Trim(), kind);
+
+    public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
+        SparklineRangeSelectionTarget target,
+        string? currentText) =>
+        new(target, (currentText ?? string.Empty).Trim(), CollapseDialog: true);
+
+    public static SparklineInputValidation ValidateDialogInputs(
+        string? dataRangeText,
+        string? locationText,
+        SheetId sheetId) =>
+        ValidateInsert(dataRangeText ?? string.Empty, locationText ?? string.Empty, sheetId, out _, out _);
 
     /// <summary>
     /// Markers apply only to line sparklines; negative-point emphasis applies only to column / win-loss
