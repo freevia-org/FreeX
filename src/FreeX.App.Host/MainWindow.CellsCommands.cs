@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.Editing;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Calc;
