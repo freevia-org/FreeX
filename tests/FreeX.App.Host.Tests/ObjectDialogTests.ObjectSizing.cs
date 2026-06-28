@@ -93,9 +93,10 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("UiText.Get(\"ObjectSizing_EnterPositiveWidthAndHeightValues\")");
         source.Should().Contain("FocusInvalidSizeInput(ResolveInvalidSizeInput());");
         source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
-        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
-        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
+        source.Should().Contain("ObjectSizeDialogPlanner.ResolveInvalidSizeField(");
+        source.Should().Contain("_sizeState.FirstInvalidField");
         source.Should().Contain("private static bool TryParsePositiveSize(string text)");
+        source.Should().Contain("ObjectSizeDialogPlanner.TryParsePositiveSize(text, out _)");
         source.Should().Contain("private static void FocusInvalidSizeInput(TextBox textBox)");
         source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
     }
@@ -105,9 +106,11 @@ public sealed partial class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
 
-        source.Should().Contain("FormatPicturePlanner.TryCreateSizeResult(input");
-        source.Should().Contain("FormatPicturePlanner.SyncHeightFromWidth(");
-        source.Should().Contain("FormatPicturePlanner.SyncWidthFromHeight(");
+        source.Should().Contain("ObjectSizeDialogPlanner.CreateState(");
+        source.Should().Contain("ObjectSizeDialogPlanner.TryCreateDelimitedSize(input");
+        source.Should().Contain("ObjectSizeDialogPlanner.SyncHeightFromWidth(");
+        source.Should().Contain("ObjectSizeDialogPlanner.SyncWidthFromHeight(");
+        source.Should().Contain("ObjectSizeDialogPlanner.FormatSize(value");
         source.Should().NotContain("DrawingInputParser.TryParseSize(input");
     }
 

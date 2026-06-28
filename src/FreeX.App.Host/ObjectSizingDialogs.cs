@@ -14,25 +14,28 @@ public sealed class ObjectSizeDialog : Window
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
     private readonly CheckBox _lockAspectRatioBox = new() { Content = UiText.Get("ObjectSizing_LockAspectRatio"), IsChecked = true };
-    private readonly double _originalWidth;
-    private readonly double _originalHeight;
+    private readonly ObjectSizeDialogState _sizeState;
     private bool _updatingSize;
 
     public ObjectSizeDialogResult Result { get; private set; }
 
     public ObjectSizeDialog(double width, double height, string? title = null)
     {
-        Result = new ObjectSizeDialogResult(width, height);
-        _originalWidth = Math.Max(1, width);
-        _originalHeight = Math.Max(1, height);
+        _sizeState = ObjectSizeDialogPlanner.CreateState(
+            width,
+            height,
+            ObjectSizeDialogField.Height,
+            ObjectSizeDialogField.Height,
+            CultureInfo.CurrentCulture);
+        Result = new ObjectSizeDialogResult(_sizeState.OriginalSize.Width, _sizeState.OriginalSize.Height);
         Title = title ?? UiText.Get("ObjectSizing_ObjectSize");
         Width = 360;
         Height = 250;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _widthBox.Text = width.ToString(CultureInfo.CurrentCulture);
-        _heightBox.Text = height.ToString(CultureInfo.CurrentCulture);
+        _widthBox.Text = _sizeState.WidthText;
+        _heightBox.Text = _sizeState.HeightText;
         AutomationProperties.SetName(_heightBox, UiText.Get("ObjectSizing_ObjectHeight"));
         AutomationProperties.SetAutomationId(_heightBox, "ObjectSizeHeightBox");
         AutomationProperties.SetHelpText(_heightBox, UiText.Get("ObjectSizing_EnterTheObjectSHeight"));
@@ -51,7 +54,7 @@ public sealed class ObjectSizeDialog : Window
     public static bool TryParseSize(string input, out ObjectSizeDialogResult result)
     {
         result = new ObjectSizeDialogResult(0, 0);
-        if (!FormatPicturePlanner.TryCreateSizeResult(input, out var size) || size is null)
+        if (!ObjectSizeDialogPlanner.TryCreateDelimitedSize(input, out var size, out _))
         {
             return false;
         }
@@ -61,14 +64,10 @@ public sealed class ObjectSizeDialog : Window
     }
 
     internal static double CalculateLockedAspectHeight(double width, double originalWidth, double originalHeight) =>
-        FormatPicturePlanner.SyncHeightFromWidth(
-            width,
-            FormatPicturePlanner.AspectRatio(originalWidth, originalHeight)) ?? width;
+        ObjectSizeDialogPlanner.CalculateLockedAspectHeight(width, originalWidth, originalHeight);
 
     internal static double CalculateLockedAspectWidth(double height, double originalWidth, double originalHeight) =>
-        FormatPicturePlanner.SyncWidthFromHeight(
-            height,
-            FormatPicturePlanner.AspectRatio(originalWidth, originalHeight)) ?? height;
+        ObjectSizeDialogPlanner.CalculateLockedAspectWidth(height, originalWidth, originalHeight);
 
     internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept, string? acceptContent = null)
     {
@@ -100,17 +99,15 @@ public sealed class ObjectSizeDialog : Window
 
     private TextBox ResolveInvalidSizeInput()
     {
-        if (!TryParsePositiveSize(_heightBox.Text))
-            return _heightBox;
-
-        if (!TryParsePositiveSize(_widthBox.Text))
-            return _widthBox;
-
-        return _heightBox;
+        var invalidField = ObjectSizeDialogPlanner.ResolveInvalidSizeField(
+            _widthBox.Text,
+            _heightBox.Text,
+            _sizeState.FirstInvalidField);
+        return invalidField == ObjectSizeDialogField.Height ? _heightBox : _widthBox;
     }
 
     private static bool TryParsePositiveSize(string text) =>
-        FormatPicturePlanner.TryCreateSizeResult(text, text, out _);
+        ObjectSizeDialogPlanner.TryParsePositiveSize(text, out _);
 
     private static void FocusInvalidSizeInput(TextBox textBox)
     {
@@ -122,10 +119,10 @@ public sealed class ObjectSizeDialog : Window
         if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
             return;
 
-        if (!NumericInputParser.TryParseFiniteDouble(_widthBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var width) || width <= 0)
+        if (ObjectSizeDialogPlanner.SyncHeightFromWidth(_widthBox.Text, _sizeState.OriginalSize) is not { } height)
             return;
 
-        SetHeight(CalculateLockedAspectHeight(width, _originalWidth, _originalHeight));
+        SetHeight(height);
     }
 
     private void HeightBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -133,10 +130,10 @@ public sealed class ObjectSizeDialog : Window
         if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
             return;
 
-        if (!NumericInputParser.TryParseFiniteDouble(_heightBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var height) || height <= 0)
+        if (ObjectSizeDialogPlanner.SyncWidthFromHeight(_heightBox.Text, _sizeState.OriginalSize) is not { } width)
             return;
 
-        SetWidth(CalculateLockedAspectWidth(height, _originalWidth, _originalHeight));
+        SetWidth(width);
     }
 
     private void SetWidth(double width)
@@ -166,7 +163,7 @@ public sealed class ObjectSizeDialog : Window
     }
 
     private static string FormatSize(double value) =>
-        Math.Round(value, 2).ToString("0.##", CultureInfo.CurrentCulture);
+        ObjectSizeDialogPlanner.FormatSize(value, CultureInfo.CurrentCulture);
 
     private StackPanel CreateSizeContent(Action accept)
     {
