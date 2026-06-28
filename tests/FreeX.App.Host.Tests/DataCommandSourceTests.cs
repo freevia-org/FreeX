@@ -26,13 +26,18 @@ public sealed class DataCommandSourceTests
         editingDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
         editingDropdownSource.Should().Contain("AutoFilterMenuResources.TextProvider");
         filterSource.Should().Contain("FilterPromptPlanner.TryPlan(value, out var promptPlan, out var promptError)");
+        filterSource.Should().Contain("FormatFilterPromptPlanError(promptError)");
         filterSource.Should().Contain("new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)");
         filterSource.Should().Contain("private void ClearFilterButton_Click(object sender, RoutedEventArgs e)");
-        filterSource.Should().Contain("ClearFilterRangePlanner.Create(sheet, selectedRange)");
+        filterSource.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
+        filterSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter(sheet, range)");
+        filterSource.Should().NotContain("ClearFilterRangePlanner.");
         filterSource.Should().Contain("ClearRememberedAutoFilterCommand();");
         filterSource.Should().Contain("private void ReapplyAutoFilter()");
 
         dataSource.Should().Contain("new AdvancedFilterDialog(");
+        dataSource.Should().Contain("AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected)");
+        dataSource.Should().NotContain("AdvancedFilterDefaultListRangePlanner.");
         dataSource.Should().Contain("() => new AdvancedFilterCommand(");
         dataSource.Should().Contain("ApplyAdvancedFilterRangeSelection(dialog, request)");
     }

@@ -36,6 +36,12 @@ public sealed class AutoFilterPlannerSourceGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterDropdownPlanner.cs"))
             .Should()
             .BeFalse("WPF Host should call the shared dropdown planner directly and keep only UI text resources local");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ClearFilterRangePlanner.cs"))
+            .Should()
+            .BeFalse("WPF Host should call the shared AutoFilter range and active-filter planners directly");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "FilterPromptPlanner.cs"))
+            .Should()
+            .BeFalse("filter prompt parsing should live below Host, with WPF owning only localized error text");
     }
 
     [Fact]
@@ -47,7 +53,8 @@ public sealed class AutoFilterPlannerSourceGuardTests
         var avaloniaSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
         var hostDropdownSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.EditingDropdowns.cs"));
         var hostResourcesSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterMenuResources.cs"));
-        var hostClearSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ClearFilterRangePlanner.cs"));
+        var hostDataFilterSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+        var presentationPromptSource = File.ReadAllText(Path.Combine(presentationRoot, "Filtering", "FilterPromptPlanner.cs"));
 
         avaloniaSource.Should().Contain("AutoFilterHeaderButtonPlanner.IsFilterButtonCell");
         avaloniaSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
@@ -59,9 +66,14 @@ public sealed class AutoFilterPlannerSourceGuardTests
         hostDropdownSource.Should().NotContain("AutoFilterDropdownPlanner.");
         hostResourcesSource.Should().Contain("IAutoFilterMenuTextProvider");
         hostResourcesSource.Should().NotContain("AutoFilterDropdownMenuPlanner.");
-        hostClearSource.Should().Contain("AutoFilterToggleRangePlanner.Create");
-        hostClearSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter");
-        hostClearSource.Should().NotContain("SelectionRangeService.GetCurrentRegion");
+        hostDataFilterSource.Should().Contain("AutoFilterToggleRangePlanner.Create(sheet, selectedRange)");
+        hostDataFilterSource.Should().Contain("AutoFilterDropdownMenuPlanner.HasActiveFilter(sheet, range)");
+        hostDataFilterSource.Should().Contain("FormatFilterPromptPlanError(promptError)");
+        hostDataFilterSource.Should().Contain("UiText.Get(\"FilterPrompt_ErrorTopBottomSyntax\")");
+        presentationPromptSource.Should().Contain("FilterInputParser.TryParseTopBottom");
+        presentationPromptSource.Should().Contain("FilterInputParser.TryParseCriterion");
+        presentationPromptSource.Should().NotContain("UiText.Get(");
+        hostDataFilterSource.Should().NotContain("SelectionRangeService.GetCurrentRegion");
     }
 
     [Fact]

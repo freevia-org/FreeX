@@ -1,7 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Services.Tests;
 
 public sealed class QuickSortRangePlannerTests
 {
