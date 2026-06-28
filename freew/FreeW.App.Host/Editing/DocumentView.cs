@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using FreeW.App.Host;
 using System.Diagnostics;
