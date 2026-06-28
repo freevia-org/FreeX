@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class AutoFilterDropdownPlannerTests
+public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
 {
     [Fact]
     public void CreateMenuPlan_BuildsExcelStyleTextFilterMenuSections()
@@ -20,7 +20,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 3, 1)),
             FilterColumnOffset: 0);
 
-        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var menu = CreateMenuPlan(sheet, plan);
 
         menu.HeaderText.Should().Be("Fruit");
         menu.FilterKind.Should().Be(AutoFilterMenuFilterKind.Text);
@@ -50,7 +50,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 4, 4)),
             FilterColumnOffset: 0);
 
-        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var menu = CreateMenuPlan(sheet, plan);
 
         menu.HeaderText.Should().Be(UiText.Format("AutoFilter_ColumnHeader", "C"));
         menu.Entries.Should().Contain(entry => entry.Header == UiText.Format("AutoFilter_ClearFilterFrom", UiText.Format("AutoFilter_ColumnHeader", "C")));
@@ -69,9 +69,9 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 3, 1)),
             FilterColumnOffset: 0);
 
-        var withoutFilter = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var withoutFilter = CreateMenuPlan(sheet, plan);
         sheet.FilterHiddenRows.Add(3);
-        var withFilter = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var withFilter = CreateMenuPlan(sheet, plan);
 
         withoutFilter.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.ClearFilter)
             .IsEnabled.Should().BeFalse();
@@ -93,7 +93,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 3, 1)),
             FilterColumnOffset: 0);
 
-        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var menu = CreateMenuPlan(sheet, plan);
 
         menu.Entries.Select(entry => entry.Kind).Should().ContainInOrder(
             AutoFilterMenuEntryKind.SortAscending,
@@ -123,7 +123,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
                 new CellAddress(SheetId, 3, 1)),
             FilterColumnOffset: 0);
 
-        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var menu = CreateMenuPlan(sheet, plan);
 
         menu.Sections.Select(section => section.Kind).Should().Equal(
             AutoFilterMenuSectionKind.Sort,

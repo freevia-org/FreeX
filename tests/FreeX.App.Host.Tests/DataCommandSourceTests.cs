@@ -23,7 +23,8 @@ public sealed class DataCommandSourceTests
         filterButtonHandler.Should().NotContain("AutoFilterDialog");
         filterButtonHandler.Should().NotContain("ApplyFilterPrompt");
         filterSource.Should().NotContain("private void ApplyFilterPrompt(");
-        editingDropdownSource.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(");
+        editingDropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
+        editingDropdownSource.Should().Contain("AutoFilterMenuResources.TextProvider");
         filterSource.Should().Contain("FilterPromptPlanner.TryPlan(value, out var promptPlan, out var promptError)");
         filterSource.Should().Contain("new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)");
         filterSource.Should().Contain("private void ClearFilterButton_Click(object sender, RoutedEventArgs e)");

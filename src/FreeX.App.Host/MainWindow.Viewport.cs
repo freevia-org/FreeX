@@ -423,7 +423,7 @@ public partial class MainWindow
         SheetGrid.HiddenRows = sheet?.HiddenRows;
         SheetGrid.HiddenColumns = sheet?.HiddenCols;
         SheetGrid.AutoFilterRange = sheet is not null &&
-                                    AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
+                                    AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
             ? autoFilterRange
             : null;
         IReadOnlyList<PivotHeaderDropdownTarget> pivotHeaderDropdownTargets = sheet is null

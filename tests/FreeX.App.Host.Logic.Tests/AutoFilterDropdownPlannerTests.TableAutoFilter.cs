@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class AutoFilterDropdownPlannerTests
+public sealed partial class AutoFilterDropdownMenuPlannerHostResourceTests
 {
     // A structured Excel table can carry its AutoFilter purely inside the table definition
     // (<table><autoFilter ref="B2:G12"/></table>) with NO worksheet-level <autoFilter> element.
@@ -29,7 +29,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
             HeaderRowCount = 1
         });
 
-        AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var resolved).Should().BeTrue();
+        TryGetAutoFilterRange(sheet, out var resolved).Should().BeTrue();
         resolved.Should().Be(range);
     }
 
@@ -48,7 +48,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
             HeaderRowCount = 1
         });
 
-        AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out _).Should().BeFalse();
+        TryGetAutoFilterRange(sheet, out _).Should().BeFalse();
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed partial class AutoFilterDropdownPlannerTests
             HeaderRowCount = 1
         });
 
-        AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var resolved).Should().BeTrue();
+        TryGetAutoFilterRange(sheet, out var resolved).Should().BeTrue();
         resolved.Should().Be(new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 9, 3)));
     }
 }

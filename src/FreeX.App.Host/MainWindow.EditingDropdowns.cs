@@ -275,7 +275,7 @@ public partial class MainWindow
             return false;
         }
 
-        if (AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange))
+        if (AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange))
             return range == autoFilterRange;
 
         return SelectionRangeService.GetCurrentRegion(sheet, headerCell) is { } currentRegion &&
@@ -347,17 +347,22 @@ public partial class MainWindow
         System.Windows.Point? anchorPoint,
         out AutoFilterDropdownPlan? createdPlan)
     {
-        var currentRegion = AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
+        var currentRegion = AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)
             ? autoFilterRange
             : SelectionRangeService.GetCurrentRegion(sheet, headerCell);
         createdPlan = null;
         if (currentRegion is not { } range ||
-            !AutoFilterDropdownPlanner.TryPlan(range, headerCell, out var plan))
+            !AutoFilterDropdownMenuPlanner.TryPlan(range, headerCell, out var plan))
         {
             return null;
         }
 
-        var menuPlan = AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan);
+        var menuPlan = AutoFilterDropdownMenuPlanner.CreateMenuPlan(
+            _workbook,
+            sheet,
+            plan,
+            AutoFilterMenuResources.TextProvider,
+            AutoFilterMenuResources.BlankDisplayText);
         if (menuPlan.Entries.All(entry => entry.Kind != AutoFilterMenuEntryKind.ChecklistItem))
             return null;
 

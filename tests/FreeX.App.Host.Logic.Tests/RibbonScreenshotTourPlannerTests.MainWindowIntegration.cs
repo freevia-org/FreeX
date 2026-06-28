@@ -264,7 +264,8 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.AutoFilterFlyoutTourManifest");
 
         editingSource.Should().Contain("private AutoFilterDialog? CreateAutoFilterFlyoutDialog");
-        editingSource.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
+        editingSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
+        editingSource.Should().Contain("AutoFilterMenuResources.TextProvider");
         editingSource.Should().Contain("dialog.ConfigureAsModelessFlyout();");
         editingSource.Should().Contain("PositionAutoFilterFlyout(dialog, headerCell, anchorPoint);");
     }

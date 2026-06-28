@@ -102,7 +102,8 @@ public sealed partial class MainWindowSourceHygieneTests
         formulaReferenceSource.Should().Contain("FormulaReferenceHighlightPlanner");
         dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
         dropdownSource.Should().Contain("private void OpenActiveDropdown(");
-        dropdownSource.Should().Contain("AutoFilterDropdownPlanner");
+        dropdownSource.Should().Contain("AutoFilterDropdownMenuPlanner");
+        dropdownSource.Should().Contain("AutoFilterMenuResources");
         dropdownSource.Should().Contain("DataValidationDropdownPlanner");
     }
 
@@ -865,7 +866,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().Contain("SheetGrid.AutoFilterDropdownRequested += OnAutoFilterDropdownRequested;");
         editingSource.Should().Contain("private void OnAutoFilterDropdownRequested(CellAddress headerCell, System.Windows.Point position)");
         editingSource.Should().Contain("ShowAutoFilterDropdownForHeaderCell(sheet, headerCell, position);");
-        editingSource.Should().Contain("AutoFilterDropdownPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)");
+        editingSource.Should().Contain("AutoFilterDropdownMenuPlanner.TryGetAutoFilterRange(sheet, out var autoFilterRange)");
     }
 
     [Fact]
@@ -874,7 +875,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = ReadEditingSource();
         var dialog = DialogSourceTestSupport.ReadHostSources("AutoFilterDialog.cs");
 
-        source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
+        source.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan(");
+        source.Should().Contain("AutoFilterMenuResources.TextProvider");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
         dialog.Should().Contain("AutoFilterMenuPlan menuPlan");
         dialog.Should().Contain("CriteriaSuggestions");

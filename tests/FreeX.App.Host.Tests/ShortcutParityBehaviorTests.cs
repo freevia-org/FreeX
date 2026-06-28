@@ -325,20 +325,22 @@ public sealed class ShortcutParityBehaviorTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.EditingDropdowns.cs");
 
-        source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan");
+        source.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        source.Should().Contain("AutoFilterMenuResources.TextProvider");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
     }
 
     [Fact]
-    public void AutoFilterDropdownPlanner_SupportsCriteriaSuggestionsAndFilterFamilySubmenus()
+    public void AutoFilterDropdownMenuPlanner_SupportsCriteriaSuggestionsAndFilterFamilySubmenus()
     {
-        var hostPlannerSource = DialogSourceTestSupport.ReadHostSources("AutoFilterDropdownPlanner.cs");
+        var hostResourcesSource = DialogSourceTestSupport.ReadHostSources("AutoFilterMenuResources.cs");
         var plannerSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Presentation", "Filtering", "AutoFilterDropdownMenuPlanner.cs");
         var menuModelSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Presentation", "Filtering", "AutoFilterMenuModel.cs");
 
-        hostPlannerSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
+        hostResourcesSource.Should().Contain("IAutoFilterMenuTextProvider");
+        hostResourcesSource.Should().NotContain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
         plannerSource.Should().ContainAll(
             "SortAscending",
             "ClearFilter");
