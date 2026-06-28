@@ -1,0 +1,28 @@
+using FluentAssertions;
+
+namespace FreeX.App.Presentation.Tests.TextToColumns;
+
+public sealed class TextToColumnsSourceGuardTests
+{
+    [Fact]
+    public void FixedWidthPlanners_AreSingleSharedPresentationImplementations()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var hostRoot = Path.Combine(repoRoot, "src", "FreeX.App.Host");
+
+        File.Exists(Path.Combine(presentationRoot, "TextToColumns", "TextToColumnsFixedWidthBreakPlanner.cs"))
+            .Should()
+            .BeTrue("fixed-width break parsing and mutation should be shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "TextToColumns", "TextToColumnsFixedWidthRulerPlanner.cs"))
+            .Should()
+            .BeTrue("fixed-width ruler coordinate planning should be shared by renderers");
+        File.Exists(Path.Combine(hostRoot, "TextToColumnsFixedWidthBreakPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared fixed-width break planner instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(hostRoot, "TextToColumnsFixedWidthRulerPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared fixed-width ruler planner instead of carrying a renderer-local facade");
+    }
+}
