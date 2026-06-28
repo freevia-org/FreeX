@@ -22,9 +22,8 @@ namespace FreeP.App.Rendering.Wpf;
 public sealed class SelectionAdorner : Adorner
 {
     // Handle appearance
-    private const double HandleSize = 8.0;           // screen px
-    private const double RotateHandleRadius = 4.0;   // screen px
-    private const double RotateHandleOffset = 18.0;  // above top-middle handle, screen px
+    private const double HandleSize = SelectionAdornerGeometry.HandleSize;
+    private const double RotateHandleRadius = SelectionAdornerGeometry.RotateHandleRadius;
 
     private static readonly Pen SelectionPen;
     private static readonly Pen PreviewPen;
@@ -226,7 +225,8 @@ public sealed class SelectionAdorner : Adorner
 
         // Rotate handle above N handle
         var topCenter = new Point(rect.Left + rect.Width / 2, rect.Top);
-        double rotY = topCenter.Y - RotateHandleOffset;
+        var rotateCenter = GetRotateHandleCenter(rect);
+        double rotY = rotateCenter.Y;
         dc.DrawLine(new Pen(HandleBorder.Brush, 1.0),
             new Point(topCenter.X, topCenter.Y),
             new Point(topCenter.X, rotY));
@@ -240,19 +240,9 @@ public sealed class SelectionAdorner : Adorner
     /// </summary>
     internal static Point[] GetHandleCenters(Rect rect)
     {
-        double mx = rect.Left + rect.Width / 2;
-        double my = rect.Top  + rect.Height / 2;
-        return new[]
-        {
-            new Point(mx,         rect.Top),     // N
-            new Point(rect.Right, rect.Top),     // NE
-            new Point(rect.Right, my),           // E
-            new Point(rect.Right, rect.Bottom),  // SE
-            new Point(mx,         rect.Bottom),  // S
-            new Point(rect.Left,  rect.Bottom),  // SW
-            new Point(rect.Left,  my),           // W
-            new Point(rect.Left,  rect.Top),     // NW
-        };
+        return SelectionAdornerGeometry.GetHandleCenters(ToSelectionAdornerRect(rect))
+            .Select(ToWpfPoint)
+            .ToArray();
     }
 
     /// <summary>
@@ -260,13 +250,11 @@ public sealed class SelectionAdorner : Adorner
     /// </summary>
     internal static Point GetRotateHandleCenter(Rect rect)
     {
-        double topCenterX = rect.Left + rect.Width / 2;
-        return new Point(topCenterX, rect.Top - RotateHandleOffset);
+        return ToWpfPoint(
+            SelectionAdornerGeometry.GetRotateHandleCenter(ToSelectionAdornerRect(rect)));
     }
 
     // ── Hit-test helpers (used by CanvasGestureHandler) ───────────────────────────────────────
-
-    private const double HandleHitRadius = 8.0; // screen px
 
     public enum HandleKind
     {
@@ -281,34 +269,35 @@ public sealed class SelectionAdorner : Adorner
     /// </summary>
     public HandleKind HitTestHandle(Rect selectionRect, Point screenPt)
     {
-        // Rotate handle
-        var rotCenter = GetRotateHandleCenter(selectionRect);
-        if (Distance(screenPt, rotCenter) <= HandleHitRadius)
-            return HandleKind.Rotate;
-
-        // Resize handles
-        var centers = GetHandleCenters(selectionRect);
-        var kinds = new[]
-        {
-            HandleKind.ResizeN, HandleKind.ResizeNE, HandleKind.ResizeE, HandleKind.ResizeSE,
-            HandleKind.ResizeS, HandleKind.ResizeSW, HandleKind.ResizeW, HandleKind.ResizeNW
-        };
-
-        for (int i = 0; i < centers.Length; i++)
-        {
-            if (Distance(screenPt, centers[i]) <= HandleHitRadius)
-                return kinds[i];
-        }
-
-        // Body
-        if (selectionRect.Contains(screenPt))
-            return HandleKind.Body;
-
-        return HandleKind.None;
+        return ToHandleKind(SelectionAdornerGeometry.HitTestHandle(
+            ToSelectionAdornerRect(selectionRect),
+            ToCanvasPoint(screenPt)));
     }
 
-    private static double Distance(Point a, Point b)
-        => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    private static SelectionAdornerRect ToSelectionAdornerRect(Rect rect)
+        => new(rect.Left, rect.Top, rect.Width, rect.Height);
+
+    private static Point ToWpfPoint(CanvasGesturePoint point)
+        => new(point.X, point.Y);
+
+    private static CanvasGesturePoint ToCanvasPoint(Point point)
+        => new(point.X, point.Y);
+
+    private static HandleKind ToHandleKind(CanvasGestureHandleKind handle)
+        => handle switch
+        {
+            CanvasGestureHandleKind.Body => HandleKind.Body,
+            CanvasGestureHandleKind.ResizeN => HandleKind.ResizeN,
+            CanvasGestureHandleKind.ResizeNE => HandleKind.ResizeNE,
+            CanvasGestureHandleKind.ResizeE => HandleKind.ResizeE,
+            CanvasGestureHandleKind.ResizeSE => HandleKind.ResizeSE,
+            CanvasGestureHandleKind.ResizeS => HandleKind.ResizeS,
+            CanvasGestureHandleKind.ResizeSW => HandleKind.ResizeSW,
+            CanvasGestureHandleKind.ResizeW => HandleKind.ResizeW,
+            CanvasGestureHandleKind.ResizeNW => HandleKind.ResizeNW,
+            CanvasGestureHandleKind.Rotate => HandleKind.Rotate,
+            _ => HandleKind.None
+        };
 
     /// <summary>Selection rects accessible to the gesture handler for redraw.</summary>
     public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects => _selectionRects;
