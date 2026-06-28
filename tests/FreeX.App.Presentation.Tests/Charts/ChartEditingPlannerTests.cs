@@ -728,6 +728,114 @@ public sealed class ChartEditingPlannerTests
         chart.YAxisLineThickness.Should().Be(2);
     }
 
+    [Fact]
+    public void Axis_CanToggleSecondaryAxis_RequiresSupportedChartAndEnoughSeries()
+    {
+        ChartAxisPlanner.CanToggleSecondaryAxis(MakeChartWithSeries(ChartType.Column, columns: 4))
+            .Should().BeTrue();
+        ChartAxisPlanner.CanToggleSecondaryAxis(MakeChartWithSeries(ChartType.Column, columns: 2))
+            .Should().BeFalse();
+        ChartAxisPlanner.CanToggleSecondaryAxis(MakeChartWithSeries(ChartType.Pie, columns: 4))
+            .Should().BeFalse();
+
+        var alreadyVisible = MakeChartWithSeries(ChartType.Column, columns: 2);
+        alreadyVisible.ShowSecondaryAxis = true;
+        ChartAxisPlanner.CanToggleSecondaryAxis(alreadyVisible).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Axis_PlanSecondaryAxisToggle_ClearsSeriesIndexes()
+    {
+        var chart = MakeChartWithSeries(ChartType.Column, columns: 4);
+        chart.ShowSecondaryAxis = true;
+        chart.SecondaryAxisSeriesIndexes = [1, 2];
+
+        var options = ChartAxisPlanner.PlanSecondaryAxisToggle(chart);
+
+        options.ShowSecondaryAxis.Should().BeFalse();
+        options.SecondaryAxisSeriesIndexes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Axis_PlanQuickCommand_ProjectsRepeatableButtonOptions()
+    {
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            YAxisMajorTickStyle = ChartAxisTickStyle.Outside,
+            YAxisMinorTickStyle = ChartAxisTickStyle.None,
+            ShowYAxisLabels = true,
+            YAxisLabelFontSize = 14,
+            YAxisLabelAngle = 0,
+            YAxisLineThickness = 0.5,
+            ShowYAxisMajorGridlines = false,
+            ShowYAxisMinorGridlines = false,
+            YAxisGridlineThickness = 3,
+            YAxisNumberFormat = ChartDataLabelNumberFormat.General,
+        };
+
+        ChartAxisPlanner.PlanQuickCommand(chart, useXAxis: false, ChartAxisQuickCommand.TickMarks)
+            .YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Inside);
+        ChartAxisPlanner.PlanQuickCommand(chart, useXAxis: false, ChartAxisQuickCommand.Labels)
+            .ShowYAxisLabels.Should().BeFalse();
+        ChartAxisPlanner.PlanQuickCommand(chart, useXAxis: false, ChartAxisQuickCommand.LabelFont)
+            .YAxisLabelFontSize.Should().Be(9);
+        ChartAxisPlanner.PlanQuickCommand(chart, useXAxis: false, ChartAxisQuickCommand.LabelAngle)
+            .YAxisLabelAngle.Should().Be(-45);
+        ChartAxisPlanner.PlanQuickCommand(chart, useXAxis: false, ChartAxisQuickCommand.AxisLine)
+            .YAxisLineThickness.Should().Be(1.5);
+        ChartAxisPlanner.PlanQuickCommand(chart, useXAxis: false, ChartAxisQuickCommand.Gridlines)
+            .ShowYAxisMajorGridlines.Should().BeTrue();
+        ChartAxisPlanner.PlanQuickCommand(chart, useXAxis: false, ChartAxisQuickCommand.GridlineStyle)
+            .YAxisGridlineThickness.Should().Be(1);
+        ChartAxisPlanner.PlanQuickCommand(chart, useXAxis: false, ChartAxisQuickCommand.NumberFormat)
+            .YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Number);
+    }
+
+    [Fact]
+    public void Axis_PlanLogScaleToggle_AddsPositiveBoundsWhenEnabling()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var chart = CreateChartWithRange(sheet.Id, ChartType.Column, columns: 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(-5));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(25));
+
+        var plan = ChartAxisPlanner.PlanLogScaleToggle(sheet, chart, useXAxis: false);
+
+        plan.Success.Should().BeTrue();
+        plan.Options.Should().NotBeNull();
+        plan.Options!.YAxisLogScale.Should().BeTrue();
+        plan.Options.YAxisMinimum.Should().Be(1);
+        plan.Options.YAxisMaximum.Should().Be(25);
+    }
+
+    [Fact]
+    public void Axis_PlanBoundsToggle_ReportsUnsupportedAndNumericDataIssues()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var unsupported = CreateChartWithRange(sheet.Id, ChartType.Pie, columns: 2);
+        var noNumericData = CreateChartWithRange(sheet.Id, ChartType.Column, columns: 2);
+
+        ChartAxisPlanner.PlanBoundsToggle(sheet, unsupported, useXAxis: false).Issue
+            .Should().Be(ChartAxisCommandIssue.UnsupportedBounds);
+        ChartAxisPlanner.PlanBoundsToggle(sheet, noNumericData, useXAxis: false).Issue
+            .Should().Be(ChartAxisCommandIssue.NumericBoundsRequired);
+    }
+
+    [Fact]
+    public void Axis_PlanBoundsToggle_ClearsExistingBoundsBeforeReadingData()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var chart = CreateChartWithRange(sheet.Id, ChartType.Column, columns: 2);
+        chart.YAxisMinimum = 10;
+
+        var plan = ChartAxisPlanner.PlanBoundsToggle(sheet, chart, useXAxis: false);
+
+        plan.Success.Should().BeTrue();
+        plan.Options.Should().NotBeNull();
+        plan.Options!.ClearYAxisBounds.Should().BeTrue();
+    }
+
     // ---- ChartSeriesFormatPlanner --------------------------------------------------------------------
 
     [Fact]
@@ -1469,13 +1577,18 @@ public sealed class ChartEditingPlannerTests
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Series");
+        return CreateChartWithRange(sheet.Id, type, columns);
+    }
+
+    private static ChartModel CreateChartWithRange(SheetId sheetId, ChartType type, int columns)
+    {
         return new ChartModel
         {
             Type = type,
             FirstColIsCategories = true,
             DataRange = new GridRange(
-                new CellAddress(sheet.Id, 1, 1),
-                new CellAddress(sheet.Id, 6, (uint)columns)),
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 6, (uint)columns)),
         };
     }
 

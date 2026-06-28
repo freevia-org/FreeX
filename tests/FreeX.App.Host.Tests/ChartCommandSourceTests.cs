@@ -68,6 +68,7 @@ public sealed class ChartCommandSourceTests
         var chartSource = ReadHostSourceFile("MainWindow.ChartCommands.cs");
         var axisSource = ReadHostSourceFile("MainWindow.ChartAxisCommands.cs");
         var cyclerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartOptionCycler.cs");
+        var axisPlannerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartAxisPlanner.cs");
 
         chartSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
         chartSource.Should().Contain("ChartQuickFormatCycler.NextChartTitleFontSize(");
@@ -88,10 +89,15 @@ public sealed class ChartCommandSourceTests
         chartSource.Should().NotContain("LegendBorderThickness: chart.LegendBorderThickness >= 3");
         chartSource.Should().NotContain("TrendlineThickness: chart.TrendlineThickness >= 3");
 
-        axisSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
-        axisSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
-        axisSource.Should().Contain("ChartOptionCycler.NextAxisTickState(");
-        axisSource.Should().Contain("ChartOptionCycler.TryGetAxisBounds(");
+        axisSource.Should().Contain("ChartAxisPlanner.PlanQuickCommand(");
+        axisSource.Should().Contain("ChartAxisPlanner.PlanLogScaleToggle");
+        axisSource.Should().Contain("ChartAxisPlanner.PlanBoundsToggle");
+        axisSource.Should().NotContain("ChartQuickFormatCycler.");
+        axisSource.Should().NotContain("ChartOptionCycler.");
+        axisPlannerSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
+        axisPlannerSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
+        axisPlannerSource.Should().Contain("ChartOptionCycler.NextAxisTickState(");
+        axisPlannerSource.Should().Contain("ChartOptionCycler.TryGetAxisBounds(");
         chartSource.Should().Contain("ChartOptionCycler.GetNextSecondaryAxisSeries(");
         cyclerSource.Should().NotContain("public static CellColor NextSeriesColor(");
         cyclerSource.Should().NotContain("NextDataLabelPosition(");

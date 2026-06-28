@@ -13,12 +13,9 @@ public partial class MainWindow
         if (!TryExecuteRepeatableChartLayout(
                 "Secondary Axis",
                 UiText.Get("MainWindowMessage_ChartSecondaryAxisRequiresChart"),
-                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) &&
-                         (chart.ShowSecondaryAxis || ChartOptionCycler.GetSeriesCount(chart) >= 2),
+                ChartAxisPlanner.CanToggleSecondaryAxis,
                 UiText.Get("MainWindowMessage_ChartSecondaryAxisUnsupported"),
-                chart => new ChartLayoutOptions(
-                    ShowSecondaryAxis: !chart.ShowSecondaryAxis,
-                    SecondaryAxisSeriesIndexes: [])))
+                ChartAxisPlanner.PlanSecondaryAxisToggle))
             return;
 
         UpdateViewport();
@@ -140,264 +137,136 @@ public partial class MainWindow
     private void ToggleChartAxisTicks(bool useXAxis)
     {
         var caption = useXAxis ? "X Axis Ticks" : "Y Axis Ticks";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartAxisTicksRequiresChart"),
-                null,
-                null,
-                chart =>
-                {
-                    var (major, minor) = useXAxis
-                        ? ChartOptionCycler.NextAxisTickState(chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle)
-                        : ChartOptionCycler.NextAxisTickState(chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle);
-                    return useXAxis
-                        ? new ChartLayoutOptions(XAxisMajorTickStyle: major, XAxisMinorTickStyle: minor)
-                        : new ChartLayoutOptions(YAxisMajorTickStyle: major, YAxisMinorTickStyle: minor);
-                }))
-            return;
-
-        UpdateViewport();
+        ToggleChartAxisQuickCommand(
+            useXAxis,
+            ChartAxisQuickCommand.TickMarks,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisTicksRequiresChart"));
     }
 
     private void ToggleChartAxisLabels(bool useXAxis)
     {
         var caption = useXAxis ? "X Axis Labels" : "Y Axis Labels";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartAxisLabelsRequiresChart"),
-                null,
-                null,
-                chart => useXAxis
-                    ? new ChartLayoutOptions(ShowXAxisLabels: !chart.ShowXAxisLabels)
-                    : new ChartLayoutOptions(ShowYAxisLabels: !chart.ShowYAxisLabels)))
-            return;
-
-        UpdateViewport();
+        ToggleChartAxisQuickCommand(
+            useXAxis,
+            ChartAxisQuickCommand.Labels,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisLabelsRequiresChart"));
     }
 
     private void ToggleChartAxisLabelFont(bool useXAxis)
     {
         var caption = useXAxis ? "X Axis Label Font" : "Y Axis Label Font";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartAxisLabelFormattingRequiresChart"),
-                null,
-                null,
-                chart =>
-                {
-                    var currentColor = useXAxis ? chart.XAxisLabelTextColor : chart.YAxisLabelTextColor;
-                    var currentSize = useXAxis ? chart.XAxisLabelFontSize : chart.YAxisLabelFontSize;
-                    var nextColor = ChartQuickFormatCycler.NextSeriesColor(currentColor);
-                    var nextSize = currentSize >= 14 ? 9 : currentSize + 1;
-                    return useXAxis
-                        ? new ChartLayoutOptions(XAxisLabelTextColor: nextColor, XAxisLabelFontSize: nextSize)
-                        : new ChartLayoutOptions(YAxisLabelTextColor: nextColor, YAxisLabelFontSize: nextSize);
-                }))
-            return;
-
-        UpdateViewport();
+        ToggleChartAxisQuickCommand(
+            useXAxis,
+            ChartAxisQuickCommand.LabelFont,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisLabelFormattingRequiresChart"));
     }
 
     private void ToggleChartAxisLabelAngle(bool useXAxis)
     {
         var caption = useXAxis ? "X Axis Label Angle" : "Y Axis Label Angle";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartAxisLabelRotationRequiresChart"),
-                null,
-                null,
-                chart =>
-                {
-                    var currentAngle = useXAxis ? chart.XAxisLabelAngle : chart.YAxisLabelAngle;
-                    var nextAngle = ChartOptionCycler.NextAxisLabelAngle(currentAngle);
-                    return useXAxis
-                        ? new ChartLayoutOptions(XAxisLabelAngle: nextAngle)
-                        : new ChartLayoutOptions(YAxisLabelAngle: nextAngle);
-                }))
-            return;
-
-        UpdateViewport();
+        ToggleChartAxisQuickCommand(
+            useXAxis,
+            ChartAxisQuickCommand.LabelAngle,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisLabelRotationRequiresChart"));
     }
 
     private void ToggleChartAxisLine(bool useXAxis)
     {
         var caption = useXAxis ? "X Axis Line" : "Y Axis Line";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartAxisLineFormattingRequiresChart"),
-                null,
-                null,
-                chart =>
-                {
-                    var currentColor = useXAxis ? chart.XAxisLineColor : chart.YAxisLineColor;
-                    var currentThickness = useXAxis ? chart.XAxisLineThickness : chart.YAxisLineThickness;
-                    var (nextColor, nextThickness) = ChartOptionCycler.NextAxisLineState(currentColor, currentThickness);
-                    return useXAxis
-                        ? new ChartLayoutOptions(XAxisLineColor: nextColor, XAxisLineThickness: nextThickness)
-                        : new ChartLayoutOptions(YAxisLineColor: nextColor, YAxisLineThickness: nextThickness);
-                }))
-            return;
-
-        UpdateViewport();
+        ToggleChartAxisQuickCommand(
+            useXAxis,
+            ChartAxisQuickCommand.AxisLine,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisLineFormattingRequiresChart"));
     }
 
     private void ToggleChartAxisGridlines(bool useXAxis)
     {
         var caption = useXAxis ? "X Axis Gridlines" : "Y Axis Gridlines";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartAxisGridlinesRequiresChart"),
-                null,
-                null,
-                chart =>
-                {
-                    var (showMajor, showMinor) = useXAxis
-                        ? ChartQuickFormatCycler.NextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines)
-                        : ChartQuickFormatCycler.NextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
-                    return useXAxis
-                        ? new ChartLayoutOptions(ShowXAxisMajorGridlines: showMajor, ShowXAxisMinorGridlines: showMinor)
-                        : new ChartLayoutOptions(ShowYAxisMajorGridlines: showMajor, ShowYAxisMinorGridlines: showMinor);
-                }))
-            return;
-
-        UpdateViewport();
+        ToggleChartAxisQuickCommand(
+            useXAxis,
+            ChartAxisQuickCommand.Gridlines,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisGridlinesRequiresChart"));
     }
 
     private void ToggleChartAxisGridlineStyle(bool useXAxis)
     {
         var caption = useXAxis ? "X Gridline Style" : "Y Gridline Style";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartGridlineFormattingRequiresChart"),
-                null,
-                null,
-                chart =>
-                {
-                    var currentMajorColor = useXAxis ? chart.XAxisMajorGridlineColor : chart.YAxisMajorGridlineColor;
-                    var currentMinorColor = useXAxis ? chart.XAxisMinorGridlineColor : chart.YAxisMinorGridlineColor;
-                    var currentThickness = useXAxis ? chart.XAxisGridlineThickness : chart.YAxisGridlineThickness;
-                    var nextMajorColor = ChartQuickFormatCycler.NextSeriesColor(currentMajorColor);
-                    var nextMinorColor = ChartQuickFormatCycler.NextSeriesColor(currentMinorColor ?? currentMajorColor);
-                    var nextThickness = currentThickness >= 3 ? 1 : currentThickness + 0.5;
-                    return useXAxis
-                        ? new ChartLayoutOptions(
-                            XAxisMajorGridlineColor: nextMajorColor,
-                            XAxisMinorGridlineColor: nextMinorColor,
-                            XAxisGridlineThickness: nextThickness,
-                            ShowXAxisMajorGridlines: true)
-                        : new ChartLayoutOptions(
-                            YAxisMajorGridlineColor: nextMajorColor,
-                            YAxisMinorGridlineColor: nextMinorColor,
-                            YAxisGridlineThickness: nextThickness,
-                            ShowYAxisMajorGridlines: true);
-                }))
-            return;
-
-        UpdateViewport();
+        ToggleChartAxisQuickCommand(
+            useXAxis,
+            ChartAxisQuickCommand.GridlineStyle,
+            caption,
+            UiText.Get("MainWindowMessage_ChartGridlineFormattingRequiresChart"));
     }
 
     private void ToggleChartAxisNumberFormat(bool useXAxis)
     {
         var caption = useXAxis ? "X Axis Number Format" : "Y Axis Number Format";
-        if (!TryExecuteRepeatableChartLayout(
-                caption,
-                UiText.Get("MainWindowMessage_ChartAxisNumberFormatRequiresChart"),
-                null,
-                null,
-                chart =>
-                {
-                    var next = ChartOptionCycler.NextDataLabelNumberFormat(useXAxis ? chart.XAxisNumberFormat : chart.YAxisNumberFormat);
-                    return useXAxis
-                        ? new ChartLayoutOptions(XAxisNumberFormat: next)
-                        : new ChartLayoutOptions(YAxisNumberFormat: next);
-                }))
-            return;
-
-        UpdateViewport();
+        ToggleChartAxisQuickCommand(
+            useXAxis,
+            ChartAxisQuickCommand.NumberFormat,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisNumberFormatRequiresChart"));
     }
 
     private void ToggleChartAxisLogScale(bool useXAxis)
     {
         var caption = useXAxis ? "X Log Scale" : "Y Log Scale";
-        IWorkbookCommand CreateCommand()
-        {
-            var sheet = _workbook.GetSheet(_currentSheetId);
-            var chart = FindFirstChart(sheet);
-            if (sheet is null || chart is null)
-                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisScaleRequiresChart"));
-
-            if (useXAxis && !ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
-                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartXAxisLogScaleSupportedTypes"));
-
-            if (!useXAxis && !ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
-                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartYAxisLogScaleSupportedTypes"));
-
-            var enableLog = useXAxis ? !chart.XAxisLogScale : !chart.YAxisLogScale;
-            var options = useXAxis
-                ? new ChartLayoutOptions(XAxisLogScale: enableLog)
-                : new ChartLayoutOptions(YAxisLogScale: enableLog);
-
-            if (enableLog && ChartOptionCycler.TryGetAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
-            {
-                var positiveMinimum = minimum > 0 ? minimum : 1;
-                var positiveMaximum = maximum > positiveMinimum ? maximum : positiveMinimum * 10;
-                options = useXAxis
-                    ? options with { XAxisMinimum = positiveMinimum, XAxisMaximum = positiveMaximum }
-                    : options with { YAxisMinimum = positiveMinimum, YAxisMaximum = positiveMaximum };
-            }
-
-            return new SetChartLayoutCommand(_currentSheetId, chart.Id, options);
-        }
-
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, caption);
-            return;
-        }
-
-        _repeatPostAction = null;
-        UpdateViewport();
+        ToggleChartAxisPlannedCommand(
+            useXAxis,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisScaleRequiresChart"),
+            ChartAxisPlanner.PlanLogScaleToggle);
     }
 
     private void ToggleChartAxisBounds(bool useXAxis)
     {
         var caption = useXAxis ? "X Axis Bounds" : "Y Axis Bounds";
+        ToggleChartAxisPlannedCommand(
+            useXAxis,
+            caption,
+            UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresChart"),
+            ChartAxisPlanner.PlanBoundsToggle);
+    }
+
+    private void ToggleChartAxisQuickCommand(
+        bool useXAxis,
+        ChartAxisQuickCommand command,
+        string caption,
+        string requiresChartMessage)
+    {
+        if (!TryExecuteRepeatableChartLayout(
+                caption,
+                requiresChartMessage,
+                null,
+                null,
+                chart => ChartAxisPlanner.PlanQuickCommand(chart, useXAxis, command)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ToggleChartAxisPlannedCommand(
+        bool useXAxis,
+        string caption,
+        string requiresChartMessage,
+        Func<Sheet, ChartModel, bool, ChartAxisCommandPlan> planner)
+    {
         IWorkbookCommand CreateCommand()
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
             var chart = FindFirstChart(sheet);
             if (sheet is null || chart is null)
-                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresChart"));
+                return new FailedWorkbookCommand(requiresChartMessage);
 
-            var hasBounds = useXAxis
-                ? chart.XAxisMinimum is not null || chart.XAxisMaximum is not null
-                : chart.YAxisMinimum is not null || chart.YAxisMaximum is not null;
-            if (!hasBounds &&
-                (useXAxis
-                    ? !ChartTypeSupport.SupportsXAxisBounds(chart.Type)
-                    : !ChartTypeSupport.SupportsYAxisBounds(chart.Type)))
-                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisBoundsSupportedTypes"));
-
-            ChartLayoutOptions options;
-            if (hasBounds)
-            {
-                options = useXAxis
-                    ? new ChartLayoutOptions(ClearXAxisBounds: true)
-                    : new ChartLayoutOptions(ClearYAxisBounds: true);
-            }
-            else if (ChartOptionCycler.TryGetAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
-            {
-                var majorUnit = Math.Max(double.Epsilon, (maximum - minimum) / 5);
-                var minorUnit = Math.Max(double.Epsilon, majorUnit / 2);
-                options = useXAxis
-                    ? new ChartLayoutOptions(XAxisMinimum: minimum, XAxisMaximum: maximum, XAxisMajorUnit: majorUnit, XAxisMinorUnit: minorUnit)
-                    : new ChartLayoutOptions(YAxisMinimum: minimum, YAxisMaximum: maximum, YAxisMajorUnit: majorUnit, YAxisMinorUnit: minorUnit);
-            }
-            else
-            {
-                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresNumericData"));
-            }
+            var plan = planner(sheet, chart, useXAxis);
+            if (plan.Options is not { } options)
+                return new FailedWorkbookCommand(GetChartAxisCommandIssueMessage(plan.Issue, useXAxis));
 
             return new SetChartLayoutCommand(_currentSheetId, chart.Id, options);
         }
@@ -412,6 +281,17 @@ public partial class MainWindow
         _repeatPostAction = null;
         UpdateViewport();
     }
+
+    private static string GetChartAxisCommandIssueMessage(ChartAxisCommandIssue issue, bool useXAxis) =>
+        issue switch
+        {
+            ChartAxisCommandIssue.UnsupportedLogScale => UiText.Get(useXAxis
+                ? "MainWindowMessage_ChartXAxisLogScaleSupportedTypes"
+                : "MainWindowMessage_ChartYAxisLogScaleSupportedTypes"),
+            ChartAxisCommandIssue.UnsupportedBounds => UiText.Get("MainWindowMessage_ChartAxisBoundsSupportedTypes"),
+            ChartAxisCommandIssue.NumericBoundsRequired => UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresNumericData"),
+            _ => UiText.Get("MainWindowMessage_ChartAxisOptionsRequiresChart"),
+        };
 
     private static ChartModel? FindFirstChart(Sheet? sheet)
         => ChartWorkflowTargetPlanner.FindFirstChart(sheet);
