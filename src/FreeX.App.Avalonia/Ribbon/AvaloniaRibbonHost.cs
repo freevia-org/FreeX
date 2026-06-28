@@ -66,7 +66,7 @@ internal static class AvaloniaRibbonHost
     /// <summary>
     /// Builds the ribbon control, wiring every host dialog/action the shell exposes through
     /// <paramref name="callbacks"/>. Each non-null callback overrides its control's no-op registration with
-    /// a <see cref="RelayRibbonCommand"/>; null callbacks (e.g. in the smoke harness) leave the no-op.
+    /// an <see cref="ActionRibbonCommand"/>; null callbacks (e.g. in the smoke harness) leave the no-op.
     /// </summary>
     public static Control Build(
         Func<WorkbookSession?> session,
@@ -182,17 +182,6 @@ internal sealed record AvaloniaRibbonHostCallbacks
     public IReadOnlyDictionary<string, Func<RibbonCommandState>>? ExtraCommandStates { get; init; }
 }
 
-/// <summary>An <see cref="IRibbonCommand"/> that invokes a host-supplied callback (e.g. opens a dialog).</summary>
-internal sealed class RelayRibbonCommand : IRibbonCommand
-{
-    private readonly Action _execute;
-
-    public RelayRibbonCommand(Action execute)
-        => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-
-    public void Execute(RibbonCommandContext context) => _execute();
-}
-
 /// <summary>An <see cref="IRibbonStatefulCommand"/> that invokes a host callback and reports live UI state.</summary>
 internal sealed class StatefulRelayRibbonCommand : IRibbonStatefulCommand
 {
@@ -208,31 +197,6 @@ internal sealed class StatefulRelayRibbonCommand : IRibbonStatefulCommand
     public void Execute(RibbonCommandContext context) => _execute();
 
     public RibbonCommandState GetState() => _getState() ?? RibbonCommandState.Default;
-}
-
-/// <summary>
-/// An <see cref="IRibbonCommand"/> for value-bearing controls (combo boxes / galleries): invokes a
-/// host-supplied callback with the control's selected value (<see cref="RibbonCommandContext.SelectedValue"/>).
-/// </summary>
-internal sealed class RelayValueRibbonCommand : IRibbonCommand
-{
-    private readonly Action<string?> _execute;
-
-    public RelayValueRibbonCommand(Action<string?> execute)
-        => _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-
-    public void Execute(RibbonCommandContext context) => _execute(context.SelectedValue);
-}
-
-/// <summary>A do-nothing command — enough to mark a control as registered/enabled.</summary>
-internal sealed class NoOpRibbonCommand : IRibbonCommand
-{
-    public static readonly NoOpRibbonCommand Instance = new();
-
-    public void Execute(RibbonCommandContext context)
-    {
-        // Intentionally empty: the Avalonia shell wires real behavior elsewhere.
-    }
 }
 
 /// <summary>A disabled placeholder for shared ribbon commands that are intentionally unavailable.</summary>
@@ -310,12 +274,12 @@ internal static class AvaloniaRibbonComposition
     {
         var registry = new RibbonCommandRegistry();
 
-        // Seed every canonical id the shared definition emits with the honest NoOp stub, so the shared
+        // Seed every canonical id the shared definition emits with the shared no-op stub, so the shared
         // definition's richer surface (Draw/Help tabs, deeper menus) renders enabled without a crash even
         // before any real handler is wired. Real handlers below override the relevant ids.
         var definition = BuildDefinition();
         foreach (var id in EnumerateCommandIds(definition))
-            registry.Register(id, NoOpRibbonCommand.Instance);
+            registry.Register(id, EmptyRibbonCommand.Instance);
 
         RegisterDisabledDrawDefaults(registry, definition);
 
@@ -352,7 +316,7 @@ internal static class AvaloniaRibbonComposition
         => registry.Register(new RibbonCommandId(AvaloniaCommandIdAdapter.ToCanonical(avaloniaId)), command);
 
     /// <summary>
-    /// Binds each non-null host callback to its canonical command id(s) via a <see cref="RelayRibbonCommand"/>,
+    /// Binds each non-null host callback to its canonical command id(s) via an <see cref="ActionRibbonCommand"/>,
     /// replacing the no-op registration. Null callbacks leave the no-op so the smoke harness still builds.
     /// </summary>
     private static void ApplyHostCallbacks(IRibbonCommandRegistry registry, AvaloniaRibbonHostCallbacks callbacks)
@@ -372,7 +336,7 @@ internal static class AvaloniaRibbonComposition
                 return new StatefulRelayRibbonCommand(action, state);
             }
 
-            return new RelayRibbonCommand(action);
+            return new ActionRibbonCommand(action);
         }
 
         Bind("data.textToColumns", callbacks.OpenTextToColumns);
@@ -388,9 +352,9 @@ internal static class AvaloniaRibbonComposition
         Bind("home.formatPainter", callbacks.FormatPainter);
 
         if (callbacks.SetFontSize is { } setFontSize)
-            Register(registry, "home.fontSize", new RelayValueRibbonCommand(setFontSize));
+            Register(registry, "home.fontSize", new ValueRibbonCommand(setFontSize));
         if (callbacks.SetFontName is { } setFontName)
-            Register(registry, "home.fontName", new RelayValueRibbonCommand(setFontName));
+            Register(registry, "home.fontName", new ValueRibbonCommand(setFontName));
         Bind("data.sortAsc", callbacks.SortAscending);
         Bind("data.sortDesc", callbacks.SortDescending);
         Bind("data.filter", callbacks.ToggleFilter);
