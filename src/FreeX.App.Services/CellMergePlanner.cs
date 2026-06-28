@@ -58,6 +58,25 @@ public static class CellMergePlanner
         return CreateUnmergeCommands(sheet, sheetId, range);
     }
 
+    public static IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(
+        Sheet sheet,
+        SheetId sheetId,
+        GridRange range,
+        bool mergeCells,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
+    {
+        if (mergeCells)
+        {
+            return contentResolution == MergeCellContentResolution.ConcatenateAllCells
+                ? CreateMergeAndCenterCommands(sheet, sheetId, range, contentResolution)
+                    .Where(command => command is not ApplyStyleCommand)
+                    .ToList()
+                : CreateMergeCommands(sheet, sheetId, range, mergeCells: true);
+        }
+
+        return CreateMergeCommands(sheet, sheetId, range, mergeCells: false);
+    }
+
     public static IReadOnlyList<IWorkbookCommand> CreateUnmergeCommands(Sheet sheet, SheetId sheetId, GridRange range) =>
         sheet.MergedRegions
             .Where(region => region.Overlaps(range))

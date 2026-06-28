@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using FreeX.App.Presentation.Editing;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 

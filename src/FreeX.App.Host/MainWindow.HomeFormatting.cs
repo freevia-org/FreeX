@@ -253,7 +253,7 @@ public partial class MainWindow
         if (_workbook.GetSheet(sheetId) is not { } sheet)
             return new MergeCellsCommand(sheetId, range);
 
-        var commands = FormatCellsMergePlanner.CreateMergeCommands(
+        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
             sheet,
             sheetId,
             range,

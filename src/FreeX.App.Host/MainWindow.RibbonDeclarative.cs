@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using Free.Shared.Ribbon;
 
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 

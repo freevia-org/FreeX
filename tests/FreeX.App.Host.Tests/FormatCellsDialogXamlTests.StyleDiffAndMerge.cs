@@ -305,7 +305,7 @@ public sealed partial class FormatCellsDialogXamlTests
     }
 
     [Fact]
-    public void FormatCellsMergePlanner_CreatesMergeAndUnmergeCommandsForSelection()
+    public void CellMergePlanner_CreatesFormatCellsMergeAndUnmergeCommandsForSelection()
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sheet1");
@@ -313,13 +313,13 @@ public sealed partial class FormatCellsDialogXamlTests
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 2, 2));
 
-        var mergeCommands = FormatCellsMergePlanner.CreateMergeCommands(sheet, sheet.Id, range, mergeCells: true);
+        var mergeCommands = CellMergePlanner.CreateFormatCellsMergeCommands(sheet, sheet.Id, range, mergeCells: true);
 
         mergeCommands.Should().ContainSingle().Which.Should().BeOfType<MergeCellsCommand>();
 
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("One"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Two"));
-        var concatenateCommands = FormatCellsMergePlanner.CreateMergeCommands(
+        var concatenateCommands = CellMergePlanner.CreateFormatCellsMergeCommands(
             sheet,
             sheet.Id,
             range,
@@ -331,13 +331,13 @@ public sealed partial class FormatCellsDialogXamlTests
         concatenateCommands[1].Should().BeOfType<MergeCellsCommand>();
 
         sheet.AddMergedRegion(range);
-        FormatCellsMergePlanner.IsSelectionMerged(sheet, new GridRange(
+        CellMergePlanner.IsSelectionMerged(sheet, new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 1, 1)))
             .Should()
             .BeTrue();
 
-        var unmergeCommands = FormatCellsMergePlanner.CreateMergeCommands(
+        var unmergeCommands = CellMergePlanner.CreateFormatCellsMergeCommands(
             sheet,
             sheet.Id,
             new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),

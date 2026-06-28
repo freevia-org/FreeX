@@ -38,7 +38,7 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("MergeCellsMenuItem_Click");
         source.Should().Contain("UnmergeCellsMenuItem_Click");
         source.Should().Contain("CreateMergeCellsCommand(");
-        source.Should().Contain("FormatCellsMergePlanner.CreateMergeCommands(");
+        source.Should().Contain("CellMergePlanner.CreateFormatCellsMergeCommands(");
         source.Should().Contain("CellMergePlanner.CreateMergeAndCenterCommands(");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 0))");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(TextRotation: 45))");
