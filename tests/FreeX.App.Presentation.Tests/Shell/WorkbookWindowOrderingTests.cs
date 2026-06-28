@@ -1,7 +1,7 @@
 using FluentAssertions;
-using FreeX.App.Host;
+using FreeX.App.Presentation.Shell;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.Shell;
 
 public sealed class WorkbookWindowOrderingTests
 {

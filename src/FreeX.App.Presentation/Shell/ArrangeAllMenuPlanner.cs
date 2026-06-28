@@ -1,6 +1,6 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Shell;
 
 public static class ArrangeAllMenuPlanner
 {

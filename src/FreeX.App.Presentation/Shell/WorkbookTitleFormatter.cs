@@ -1,6 +1,6 @@
 using Free.Shared.AppServices;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Shell;
 
 public static class WorkbookTitleFormatter
 {

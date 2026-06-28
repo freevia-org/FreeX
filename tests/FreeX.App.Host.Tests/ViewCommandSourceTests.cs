@@ -54,7 +54,8 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("private void ViewHideWindowBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("_windowRegistry.Hide(this)");
         source.Should().Contain("private void ViewUnhideWindowBtn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(_windowRegistry, _workbook.Name)");
+        source.Should().Contain("WorkbookWindowSelectionPlanner.BuildUnhideWindowTargets(");
+        source.Should().Contain("BuildWorkbookWindowSelectionEntries(_windowRegistry, hidden)");
         source.Should().Contain("new UnhideWindowDialog(targets)");
         source.Should().Contain("dialog.Result?.Window");
         source.Should().Contain("_windowRegistry.Unhide(window)");
