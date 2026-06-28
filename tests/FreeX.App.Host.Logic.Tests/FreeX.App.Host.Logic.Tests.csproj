@@ -26,6 +26,7 @@
     <Using Include="FreeX.App.Presentation.TextToColumns" />
     <Using Include="FreeX.App.Presentation.NamedRanges" />
     <Using Include="FreeX.App.Presentation.Protection" />
+    <Using Include="FreeX.App.Presentation.TableUI" />
   </ItemGroup>
 
   <ItemGroup>
