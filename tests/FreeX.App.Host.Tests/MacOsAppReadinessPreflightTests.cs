@@ -349,10 +349,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeFormatCellsMenuItem &&");
         script.Should().Contain("HasNativeFormatCellsMenuItem:");
         script.Should().Contain("private readonly NativeMenuItem _sortAscendingMenuItem = new();");
-        script.Should().Contain("_sortAscendingMenuItem.Header = `\"Sort A to Z`\";");
-        script.Should().Contain("_sortDescendingMenuItem.Header = `\"Sort Z to A`\";");
-        script.Should().Contain("var dataMenu = new NativeMenu();");
-        script.Should().Contain("dataMenu.Items.Add(_sortAscendingMenuItem);");
+        script.Should().Contain("NativeMenuItemId.SortAscending => _sortAscendingMenuItem,");
+        script.Should().Contain("NativeMenuItemId.SortDescending => _sortDescendingMenuItem,");
+        script.Should().Contain("var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);");
         script.Should().Contain("[NativeMenuTopLevelId.Data] = dataMenu,");
         script.Should().Contain("[NativeMenuTopLevelId.Review] = reviewMenu,");
         script.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);");
@@ -360,33 +359,27 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         script.Should().Contain("HasNativeReviewMenu: hasNativeReviewMenu");
         script.Should().Contain("private readonly NativeMenuItem _flashFillMenuItem = new();");
-        script.Should().Contain("_flashFillMenuItem.Header = `\"Flash Fill`\";");
-        script.Should().Contain("_flashFillMenuItem.Gesture = new KeyGesture(Key.E, KeyModifiers.Control);");
+        script.Should().Contain("NativeMenuItemId.FlashFill => _flashFillMenuItem,");
         script.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
-        script.Should().Contain("dataMenu.Items.Add(_flashFillMenuItem);");
-        script.Should().Contain("_flashFillMenuItem.IsEnabled = isIdle;");
+        script.Should().Contain("NativeMenuCatalog.PlanMenuAvailability(");
         script.Should().Contain("e.Key == Key.E && HasOnlyControlModifier(e.KeyModifiers)");
         script.Should().Contain("private void FlashFillSelectedRange()");
         script.Should().Contain("_session.FlashFillSelectedRange()");
-        script.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, `\"Flash Fill`\")");
+        script.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill)");
         script.Should().Contain("HasNativeFlashFillMenuItem &&");
         script.Should().Contain("native_flash_fill_menu_item=");
-        script.Should().Contain("_sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;");
+        script.Should().Contain("new NativeMenuAvailabilityContext(");
         script.Should().Contain("_session.SortSelectedRange(ascending)");
-        script.Should().Contain("HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, `\"Sort A to Z`\", requireGesture: false)");
-        script.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, `\"Sort Z to A`\", requireGesture: false)");
-        script.Should().Contain("HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, `\"Advanced Filter...`\", requireGesture: false)");
-        script.Should().Contain("_removeDuplicatesMenuItem.Header = `\"Remove Duplicates...`\";");
+        script.Should().Contain("HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, NativeMenuItemId.SortAscending)");
+        script.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, NativeMenuItemId.SortDescending)");
+        script.Should().Contain("HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, NativeMenuItemId.AdvancedFilter)");
+        script.Should().Contain("NativeMenuItemId.RemoveDuplicates => _removeDuplicatesMenuItem,");
         script.Should().Contain("_removeDuplicatesMenuItem.Click += async (_, _) => await ShowRemoveDuplicatesDialogAsync();");
-        script.Should().Contain("dataMenu.Items.Add(_removeDuplicatesMenuItem);");
-        script.Should().Contain("_removeDuplicatesMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1;");
-        script.Should().Contain("HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, `\"Remove Duplicates...`\", requireGesture: false)");
+        script.Should().Contain("HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, NativeMenuItemId.RemoveDuplicates)");
         script.Should().Contain("native_remove_duplicates_menu_item=");
         script.Should().Contain("private readonly NativeMenuItem _subtotalMenuItem = new();");
-        script.Should().Contain("_subtotalMenuItem.Header = `\"Subtotal...`\";");
+        script.Should().Contain("NativeMenuItemId.Subtotal => _subtotalMenuItem,");
         script.Should().Contain("_subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();");
-        script.Should().Contain("dataMenu.Items.Add(_subtotalMenuItem);");
-        script.Should().Contain("_subtotalMenuItem.IsEnabled = isIdle && _session.SelectedRange.RowCount > 1 && _session.SelectedRange.ColCount > 1;");
         script.Should().Contain("private async Task ShowSubtotalDialogAsync()");
         script.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()");
         script.Should().Contain("_session.ExecuteSubtotalOptions(selection.Options!)");
@@ -397,22 +390,22 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("AutomationProperties.SetAutomationId(functionBox, `\"SubtotalFunctionBox`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(columnsPanel, `\"SubtotalColumnsPanel`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(removeAllButton, `\"SubtotalRemoveAllButton`\");");
-        script.Should().Contain("HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, `\"Subtotal...`\", requireGesture: false)");
+        script.Should().Contain("HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, NativeMenuItemId.Subtotal)");
         script.Should().Contain("HasNativeSubtotalMenuItem &&");
         script.Should().Contain("native_subtotal_menu_item=");
-        script.Should().Contain("HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, `\"Data Validation Preview...`\", requireGesture: false)");
-        script.Should().Contain("HasNativeDataValidationMenuItem: HasNativeMenuItem(_dataValidationMenuItem, `\"Data Validation...`\", requireGesture: false)");
-        script.Should().Contain("HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, `\"What-If Analysis`\", requireGesture: false)");
-        script.Should().Contain("HasNativeGoalSeekMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, `\"Goal Seek...`\")");
-        script.Should().Contain("HasNativeDataTableMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, `\"Data Table...`\")");
-        script.Should().Contain("HasNativeScenarioManagerMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, `\"Scenario Manager...`\")");
-        script.Should().Contain("HasNativeForecastSheetMenuItem: HasNativeMenuItem(_forecastSheetMenuItem, `\"Forecast Sheet...`\", requireGesture: false)");
-        script.Should().Contain("HasNativeReviewSummaryMenuItem: HasNativeMenuItem(_reviewSummaryMenuItem, `\"Review Summary...`\", requireGesture: false)");
-        script.Should().Contain("HasNativeCheckAccessibilityMenuItem: HasNativeMenuItem(_checkAccessibilityMenuItem, `\"Check Accessibility...`\", requireGesture: false)");
-        script.Should().Contain("HasNativeNextNoteMenuItem: HasNativeMenuItem(_nextNoteMenuItem, `\"Next Note`\", requireGesture: false)");
-        script.Should().Contain("HasNativePreviousNoteMenuItem: HasNativeMenuItem(_previousNoteMenuItem, `\"Previous Note`\", requireGesture: false)");
-        script.Should().Contain("HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, `\"Next Comment`\", requireGesture: false)");
-        script.Should().Contain("HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, `\"Previous Comment`\", requireGesture: false)");
+        script.Should().Contain("HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, NativeMenuItemId.DataValidationPreview)");
+        script.Should().Contain("HasNativeDataValidationMenuItem: HasNativeMenuItem(_dataValidationMenuItem, NativeMenuItemId.DataValidation)");
+        script.Should().Contain("HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, NativeMenuItemId.WhatIfAnalysis)");
+        script.Should().Contain("HasNativeGoalSeekMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.GoalSeek)");
+        script.Should().Contain("HasNativeDataTableMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.DataTable)");
+        script.Should().Contain("HasNativeScenarioManagerMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.ScenarioManager)");
+        script.Should().Contain("HasNativeForecastSheetMenuItem: HasNativeMenuItem(_forecastSheetMenuItem, NativeMenuItemId.ForecastSheet)");
+        script.Should().Contain("HasNativeReviewSummaryMenuItem: HasNativeMenuItem(_reviewSummaryMenuItem, NativeMenuItemId.ReviewSummary)");
+        script.Should().Contain("HasNativeCheckAccessibilityMenuItem: HasNativeMenuItem(_checkAccessibilityMenuItem, NativeMenuItemId.CheckAccessibility)");
+        script.Should().Contain("HasNativeNextNoteMenuItem: HasNativeMenuItem(_nextNoteMenuItem, NativeMenuItemId.NextNote)");
+        script.Should().Contain("HasNativePreviousNoteMenuItem: HasNativeMenuItem(_previousNoteMenuItem, NativeMenuItemId.PreviousNote)");
+        script.Should().Contain("HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, NativeMenuItemId.NextComment)");
+        script.Should().Contain("HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, NativeMenuItemId.PreviousComment)");
         script.Should().Contain("public WorkbookCellEditResult SortSelectedRange(bool ascending)");
         script.Should().Contain("new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)");
         script.Should().Contain("public WorkbookCellEditResult FlashFillSelectedRange()");
@@ -630,7 +623,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public static bool ShouldClip(");
         script.Should().Contain("CreateNativePasteSpecialMenu()");
         script.Should().Contain("private readonly NativeMenuItem _formatCellsMenuItem = new();");
-        script.Should().Contain("_formatCellsMenuItem.Header = `\"Format Cells...`\"");
+        script.Should().Contain("NativeMenuItemId.FormatCells => _formatCellsMenuItem,");
         script.Should().Contain("FormatCellsCompactPlanner.TryPlan");
         script.Should().Contain("_session.ApplySelectedRangeCompactFormat(");
         script.Should().Contain("selection.Request.MergeCells");
@@ -777,10 +770,10 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();");
         script.Should().Contain("_newWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);");
         script.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
-        script.Should().Contain("_selectAllMenuItem.Header = `\"Select All`\";");
+        script.Should().Contain("NativeMenuItemId.SelectAll => _selectAllMenuItem,");
         script.Should().Contain("_fillCellsButton.Content = `\"Fill Cells`\";");
-        script.Should().Contain("_fillDownMenuItem.Gesture = new KeyGesture(Key.D, KeyModifiers.Control);");
-        script.Should().Contain("_fillRightMenuItem.Gesture = new KeyGesture(Key.R, KeyModifiers.Control);");
+        script.Should().Contain("NativeMenuItemId.FillDown => _fillDownMenuItem,");
+        script.Should().Contain("NativeMenuItemId.FillRight => _fillRightMenuItem,");
         script.Should().Contain("private void FillSelectedRange(FillCellsDirection direction)");
         script.Should().Contain("_session.FillSelectedRange(direction)");
         script.Should().Contain("private void SelectCurrentRegionOrAll()");
@@ -814,24 +807,22 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("var result = _session.DuplicateActiveSheet();");
         script.Should().Contain("var result = _session.SetActiveSheetTabColor(color);");
         script.Should().Contain("var result = _session.DeleteActiveSheet();");
-        script.Should().Contain("_showGridlinesMenuItem.Header = `\"Gridlines`\";");
-        script.Should().Contain("_showHeadingsMenuItem.Header = `\"Headings`\";");
-        script.Should().Contain("viewMenu.Items.Add(_showGridlinesMenuItem);");
+        script.Should().Contain("NativeMenuItemId.ShowGridlines => _showGridlinesMenuItem,");
+        script.Should().Contain("NativeMenuItemId.ShowHeadings => _showHeadingsMenuItem,");
+        script.Should().Contain("var viewMenu = CreateNativeMenu(NativeMenuTopLevelId.View);");
         script.Should().Contain("var result = _session.SetShowGridlines(showGridlines);");
         script.Should().Contain("var result = _session.SetShowHeadings(showHeadings);");
-        script.Should().Contain("_zoomInMenuItem.Header = `\"Zoom In`\";");
-        script.Should().Contain("_zoomOutMenuItem.Header = `\"Zoom Out`\";");
-        script.Should().Contain("_zoom100MenuItem.Header = `\"100%`\";");
-        script.Should().Contain("_zoomToSelectionMenuItem.Header = `\"Zoom to Selection`\";");
-        script.Should().Contain("viewMenu.Items.Add(_zoomInMenuItem);");
+        script.Should().Contain("NativeMenuItemId.ZoomIn => _zoomInMenuItem,");
+        script.Should().Contain("NativeMenuItemId.ZoomOut => _zoomOutMenuItem,");
+        script.Should().Contain("NativeMenuItemId.Zoom100 => _zoom100MenuItem,");
+        script.Should().Contain("NativeMenuItemId.ZoomToSelection => _zoomToSelectionMenuItem,");
         script.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
         script.Should().Contain("_zoomText.Text = FormatZoomPercent(_session.ZoomPercent);");
         script.Should().Contain("CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor)");
         script.Should().Contain("displayHeight / zoomFactor");
         script.Should().Contain("showGridlines ? GridLine : Brushes.Transparent");
-        script.Should().Contain("_freezePanesMenuItem.Header = `\"Freeze Panes`\";");
+        script.Should().Contain("NativeMenuItemId.FreezePanes => _freezePanesMenuItem,");
         script.Should().Contain("_freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();");
-        script.Should().Contain("viewMenu.Items.Add(_freezePanesMenuItem);");
         script.Should().Contain("private void ApplyFreezePaneCommand(Func<WorkbookCellEditResult> execute, string successAction, string failureMessage)");
         script.Should().Contain("_session.FreezePanesAtActiveCell");
         script.Should().Contain("public WorkbookCellEditResult FreezePanesAtActiveCell()");
@@ -2004,6 +1995,104 @@ public sealed class MacOsAppReadinessPreflightTests
                 NativeDock.GetMenu(app);
                 NativeMenu.SetMenu(this, menu);
                 InstallNativeMenu(_nativeMenu);
+                ConfigureNativeCatalogMenuItems();
+                var homeMenu = CreateNativeMenu(NativeMenuTopLevelId.Home);
+                var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);
+                var reviewMenu = CreateNativeMenu(NativeMenuTopLevelId.Review);
+                var viewMenu = CreateNativeMenu(NativeMenuTopLevelId.View);
+                var sheetMenu = CreateNativeMenu(NativeMenuTopLevelId.Sheet);
+                var windowMenu = CreateNativeMenu(NativeMenuTopLevelId.Window);
+                var helpMenu = CreateNativeMenu(NativeMenuTopLevelId.Help);
+                NativeMenuItemId.FormatPainter => _formatPainterMenuItem,
+                NativeMenuItemId.FormatCells => _formatCellsMenuItem,
+                NativeMenuItemId.FillCells => _fillCellsMenuItem,
+                NativeMenuItemId.FillDown => _fillDownMenuItem,
+                NativeMenuItemId.FillRight => _fillRightMenuItem,
+                NativeMenuItemId.Clear => _clearMenuItem,
+                NativeMenuItemId.ClearAll => _clearAllMenuItem,
+                NativeMenuItemId.ClearFormats => _clearFormatsMenuItem,
+                NativeMenuItemId.ClearContents => _clearContentsMenuItem,
+                NativeMenuItemId.ClearComments => _clearCommentsMenuItem,
+                NativeMenuItemId.ClearHyperlinks => _clearHyperlinksMenuItem,
+                NativeMenuItemId.Borders => _bordersMenuItem,
+                NativeMenuItemId.MergeAndCenter => _mergeAndCenterMenuItem,
+                NativeMenuItemId.UnmergeCells => _unmergeCellsMenuItem,
+                NativeMenuItemId.SelectAll => _selectAllMenuItem,
+                NativeMenuItemId.Find => _findMenuItem,
+                NativeMenuItemId.FindNext => _findNextMenuItem,
+                NativeMenuItemId.Replace => _replaceMenuItem,
+                NativeMenuItemId.GoTo => _goToMenuItem,
+                NativeMenuItemId.GoToSpecial => _goToSpecialMenuItem,
+                NativeMenuItemId.SortAscending => _sortAscendingMenuItem,
+                NativeMenuItemId.SortDescending => _sortDescendingMenuItem,
+                NativeMenuItemId.FlashFill => _flashFillMenuItem,
+                NativeMenuItemId.AdvancedFilter => _advancedFilterMenuItem,
+                NativeMenuItemId.RemoveDuplicates => _removeDuplicatesMenuItem,
+                NativeMenuItemId.Subtotal => _subtotalMenuItem,
+                NativeMenuItemId.DataValidation => _dataValidationMenuItem,
+                NativeMenuItemId.WhatIfAnalysis => _whatIfAnalysisMenuItem,
+                NativeMenuItemId.GoalSeek => _goalSeekMenuItem,
+                NativeMenuItemId.ScenarioManager => _scenarioManagerMenuItem,
+                NativeMenuItemId.DataTable => _dataTableMenuItem,
+                NativeMenuItemId.ForecastSheet => _forecastSheetMenuItem,
+                NativeMenuItemId.ReviewSummary => _reviewSummaryMenuItem,
+                NativeMenuItemId.CheckAccessibility => _checkAccessibilityMenuItem,
+                NativeMenuItemId.NextNote => _nextNoteMenuItem,
+                NativeMenuItemId.PreviousNote => _previousNoteMenuItem,
+                NativeMenuItemId.NextComment => _nextCommentMenuItem,
+                NativeMenuItemId.PreviousComment => _previousCommentMenuItem,
+                NativeMenuItemId.TabColor => _tabColorMenuItem,
+                NativeMenuItemId.SelectAllSheets => _selectAllSheetsMenuItem,
+                NativeMenuItemId.UngroupSheets => _ungroupSheetsMenuItem,
+                NativeMenuItemId.ShowGridlines => _showGridlinesMenuItem,
+                NativeMenuItemId.ShowHeadings => _showHeadingsMenuItem,
+                NativeMenuItemId.ZoomIn => _zoomInMenuItem,
+                NativeMenuItemId.ZoomOut => _zoomOutMenuItem,
+                NativeMenuItemId.Zoom100 => _zoom100MenuItem,
+                NativeMenuItemId.ZoomToSelection => _zoomToSelectionMenuItem,
+                NativeMenuItemId.FreezePanes => _freezePanesMenuItem,
+                NativeMenuItemId.FreezeTopRow => _freezeTopRowMenuItem,
+                NativeMenuItemId.FreezeFirstColumn => _freezeFirstColumnMenuItem,
+                NativeMenuItemId.UnfreezePanes => _unfreezePanesMenuItem,
+                NativeMenuItemId.MinimizeWindow => _minimizeWindowMenuItem,
+                NativeMenuItemId.ZoomWindow => _zoomWindowMenuItem,
+                NativeMenuItemId.BringAllToFront => _bringAllToFrontMenuItem,
+                ApplyNativeMenuAvailability(isIdle);
+                NativeMenuCatalog.PlanMenuAvailability(
+                new NativeMenuAvailabilityContext(
+                GetNativeMenuItem(item.Id)
+                => CreateNativeMenu(NativeMenuCatalog.FillCellsMenuEntries);
+                => CreateNativeMenu(NativeMenuCatalog.ClearMenuEntries);
+                HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, NativeMenuItemId.FormatPainter)
+                HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, NativeMenuItemId.Borders)
+                HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, NativeMenuItemId.MergeAndCenter)
+                HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, NativeMenuItemId.UnmergeCells)
+                HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, NativeMenuItemId.Find)
+                HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, NativeMenuItemId.FindNext)
+                HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, NativeMenuItemId.Replace)
+                HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, NativeMenuItemId.GoTo)
+                HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, NativeMenuItemId.SortAscending)
+                HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, NativeMenuItemId.SortDescending)
+                HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill)
+                HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, NativeMenuItemId.AdvancedFilter)
+                HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, NativeMenuItemId.RemoveDuplicates)
+                HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, NativeMenuItemId.Subtotal)
+                HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, NativeMenuItemId.DataValidationPreview)
+                HasNativeDataValidationMenuItem: HasNativeMenuItem(_dataValidationMenuItem, NativeMenuItemId.DataValidation)
+                HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, NativeMenuItemId.WhatIfAnalysis)
+                HasNativeGoalSeekMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.GoalSeek)
+                HasNativeDataTableMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.DataTable)
+                HasNativeScenarioManagerMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.ScenarioManager)
+                HasNativeForecastSheetMenuItem: HasNativeMenuItem(_forecastSheetMenuItem, NativeMenuItemId.ForecastSheet)
+                HasNativeReviewSummaryMenuItem: HasNativeMenuItem(_reviewSummaryMenuItem, NativeMenuItemId.ReviewSummary)
+                HasNativeCheckAccessibilityMenuItem: HasNativeMenuItem(_checkAccessibilityMenuItem, NativeMenuItemId.CheckAccessibility)
+                HasNativeNextNoteMenuItem: HasNativeMenuItem(_nextNoteMenuItem, NativeMenuItemId.NextNote)
+                HasNativePreviousNoteMenuItem: HasNativeMenuItem(_previousNoteMenuItem, NativeMenuItemId.PreviousNote)
+                HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, NativeMenuItemId.NextComment)
+                HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, NativeMenuItemId.PreviousComment)
+                HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, NativeMenuItemId.MinimizeWindow)
+                HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, NativeMenuItemId.ZoomWindow)
+                HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, NativeMenuItemId.BringAllToFront)
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
@@ -2403,9 +2492,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _nextCommentMenuItem.IsEnabled = isIdle;
                     _previousCommentMenuItem.IsEnabled = isIdle;
                     private NativeMenu CreateNativeWhatIfAnalysisMenu()
-                    menu.Items.Add(_goalSeekMenuItem);
-                    menu.Items.Add(_scenarioManagerMenuItem);
-                    menu.Items.Add(_dataTableMenuItem);
+                        => CreateNativeMenu(NativeMenuCatalog.WhatIfAnalysisMenuEntries);
                     private async Task ShowSubtotalDialogAsync()
                     private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()
                     _session.ExecuteSubtotalOptions(selection.Options!)
@@ -2819,15 +2906,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, "Right");
                     HasFillUpMenuItem: HasToolbarMenuItem(_fillUpFlyoutItem, "Up");
                     HasFillLeftMenuItem: HasToolbarMenuItem(_fillLeftFlyoutItem, "Left");
-                    HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, "Fill", requireGesture: false);
-                    HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Down");
-                    HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Right");
-                    HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Up");
-                    HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, "Left");
+                    HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, NativeMenuItemId.FillCells);
+                    HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillDown);
+                    HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillRight);
+                    HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillUp);
+                    HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillLeft);
                     HasClearButton: _clearButton.Content?.ToString() == "Clear";
                     HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, "Clear All");
-                    HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, "Clear", requireGesture: false);
-                    HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, "Clear Hyperlinks");
+                    HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, NativeMenuItemId.Clear);
+                    HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearHyperlinks);
                     HasBordersButton: _bordersButton.Content?.ToString() == "Borders";
                     HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, "Borders", requireGesture: false);
                     NativeBordersPresetCount: nativeBordersPresetCount;
@@ -3075,7 +3162,51 @@ public sealed class MacOsAppReadinessPreflightTests
                         NativeMenuGestureKey.G,
                         NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift),
                     new(NativeFileMenuItemId.WorkbookStatistics, context.IsIdle),
-                    new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)
+                    new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider),
+                    "public static IReadOnlyList<NativeMenuEntryPlan> HomeMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> DataMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> ReviewMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> ViewMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> SheetMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> WindowMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> HelpMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> FillCellsMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> ClearMenuEntries",
+                    "public static IReadOnlyList<NativeMenuEntryPlan> WhatIfAnalysisMenuEntries",
+                    "new(NativeMenuItemId.SelectAll, "Select All", new NativeMenuGesturePlan(NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta))",
+                    "new(NativeMenuItemId.Find, "Find...", new NativeMenuGesturePlan(NativeMenuGestureKey.F, NativeMenuGestureModifiers.Meta))",
+                    "new(NativeMenuItemId.FillCells, "Fill", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.FillDown, "Down", new NativeMenuGesturePlan(NativeMenuGestureKey.D, NativeMenuGestureModifiers.Control))",
+                    "new(NativeMenuItemId.Clear, "Clear", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.ClearContents, "Clear Contents", new NativeMenuGesturePlan(NativeMenuGestureKey.Delete))",
+                    "new(NativeMenuItemId.SortAscending, "Sort A to Z", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.FlashFill, "Flash Fill", new NativeMenuGesturePlan(NativeMenuGestureKey.E, NativeMenuGestureModifiers.Control))",
+                    "new(NativeMenuItemId.RemoveDuplicates, "Remove Duplicates...", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.Subtotal, "Subtotal...", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.ReviewSummary, "Review Summary...", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.ShowGridlines, "Gridlines", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.ZoomIn, "Zoom In", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Meta))",
+                    "new(NativeMenuItemId.FreezePanes, "Freeze Panes", RequiresGestureInSmoke: false)",
+                    "new(NativeMenuItemId.MinimizeWindow, "Minimize", new NativeMenuGesturePlan(NativeMenuGestureKey.M, NativeMenuGestureModifiers.Meta))",
+                    "new(NativeMenuItemId.HelpOnline, "Help Online", new NativeMenuGesturePlan(NativeMenuGestureKey.F1))",
+                    "Item(NativeMenuItemId.FormatPainter)",
+                    "Item(NativeMenuItemId.FormatCells)",
+                    "Item(NativeMenuItemId.FillCells)",
+                    "Item(NativeMenuItemId.Clear)",
+                    "Item(NativeMenuItemId.SortAscending)",
+                    "Item(NativeMenuItemId.ReviewSummary)",
+                    "Item(NativeMenuItemId.ShowGridlines)",
+                    "Item(NativeMenuItemId.TabColor)",
+                    "Item(NativeMenuItemId.MinimizeWindow)",
+                    "Item(NativeMenuItemId.HelpOnline)",
+                    "new(NativeMenuItemId.FormatPainter, context.CanFormatPainter)",
+                    "new(NativeMenuItemId.SortAscending, context.IsIdle && context.CanSortSelectedRange)",
+                    "new(NativeMenuItemId.RemoveDuplicates, context.IsIdle && context.SelectedRangeRowCount > 1)",
+                    "new(NativeMenuItemId.FillCells, context.CanFillCells)",
+                    "new(NativeMenuItemId.Clear, context.CanClear)",
+                    "new(NativeMenuItemId.ShowGridlines, context.IsIdle, context.IsShowingGridlines)",
+                    "new(NativeMenuItemId.MinimizeWindow, true)",
+                    "new(NativeMenuItemId.HelpOnline, true)"
                 ];
             }
             """);

@@ -381,15 +381,24 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Sheet", "NativeMenuTopLevelId.Window");
         AssertBefore(topLevelCatalogBlock, "NativeMenuTopLevelId.Window", "NativeMenuTopLevelId.Help");
 
-        var homeMenuBlock = ExtractSourceBlock(
-            normalizedSource,
-            "var homeMenu = new NativeMenu();",
-            "homeMenu.Items.Add(_openHyperlinkMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_formatPainterMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_conditionalFormattingMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_fillCellsMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_clearMenuItem);");
-        homeMenuBlock.Should().Contain("homeMenu.Items.Add(_findMenuItem);");
+        source.Should().Contain("var homeMenu = CreateNativeMenu(NativeMenuTopLevelId.Home);");
+        source.Should().Contain("var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);");
+        source.Should().Contain("var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);");
+        source.Should().Contain("var reviewMenu = CreateNativeMenu(NativeMenuTopLevelId.Review);");
+        source.Should().Contain("var viewMenu = CreateNativeMenu(NativeMenuTopLevelId.View);");
+        source.Should().Contain("var sheetMenu = CreateNativeMenu(NativeMenuTopLevelId.Sheet);");
+        source.Should().Contain("var windowMenu = CreateNativeMenu(NativeMenuTopLevelId.Window);");
+        source.Should().Contain("var helpMenu = CreateNativeMenu(NativeMenuTopLevelId.Help);");
+
+        var homeMenuCatalogBlock = ExtractSourceBlock(
+            normalizedCatalogSource,
+            "public static IReadOnlyList<NativeMenuEntryPlan> HomeMenuEntries",
+            "    ];");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.FormatPainter)");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.ConditionalFormatting)");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.FillCells)");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.Clear)");
+        homeMenuCatalogBlock.Should().Contain("Item(NativeMenuItemId.Find)");
 
         var pageLayoutMenuBlock = ExtractSourceBlock(
             normalizedSource,
