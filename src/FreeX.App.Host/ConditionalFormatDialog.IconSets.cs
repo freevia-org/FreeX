@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -15,10 +16,11 @@ public partial class ConditionalFormatDialog
             UiText.Get("ConditionalFormatDialog_IconOverride_Default"),
             UiText.Get("ConditionalFormatDialog_IconOverride_NoIcon")
         };
-        foreach (var option in ConditionalFormatIconSetPlanner.Options)
+        foreach (var option in ConditionalFormatIconSetCatalog.GalleryOptions)
         {
+            var label = UiText.Get(option.LabelKey);
             for (var i = 0; i < option.IconCount; i++)
-                choices.Add($"{option.Label} {i + 1}|{option.Style}|{i}");
+                choices.Add($"{label} {i + 1}|{option.Style}|{i}");
         }
 
         return choices.ToArray();
@@ -30,12 +32,12 @@ public partial class ConditionalFormatDialog
         if (string.Equals(ovr.IconSet, "NoIcons", StringComparison.OrdinalIgnoreCase)) return UiText.Get("ConditionalFormatDialog_IconOverride_NoIcon");
         var option = FindIconSetOption(ovr.IconSet);
         if (option is null) return UiText.Get("ConditionalFormatDialog_IconOverride_Default");
-        return $"{option.Label} {ovr.IconId + 1}|{option.Style}|{ovr.IconId}";
+        return $"{UiText.Get(option.LabelKey)} {ovr.IconId + 1}|{option.Style}|{ovr.IconId}";
     }
 
     private static ConditionalFormatIconSetOption? FindIconSetOption(string iconSet)
     {
-        foreach (var option in ConditionalFormatIconSetPlanner.Options)
+        foreach (var option in ConditionalFormatIconSetCatalog.GalleryOptions)
         {
             if (string.Equals(option.Style, iconSet, StringComparison.Ordinal))
                 return option;
@@ -60,8 +62,8 @@ public partial class ConditionalFormatDialog
         _iconSetThresholdPanel.Children.Clear();
         _iconSetThresholdRows.Clear();
 
-        var count = ConditionalFormatIconSetPlanner.GetIconCount(style);
-        var defaults = ConditionalFormatIconSetPlanner.CreateThresholds(style);
+        var count = ConditionalFormatIconSetCatalog.GetIconCount(style);
+        var defaults = ConditionalFormatIconSetCatalog.CreateThresholds(style);
 
         for (var i = 0; i < count; i++)
         {

@@ -109,7 +109,7 @@ public partial class ConditionalFormatDialog
                 }
                 else
                 {
-                    cf.IconSetThresholds.AddRange(ConditionalFormatIconSetPlanner.CreateThresholds(cf.IconSetStyle));
+                    cf.IconSetThresholds.AddRange(ConditionalFormatIconSetCatalog.CreateThresholds(cf.IconSetStyle));
                 }
             }
             else if (cf.RuleType == CfRuleType.DataBar)

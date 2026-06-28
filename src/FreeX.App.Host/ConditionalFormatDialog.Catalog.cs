@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using FreeX.App.Presentation.ConditionalFormatting;
 
 namespace FreeX.App.Host;
 
@@ -76,7 +77,7 @@ public partial class ConditionalFormatDialog
             (UiText.Get("ConditionalFormatDialog_TextOperator_EndingWith"), "Text Ends With")
         ];
 
-    private static readonly IReadOnlyList<string> IconSetStyles = ConditionalFormatIconSetPlanner.Styles;
+    private static readonly IReadOnlyList<string> IconSetStyles = ConditionalFormatIconSetCatalog.GalleryStyles;
 
     private static (string Label, string Value)[] DateOccurringPeriods =>
         [

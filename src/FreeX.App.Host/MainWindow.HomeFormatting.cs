@@ -7,6 +7,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -1088,7 +1089,7 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range)
             return;
 
-        var rule = ConditionalFormatIconSetPlanner.CreateRule(style, range);
+        var rule = ConditionalFormatIconSetCatalog.CreateRule(style, range);
         if (rule is null)
             return;
 
@@ -1127,11 +1128,12 @@ public partial class MainWindow
 
         foreach (var group in ConditionalFormatPresetGalleryPlanner.DataBarGroups)
         {
-            AddConditionalFormatGalleryHeader(menuItem, group.Name);
+            AddConditionalFormatGalleryHeader(menuItem, UiText.Get(group.CategoryKey));
             foreach (var option in group.Options)
             {
+                var label = UiText.Get(option.LabelKey);
                 var item = CreateConditionalFormatPresetMenuItem(
-                    option.Label,
+                    label,
                     option.Style,
                     option.KeyTip,
                     CreateDataBarPresetSwatch(option.Color, option.Gradient));
@@ -1150,11 +1152,12 @@ public partial class MainWindow
 
         foreach (var group in ConditionalFormatPresetGalleryPlanner.ColorScaleGroups)
         {
-            AddConditionalFormatGalleryHeader(menuItem, group.Name);
+            AddConditionalFormatGalleryHeader(menuItem, UiText.Get(group.CategoryKey));
             foreach (var option in group.Options)
             {
+                var label = UiText.Get(option.LabelKey);
                 var item = CreateConditionalFormatPresetMenuItem(
-                    option.Label,
+                    label,
                     option.Style,
                     option.KeyTip,
                     CreateColorScalePresetSwatch(option.MinColor, option.MidColor, option.MaxColor));
