@@ -1,8 +1,8 @@
 using FluentAssertions;
-using FreeX.App.Host;
+using FreeX.App.Presentation.ThemeUI;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.ThemeUI;
 
 public sealed class WorkbookThemeDialogColorCodecTests
 {

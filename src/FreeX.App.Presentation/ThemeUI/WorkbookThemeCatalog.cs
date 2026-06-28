@@ -1,23 +1,23 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.ThemeUI;
 
-internal sealed record WorkbookThemePresetOption(string Label, Func<WorkbookTheme> CreateTheme, bool IsCustomizeAction = false);
+public sealed record WorkbookThemePresetOption(string Label, Func<WorkbookTheme> CreateTheme, bool IsCustomizeAction = false);
 
-internal sealed record WorkbookThemeColorPresetOption(
+public sealed record WorkbookThemeColorPresetOption(
     string Label,
     Func<WorkbookTheme, WorkbookTheme> ApplyColors,
     bool IsCustomizeAction = false);
 
-internal sealed record WorkbookThemeFontPresetOption(
+public sealed record WorkbookThemeFontPresetOption(
     string Label,
     string MajorFontName,
     string MinorFontName,
     bool IsCustomizeAction = false);
 
-internal sealed record WorkbookThemeEffectPresetOption(string Label, string EffectsName, bool IsCustomizeAction = false);
+public sealed record WorkbookThemeEffectPresetOption(string Label, string EffectsName, bool IsCustomizeAction = false);
 
-internal static class WorkbookThemeCatalog
+public static class WorkbookThemeCatalog
 {
     public static IReadOnlyList<WorkbookThemePresetOption> ThemePresets { get; } =
     [

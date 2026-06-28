@@ -1,8 +1,8 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.ThemeUI;
 
-internal static class WorkbookThemeDialogPlanner
+public static class WorkbookThemeDialogPlanner
 {
     public static bool TryCreateTheme(
         WorkbookTheme initialTheme,
@@ -80,6 +80,6 @@ internal static class WorkbookThemeDialogPlanner
             : string.Empty;
 }
 
-internal sealed record WorkbookThemeDialogValidationError(
+public sealed record WorkbookThemeDialogValidationError(
     WorkbookThemeColorSlot Slot,
     string Message);
