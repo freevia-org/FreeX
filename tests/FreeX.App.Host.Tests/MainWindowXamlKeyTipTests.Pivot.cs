@@ -229,14 +229,20 @@ public sealed partial class MainWindowXamlKeyTipTests
 
         presentationSource.Should().Contain("PivotValueFieldOption<PivotShowValuesAs>");
         presentationSource.Should().Contain("PivotValueFieldValidationErrorPlan");
+        presentationSource.Should().Contain("PivotValueNumberFormatPreset");
+        presentationSource.Should().Contain("NumberFormatPresets");
+        presentationSource.Should().Contain("\"PivotValueFieldSettings_NumberFormatCurrency\"");
+        presentationSource.Should().Contain("DefaultCustomNumberFormatId");
         presentationSource.Should().Contain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
         presentationSource.Should().Contain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
         plannerSource.Should().Contain("LocalizeOptions(PivotValueFieldPlanner.ShowValuesAsOptions)");
         plannerSource.Should().Contain("UiText.Get(option.ResourceKey)");
         plannerSource.Should().Contain("PivotValueFieldPlanner.DescribeValidationError");
         plannerSource.Should().Contain("UiText.Get(errorPlan.ResourceKey)");
+        plannerSource.Should().Contain("PivotValueFieldPlanner.FindNumberFormatPresetIndex");
         plannerSource.Should().NotContain("\"PivotValueFieldSettings_SelectBaseFieldMessage\"");
         plannerSource.Should().NotContain("\"PivotValueFieldSettings_EnterBaseItemMessage\"");
+        plannerSource.Should().NotContain("\"PivotValueFieldSettings_NumberFormatCurrency\"");
         PivotValueFieldPlanner.ShowValuesAsOptions
             .Select(option => option.ResourceKey)
             .Should()

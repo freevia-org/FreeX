@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
@@ -20,6 +21,15 @@ public sealed record PivotValueFieldValidationErrorPlan(
     string ResourceKey,
     string FallbackMessage);
 
+public sealed record PivotValueNumberFormatPreset(
+    string ResourceKey,
+    string FallbackLabel,
+    int? NumberFormatId,
+    string FormatCode)
+{
+    public string Label => FallbackLabel;
+}
+
 public enum PivotShowValuesAsValidationError
 {
     None,
@@ -30,12 +40,13 @@ public enum PivotShowValuesAsValidationError
 /// <summary>
 /// Portable, UI-free planning for the PivotTable "Value Field Settings" dialog: the summary-function and
 /// show-values-as option catalogs, index resolution, base-field validation, the auto-generated caption
-/// rules, and building the resulting <see cref="PivotDataFieldModel"/>. Single-sourced here (English labels)
-/// so every desktop host shares identical behavior. Number-format planning is handled separately by the
-/// host's number-format parser and is intentionally not part of this portable planner.
+/// rules, number-format preset/catalog parsing, and building the resulting <see cref="PivotDataFieldModel"/>.
+/// Single-sourced here (English labels) so every desktop host shares identical behavior.
 /// </summary>
 public static class PivotValueFieldPlanner
 {
+    public const int DefaultCustomNumberFormatId = 164;
+
     /// <summary>The "(Automatic)" sentinel label shown at the top of the base-field selector.</summary>
     public static readonly PivotValueFieldText AutomaticBaseField =
         new("PivotValueFieldSettings_AutomaticBaseField", "(Automatic)");
@@ -88,6 +99,47 @@ public static class PivotValueFieldPlanner
             "Enter a base item for the chosen calculation."),
     ];
 
+    public static IReadOnlyList<PivotValueNumberFormatPreset> NumberFormatPresets { get; } =
+    [
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatGeneral", "General", null),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatNumber0Decimals", "Number 0 decimals", 1),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatNumber", "Number", 2),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatComma0Decimals", "Comma 0 decimals", 3),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatNumberWithThousands", "Number with thousands", 4),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatCurrency0Decimals", "Currency 0 decimals", 5),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatCurrency0DecimalsRedNegatives", "Currency 0 decimals red negatives", 6),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatCurrency", "Currency", 7),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatCurrencyRedNegatives", "Currency red negatives", 8),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatPercentage0Decimals", "Percentage 0 decimals", 9),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatPercentage", "Percentage", 10),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatScientific", "Scientific", 11),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatFraction", "Fraction", 12),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatFractionTwoDigits", "Fraction two digits", 13),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatShortDate", "Short Date", 14),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatDate", "Date", 14),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatLongDate", "Long Date", 15),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatDayMonth", "Day Month", 16),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatMonthYear", "Month Year", 17),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatTimeAmPm", "Time AM/PM", 18),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatTimeWithSecondsAmPm", "Time with seconds AM/PM", 19),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatTimeHoursMinutes", "Time hours minutes", 20),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatTime", "Time", 21),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatDateTime", "Date Time", 22),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatComma0DecimalsParentheses", "Comma 0 decimals parentheses", 37),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatCommaRedNegatives", "Comma red negatives", 38),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatCommaParentheses", "Comma parentheses", 39),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatCommaDecimalsRedNegatives", "Comma decimals red negatives", 40),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatAccountingNoSymbol0Decimals", "Accounting no symbol 0 decimals", 41),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatAccounting0Decimals", "Accounting 0 decimals", 42),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatAccountingNoSymbol", "Accounting no symbol", 43),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatAccounting", "Accounting", 44),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatElapsedMinutes", "Elapsed Minutes", 45),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatElapsedTime", "Elapsed Time", 46),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatElapsedMinutesTenths", "Elapsed Minutes Tenths", 47),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatScientificCompact", "Scientific compact", 48),
+        NumberFormatPreset("PivotValueFieldSettings_NumberFormatText", "Text", 49),
+    ];
+
     public static int FindSummaryFunctionIndex(string? summaryFunction)
     {
         for (var index = 0; index < SummaryFunctions.Count; index++)
@@ -115,6 +167,17 @@ public static class PivotValueFieldPlanner
         baseFieldIndex is { } index && index >= 0 && index < sourceHeaderCount
             ? index + 1
             : 0;
+
+    public static int FindNumberFormatPresetIndex(int? numberFormatId)
+    {
+        for (var index = 0; index < NumberFormatPresets.Count; index++)
+        {
+            if (NumberFormatPresets[index].NumberFormatId == numberFormatId)
+                return index;
+        }
+
+        return 0;
+    }
 
     public static string SummaryFunctionFromIndex(int selectedIndex) =>
         SummaryFunctions[Math.Max(0, Math.Min(selectedIndex, SummaryFunctions.Count - 1))].Value;
@@ -191,6 +254,60 @@ public static class PivotValueFieldPlanner
 
         error = errorPlan.FallbackMessage;
         return false;
+    }
+
+    public static bool TryParseOptionalNumberFormatId(string input, out int? numberFormatId)
+    {
+        numberFormatId = null;
+        var trimmed = input.Trim();
+        if (trimmed.Length == 0)
+            return true;
+
+        if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            return false;
+
+        numberFormatId = parsed;
+        return true;
+    }
+
+    public static string? ResolveOptionalNumberFormatCode(string input)
+    {
+        var trimmed = input.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    public static int? ResolveNumberFormatIdForCode(int? numberFormatId, string? numberFormatCode)
+    {
+        if (string.IsNullOrWhiteSpace(numberFormatCode))
+            return numberFormatId;
+
+        return numberFormatId is >= DefaultCustomNumberFormatId
+            ? numberFormatId
+            : DefaultCustomNumberFormatId;
+    }
+
+    public static int? ResolvePresetNumberFormatId(string? label) =>
+        string.IsNullOrWhiteSpace(label)
+            ? null
+            : FindNumberFormatPreset(label.Trim())?.NumberFormatId;
+
+    public static string? ResolvePresetNumberFormatCode(string? label) =>
+        string.IsNullOrWhiteSpace(label)
+            ? null
+            : FindNumberFormatPreset(label.Trim())?.FormatCode;
+
+    public static int? ResolveBuiltInNumberFormatIdForCode(string? formatCode) =>
+        TryResolveBuiltInNumberFormatIdForCode(formatCode, out var numberFormatId)
+            ? numberFormatId
+            : null;
+
+    public static bool TryResolveBuiltInNumberFormatIdForCode(string? formatCode, out int? numberFormatId)
+    {
+        numberFormatId = null;
+        if (string.IsNullOrWhiteSpace(formatCode))
+            return false;
+
+        return BuiltInNumberFormatCatalog.TryResolveNumberFormatIdForCode(formatCode, out numberFormatId);
     }
 
     /// <summary>Builds the updated data field from the dialog's collected input.</summary>
@@ -281,4 +398,26 @@ public static class PivotValueFieldPlanner
         sourceFieldIndex >= 0 && sourceFieldIndex < sourceHeaders.Count
             ? sourceHeaders[sourceFieldIndex]
             : $"Column {sourceFieldIndex + 1}";
+
+    private static PivotValueNumberFormatPreset NumberFormatPreset(
+        string resourceKey,
+        string fallbackLabel,
+        int? numberFormatId) =>
+        new(resourceKey, fallbackLabel, numberFormatId, BuiltInFormat(numberFormatId));
+
+    private static PivotValueNumberFormatPreset? FindNumberFormatPreset(string label)
+    {
+        foreach (var preset in NumberFormatPresets)
+        {
+            if (string.Equals(preset.Label, label, StringComparison.OrdinalIgnoreCase))
+                return preset;
+        }
+
+        return null;
+    }
+
+    private static string BuiltInFormat(int? numberFormatId) =>
+        BuiltInNumberFormatCatalog.TryResolveFormatCode(numberFormatId, out var formatCode)
+            ? formatCode
+            : "General";
 }

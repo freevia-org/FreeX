@@ -3,9 +3,9 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-// WPF localization and number-format helpers stay here. Option order, fallback labels, validation metadata,
-// index/base-field/show-values-as resolution, caption generation, and result building delegate to the
-// portable PivotValueFieldPlanner so the logic is single-sourced for Avalonia/macOS.
+// WPF localization helpers stay here. Option order, fallback labels, validation metadata, number-format
+// catalog/input rules, index/base-field/show-values-as resolution, caption generation, and result building
+// delegate to the portable PivotValueFieldPlanner so the logic is single-sourced for Avalonia/macOS.
 public static class PivotValueFieldSettingsDialogPlanner
 {
     public static string AutomaticBaseFieldLabel =>
@@ -27,16 +27,7 @@ public static class PivotValueFieldSettingsDialogPlanner
         PivotValueFieldPlanner.FindBaseFieldIndex(baseFieldIndex, sourceHeaderCount);
 
     public static int FindNumberFormatPresetIndex(int? numberFormatId)
-    {
-        var presets = PivotValueFieldSettingsInputParser.NumberFormatPresets;
-        for (var index = 0; index < presets.Count; index++)
-        {
-            if (presets[index].NumberFormatId == numberFormatId)
-                return index;
-        }
-
-        return 0;
-    }
+        => PivotValueFieldPlanner.FindNumberFormatPresetIndex(numberFormatId);
 
     public static string SummaryFunctionFromIndex(int selectedIndex) =>
         PivotValueFieldPlanner.SummaryFunctionFromIndex(selectedIndex);
