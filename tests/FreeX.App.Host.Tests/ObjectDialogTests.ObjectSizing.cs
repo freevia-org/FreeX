@@ -101,6 +101,17 @@ public sealed partial class ObjectDialogTests
     }
 
     [Fact]
+    public void ObjectSizeDialog_RoutesParsingAndAspectMathThroughSharedPlanner()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
+
+        source.Should().Contain("FormatPicturePlanner.TryCreateSizeResult(input");
+        source.Should().Contain("FormatPicturePlanner.SyncHeightFromWidth(");
+        source.Should().Contain("FormatPicturePlanner.SyncWidthFromHeight(");
+        source.Should().NotContain("DrawingInputParser.TryParseSize(input");
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
@@ -161,6 +172,16 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("FocusInvalidRotationInput();");
         source.Should().Contain("private void FocusInvalidRotationInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
+    }
+
+    [Fact]
+    public void RotationDialog_RoutesParsingThroughSharedPlanner()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
+
+        source.Should().Contain("FormatPicturePlanner.TryCreateRotationResult(input");
+        source.Should().Contain("FormatPicturePlanner.NormalizeRotationDegrees(value)");
+        source.Should().NotContain("DrawingInputParser.TryParseRotationDegrees(input");
     }
 
     [Fact]
@@ -239,5 +260,15 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("return _cropBottomBox;");
         source.Should().Contain("private static void FocusInvalidCropInput(TextBox textBox)");
         source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
+    }
+
+    [Fact]
+    public void PictureCropDialog_RoutesParsingThroughSharedPlanner()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
+
+        source.Should().Contain("PictureCropDialogPlanner.TryCreateResult(input");
+        source.Should().Contain("PictureCropDialogPlanner.TryParsePercent(_cropLeftBox.Text");
+        source.Should().NotContain("DrawingInputParser.TryParseCropPercents(input");
     }
 }

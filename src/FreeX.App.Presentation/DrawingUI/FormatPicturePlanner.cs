@@ -35,6 +35,12 @@ public static class FormatPicturePlanner
         bool LockAspectRatio,
         string? AltText);
 
+    /// <summary>The validated size fields used by the standalone object-size dialog.</summary>
+    public sealed record SizeResult(double Width, double Height);
+
+    /// <summary>The validated, normalized rotation used by standalone and combined format dialogs.</summary>
+    public sealed record RotationResult(double Degrees);
+
     /// <summary>Snapshots a picture's editable fields. Pictures support locking the aspect ratio.</summary>
     public static FormatObjectValues Capture(PictureModel picture)
     {
@@ -89,6 +95,48 @@ public static class FormatPicturePlanner
         return false;
     }
 
+    /// <summary>Validates width and height text from separate input boxes.</summary>
+    public static bool TryCreateSizeResult(string? widthText, string? heightText, out SizeResult? result)
+    {
+        result = null;
+        if (!TryParseNumber(widthText, out var width) ||
+            !TryParseNumber(heightText, out var height) ||
+            width < MinimumSize ||
+            height < MinimumSize)
+        {
+            return false;
+        }
+
+        result = new SizeResult(width, height);
+        return true;
+    }
+
+    /// <summary>Validates width-by-height text such as "320 x 180".</summary>
+    public static bool TryCreateSizeResult(string? sizeText, out SizeResult? result)
+    {
+        result = null;
+        var parts = (sizeText ?? string.Empty).Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2 && TryCreateSizeResult(parts[0], parts[1], out result);
+    }
+
+    /// <summary>Validates and normalizes rotation to the 0..360 degree range used by drawing commands.</summary>
+    public static bool TryCreateRotationResult(string? rotationText, out RotationResult? result)
+    {
+        result = null;
+        if (!TryParseNumber(rotationText, out var rotation))
+            return false;
+
+        result = new RotationResult(NormalizeRotationDegrees(rotation));
+        return true;
+    }
+
+    /// <summary>Normalizes arbitrary finite degrees to the Excel-style 0..360 range.</summary>
+    public static double NormalizeRotationDegrees(double value)
+    {
+        var normalized = value % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
+    }
+
     /// <summary>
     /// Given a new width while the aspect ratio is locked, returns the height that preserves
     /// <paramref name="aspectRatio"/>, or null when no sync should happen.
@@ -99,8 +147,14 @@ public static class FormatPicturePlanner
             return null;
         if (!TryParseNumber(widthText, out var width) || width <= 0)
             return null;
-        return width / aspectRatio;
+        return SyncHeightFromWidth(width, aspectRatio);
     }
+
+    /// <summary>Numeric equivalent of <see cref="SyncHeightFromWidth(string?, double)"/>.</summary>
+    public static double? SyncHeightFromWidth(double width, double aspectRatio) =>
+        aspectRatio > 0 && width > 0 && double.IsFinite(width)
+            ? width / aspectRatio
+            : null;
 
     /// <summary>
     /// Given a new height while the aspect ratio is locked, returns the width that preserves
@@ -112,8 +166,14 @@ public static class FormatPicturePlanner
             return null;
         if (!TryParseNumber(heightText, out var height) || height <= 0)
             return null;
-        return height * aspectRatio;
+        return SyncWidthFromHeight(height, aspectRatio);
     }
+
+    /// <summary>Numeric equivalent of <see cref="SyncWidthFromHeight(string?, double)"/>.</summary>
+    public static double? SyncWidthFromHeight(double height, double aspectRatio) =>
+        aspectRatio > 0 && height > 0 && double.IsFinite(height)
+            ? height * aspectRatio
+            : null;
 
     /// <summary>
     /// Validates the typed size / rotation / alt-text and produces the result the shell applies. Width and
@@ -131,23 +191,20 @@ public static class FormatPicturePlanner
         result = null;
         error = null;
 
-        if (!TryParseNumber(widthText, out var width) ||
-            !TryParseNumber(heightText, out var height) ||
-            width < MinimumSize ||
-            height < MinimumSize)
+        if (!TryCreateSizeResult(widthText, heightText, out var size) || size is null)
         {
             error = InvalidSizeMessage;
             return false;
         }
 
-        if (!TryParseNumber(rotationText, out var rotation))
+        if (!TryCreateRotationResult(rotationText, out var rotation) || rotation is null)
         {
             error = InvalidRotationMessage;
             return false;
         }
 
         var normalizedAlt = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
-        result = new FormatObjectResult(width, height, rotation, lockAspectRatio, normalizedAlt);
+        result = new FormatObjectResult(size.Width, size.Height, rotation.Degrees, lockAspectRatio, normalizedAlt);
         return true;
     }
 }
