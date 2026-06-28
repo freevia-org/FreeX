@@ -64,10 +64,33 @@ public sealed partial class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void RenderMetadataWrappers_ExposeSharedPaintAndFillPolicy()
+    {
+        var shapeMetadata = GridView.ResolveDrawingShapeRenderMetadata(
+            new DrawingShapeModel
+            {
+                HasFill = false,
+                FillColor = new CellColor(10, 20, 30),
+                OutlineHasNoFill = true
+            },
+            WorkbookTheme.Office);
+        var textBoxMetadata = GridView.ResolveTextBoxRenderMetadata(
+            new TextBoxModel { HasFill = false },
+            WorkbookTheme.Office);
+
+        shapeMetadata.Paint.Fill.Should().Be(new CellColor(10, 20, 30));
+        shapeMetadata.Paint.HasFill.Should().BeFalse();
+        shapeMetadata.Paint.HasOutline.Should().BeFalse();
+        textBoxMetadata.Paint.HasFill.Should().BeFalse();
+        textBoxMetadata.Paint.HasOutline.Should().BeTrue();
+    }
+
+    [Fact]
     public void CreateObjectPlaceholderLabel_UsesObjectNameOrExcelLikeFallback()
     {
         GridView.CreateObjectPlaceholderLabel("Picture", "  Logo  ", 3).Should().Be("Logo");
         GridView.CreateObjectPlaceholderLabel("Picture", "", 1).Should().Be("Picture");
         GridView.CreateObjectPlaceholderLabel("Picture", null, 3).Should().Be("Picture 3");
+        GridView.CreateObjectPlaceholderMetadata("Picture", "  Logo  ", 3).Label.Should().Be("Logo");
     }
 }

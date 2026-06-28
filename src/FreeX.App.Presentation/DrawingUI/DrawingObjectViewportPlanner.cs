@@ -197,6 +197,17 @@ public static class DrawingObjectViewportPlanner
         anchor.From.Row < bounds.LastRow &&
         anchor.From.Column < bounds.LastColumn;
 
+    public static bool ShouldDisplayAnchoredObject(
+        bool isVisible,
+        CellAddress anchor,
+        DrawingViewportAnchorBounds bounds) =>
+        isVisible && CanAnchoredObjectReachViewport(anchor, bounds);
+
+    public static bool ShouldDisplayAnchorRange(
+        DrawingAnchorRange anchor,
+        DrawingViewportAnchorBounds bounds) =>
+        CanAnchorRangeReachViewport(anchor, bounds);
+
     public static bool NeedsViewportCull(
         LayoutRect rect,
         double rotationDegrees,
@@ -207,6 +218,14 @@ public static class DrawingObjectViewportPlanner
         rect.Top < 0 ||
         rect.Left >= visibleRight ||
         rect.Top >= visibleBottom;
+
+    public static bool ShouldDisplayObjectRect(
+        LayoutRect rect,
+        double rotationDegrees,
+        double visibleRight,
+        double visibleBottom) =>
+        !NeedsViewportCull(rect, rotationDegrees, visibleRight, visibleBottom) ||
+        IntersectsViewport(rect, rotationDegrees, visibleRight, visibleBottom);
 
     public static bool IntersectsViewport(
         LayoutRect rect,
@@ -265,12 +284,15 @@ public static class DrawingObjectViewportPlanner
     public static DrawingObjectPaintMetadata ResolveDrawingShapePaint(DrawingShapeModel shape, WorkbookTheme theme) =>
         new(
             shape.GetEffectiveFillColor(theme, DrawingShapeModel.ResolveDefaultFillColor(theme)),
-            shape.GetEffectiveOutlineColor(theme, DrawingShapeModel.ResolveDefaultOutlineColor(theme)));
+            shape.GetEffectiveOutlineColor(theme, DrawingShapeModel.ResolveDefaultOutlineColor(theme)),
+            shape.HasFill,
+            !shape.OutlineHasNoFill);
 
     public static DrawingObjectPaintMetadata ResolveTextBoxPaint(TextBoxModel textBox, WorkbookTheme theme) =>
         new(
             textBox.GetEffectiveFillColor(theme, CellColor.White),
-            textBox.GetEffectiveOutlineColor(theme, new CellColor(89, 89, 89)));
+            textBox.GetEffectiveOutlineColor(theme, new CellColor(89, 89, 89)),
+            textBox.HasFill);
 
     public static string CreateObjectPlaceholderLabel(string objectType, string? objectName, int index)
     {
@@ -527,4 +549,8 @@ public static class DrawingObjectViewportPlanner
 
 public readonly record struct DrawingViewportAnchorBounds(uint LastRow, uint LastColumn);
 
-public readonly record struct DrawingObjectPaintMetadata(CellColor Fill, CellColor Outline);
+public readonly record struct DrawingObjectPaintMetadata(
+    CellColor Fill,
+    CellColor Outline,
+    bool HasFill = true,
+    bool HasOutline = true);

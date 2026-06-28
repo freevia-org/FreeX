@@ -207,12 +207,12 @@ public sealed partial class GridViewRenderPerformanceTests
             drawingSource.IndexOf("private static void DrawPlaceholderDiagonals", StringComparison.Ordinal)];
 
         renderObjectPlaceholders.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
-        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Chart\", chart.Name, index), pixelsPerDip);");
-        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Shape\", shape.Name, index), pixelsPerDip);");
-        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Picture\", picture.Name, index), pixelsPerDip);");
-        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Text Box\", textBox.Name, index), pixelsPerDip);");
-        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Slicer\"");
-        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Timeline\"");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderMetadata(\"Chart\", chart.Name, index).Label, pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderMetadata(\"Shape\", shape.Name, index).Label, pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderMetadata(\"Picture\", picture.Name, index).Label, pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderMetadata(\"Text Box\", textBox.Name, index).Label, pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderMetadata(\"Slicer\"");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderMetadata(\"Timeline\"");
         drawObjectPlaceholder.Should().Contain("double pixelsPerDip)");
         drawObjectPlaceholder.Should().Contain("GetDrawingObjectText(");
         drawObjectPlaceholder.Should().Contain("var textClipRect = new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight);");

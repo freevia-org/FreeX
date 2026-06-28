@@ -557,6 +557,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         displayBoundsBlock.Should().NotContain("TryGetDisplayedRowTop(viewport.RowMetrics, drawingObject.AnchorRow");
         sharedPlanner.Should().Contain("rowHeaderWidth + (drawingObject.Left * zoomFactor)");
         sharedPlanner.Should().Contain("columnHeaderHeight + (drawingObject.Top * zoomFactor)");
+        source.Should().Contain("DrawingObjectViewportPlanner.ShouldDisplayObjectRect(");
+        source.Should().Contain("new LayoutRect(left, top, width, height)");
     }
 
     [Fact]

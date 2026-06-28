@@ -174,6 +174,49 @@ internal static class GridDrawingObjectPlanner
         return new DrawingObjectColors(paint.Fill, paint.Outline);
     }
 
+    public static DrawingShapeRenderMetadata ResolveDrawingShapeRenderMetadata(
+        DrawingShapeModel shape,
+        WorkbookTheme theme) =>
+        DrawingObjectRenderMetadataPlanner.ResolveDrawingShapeRenderMetadata(shape, theme);
+
+    public static TextBoxRenderMetadata ResolveTextBoxRenderMetadata(
+        TextBoxModel textBox,
+        WorkbookTheme theme) =>
+        DrawingObjectRenderMetadataPlanner.ResolveTextBoxRenderMetadata(textBox, theme);
+
+    public static IReadOnlyList<DrawingObjectZOrderEntry> NormalizeDrawingObjectZOrder(
+        IReadOnlyList<DrawingShapeModel>? shapes,
+        IReadOnlyList<PictureModel>? pictures,
+        IReadOnlyList<TextBoxModel>? textBoxes,
+        IReadOnlyList<DrawingObjectZOrderEntry>? explicitOrder) =>
+        DrawingObjectRenderMetadataPlanner.NormalizeZOrder(shapes, pictures, textBoxes, explicitOrder);
+
+    public static bool HasExplicitDrawingObjectZOrder(IReadOnlyList<DrawingObjectZOrderEntry>? zOrder) =>
+        DrawingObjectRenderMetadataPlanner.HasExplicitZOrder(zOrder);
+
+    public static DrawingObjectLayerRenderMode PlanLayerRenderMode(GridObjectDisplayMode mode) =>
+        DrawingObjectRenderMetadataPlanner.PlanLayerRenderMode(mode switch
+        {
+            GridObjectDisplayMode.Placeholders => DrawingObjectLayerDisplayMode.Placeholders,
+            GridObjectDisplayMode.Nothing => DrawingObjectLayerDisplayMode.Nothing,
+            _ => DrawingObjectLayerDisplayMode.All
+        });
+
+    public static DrawingObjectPlaceholderMetadata CreateObjectPlaceholderMetadata(
+        string objectType,
+        string? objectName,
+        int index) =>
+        DrawingObjectRenderMetadataPlanner.CreatePlaceholderMetadata(objectType, objectName, index);
+
+    public static int CalculateDrawingShapeRenderStamp(IReadOnlyList<DrawingShapeModel>? shapes) =>
+        DrawingObjectRenderMetadataPlanner.CalculateDrawingShapeRenderStamp(shapes);
+
+    public static int CalculatePictureRenderStamp(IReadOnlyList<PictureModel>? pictures) =>
+        DrawingObjectRenderMetadataPlanner.CalculatePictureRenderStamp(pictures);
+
+    public static int CalculateTextBoxRenderStamp(IReadOnlyList<TextBoxModel>? textBoxes) =>
+        DrawingObjectRenderMetadataPlanner.CalculateTextBoxRenderStamp(textBoxes);
+
     public static string CreateObjectPlaceholderLabel(string objectType, string? objectName, int index) =>
         DrawingObjectViewportPlanner.CreateObjectPlaceholderLabel(objectType, objectName, index);
 
@@ -203,6 +246,35 @@ internal static class GridDrawingObjectPlanner
             rotationDegrees,
             visibleRight,
             visibleBottom);
+
+    public static bool ShouldDisplayObjectRect(
+        Rect rect,
+        double rotationDegrees,
+        double visibleRight,
+        double visibleBottom) =>
+        DrawingObjectViewportPlanner.ShouldDisplayObjectRect(
+            ToLayoutRect(rect),
+            rotationDegrees,
+            visibleRight,
+            visibleBottom);
+
+    public static bool ShouldDisplayAnchoredObject(
+        bool isVisible,
+        CellAddress anchor,
+        uint lastRenderableRow,
+        uint lastRenderableColumn) =>
+        DrawingObjectViewportPlanner.ShouldDisplayAnchoredObject(
+            isVisible,
+            anchor,
+            new DrawingViewportAnchorBounds(lastRenderableRow, lastRenderableColumn));
+
+    public static bool ShouldDisplayAnchorRange(
+        DrawingAnchorRange anchor,
+        uint lastRenderableRow,
+        uint lastRenderableColumn) =>
+        DrawingObjectViewportPlanner.ShouldDisplayAnchorRange(
+            anchor,
+            new DrawingViewportAnchorBounds(lastRenderableRow, lastRenderableColumn));
 
     public static bool NeedsViewportCull(
         Rect rect,
