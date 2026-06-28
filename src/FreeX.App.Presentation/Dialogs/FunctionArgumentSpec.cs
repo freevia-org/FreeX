@@ -50,25 +50,38 @@ public static class FunctionArgumentCatalog
         GetArgumentSpecs(functionName).Count(argument => !argument.Optional);
 
     /// <summary>
-    /// Builds the live formula preview, e.g. <c>=SUM(A1, A2)</c>. Trailing blank arguments are trimmed
-    /// so an untouched optional box does not leave a dangling comma; interior blanks are preserved as
-    /// empty slots. Always prefixed with <c>=</c> for the formula-result line.
+    /// Builds the function call text, e.g. <c>SUM(A1, A2)</c>, without a leading equals sign.
+    /// Trailing blank arguments are trimmed so an untouched optional box does not leave a dangling
+    /// comma; interior blanks are preserved as empty slots.
     /// </summary>
-    public static string BuildPreview(string functionName, IEnumerable<string?> arguments)
+    public static string BuildFormula(string functionName, IEnumerable<string?> arguments)
     {
         ArgumentNullException.ThrowIfNull(functionName);
         ArgumentNullException.ThrowIfNull(arguments);
 
         var normalized = Normalize(functionName);
-        var cleaned = arguments.Select(argument => argument?.Trim() ?? "").ToList();
-        while (cleaned.Count > 0 && cleaned[^1].Length == 0)
-            cleaned.RemoveAt(cleaned.Count - 1);
+        var cleaned = CleanArguments(arguments);
 
-        return $"={normalized}({string.Join(", ", cleaned)})";
+        return $"{normalized}({string.Join(", ", cleaned)})";
     }
+
+    /// <summary>
+    /// Builds the live formula preview, e.g. <c>=SUM(A1, A2)</c>. Always prefixed with <c>=</c> for
+    /// the formula-result line.
+    /// </summary>
+    public static string BuildPreview(string functionName, IEnumerable<string?> arguments) =>
+        $"={BuildFormula(functionName, arguments)}";
 
     private static string Normalize(string functionName) =>
         functionName.Trim().ToUpperInvariant();
+
+    private static List<string> CleanArguments(IEnumerable<string?> arguments)
+    {
+        var cleaned = arguments.Select(argument => argument?.Trim() ?? "").ToList();
+        while (cleaned.Count > 0 && cleaned[^1].Length == 0)
+            cleaned.RemoveAt(cleaned.Count - 1);
+        return cleaned;
+    }
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<FunctionArgumentSpec>> KnownArguments =
         new Dictionary<string, IReadOnlyList<FunctionArgumentSpec>>(StringComparer.OrdinalIgnoreCase)
