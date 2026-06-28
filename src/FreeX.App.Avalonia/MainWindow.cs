@@ -4149,6 +4149,15 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
+            if (!DrawingObjectViewportPlanner.ShouldDisplayObjectRect(
+                    new LayoutRect(left, top, width, height),
+                    drawingObject.RotationDegrees,
+                    overlay.Width,
+                    overlay.Height))
+            {
+                continue;
+            }
+
             var visual = CreateSelectableDrawingObjectVisual(renderPlan, width, height);
             Canvas.SetLeft(visual, left);
             Canvas.SetTop(visual, top);
@@ -4433,23 +4442,21 @@ public sealed partial class MainWindow : Window
         double width,
         double height)
     {
+        var metadata = DrawingObjectRenderMetadataPlanner.ResolveBoundsShapeRenderMetadata(drawingObject);
         // Render the body fill when the shape carries one (FillColor non-null = HasFill=true in model).
         // WordArt with no body fill (FillColor=null) uses Transparent so the styled text shows alone.
         // WordArt WITH an authored body fill still renders the box behind the styled text, matching
         // Excel which shows the filled box and the styled run text together.
-        var fill = drawingObject.FillColor is { } fc
+        var fill = metadata.FillColor is { } fc
             ? Brush(fc)
-            : (drawingObject.IsWordArt ? Brushes.Transparent : Brush(new CellColor(0x5B, 0x9B, 0xD5)));
+            : Brushes.Transparent;
         // When OutlineHasNoFill is set the shape explicitly has no border stroke.
-        IBrush? strokeBrush = drawingObject.OutlineHasNoFill
-            ? null
-            : Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
+        IBrush? strokeBrush = metadata.OutlineColor is { } outlineColor
+            ? Brush(outlineColor)
+            : null;
         // pt → Avalonia DIPs at 96 dpi: 1 pt = 96/72 DIP. Fall back to 1.5 when unset.
-        const double PtToDip = 96.0 / 72.0;
-        var strokeThickness = drawingObject.OutlineWidthPoints > 0
-            ? drawingObject.OutlineWidthPoints * PtToDip
-            : 1.5;
-        var dashArray = GetShapeOutlineDashArray(drawingObject.OutlineDash);
+        var strokeThickness = metadata.OutlineThicknessDip;
+        var dashArray = GetShapeOutlineDashArray(metadata.OutlineDash);
 
         var w = Math.Max(1, width);
         var h = Math.Max(1, height);
@@ -4465,14 +4472,11 @@ public sealed partial class MainWindow : Window
         ApplyDrawingObjectEffect(shapeControl, drawingObject.Effect);
 
         // Arrowheads for line-like shapes: overlay filled polygons on a Canvas.
-        var hasArrowheads = drawingObject.ShapeKind.HasValue &&
-            DrawingShapeKindSupport.IsLineLike(drawingObject.ShapeKind.Value) &&
-            ((drawingObject.HeadArrowhead?.IsPresent == true) ||
-             (drawingObject.TailArrowhead?.IsPresent == true));
+        var hasArrowheads = metadata.IsLineLike && metadata.HasArrowheads;
 
         // Overlay shape text inside the same rotation envelope (text is added as a sibling in a
         // Grid so that ApplyDrawingObjectTransform, called by the caller, rotates both together).
-        if (hasArrowheads || !string.IsNullOrEmpty(drawingObject.ShapeText))
+        if (hasArrowheads || metadata.HasShapeText)
         {
             var grid = new AvaloniaGrid
             {
@@ -4482,8 +4486,8 @@ public sealed partial class MainWindow : Window
             };
             grid.Children.Add(shapeControl);
             if (hasArrowheads)
-                AddArrowheadOverlays(grid, drawingObject, w, h, strokeBrush);
-            if (!string.IsNullOrEmpty(drawingObject.ShapeText))
+                AddArrowheadOverlays(grid, drawingObject, w, h, strokeBrush, metadata.OutlineThicknessDip);
+            if (metadata.HasShapeText)
                 grid.Children.Add(CreateShapeTextOverlay(drawingObject, w, h));
             return grid;
         }
@@ -4500,13 +4504,11 @@ public sealed partial class MainWindow : Window
         DrawingObjectBounds d,
         double w,
         double h,
-        IBrush? arrowBrush)
+        IBrush? arrowBrush,
+        double strokeDip)
     {
         if (arrowBrush is null || d.ShapeKind is not { } kind)
             return;
-
-        const double PtToDip = 96.0 / 72.0;
-        var strokeDip = d.OutlineWidthPoints > 0 ? d.OutlineWidthPoints * PtToDip : 1.5;
 
         // Pass flipHorizontal/flipVertical as false here: ApplyDrawingObjectTransform sets a
         // ScaleTransform on the container visual that already flips the entire overlay (and its

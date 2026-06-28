@@ -150,12 +150,20 @@ public sealed class DrawingObjectViewportPlannerTests
     {
         var theme = WorkbookTheme.Office;
 
-        var shapePaint = DrawingObjectViewportPlanner.ResolveDrawingShapePaint(new DrawingShapeModel(), theme);
-        var textBoxPaint = DrawingObjectViewportPlanner.ResolveTextBoxPaint(new TextBoxModel(), theme);
+        var shapePaint = DrawingObjectViewportPlanner.ResolveDrawingShapePaint(
+            new DrawingShapeModel { HasFill = false, OutlineHasNoFill = true },
+            theme);
+        var textBoxPaint = DrawingObjectViewportPlanner.ResolveTextBoxPaint(
+            new TextBoxModel { HasFill = false },
+            theme);
 
         shapePaint.Fill.Should().Be(DrawingShapeModel.ResolveDefaultFillColor(theme));
         shapePaint.Outline.Should().Be(DrawingShapeModel.ResolveDefaultOutlineColor(theme));
+        shapePaint.HasFill.Should().BeFalse();
+        shapePaint.HasOutline.Should().BeFalse();
         textBoxPaint.Fill.Should().Be(CellColor.White);
         textBoxPaint.Outline.Should().Be(new CellColor(89, 89, 89));
+        textBoxPaint.HasFill.Should().BeFalse();
+        textBoxPaint.HasOutline.Should().BeTrue();
     }
 }

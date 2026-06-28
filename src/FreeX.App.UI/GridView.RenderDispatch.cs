@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Media;
 
+using FreeX.App.Presentation.DrawingUI;
+
 namespace FreeX.App.UI;
 
 public partial class GridView
@@ -137,7 +139,7 @@ public partial class GridView
 
     private bool HasDrawingObjectLayerWork()
     {
-        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing)
+        if (GridDrawingObjectPlanner.PlanLayerRenderMode(ObjectDisplayMode) == DrawingObjectLayerRenderMode.Hidden)
             return false;
 
         if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
