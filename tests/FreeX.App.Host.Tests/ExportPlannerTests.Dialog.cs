@@ -86,11 +86,11 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
-    public void ExportOptionsDialogPlanner_CreatesFormatAvailability()
+    public void ExportOptionsDialogSurfacePlanner_CreatesFormatAvailability()
     {
-        ExportOptionsDialogPlanner.CreateFormatAvailability(ExportFormat.Pdf)
+        ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(ExportFormat.Pdf)
             .Should()
-            .Be(new ExportOptionsFormatAvailability(
+            .Be(new ExportOptionsDialogFormatAvailability(
                 PdfBookmarksEnabled: true,
                 PdfInitialViewEnabled: true,
                 PdfOpenModeEnabled: true,
@@ -98,9 +98,9 @@ public partial class ExportPlannerTests
                 PdfBitmapTextEnabled: true,
                 MinimumSizeEnabled: true));
 
-        ExportOptionsDialogPlanner.CreateFormatAvailability(ExportFormat.Xps)
+        ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(ExportFormat.Xps)
             .Should()
-            .Be(new ExportOptionsFormatAvailability(
+            .Be(new ExportOptionsDialogFormatAvailability(
                 PdfBookmarksEnabled: false,
                 PdfInitialViewEnabled: false,
                 PdfOpenModeEnabled: false,
@@ -114,9 +114,9 @@ public partial class ExportPlannerTests
     [InlineData(1, 2)]
     [InlineData(2, 3)]
     [InlineData(99, 1)]
-    public void ExportOptionsDialogPlanner_MapsBookmarkModeIndexes(int index, int expected)
+    public void ExportOptionsDialogSurfacePlanner_MapsBookmarkModeIndexes(int index, int expected)
     {
-        ((int)ExportOptionsDialogPlanner.BookmarkModeFromIndex(index)).Should().Be(expected);
+        ((int)ExportOptionsDialogSurfacePlanner.BookmarkModeFromIndex(index)).Should().Be(expected);
     }
 
     [Theory]
@@ -125,9 +125,9 @@ public partial class ExportPlannerTests
     [InlineData(2, 2)]
     [InlineData(3, 3)]
     [InlineData(99, 0)]
-    public void ExportOptionsDialogPlanner_MapsInitialViewIndexes(int index, int expected)
+    public void ExportOptionsDialogSurfacePlanner_MapsInitialViewIndexes(int index, int expected)
     {
-        ((int)ExportOptionsDialogPlanner.InitialViewFromIndex(index)).Should().Be(expected);
+        ((int)ExportOptionsDialogSurfacePlanner.InitialViewFromIndex(index)).Should().Be(expected);
     }
 
     [Theory]
@@ -135,9 +135,9 @@ public partial class ExportPlannerTests
     [InlineData(1, 1)]
     [InlineData(2, 2)]
     [InlineData(99, 0)]
-    public void ExportOptionsDialogPlanner_MapsOpenModeIndexes(int index, int expected)
+    public void ExportOptionsDialogSurfacePlanner_MapsOpenModeIndexes(int index, int expected)
     {
-        ((int)ExportOptionsDialogPlanner.OpenModeFromIndex(index)).Should().Be(expected);
+        ((int)ExportOptionsDialogSurfacePlanner.OpenModeFromIndex(index)).Should().Be(expected);
     }
 
     [Theory]
@@ -145,7 +145,7 @@ public partial class ExportPlannerTests
     [InlineData("Enter a valid page range.", "2", 1)]
     [InlineData("Enter a valid page range.", "0", 0)]
     [InlineData("Enter a valid page range.", "x", 0)]
-    public void ExportOptionsDialogPlanner_SelectsInvalidPageRangeFocusTarget(
+    public void ExportOptionsDialogSurfacePlanner_SelectsInvalidPageRangeFocusTarget(
         string errorOrKey,
         string fromPageText,
         int expected)
@@ -154,24 +154,28 @@ public partial class ExportPlannerTests
             ? UiText.Get(errorOrKey)
             : errorOrKey;
 
-        ((int)ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, fromPageText)).Should().Be(expected);
+        ((int)ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(
+            error,
+            fromPageText,
+            UiText.Get("Export_PageRangeFromLessThanToError"))).Should().Be(expected);
     }
 
     [Fact]
-    public void ExportOptionsDialogPlanningFacade_ForwardsPureWorkToPlanner()
+    public void ExportOptionsDialog_UsesSharedSurfacePlannerDirectly()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs", "ExportOptionsDialogPlanner.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
+        var sharedPlanner = DialogSourceTestSupport.ReadAppServicesSource("ExportOptionsDialogSurfacePlanner.cs");
 
-        source.Should().Contain("ExportOptionsDialogPlanner.CreateResult(");
-        source.Should().Contain("ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex)");
-        source.Should().Contain("ExportOptionsDialogPlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex)");
-        source.Should().Contain("ExportOptionsDialogPlanner.OpenModeFromIndex(_openModeBox.SelectedIndex)");
-        source.Should().Contain("ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text)");
-        source.Should().Contain("ExportOptionsDialogPlanner.CreateFormatAvailability(format)");
-        source.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(ToSharedFormat(format))");
+        source.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateResult(");
+        source.Should().Contain("ExportOptionsDialogSurfacePlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex)");
+        source.Should().Contain("ExportOptionsDialogSurfacePlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex)");
+        source.Should().Contain("ExportOptionsDialogSurfacePlanner.OpenModeFromIndex(_openModeBox.SelectedIndex)");
         source.Should().Contain("ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(");
+        source.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(format)");
+        sharedPlanner.Should().Contain("public static ExportOptions CreateResult(");
+        sharedPlanner.Should().Contain("public static PdfBookmarkMode BookmarkModeFromIndex");
         source.Should().Contain("AutomationProperties.SetAutomationId(this, ExportOptionsDialogSurfacePlanner.DialogAutomationId);");
-        source.Should().Contain("ApplyFormatAvailability(ExportOptionsDialogPlanner.CreateFormatAvailability(format));");
+        source.Should().Contain("ApplyFormatAvailability(ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(format));");
         source.Should().Contain("DisableOption(_bookmarksBox, UiText.Get(\"Export_BookmarksPdfOnly\"));");
     }
 
@@ -268,7 +272,7 @@ public partial class ExportPlannerTests
         source.Should().Contain("Content = UiText.Get(\"ExportOptions_Standard\"), IsChecked = true");
         source.Should().Contain("Content = UiText.Get(\"ExportOptions_MinimumSize\")");
         source.Should().Contain("Content = UiText.Get(\"ExportOptions_OpenAfterPublishing\")");
-        source.Should().Contain("ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error)");
+        source.Should().Contain("ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error, WpfExportPlannerTextResolver.Instance)");
         source.Should().Contain("_minimumSizeButton.IsChecked == true");
         source.Should().Contain("_openAfterPublishBox.IsChecked == true");
     }
@@ -360,7 +364,7 @@ public partial class ExportPlannerTests
         source.Should().Contain("_pagesRangeButton.IsChecked = true;");
         source.Should().Contain("var target = ResolveInvalidPageRangeInput(error);");
         source.Should().Contain("private TextBox ResolveInvalidPageRangeInput(string? error)");
-        source.Should().Contain("ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text)");
+        source.Should().Contain("ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(");
         source.Should().Contain("? _toPageBox");
         source.Should().Contain(": _fromPageBox");
         source.Should().Contain("target.Focus();");
@@ -373,7 +377,7 @@ public partial class ExportPlannerTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
-        source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError)");
+        source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError, WpfExportPlannerTextResolver.Instance)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, pdfLanguageError, UiText.Get(\"ExportOptions_ExportOptions\"));");
         source.Should().Contain("FocusInvalidPdfLanguageInput();");
         source.Should().Contain("private void FocusInvalidPdfLanguageInput()");

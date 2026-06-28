@@ -529,11 +529,11 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.PrintExport.cs");
 
-        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
-        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
+        source.Should().Contain("ExportAsPdf(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)");
+        source.Should().Contain("ExportAsXps(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)");
         source.Should().Contain("var document = RenderExportDocument(effectiveOptions)");
         source.Should().Contain("var paginator = RenderExportPaginator(effectiveOptions)");
-        source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("WpfExportDescriptionPlanner.DescribeRequest(request)");
         source.Should().Contain("OpenExportedFile(request.ActualPath)");
         source.Should().NotContain("ExportPdfFallbackAsXps");
     }
@@ -557,7 +557,7 @@ public sealed partial class MainWindowSourceHygieneTests
         exportMethod.Should().Contain("var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
         exportMethod.Should().Contain("var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps");
         exportMethod.Should().Contain("ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result)");
-        exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError)");
+        exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError, WpfExportPlannerTextResolver.Instance)");
         exportMethod.Should().Contain("publishOptionsError ?? UiText.Get(\"MainWindowMessage_ExportUnsupportedOptions\")");
         exportMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportOptionsTitle\")");
         exportMethod.Should().Contain("ShowOwnedMessage(");

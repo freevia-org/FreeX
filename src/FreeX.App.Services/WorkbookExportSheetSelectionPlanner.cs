@@ -1,8 +1,8 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
-internal static class ExportSheetSelectionPlanner
+public static class WorkbookExportSheetSelectionPlanner
 {
     public static IReadOnlyList<SheetId> ResolveSheetIds(
         Workbook workbook,

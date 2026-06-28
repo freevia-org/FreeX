@@ -305,8 +305,8 @@ public partial class ExportPlannerTests
         source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
         source.Should().Contain("PrintPreviewPageRangeMode.Pages");
         source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
-        source.Should().Contain("ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError)");
-        source.Should().Contain("ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError)");
+        source.Should().Contain("ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError, WpfExportPlannerTextResolver.Instance)");
+        source.Should().Contain("ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError, WpfExportPlannerTextResolver.Instance)");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
         source.Should().Contain("ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError)");
@@ -341,7 +341,7 @@ public partial class ExportPlannerTests
             "PrintPreviewDialog.Helpers.cs",
             "NativePrintDialogService.cs",
             "PrintPreviewSettingsPanelFactory.cs",
-            "PrintPreviewToolbarPlanner.cs")
+            "WpfPrintPreviewToolbarPlanner.cs")
         + Environment.NewLine
         + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs");
 

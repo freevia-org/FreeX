@@ -422,7 +422,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_backstage_back_to_workbook_focus_return");
         source.Should().Contain("SwitchToPinnedTab();");
         source.Should().Contain("new ExportOptionsDialog(");
-        source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("WpfExportDescriptionPlanner.DescribeRequest(request)");
         source.Should().Contain("ShareWorkbookPlanner.CreatePlan(null)");
         source.Should().Contain("SaveBackstageRecentExportShareTourWorkbookAsync");
         source.Should().Contain("ConfirmUnsupportedXlsxFeatureSave();");

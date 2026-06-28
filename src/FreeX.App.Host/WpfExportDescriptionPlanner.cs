@@ -1,41 +1,13 @@
+using FreeX.App.Services;
+
 namespace FreeX.App.Host;
 
-internal static partial class ExportPlanner
+internal static class WpfExportDescriptionPlanner
 {
-    public static string DescribeOptions(ExportOptions options)
-    {
-        var scope = options.Scope switch
-        {
-            ExportContentScope.ActiveSheet => UiText.Get("Export_ScopeActiveSheet"),
-            ExportContentScope.Selection => UiText.Get("Export_ScopeSelection"),
-            ExportContentScope.EntireWorkbook => UiText.Get("Export_ScopeEntireWorkbook"),
-            _ => UiText.Get("Export_ScopeActiveSheet")
-        };
-        var pageRange = options.PageRange is null
-            ? null
-            : options.PageRange.ToString();
-        var quality = DescribeQuality(options.Quality);
-        var printAreas = options.IgnorePrintAreas
-            ? UiText.Get("Export_PrintAreasIgnored")
-            : null;
-        var initialView = DescribeInitialView(options.InitialView);
-        var openMode = DescribeOpenMode(options.OpenMode);
-        var properties = options.IncludeDocumentProperties
-            ? UiText.Get("Export_DocumentPropertiesIncluded")
-            : UiText.Get("Export_DocumentPropertiesNotIncluded");
-        var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, ExportFormat.Pdf);
-        var bitmapText = options.BitmapTextWhenFontsMayNotBeEmbedded
-            ? UiText.Get("Export_BitmapTextWhenFontsMayNotBeEmbedded")
-            : null;
-        var language = DescribePdfLanguage(options.PdfLanguage, ExportFormat.Pdf);
-        var conformance = DescribePdfConformance(options.PdfConformance, ExportFormat.Pdf);
-        var tags = DescribeDocumentStructureTags(options.IncludeDocumentStructureTags, ExportFormat.Pdf);
-        var open = options.OpenAfterPublish
-            ? UiText.Get("Export_OpenAfterPublishing")
-            : null;
+    public static string PdfFallbackMessage => UiText.Get("Export_PdfFallbackMessage");
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, conformance, tags, open);
-    }
+    public static string DescribeOptions(ExportOptions options) =>
+        DescribeOptionsForFormat(options, ExportFormat.Pdf);
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
         DescribeOptionsForFormat(options, format);
@@ -59,19 +31,16 @@ internal static partial class ExportPlanner
         };
         var pageRange = options.PageRange is null
             ? null
-            : options.PageRange.ToString();
+            : ExportPlanner.FormatPageRange(options.PageRange, WpfExportPlannerTextResolver.Instance);
         var quality = DescribeQualityForFormat(options.Quality, format);
         var printAreas = options.IgnorePrintAreas
             ? UiText.Get("Export_PrintAreasIgnored")
             : null;
         var initialView = DescribeInitialViewForFormat(options.InitialView, format);
         var openMode = DescribeOpenModeForFormat(options.OpenMode, format);
-        var properties = (options.IncludeDocumentProperties, format) switch
-        {
-            (true, ExportFormat.Pdf) => UiText.Get("Export_DocumentPropertiesIncluded"),
-            (true, ExportFormat.Xps) => UiText.Get("Export_DocumentPropertiesIncluded"),
-            _ => UiText.Get("Export_DocumentPropertiesNotIncluded")
-        };
+        var properties = options.IncludeDocumentProperties
+            ? UiText.Get("Export_DocumentPropertiesIncluded")
+            : UiText.Get("Export_DocumentPropertiesNotIncluded");
         var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, format);
         var bitmapText = DescribeBitmapTextOption(options.BitmapTextWhenFontsMayNotBeEmbedded, format);
         var language = DescribePdfLanguage(options.PdfLanguage, format);
@@ -83,7 +52,6 @@ internal static partial class ExportPlanner
 
         return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, conformance, tags, open);
     }
-
 
     private static string JoinOptionParts(params string?[] parts) =>
         UiText.Format(
@@ -128,8 +96,8 @@ internal static partial class ExportPlanner
 
     private static string? DescribePdfLanguage(string? pdfLanguage, ExportFormat format)
     {
-        var normalized = NormalizePdfLanguage(pdfLanguage);
-        if (string.Equals(normalized, DefaultPdfLanguage, StringComparison.OrdinalIgnoreCase))
+        var normalized = ExportPlanner.NormalizePdfLanguage(pdfLanguage);
+        if (string.Equals(normalized, ExportPlanner.DefaultPdfLanguage, StringComparison.OrdinalIgnoreCase))
             return null;
 
         return format == ExportFormat.Xps

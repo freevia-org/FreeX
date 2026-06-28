@@ -2,26 +2,9 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Editing;
 
 namespace FreeX.App.Host;
-
-public enum CellShiftDialogMode
-{
-    Insert,
-    Delete
-}
-
-public enum CellShiftDialogChoice
-{
-    ShiftCellsRight,
-    ShiftCellsDown,
-    ShiftCellsLeft,
-    ShiftCellsUp,
-    EntireRow,
-    EntireColumn
-}
-
-public sealed record CellShiftDialogOption(CellShiftDialogChoice Choice, string Label);
 
 public sealed class CellShiftDialog : Window
 {
@@ -69,7 +52,7 @@ public sealed class CellShiftDialog : Window
         {
             var button = new RadioButton
             {
-                Content = option.Label,
+                Content = UiText.Get(option.LabelKey),
                 Tag = option.Choice,
                 Margin = new Thickness(0, 0, 0, 6)
             };
@@ -92,24 +75,10 @@ public sealed class CellShiftDialog : Window
     }
 
     public static IReadOnlyList<CellShiftDialogOption> GetAvailableChoices(CellShiftDialogMode mode) =>
-        CellShiftDialogPlanner.GetAvailableChoices(mode)
-            .Select(option => option with { Label = GetChoiceLabel(option.Choice) })
-            .ToList();
+        CellShiftDialogPlanner.GetAvailableChoices(mode);
 
     public static KeyboardInsertDeleteDialogChoice ToKeyboardChoice(CellShiftDialogMode mode, CellShiftDialogChoice choice) =>
         CellShiftDialogPlanner.ToKeyboardChoice(mode, choice);
-
-    private static string GetChoiceLabel(CellShiftDialogChoice choice) =>
-        choice switch
-        {
-            CellShiftDialogChoice.ShiftCellsRight => UiText.Get("CellShift_ShiftCellsRight"),
-            CellShiftDialogChoice.ShiftCellsDown => UiText.Get("CellShift_ShiftCellsDown"),
-            CellShiftDialogChoice.ShiftCellsLeft => UiText.Get("CellShift_ShiftCellsLeft"),
-            CellShiftDialogChoice.ShiftCellsUp => UiText.Get("CellShift_ShiftCellsUp"),
-            CellShiftDialogChoice.EntireRow => UiText.Get("CellShift_EntireRow"),
-            CellShiftDialogChoice.EntireColumn => UiText.Get("CellShift_EntireColumn"),
-            _ => choice.ToString()
-        };
 
     private void FocusInitialKeyboardTarget()
     {
