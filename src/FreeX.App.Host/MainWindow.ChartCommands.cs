@@ -1022,18 +1022,18 @@ public partial class MainWindow
         if (!TryGetFirstChartForDialog("Format Data Series", UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"), out var chart))
             return;
 
-        var seriesCount = ChartOptionCycler.GetSeriesCount(chart);
+        var seriesCount = ChartSeriesFormatPlanner.GetSeriesCount(chart);
         if (seriesCount <= 0)
         {
             ShowCommandError(new CommandOutcome(false, UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries")), "Format Data Series");
             return;
         }
 
-        var dialog = new ChartSeriesFormatDialog(chart, ChartOptionCycler.GetSeriesCount(chart)) { Owner = this };
+        var dialog = new ChartSeriesFormatDialog(chart, seriesCount) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Data Series", chart, dialog.Result.ToOptions(chart.SeriesFormats));
+        ApplyChartLayoutDialogResult("Format Data Series", chart, dialog.Result.ToOptions(chart));
     }
 
     private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)

@@ -10,11 +10,12 @@ public readonly record struct ChartSeriesFormatInput(
     CellColor? StrokeColor,
     double? StrokeThickness,
     ChartMarkerStyle? MarkerStyle,
-    double? MarkerSize);
+    double? MarkerSize,
+    ChartLineDashStyle? DashStyle = null);
 
 /// <summary>
 /// Portable (no UI) planner for the "Format Series" editing dialog: per-series fill color, line (stroke)
-/// color and width, and marker style/size. Reads the chosen series' current
+/// color and width, dash style, and marker style/size. Reads the chosen series' current
 /// <see cref="ChartSeriesFormat"/> and merges an edited <see cref="ChartSeriesFormatInput"/> back into the
 /// chart's series-format list (replacing the matching entry or appending a new one), producing the
 /// <see cref="ChartLayoutOptions"/> the shell hands to the Core <see cref="SetChartLayoutCommand"/>. Setting
@@ -25,6 +26,20 @@ public static class ChartSeriesFormatPlanner
 {
     /// <summary>The number of data series the series picker should offer (at least one).</summary>
     public static int GetSeriesCount(ChartModel chart) => Math.Max(1, ChartTypeSupport.GetDataSeriesCount(chart));
+
+    /// <summary>
+    /// Chooses the initially selected series for a format dialog: use the first stored format's series index
+    /// when present, clamped into the current data-series range, otherwise series 0.
+    /// </summary>
+    public static int GetDefaultSeriesIndex(ChartModel chart)
+    {
+        var seriesCount = GetSeriesCount(chart);
+        var requested = chart.SeriesFormats.Count > 0 ? chart.SeriesFormats[0].SeriesIndex : 0;
+        return Math.Clamp(requested, 0, seriesCount - 1);
+    }
+
+    /// <summary>Reads the default series-format dialog state for the chart.</summary>
+    public static ChartSeriesFormatInput ReadDefault(ChartModel chart) => Read(chart, GetDefaultSeriesIndex(chart));
 
     /// <summary>
     /// Reads the chosen series' current format into the dialog input shape. <paramref name="seriesIndex"/> is
@@ -42,7 +57,8 @@ public static class ChartSeriesFormatPlanner
             format?.StrokeColor,
             format?.StrokeThickness,
             format?.MarkerStyle,
-            format?.MarkerSize);
+            format?.MarkerSize,
+            format?.DashStyle);
     }
 
     /// <summary>
@@ -80,6 +96,7 @@ public static class ChartSeriesFormatPlanner
             StrokeColor = input.StrokeColor,
             StrokeThemeColor = input.StrokeColor is null ? current.StrokeThemeColor : null,
             StrokeThickness = input.StrokeThickness,
+            DashStyle = input.DashStyle,
             MarkerStyle = input.MarkerStyle,
             MarkerSize = input.MarkerSize,
         };

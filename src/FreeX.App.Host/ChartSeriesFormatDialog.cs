@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -18,33 +19,10 @@ public sealed record ChartSeriesFormatDialogResult(
     ChartMarkerStyle? MarkerStyle,
     double? MarkerSize)
 {
-    public ChartLayoutOptions ToOptions(IReadOnlyList<ChartSeriesFormat> currentFormats)
-    {
-        var formats = currentFormats.ToList();
-        var replacement = new ChartSeriesFormat(
-            SeriesIndex,
-            FillColor,
-            StrokeColor,
-            StrokeThickness,
-            DashStyle,
-            MarkerStyle,
-            MarkerSize);
-        var existingIndex = IndexOfSeriesFormat(formats, SeriesIndex);
-        if (existingIndex >= 0)
-            formats[existingIndex] = replacement;
-        else
-            formats.Add(replacement);
-        return new ChartLayoutOptions(SeriesFormats: formats);
-    }
+    public ChartSeriesFormatInput ToInput() =>
+        new(SeriesIndex, FillColor, StrokeColor, StrokeThickness, MarkerStyle, MarkerSize, DashStyle);
 
-    private static int IndexOfSeriesFormat(IReadOnlyList<ChartSeriesFormat> formats, int seriesIndex)
-    {
-        for (var index = 0; index < formats.Count; index++)
-            if (formats[index].SeriesIndex == seriesIndex)
-                return index;
-
-        return -1;
-    }
+    public ChartLayoutOptions ToOptions(ChartModel chart) => ChartSeriesFormatPlanner.Plan(chart, ToInput());
 }
 
 public sealed class ChartSeriesFormatDialog : Window
@@ -61,7 +39,7 @@ public sealed class ChartSeriesFormatDialog : Window
 
     public ChartSeriesFormatDialog(ChartModel chart, int seriesCount)
     {
-        Result = FromChart(chart, seriesCount);
+        Result = FromChart(chart);
         Title = UiText.Get("ChartSeriesFormat_Title");
         Width = 380;
         Height = 390;
@@ -73,23 +51,10 @@ public sealed class ChartSeriesFormatDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartSeriesFormatDialogResult FromChart(ChartModel chart, int seriesCount)
+    public static ChartSeriesFormatDialogResult FromChart(ChartModel chart)
     {
-        var seriesIndex = Math.Clamp(GetFirstSeriesFormatIndex(chart), 0, Math.Max(0, seriesCount - 1));
-        var format = FindSeriesFormat(chart, seriesIndex) ?? new ChartSeriesFormat(seriesIndex);
-        return CreateResult(seriesIndex, format.FillColor, format.StrokeColor, format.StrokeThickness, format.DashStyle, format.MarkerStyle, format.MarkerSize);
-    }
-
-    private static int GetFirstSeriesFormatIndex(ChartModel chart) =>
-        chart.SeriesFormats.Count > 0 ? chart.SeriesFormats[0].SeriesIndex : 0;
-
-    private static ChartSeriesFormat? FindSeriesFormat(ChartModel chart, int seriesIndex)
-    {
-        foreach (var format in chart.SeriesFormats)
-            if (format.SeriesIndex == seriesIndex)
-                return format;
-
-        return null;
+        var input = ChartSeriesFormatPlanner.ReadDefault(chart);
+        return CreateResult(input.SeriesIndex, input.FillColor, input.StrokeColor, input.StrokeThickness, input.DashStyle, input.MarkerStyle, input.MarkerSize);
     }
 
     public static ChartSeriesFormatDialogResult CreateResult(
