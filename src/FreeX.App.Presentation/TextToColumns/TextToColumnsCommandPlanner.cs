@@ -1,9 +1,9 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.TextToColumns;
 
-internal static class TextToColumnsCommandPlanner
+public static class TextToColumnsCommandPlanner
 {
     public static IWorkbookCommand CreateCommand(
         Workbook workbook,
