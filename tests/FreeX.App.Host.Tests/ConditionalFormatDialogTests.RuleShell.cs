@@ -246,6 +246,8 @@ public sealed partial class ConditionalFormatDialogTests
     {
         var source = ReadConditionalFormatDialogSource();
 
+        source.Should().Contain("ConditionalFormatRuleSchema.ForRuleType(input.RuleType).Validate(input)");
+        source.Should().Contain("ConditionalFormatRuleBuilder.Build(");
         source.Should().Contain("ConditionalFormatDialog_InvalidFormulaMessage");
         source.Should().Contain("ConditionalFormatDialog_InvalidValueMessage");
         source.Should().Contain("ConditionalFormatDialog_InvalidMaximumValueMessage");
@@ -261,20 +263,33 @@ public sealed partial class ConditionalFormatDialogTests
     {
         var source = ReadConditionalFormatDialogSource();
 
-        source.Should().Contain("TryParseOptionalPercent(_dataBarMinLengthBox.Text, out var minLength)");
+        source.Should().Contain("CfInputField.DataBarMinLength");
         source.Should().Contain("ConditionalFormatDialog_InvalidMinimumBarLengthMessage");
-        source.Should().Contain("TryParseOptionalPercent(_dataBarMaxLengthBox.Text, out var maxLength)");
+        source.Should().Contain("CfInputField.DataBarMaxLength");
         source.Should().Contain("ConditionalFormatDialog_InvalidMaximumBarLengthMessage");
-        source.Should().Contain("TryParseTopBottomRank(_topBottomRankBox.Text, out var topBottomRank)");
+        source.Should().Contain("CfInputField.Rank");
         source.Should().Contain("ConditionalFormatDialog_InvalidRankOrPercentMessage");
-        source.Should().Contain("TryParseRgbColor(_colorScaleMinColorBox.Text, out var minColor)");
+        source.Should().Contain("CfInputField.ColorScaleMinColor");
         source.Should().Contain("ConditionalFormatDialog_InvalidMinimumColorMessage");
-        source.Should().Contain("TryParseRgbColor(_colorScaleMidColorBox.Text, out var midColor)");
+        source.Should().Contain("CfInputField.ColorScaleMidColor");
         source.Should().Contain("ConditionalFormatDialog_InvalidMidpointColorMessage");
-        source.Should().Contain("TryParseRgbColor(_colorScaleMaxColorBox.Text, out var maxColor)");
+        source.Should().Contain("CfInputField.ColorScaleMaxColor");
         source.Should().Contain("ConditionalFormatDialog_InvalidMaximumColorMessage");
         source.Should().NotContain("Math.Clamp(value, 0, 100)");
         source.Should().NotContain(": 10;");
         source.Should().NotContain("ParseRgbOrFallback");
+    }
+
+    [Fact]
+    public void DialogCatalogPolicy_DelegatesToSharedPresentationCatalog()
+    {
+        var source = ReadConditionalFormatDialogSource();
+
+        source.Should().Contain("ConditionalFormatDialogCatalog.FormatStyleOptions");
+        source.Should().Contain("ConditionalFormatDialogCatalog.ColorPresets");
+        source.Should().Contain("ConditionalFormatDialogCatalog.RuleShellOptions");
+        source.Should().Contain("ConditionalFormatDialogCatalog.ConditionKindOptions");
+        source.Should().Contain("ConditionalFormatDialogCatalog.DatePeriodOptions");
+        source.Should().NotContain("Color.FromRgb(255, 199, 206)");
     }
 }

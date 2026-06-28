@@ -28,16 +28,25 @@ public static class ConditionalFormatRuleBuilder
         GridRange range,
         ConditionalFormatHighlightPreset? highlight = null,
         Guid? id = null,
-        CellStyle? customFormat = null)
+        CellStyle? customFormat = null,
+        ConditionalFormat? existingRule = null)
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var cf = new ConditionalFormat
-        {
-            Id = id ?? Guid.NewGuid(),
-            AppliesTo = range,
-            RuleType = input.RuleType,
-        };
+        var cf = existingRule is not null
+            ? ConditionalFormatDialogPlanner.CloneRule(existingRule)
+            : new ConditionalFormat
+            {
+                Id = id ?? Guid.NewGuid(),
+                AppliesTo = range,
+            };
+
+        var previousRuleType = cf.RuleType;
+        cf.AppliesTo = range;
+        cf.RuleType = input.RuleType;
+
+        if (existingRule is not null && input.RuleType != previousRuleType)
+            ConditionalFormatDialogPlanner.ClearNativeConditionalFormatMetadata(cf);
 
         switch (input.RuleType)
         {
@@ -62,23 +71,45 @@ public static class ConditionalFormatRuleBuilder
 
             case CfRuleType.IconSet:
                 cf.IconSetStyle = ConditionalFormatInputParser.BlankToNull(input.IconSetStyle) ?? ConditionalFormatIconSetCatalog.DefaultStyle;
-                cf.IconSetShowValue = true;
-                cf.IconSetReverse = false;
+                cf.IconSetShowValue = input.IconSetShowValue;
+                cf.IconSetReverse = input.IconSetReverse;
                 cf.IconSetThresholds.Clear();
-                cf.IconSetThresholds.AddRange(ConditionalFormatIconSetCatalog.CreateThresholds(cf.IconSetStyle));
+                cf.IconSetThresholds.AddRange(input.IconSetThresholds ?? ConditionalFormatIconSetCatalog.CreateThresholds(cf.IconSetStyle));
+                ApplyIconOverrides(cf, input.IconOverrides);
                 break;
 
             case CfRuleType.DataBar:
+                if (input.DataBarColor is { } dataBarColor)
+                    cf.DataBarColor = dataBarColor;
                 cf.DataBarMinThresholdType = input.DataBarMinType;
+                cf.DataBarMinThresholdValue = ConditionalFormatInputParser.BlankToNull(input.DataBarMinValue);
                 cf.DataBarMaxThresholdType = input.DataBarMaxType;
+                cf.DataBarMaxThresholdValue = ConditionalFormatInputParser.BlankToNull(input.DataBarMaxValue);
+                cf.DataBarShowValue = input.DataBarShowValue;
+                cf.DataBarGradient = input.DataBarGradient;
+                if (ConditionalFormatInputParser.TryParseOptionalPercent(input.DataBarMinLength, out var minLength))
+                    cf.DataBarMinLength = minLength;
+                if (ConditionalFormatInputParser.TryParseOptionalPercent(input.DataBarMaxLength, out var maxLength))
+                    cf.DataBarMaxLength = maxLength;
+                cf.DataBarBorder = input.DataBarBorder;
+                cf.DataBarAxisPosition = ConditionalFormatInputParser.BlankToNull(input.DataBarAxisPosition);
+                cf.DataBarAxisColor = input.DataBarAxisColor;
+                cf.DataBarNegativeFillColor = input.DataBarNegativeFillColor;
+                cf.DataBarNegativeBorderColor = input.DataBarNegativeBorderColor;
                 break;
 
             case CfRuleType.ColorScale:
                 cf.UseThreeColorScale = input.UseThreeColorScale;
+                cf.MinThresholdType = input.ColorScaleMinType;
+                cf.MinThresholdValue = ConditionalFormatInputParser.BlankToNull(input.ColorScaleMinValue);
                 if (ConditionalFormatInputParser.TryParseRgbColor(input.MinColor, out var minColor))
                     cf.MinColor = minColor;
+                cf.MidThresholdType = input.ColorScaleMidType;
+                cf.MidThresholdValue = ConditionalFormatInputParser.BlankToNull(input.ColorScaleMidValue);
                 if (input.UseThreeColorScale && ConditionalFormatInputParser.TryParseRgbColor(input.MidColor, out var midColor))
                     cf.MidColor = midColor;
+                cf.MaxThresholdType = input.ColorScaleMaxType;
+                cf.MaxThresholdValue = ConditionalFormatInputParser.BlankToNull(input.ColorScaleMaxValue);
                 if (ConditionalFormatInputParser.TryParseRgbColor(input.MaxColor, out var maxColor))
                     cf.MaxColor = maxColor;
                 break;
@@ -91,13 +122,19 @@ public static class ConditionalFormatRuleBuilder
                 break;
 
             case CfRuleType.DateOccurring:
-                cf.DateOccurringPeriod = ConditionalFormatInputParser.BlankToNull(input.Text);
+                cf.DateOccurringPeriod = ConditionalFormatInputParser.BlankToNull(input.DatePeriod ?? input.Text);
                 break;
 
             case CfRuleType.DuplicateValues:
             case CfRuleType.UniqueValues:
                 // The schema's DuplicateOrUnique choice is already encoded in the rule type itself.
                 break;
+        }
+
+        if (input.RuleType != CfRuleType.Formula)
+        {
+            cf.AboveAverage = input.IsTop;
+            cf.TopBottomPercent = input.IsPercent;
         }
 
         // The visual families render their own appearance; the highlight families take a fill/font
@@ -108,6 +145,33 @@ public static class ConditionalFormatRuleBuilder
             cf.FormatIfTrue = customFormat ?? (highlight ?? ConditionalFormatHighlightPreset.Default).ToCellStyle();
 
         return cf;
+    }
+
+    private static void ApplyIconOverrides(ConditionalFormat cf, IReadOnlyList<CfIconOverride?>? overrides)
+    {
+        cf.IconOverrides.Clear();
+        if (overrides is null || overrides.Count == 0)
+            return;
+
+        var hasAnyOverride = false;
+        foreach (var iconOverride in overrides)
+        {
+            if (iconOverride is not null)
+            {
+                hasAnyOverride = true;
+                break;
+            }
+        }
+
+        if (!hasAnyOverride)
+            return;
+
+        for (var i = 0; i < overrides.Count; i++)
+        {
+            cf.IconOverrides.Add(overrides[i] ?? new CfIconOverride(
+                string.IsNullOrWhiteSpace(cf.IconSetStyle) ? ConditionalFormatIconSetCatalog.DefaultStyle : cf.IconSetStyle,
+                i));
+        }
     }
 
     /// <summary>

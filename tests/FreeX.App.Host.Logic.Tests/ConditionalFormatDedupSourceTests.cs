@@ -53,6 +53,9 @@ public sealed class ConditionalFormatDedupSourceTests
         var iconSetPresentationSource = DialogSourceTestSupport.ReadPresentationSources(
             "ConditionalFormatting",
             "ConditionalFormatIconSetCatalog.cs");
+        var ruleBuilderSource = DialogSourceTestSupport.ReadPresentationSources(
+            "ConditionalFormatting",
+            "ConditionalFormatRuleBuilder.cs");
 
         File.Exists(presetFacadePath)
             .Should()
@@ -69,8 +72,11 @@ public sealed class ConditionalFormatDedupSourceTests
         mainWindowSource.Should().Contain("UiText.Get(option.LabelKey)");
 
         dialogSource.Should().Contain("ConditionalFormatIconSetCatalog.GalleryOptions");
-        dialogSource.Should().Contain("ConditionalFormatIconSetCatalog.CreateThresholds(cf.IconSetStyle)");
+        dialogSource.Should().Contain("ConditionalFormatDialogCatalog.ColorPresets");
+        dialogSource.Should().Contain("ConditionalFormatRuleBuilder.Build(");
         dialogSource.Should().Contain("UiText.Get(option.LabelKey)");
+        ruleBuilderSource.Should().Contain("ConditionalFormatIconSetCatalog.CreateThresholds(cf.IconSetStyle)");
+        ruleBuilderSource.Should().Contain("ApplyIconOverrides(cf, input.IconOverrides)");
 
         runtimeCatalogSource.Should().Contain("nameof(ConditionalFormatIconSetCatalog)");
         runtimeCatalogSource.Should().Contain("textProvider(group.CategoryKey)");

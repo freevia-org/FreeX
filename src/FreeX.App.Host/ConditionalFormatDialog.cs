@@ -79,13 +79,12 @@ public partial class ConditionalFormatDialog : Window
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.Height;
 
-        bool isFormula = ruleType is "Formula" or "Use a Formula";
-        bool isIconSet = ruleType is "Icon Set";
-        bool isDataBar = ruleType is "Data Bar";
-        bool isColorScale = ruleType is "Color Scale";
-        bool isDateOccurring = ruleType is "Date Occurring";
-        bool isDuplicateValues = ruleType is "Duplicate Values";
-        bool isBetween = ruleType is "Between";
+        bool isFormula = ConditionalFormatDialogCatalog.IsFormulaRuleType(ruleType);
+        bool isIconSet = ruleType is ConditionalFormatDialogCatalog.IconSetRule;
+        bool isDataBar = ruleType is ConditionalFormatDialogCatalog.DataBarRule;
+        bool isColorScale = ruleType is ConditionalFormatDialogCatalog.ColorScaleRule;
+        bool isDateOccurring = ruleType is ConditionalFormatDialogCatalog.DateOccurringRule;
+        bool isDuplicateValues = ruleType is ConditionalFormatDialogCatalog.DuplicateValuesRule;
         var inner = new StackPanel { Margin = new Thickness(16) };
         InitializeRuleSpecificControls();
 
@@ -124,11 +123,11 @@ public partial class ConditionalFormatDialog : Window
             {
                 AddContainsShellEditor(inner, ruleType);
             }
-            else if (ruleType is "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%")
+            else if (ConditionalFormatDialogCatalog.IsTopBottomRuleType(ruleType))
             {
                 Height = 220;
-                _topBottomRankBox.Text = ruleType is "Top 10%" or "Bottom 10%" ? "10" : "10";
-                inner.Children.Add(CreateAccessLabel(ruleType is "Top 10%" or "Bottom 10%" ? UiText.Get("ConditionalFormatDialog_PercentLabel") : UiText.Get("ConditionalFormatDialog_RankLabel"), _topBottomRankBox));
+                _topBottomRankBox.Text = "10";
+                inner.Children.Add(CreateAccessLabel(ConditionalFormatDialogCatalog.IsTopBottomPercentRuleType(ruleType) ? UiText.Get("ConditionalFormatDialog_PercentLabel") : UiText.Get("ConditionalFormatDialog_RankLabel"), _topBottomRankBox));
                 inner.Children.Add(_topBottomRankBox);
             }
             else
@@ -140,7 +139,7 @@ public partial class ConditionalFormatDialog : Window
 
         _colorBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
         var colorLabel = new Label { Content = UiText.Get("ConditionalFormatDialog_FormatLabel"), Target = _colorBox, Padding = new Thickness(0) };
-        foreach (var (lbl, _, _, _) in ColorOptions) _colorBox.Items.Add(lbl);
+        foreach (var option in ColorOptions) _colorBox.Items.Add(UiText.Get(option.LabelKey));
         _colorBox.SelectedIndex = 0;
         var formatButton = new Button
         {
@@ -301,15 +300,10 @@ public partial class ConditionalFormatDialog : Window
         if (_ignoreFormatStyleChange || sender is not ComboBox cb || cb.SelectedItem is not string label)
             return;
 
-        var newType = label switch
-        {
-            var value when value == UiText.Get("ConditionalFormatDialog_FormatStyle_2ColorScale") => "Color Scale",
-            var value when value == UiText.Get("ConditionalFormatDialog_FormatStyle_3ColorScale") => "Color Scale",
-            var value when value == UiText.Get("ConditionalFormatDialog_FormatStyle_IconSet") => "Icon Set",
-            _               => "Data Bar"
-        };
+        var newType = ConditionalFormatDialogCatalog.RuleTypeForFormatStyleKey(LabelKeyForLocalizedFormatStyle(label));
         RefreshRuleDescription(newType);
-        if (label == UiText.Get("ConditionalFormatDialog_FormatStyle_3ColorScale") && _colorScaleUseThreeColorBox is not null)
+        if (ConditionalFormatDialogCatalog.UseThreeColorScaleForFormatStyleKey(LabelKeyForLocalizedFormatStyle(label))
+            && _colorScaleUseThreeColorBox is not null)
         {
             _ignoreFormatStyleChange = true;
             _colorScaleUseThreeColorBox.IsChecked = true;
@@ -611,12 +605,12 @@ public partial class ConditionalFormatDialog : Window
         _customFormatStyle = null;
 
         var inner = new StackPanel { Margin = new Thickness(16) };
-        var isFormula = ruleType is "Formula" or "Use a Formula";
-        var isIconSet = ruleType is "Icon Set";
-        var isDataBar = ruleType is "Data Bar";
-        var isColorScale = ruleType is "Color Scale";
-        var isDuplicateValues = ruleType is "Duplicate Values";
-        var isDateOccurring = ruleType is "Date Occurring";
+        var isFormula = ConditionalFormatDialogCatalog.IsFormulaRuleType(ruleType);
+        var isIconSet = ruleType is ConditionalFormatDialogCatalog.IconSetRule;
+        var isDataBar = ruleType is ConditionalFormatDialogCatalog.DataBarRule;
+        var isColorScale = ruleType is ConditionalFormatDialogCatalog.ColorScaleRule;
+        var isDuplicateValues = ruleType is ConditionalFormatDialogCatalog.DuplicateValuesRule;
+        var isDateOccurring = ruleType is ConditionalFormatDialogCatalog.DateOccurringRule;
 
         if (isDataBar || isColorScale || isIconSet)
         {
@@ -669,11 +663,11 @@ public partial class ConditionalFormatDialog : Window
             {
                 AddContainsShellEditor(inner, ruleType);
             }
-            else if (ruleType is "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%")
+            else if (ConditionalFormatDialogCatalog.IsTopBottomRuleType(ruleType))
             {
                 Height = 220;
                 _topBottomRankBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "10" };
-                inner.Children.Add(CreateAccessLabel(ruleType is "Top 10%" or "Bottom 10%" ? UiText.Get("ConditionalFormatDialog_PercentLabel") : UiText.Get("ConditionalFormatDialog_RankLabel"), _topBottomRankBox));
+                inner.Children.Add(CreateAccessLabel(ConditionalFormatDialogCatalog.IsTopBottomPercentRuleType(ruleType) ? UiText.Get("ConditionalFormatDialog_PercentLabel") : UiText.Get("ConditionalFormatDialog_RankLabel"), _topBottomRankBox));
                 inner.Children.Add(_topBottomRankBox);
             }
             else
@@ -684,7 +678,7 @@ public partial class ConditionalFormatDialog : Window
         }
 
         _colorBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
-        foreach (var (label, _, _, _) in ColorOptions) _colorBox.Items.Add(label);
+        foreach (var option in ColorOptions) _colorBox.Items.Add(UiText.Get(option.LabelKey));
         _colorBox.SelectedIndex = 0;
         var formatButton = new Button
         {
@@ -696,11 +690,11 @@ public partial class ConditionalFormatDialog : Window
         };
         formatButton.Click += FormatButton_Click;
 
-        if (ruleType is not ("Icon Set" or "Color Scale"))
+        if (ruleType is not (ConditionalFormatDialogCatalog.IconSetRule or ConditionalFormatDialogCatalog.ColorScaleRule))
         {
-            inner.Children.Add(new Label { Content = ruleType is "Data Bar" ? UiText.Get("ConditionalFormatDialog_BarColorLabel") : UiText.Get("ConditionalFormatDialog_FormatWithLabel"), Target = _colorBox, Padding = new Thickness(0) });
-            inner.Children.Add(ruleType is "Data Bar" ? CreateDataBarColorEditor(_colorBox, _dataBarColorButton) : _colorBox);
-            if (ruleType is not "Data Bar")
+            inner.Children.Add(new Label { Content = ruleType is ConditionalFormatDialogCatalog.DataBarRule ? UiText.Get("ConditionalFormatDialog_BarColorLabel") : UiText.Get("ConditionalFormatDialog_FormatWithLabel"), Target = _colorBox, Padding = new Thickness(0) });
+            inner.Children.Add(ruleType is ConditionalFormatDialogCatalog.DataBarRule ? CreateDataBarColorEditor(_colorBox, _dataBarColorButton) : _colorBox);
+            if (ruleType is not ConditionalFormatDialogCatalog.DataBarRule)
                 inner.Children.Add(formatButton);
         }
         if (isIconSet || isColorScale || isDataBar)
@@ -727,7 +721,7 @@ public partial class ConditionalFormatDialog : Window
 
     private void AddContainsShellEditor(StackPanel inner, string ruleType)
     {
-        Height = ruleType is "Between" or "Not Between" ? 320 : 280;
+        Height = ruleType is ConditionalFormatDialogCatalog.BetweenRule or ConditionalFormatDialogCatalog.NotBetweenRule ? 320 : 280;
         _conditionKindBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = ConditionKindLabels };
         _conditionKindBox.SelectedItem = ConditionKindLabelForRuleType(ruleType);
         _conditionKindBox.SelectionChanged += ConditionKindBox_SelectionChanged;
@@ -747,7 +741,7 @@ public partial class ConditionalFormatDialog : Window
             _cellValueOperatorBox.SelectionChanged += CellValueOperatorBox_SelectionChanged;
             inner.Children.Add(CreateAccessLabel(UiText.Get("ConditionalFormatDialog_OperatorLabel"), _cellValueOperatorBox));
             inner.Children.Add(_cellValueOperatorBox);
-            AddValueBoxes(inner, ruleType is "Between" or "Not Between");
+            AddValueBoxes(inner, ruleType is ConditionalFormatDialogCatalog.BetweenRule or ConditionalFormatDialogCatalog.NotBetweenRule);
         }
         else if (kind == UiText.Get("ConditionalFormatDialog_ConditionKind_SpecificText"))
         {
@@ -808,9 +802,6 @@ public partial class ConditionalFormatDialog : Window
     }
 
     private static bool IsContainsShellRuleType(string ruleType) =>
-        ruleType is "Greater Than" or "Less Than" or "Equal To" or "Between" or "Not Equal To"
-            or "Greater Than Or Equal To" or "Less Than Or Equal To" or "Not Between"
-            or "Text Contains" or "Text Does Not Contain" or "Text Begins With" or "Text Ends With"
-            or "Date Occurring" or "Blanks" or "No Blanks" or "Errors" or "No Errors";
+        ConditionalFormatDialogCatalog.IsContainsShellRuleType(ruleType);
 
 }
