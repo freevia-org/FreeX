@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
@@ -125,28 +126,12 @@ public sealed class HyperlinkDialog : Window
 
         // ── Pre-fill from current hyperlink ─────────────────────────────────────
 
-        if (current is not null)
-        {
-            if (current.IsExternal)
-            {
-                _urlRadio.IsChecked = true;
-                _urlBox.Text        = current.Url ?? string.Empty;
-            }
-            else
-            {
-                _slideRadio.IsChecked = true;
-                // Select the matching slide in the ComboBox.
-                for (int i = 0; i < _slideCombo.Items.Count; i++)
-                {
-                    if (_slideCombo.Items[i] is SlideItem si && si.Id == current.TargetSlideId)
-                    {
-                        _slideCombo.SelectedIndex = i;
-                        break;
-                    }
-                }
-            }
-            _tooltipBox.Text = current.Tooltip ?? string.Empty;
-        }
+        var initial = HyperlinkDialogPlanner.BuildInitialState(current);
+        _urlRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Url;
+        _slideRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Slide;
+        _urlBox.Text = initial.UrlText;
+        _tooltipBox.Text = initial.TooltipText;
+        SelectSlide(initial.TargetSlideId);
 
         UpdateEnabled();
     }
@@ -164,41 +149,55 @@ public sealed class HyperlinkDialog : Window
 
     private void OnOk(object sender, RoutedEventArgs e)
     {
-        if (_urlRadio.IsChecked == true)
+        var targetKind = _urlRadio.IsChecked == true
+            ? HyperlinkDialogTargetKind.Url
+            : HyperlinkDialogTargetKind.Slide;
+        var selectedSlideId = (_slideCombo.SelectedItem as SlideItem)?.Id;
+        var plan = HyperlinkDialogPlanner.BuildResult(
+            targetKind,
+            _urlBox.Text,
+            selectedSlideId,
+            _tooltipBox.Text);
+
+        if (!plan.ShouldApply)
         {
-            var url = _urlBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(url))
-            {
-                MessageBox.Show(this, "Please enter a URL (e.g. https://example.com).", "Insert Hyperlink",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            // Validate: only http, https, mailto.
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
-                || uri.Scheme is not ("http" or "https" or "mailto"))
-            {
-                MessageBox.Show(this, "Only http, https, and mailto URLs are supported.", "Insert Hyperlink",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            Result = new Hyperlink { Url = url, Tooltip = NullIfEmpty(_tooltipBox.Text) };
-        }
-        else
-        {
-            if (_slideCombo.SelectedItem is not SlideItem selected)
-            {
-                MessageBox.Show(this, "Please select a target slide.", "Insert Hyperlink",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            Result = new Hyperlink { TargetSlideId = selected.Id, Tooltip = NullIfEmpty(_tooltipBox.Text) };
+            var validation = plan.Validation!;
+            MessageBox.Show(
+                this,
+                validation.Message,
+                validation.Caption,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusField(validation.FocusField);
+            return;
         }
 
+        Result = plan.Result;
         DialogResult = true;
     }
 
-    private static string? NullIfEmpty(string s) =>
-        string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    private void SelectSlide(string? slideId)
+    {
+        if (string.IsNullOrWhiteSpace(slideId))
+            return;
+
+        for (int i = 0; i < _slideCombo.Items.Count; i++)
+        {
+            if (_slideCombo.Items[i] is SlideItem si && si.Id == slideId)
+            {
+                _slideCombo.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    private void FocusField(HyperlinkDialogField field)
+    {
+        if (field == HyperlinkDialogField.Url)
+            _urlBox.Focus();
+        else if (field == HyperlinkDialogField.Slide)
+            _slideCombo.Focus();
+    }
 
     // ── Helper record ─────────────────────────────────────────────────────────────
 
