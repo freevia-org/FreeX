@@ -1,3 +1,4 @@
+using FreeX.App.Services;
 using FreeX.Core.Model;
 using FluentAssertions;
 using System.Windows.Controls;
@@ -66,16 +67,16 @@ public sealed partial class ColorPickerDialogTests
     [Fact]
     public void PalettePlanner_ScalesColorAndChoosesReadableForeground()
     {
-        ColorPickerPalettePlanner.ScaleColor(new CellColor(0x40, 0x80, 0xC0), 0.5)
+        CellColorPalettePlanner.ScaleColor(new CellColor(0x40, 0x80, 0xC0), 0.5)
             .Should()
             .Be(new CellColor(0x20, 0x40, 0x60));
 
-        ColorPickerPalettePlanner.ScaleColor(new CellColor(0xF0, 0x80, 0x40), 2)
+        CellColorPalettePlanner.ScaleColor(new CellColor(0xF0, 0x80, 0x40), 2)
             .Should()
             .Be(new CellColor(0xFF, 0xFF, 0x80));
 
-        ColorPickerPalettePlanner.NeedsDarkForeground(CellColor.White).Should().BeTrue();
-        ColorPickerPalettePlanner.NeedsDarkForeground(CellColor.Black).Should().BeFalse();
+        CellColorPalettePlanner.NeedsDarkForeground(CellColor.White).Should().BeTrue();
+        CellColorPalettePlanner.NeedsDarkForeground(CellColor.Black).Should().BeFalse();
     }
 
     [Fact]

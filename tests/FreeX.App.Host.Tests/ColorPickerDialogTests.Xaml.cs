@@ -88,7 +88,8 @@ public sealed partial class ColorPickerDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ColorPickerDialog.xaml.cs");
 
-        source.Should().Contain("ColorPickerPalettePlanner.BuildThemePalette");
+        source.Should().Contain("CellColorPalettePlanner.BuildThemePalette");
+        source.Should().NotContain("ColorPickerPalettePlanner");
         source.Should().Contain("private Button? _initialFocusButton;");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
