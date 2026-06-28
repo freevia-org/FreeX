@@ -8510,7 +8510,7 @@ public sealed partial class MainWindow : Window
 
         var presetButtons = new List<RadioButton>();
         var presetPanel = new StackPanel { Spacing = 6 };
-        foreach (var zoom in new[] { 400, 200, 100, 75, 50, 25 })
+        foreach (var zoom in ZoomDialogPlanner.Presets)
         {
             var button = new RadioButton
             {
@@ -8575,7 +8575,7 @@ public sealed partial class MainWindow : Window
 
         void Accept()
         {
-            foreach (var (button, zoom) in presetButtons.Zip(new[] { 400, 200, 100, 75, 50, 25 }))
+            foreach (var (button, zoom) in presetButtons.Zip(ZoomDialogPlanner.Presets))
             {
                 if (button.IsChecked == true)
                 {
@@ -8592,9 +8592,9 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (!ZoomLevelMapper.TryParseZoomPercent(customBox.Text, out var customZoom))
+            if (!ZoomDialogPlanner.TryCreateResult(customBox.Text, out var customResult, out var validationError))
             {
-                errorText.Text = $"Enter a value from {SetWorksheetZoomCommand.MinZoomPercent} to {SetWorksheetZoomCommand.MaxZoomPercent}.";
+                errorText.Text = ResolveZoomDialogValidationError(validationError);
                 errorText.IsVisible = true;
                 customButton.IsChecked = true;
                 customBox.Focus();
@@ -8602,7 +8602,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            selectedZoomPercent = ClampZoomPercent((int)Math.Round(customZoom));
+            selectedZoomPercent = ClampZoomPercent(customResult.ZoomPercent);
             dialog.Close();
         }
 
@@ -8681,6 +8681,11 @@ public sealed partial class MainWindow : Window
         if (selectedZoomPercent is { } zoomPercent)
             ApplyZoomPercent(zoomPercent, "Zoom failed.");
     }
+
+    private static string ResolveZoomDialogValidationError(ZoomDialogValidationError? validationError) =>
+        validationError is null
+            ? UiText.Get("Zoom_EnterAValidZoomPercent")
+            : UiText.Get(validationError.ResourceKey);
 
     private void ApplyZoomPercent(int zoomPercent, string errorMessage)
     {

@@ -792,7 +792,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(customBox, \"ZoomCustomPercentBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"ZoomOkButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"ZoomCancelButton\");");
-        source.Should().Contain("ZoomLevelMapper.TryParseZoomPercent(customBox.Text, out var customZoom)");
+        source.Should().Contain("ZoomDialogPlanner.TryCreateResult(customBox.Text, out var customResult, out var validationError)");
+        source.Should().Contain("ResolveZoomDialogValidationError(validationError)");
         source.Should().Contain("selectedZoomPercent = CalculateZoomToSelectionPercent();");
         source.Should().Contain("private void ApplyZoomPercent(int zoomPercent, string errorMessage)");
         source.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
