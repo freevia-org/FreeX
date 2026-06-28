@@ -27,7 +27,7 @@ public sealed class StatusFooterInteractionsScreenshotTourTests
         tourSource.Should().Contain("RaiseStatusFooterButtonClickAsync(StatusZoomInButton)");
         tourSource.Should().Contain("Zoom100Btn_Click(this, new RoutedEventArgs())");
         tourSource.Should().Contain("ZoomDialog.TryCreateResult");
-        tourSource.Should().Contain("ZoomSelectionPlanner.CalculateDialogZoomPercent");
+        tourSource.Should().Contain("ZoomSelectionPlanner.CalculateZoomPercent");
         tourSource.Should().Contain("ZoomDialog.ShowDialog timed cancel -> FocusSheetGridIfNeeded");
         tourSource.Should().Contain("ButtonBase.Click events and command/session methods");
 

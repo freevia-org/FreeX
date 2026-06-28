@@ -15,7 +15,7 @@ public sealed class ViewCommandSourceTests
             .Should().Contain("ZoomCustomMenuItem_Click(sender, e);");
         source.Should().Contain("FreeX.App.Services.ZoomLevelMapper.TryParseZoomPercent(tag, out var zoomPercent)");
         source.Should().Contain("new ZoomDialog(current) { Owner = this }");
-        source.Should().Contain("ZoomSelectionPlanner.CalculateDialogZoomPercent(");
+        source.Should().Contain("ZoomSelectionPlanner.CalculateZoomPercent(");
         source.Should().Contain("private void Zoom100Btn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("ZoomSlider.Value = 100;");
         source.Should().Contain("ZoomSelectionPlanner.CalculateFitPercent(");

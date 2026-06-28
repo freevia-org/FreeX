@@ -91,7 +91,7 @@ public sealed partial class SpellCheckWorkflowPlannerTests
     [Fact]
     public void BuildReplaceAllEdits_UsesSinglePassAddressDeduplication()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("SpellCheckWorkflowPlanner.cs");
+        var source = DialogSourceTestSupport.ReadAppServicesSource("SpellCheckWorkflowPlanner.cs");
 
         source.Should().Contain("var filtered = new List<SpellingIssue>();");
         source.Should().Contain("var editedAddresses = new HashSet<CellAddress>();");

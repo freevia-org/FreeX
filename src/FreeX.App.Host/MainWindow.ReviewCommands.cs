@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Free.Shared.AppServices;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Services;
 using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
@@ -24,7 +25,7 @@ public partial class MainWindow
         if (!TryCommitPendingSpellCheckEdit())
             return;
 
-        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options);
+        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options.SpellCheckCustomDictionaryWords);
         var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ignoredIssues = new HashSet<SpellingIssueKey>();
 
@@ -69,7 +70,10 @@ public partial class MainWindow
 
             if (dialog.Result.Action == SpellCheckDialogAction.Add)
             {
-                if (SpellCheckWorkflowPlanner.AddCustomDictionaryWord(_options, customDictionary, issue.Word))
+                if (SpellCheckWorkflowPlanner.AddCustomDictionaryWord(
+                        _options.SpellCheckCustomDictionaryWords,
+                        customDictionary,
+                        issue.Word))
                     _options.Save();
 
                 continue;

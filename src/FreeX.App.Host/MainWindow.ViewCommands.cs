@@ -439,8 +439,9 @@ public partial class MainWindow
             if (dialog.ShowDialog() != true)
                 return;
 
-            var zoomPercent = ZoomSelectionPlanner.CalculateDialogZoomPercent(
-                dialog.Result,
+            var zoomPercent = ZoomSelectionPlanner.CalculateZoomPercent(
+                dialog.Result.ZoomPercent,
+                dialog.Result.FitSelection,
                 SheetGrid.ActualWidth,
                 SheetGrid.ActualHeight,
                 SheetGrid.SelectedRange?.ColCount ?? 1,

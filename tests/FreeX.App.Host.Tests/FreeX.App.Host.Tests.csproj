@@ -44,6 +44,8 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.AppServices" />
+    <Using Include="FreeX.App.Services" />
+    <Using Include="FreeX.App.Presentation" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.Shell" />
