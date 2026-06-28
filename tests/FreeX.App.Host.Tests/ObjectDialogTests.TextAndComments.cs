@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.App.Presentation.Comments;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -14,6 +15,10 @@ public sealed partial class ObjectDialogTests
     {
         TextEntryDialog.CreateResult(null).Text.Should().Be("");
         TextEntryDialog.CreateResult("  keep spacing inside  ").Text.Should().Be("keep spacing inside");
+
+        var source = ReadObjectDialogSources();
+        source.Should().Contain("TextEntryDialogPlanner.CreateResult(text)");
+        source.Should().NotContain("public sealed record TextEntryDialogResult");
     }
 
     [Fact]

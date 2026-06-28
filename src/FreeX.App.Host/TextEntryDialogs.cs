@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host;
 
@@ -31,8 +32,6 @@ public sealed class BookmarkDialog : TextEntryDialog
     {
     }
 }
-
-public sealed record TextEntryDialogResult(string Text);
 
 public class TextEntryDialog : Window
 {
@@ -67,7 +66,8 @@ public class TextEntryDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static TextEntryDialogResult CreateResult(string? text) => new((text ?? "").Trim());
+    public static TextEntryDialogResult CreateResult(string? text) =>
+        TextEntryDialogPlanner.CreateResult(text);
 
     private static string CreateAutomationName(string label) =>
         label.Replace("_", string.Empty, StringComparison.Ordinal)
