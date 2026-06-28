@@ -1,6 +1,6 @@
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
-internal static class RibbonAdaptivePriorityPlanner
+public static class RibbonAdaptivePriorityPlanner
 {
     private static readonly IReadOnlySet<int> EmptyProtectedGroupIndexes = new HashSet<int>();
 
@@ -159,6 +159,6 @@ internal static class RibbonAdaptivePriorityPlanner
     }
 }
 
-internal readonly record struct RibbonAdaptiveRuntimeStateOverride(
+public readonly record struct RibbonAdaptiveRuntimeStateOverride(
     int Index,
     RibbonAdaptiveGroupState State);

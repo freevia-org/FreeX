@@ -1,6 +1,6 @@
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
-internal static class RibbonAdaptiveTabProfiles
+public static class RibbonAdaptiveTabProfiles
 {
     private const double VeryNarrowWidth = 700;
     private static readonly IReadOnlySet<int> EmptyProtectedGroupIndexes = new HashSet<int>();
@@ -378,7 +378,7 @@ internal static class RibbonAdaptiveTabProfiles
             thresholds.Add(1320);
         }
 
-        foreach (var threshold in RibbonCollapsedGroupPresentationPlanner.BreakpointThresholds)
+        foreach (var threshold in RibbonCollapsedGroupBreakpoints.Thresholds)
             thresholds.Add(threshold);
 
         var positiveThresholds = new List<double>(thresholds.Count);
@@ -391,7 +391,7 @@ internal static class RibbonAdaptiveTabProfiles
         return positiveThresholds;
     }
 
-    internal static string? ResolveProfileName(
+    public static string? ResolveProfileName(
         IReadOnlyList<string> groupNames,
         string? selectedTabHeader = null) =>
         FindProfile(groupNames, selectedTabHeader)?.Name;
