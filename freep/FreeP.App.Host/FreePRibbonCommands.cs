@@ -78,27 +78,27 @@ internal static class FreePRibbonCommands
         // ── Slide management ─────────────────────────────────────────────────────
 
         registry.Register("freep.new-slide",
-            new ActionCommand(() => editor.InsertSlide()));
+            new ActionRibbonCommand(() => editor.InsertSlide()));
 
         registry.Register("freep.duplicate-slide",
-            new ActionCommand(() => editor.DuplicateCurrentSlide()));
+            new ActionRibbonCommand(() => editor.DuplicateCurrentSlide()));
 
         registry.Register("freep.delete-slide",
-            new ActionCommand(() => editor.DeleteCurrentSlide()));
+            new ActionRibbonCommand(() => editor.DeleteCurrentSlide()));
 
         // ── Insert shapes ────────────────────────────────────────────────────────
 
         registry.Register("freep.text-box",
-            new ActionCommand(() => editor.InsertDefaultTextBox()));
+            new ActionRibbonCommand(() => editor.InsertDefaultTextBox()));
 
         registry.Register("freep.shape-rectangle",
-            new ActionCommand(() => editor.InsertDefaultRectangle()));
+            new ActionRibbonCommand(() => editor.InsertDefaultRectangle()));
 
         registry.Register("freep.shape-ellipse",
-            new ActionCommand(() => editor.InsertDefaultEllipse()));
+            new ActionRibbonCommand(() => editor.InsertDefaultEllipse()));
 
         // Picture: open a file-open dialog and insert.
-        registry.Register("freep.picture", new ActionCommand(() =>
+        registry.Register("freep.picture", new ActionRibbonCommand(() =>
         {
             // TODO(3C): replace with a proper picture-insert dialog with preview.
             var dlg = new Microsoft.Win32.OpenFileDialog
@@ -159,21 +159,21 @@ internal static class FreePRibbonCommands
         // content to the OS clipboard (PNG image + plain text); Paste checks OS first.
 
         registry.Register("freep.copy",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 editor.CopySelectedShapes();
                 osClipboard?.PlaceSelectionOnOsClipboard(editor);
             }));
 
         registry.Register("freep.cut",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 editor.CutSelectedShapes();
                 osClipboard?.PlaceSelectionOnOsClipboard(editor);
             }));
 
         registry.Register("freep.paste",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 if (osClipboard is not null)
                     osClipboard.Paste(editor, preferOsClipboard: true);
@@ -187,20 +187,20 @@ internal static class FreePRibbonCommands
         // NOTE: full "click source → click target" canvas mode is deferred (requires a
         // modal interaction state in the gesture handler).
         registry.Register("freep.format-painter",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 editor.CopyFormatting();
                 editor.ApplyFormattingToSelection();
             }));
 
         // ── Layout — STUBBED (no layout model yet) ────────────────────────────────
-        registry.Register("freep.layout", new ActionCommand(() => { /* STUB: layout picker deferred */ }));
+        registry.Register("freep.layout", new ActionRibbonCommand(() => { /* STUB: layout picker deferred */ }));
 
         // ── Font family — Wave 5B / 10A ───────────────────────────────────────────
         // When the in-canvas editor is active, apply to the RichTextBox selection;
         // otherwise apply to the whole-shape selection.
         registry.Register("freep.font-family",
-            new ContextAwareCommand(ctx =>
+            new ContextRibbonCommand(ctx =>
             {
                 var family = ctx.SelectedValue;
                 if (string.IsNullOrEmpty(family)) return;
@@ -229,7 +229,7 @@ internal static class FreePRibbonCommands
         RegisterTransitionKind(registry, editor, "freep.transition.wheel",    TransitionKind.Wheel);
 
         // Transition timing — Duration combo: 0=500ms, 1=750ms, 2=1000ms, 3=1500ms, 4=2000ms.
-        registry.Register("freep.transition.duration", new ActionCommand(() =>
+        registry.Register("freep.transition.duration", new ActionRibbonCommand(() =>
         {
             // ComboBox selection is not yet fed back via context in Wave 4C; stub.
             /* STUB: Wave 5 will feed the selected index through RibbonCommandContext */
@@ -245,13 +245,13 @@ internal static class FreePRibbonCommands
             }));
 
         // Advance after time combo.
-        registry.Register("freep.transition.advance-after", new ActionCommand(() =>
+        registry.Register("freep.transition.advance-after", new ActionRibbonCommand(() =>
         {
             /* STUB: Wave 5 will wire the selected time value */
         }));
 
         // Apply To All — copies the current slide's transition to every slide.
-        registry.Register("freep.transition.apply-all", new ActionCommand(() =>
+        registry.Register("freep.transition.apply-all", new ActionRibbonCommand(() =>
         {
             var currentTransition = editor.CurrentSlideTransition;
             var pres = editor.Presentation;
@@ -274,11 +274,11 @@ internal static class FreePRibbonCommands
 
         // From Beginning — delegates to MainWindow.StartSlideShow(true) via onStartFromStart.
         registry.Register("freep.slideshow.from-beginning",
-            new ActionCommand(() => onStartFromStart?.Invoke()));
+            new ActionRibbonCommand(() => onStartFromStart?.Invoke()));
 
         // From Current Slide — delegates to MainWindow.StartSlideShow(false) via onStartFromCurrent.
         registry.Register("freep.slideshow.from-current-slide",
-            new ActionCommand(() => onStartFromCurrent?.Invoke()));
+            new ActionRibbonCommand(() => onStartFromCurrent?.Invoke()));
 
         // ── Wave 4C: Animations tab ──────────────────────────────────────────────
 
@@ -301,7 +301,7 @@ internal static class FreePRibbonCommands
         RegisterExitAnim(registry, editor, "freep.anim.exit.fly-out",   AnimationPreset.FlyIn);
 
         // No animation — removes the first animation that targets the selected shape.
-        registry.Register("freep.anim.none", new ActionCommand(() =>
+        registry.Register("freep.anim.none", new ActionRibbonCommand(() =>
         {
             var animations = editor.CurrentSlideAnimations;
             var selectedIds = editor.SelectedShapeIds;
@@ -316,17 +316,17 @@ internal static class FreePRibbonCommands
         }));
 
         // Timing: trigger combo (STUB — full implementation deferred to Wave 5).
-        registry.Register("freep.anim.trigger", new ActionCommand(() =>
+        registry.Register("freep.anim.trigger", new ActionRibbonCommand(() =>
         {
             /* STUB: Wave 5 will read the selected item and call editor.SetAnimation() */
         }));
 
         // Timing: duration + delay combos (STUBs).
-        registry.Register("freep.anim.duration", new ActionCommand(() => { /* STUB */ }));
-        registry.Register("freep.anim.delay",    new ActionCommand(() => { /* STUB */ }));
+        registry.Register("freep.anim.duration", new ActionRibbonCommand(() => { /* STUB */ }));
+        registry.Register("freep.anim.delay",    new ActionRibbonCommand(() => { /* STUB */ }));
 
         // Reorder animations — Move Earlier / Move Later.
-        registry.Register("freep.anim.move-earlier", new ActionCommand(() =>
+        registry.Register("freep.anim.move-earlier", new ActionRibbonCommand(() =>
         {
             var animations  = editor.CurrentSlideAnimations;
             var selectedIds = editor.SelectedShapeIds;
@@ -337,7 +337,7 @@ internal static class FreePRibbonCommands
                 editor.MoveAnimation(idx, idx - 1);
         }));
 
-        registry.Register("freep.anim.move-later", new ActionCommand(() =>
+        registry.Register("freep.anim.move-later", new ActionRibbonCommand(() =>
         {
             var animations  = editor.CurrentSlideAnimations;
             var selectedIds = editor.SelectedShapeIds;
@@ -358,61 +358,61 @@ internal static class FreePRibbonCommands
         // ── Wave 5B: Insert — Tables ─────────────────────────────────────────────
 
         registry.Register("freep.insert-table-3x3",
-            new ActionCommand(() => editor.InsertTable(3, 3)));
+            new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
 
         registry.Register("freep.insert-table-2x2",
-            new ActionCommand(() => editor.InsertTable(2, 2)));
+            new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
 
         registry.Register("freep.insert-table-4x4",
-            new ActionCommand(() => editor.InsertTable(4, 4)));
+            new ActionRibbonCommand(() => editor.InsertTable(4, 4)));
 
         // ── Wave 5B: Insert — Charts ─────────────────────────────────────────────
 
         registry.Register("freep.insert-chart-column",
-            new ActionCommand(() => editor.InsertChart(ChartType.ColumnClustered)));
+            new ActionRibbonCommand(() => editor.InsertChart(ChartType.ColumnClustered)));
 
         registry.Register("freep.insert-chart-bar",
-            new ActionCommand(() => editor.InsertChart(ChartType.BarClustered)));
+            new ActionRibbonCommand(() => editor.InsertChart(ChartType.BarClustered)));
 
         registry.Register("freep.insert-chart-line",
-            new ActionCommand(() => editor.InsertChart(ChartType.Line)));
+            new ActionRibbonCommand(() => editor.InsertChart(ChartType.Line)));
 
         registry.Register("freep.insert-chart-pie",
-            new ActionCommand(() => editor.InsertChart(ChartType.Pie)));
+            new ActionRibbonCommand(() => editor.InsertChart(ChartType.Pie)));
 
         // ── Wave 5B: Design tab — Themes ─────────────────────────────────────────
 
         registry.Register("freep.theme.office",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Office)));
+            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Office)));
 
         registry.Register("freep.theme.berlin",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Berlin)));
+            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Berlin)));
 
         registry.Register("freep.theme.facet",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Facet)));
+            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Facet)));
 
         registry.Register("freep.theme.ion",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Ion)));
+            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Ion)));
 
         registry.Register("freep.theme.slice",
-            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Slice)));
+            new ActionRibbonCommand(() => editor.SetTheme(BuiltInThemes.Id.Slice)));
 
         // ── Wave 5B: Design tab — Slide Size ─────────────────────────────────────
 
         registry.Register("freep.slide-size-16x9",
-            new ActionCommand(() => editor.SetSlideSize16x9()));
+            new ActionRibbonCommand(() => editor.SetSlideSize16x9()));
 
         registry.Register("freep.slide-size-4x3",
-            new ActionCommand(() => editor.SetSlideSize4x3()));
+            new ActionRibbonCommand(() => editor.SetSlideSize4x3()));
 
         // ── Wave 10B: Design tab — Custom Slide Size dialog ───────────────────────
         registry.Register("freep.slide-size-custom",
-            new ActionCommand(() => onCustomSlideSize?.Invoke()));
+            new ActionRibbonCommand(() => onCustomSlideSize?.Invoke()));
 
         // ── Wave 9B: Chart data editing ───────────────────────────────────────────
         // Enabled only when a chart shape is selected; otherwise silently a no-op.
         registry.Register("freep.chart.edit-data",
-            new ActionCommand(() =>
+            new ActionRibbonCommand(() =>
             {
                 // If caller supplied a dedicated open-dialog callback (e.g. MainWindow),
                 // use it; otherwise fall back to the no-op.
@@ -424,63 +424,63 @@ internal static class FreePRibbonCommands
 
         // Insert/edit hyperlink — opens HyperlinkDialog (supplied by MainWindow).
         registry.Register("freep.insert-link",
-            new ActionCommand(() => onInsertLink?.Invoke()));
+            new ActionRibbonCommand(() => onInsertLink?.Invoke()));
 
         // Remove hyperlink — clears the shape-level hyperlink on all selected shapes.
         registry.Register("freep.remove-link",
-            new ActionCommand(() => editor.RemoveShapeHyperlink()));
+            new ActionRibbonCommand(() => editor.RemoveShapeHyperlink()));
 
         // ── Wave 12A: Arrange — Group / Ungroup / Z-order / Align / Distribute ────
 
         registry.Register("freep.arrange.group",
-            new ActionCommand(() => editor.GroupSelectedShapes()));
+            new ActionRibbonCommand(() => editor.GroupSelectedShapes()));
 
         registry.Register("freep.arrange.ungroup",
-            new ActionCommand(() => editor.UngroupSelected()));
+            new ActionRibbonCommand(() => editor.UngroupSelected()));
 
         registry.Register("freep.arrange.bring-to-front",
-            new ActionCommand(() => editor.BringToFront()));
+            new ActionRibbonCommand(() => editor.BringToFront()));
 
         registry.Register("freep.arrange.bring-forward",
-            new ActionCommand(() => editor.BringForward()));
+            new ActionRibbonCommand(() => editor.BringForward()));
 
         registry.Register("freep.arrange.send-backward",
-            new ActionCommand(() => editor.SendBackward()));
+            new ActionRibbonCommand(() => editor.SendBackward()));
 
         registry.Register("freep.arrange.send-to-back",
-            new ActionCommand(() => editor.SendToBack()));
+            new ActionRibbonCommand(() => editor.SendToBack()));
 
         registry.Register("freep.arrange.align-left",
-            new ActionCommand(() => editor.AlignLeft()));
+            new ActionRibbonCommand(() => editor.AlignLeft()));
 
         registry.Register("freep.arrange.align-center-h",
-            new ActionCommand(() => editor.AlignCenterH()));
+            new ActionRibbonCommand(() => editor.AlignCenterH()));
 
         registry.Register("freep.arrange.align-right",
-            new ActionCommand(() => editor.AlignRight()));
+            new ActionRibbonCommand(() => editor.AlignRight()));
 
         registry.Register("freep.arrange.align-top",
-            new ActionCommand(() => editor.AlignTop()));
+            new ActionRibbonCommand(() => editor.AlignTop()));
 
         registry.Register("freep.arrange.align-middle",
-            new ActionCommand(() => editor.AlignMiddle()));
+            new ActionRibbonCommand(() => editor.AlignMiddle()));
 
         registry.Register("freep.arrange.align-bottom",
-            new ActionCommand(() => editor.AlignBottom()));
+            new ActionRibbonCommand(() => editor.AlignBottom()));
 
         registry.Register("freep.arrange.distribute-h",
-            new ActionCommand(() => editor.DistributeHorizontally()));
+            new ActionRibbonCommand(() => editor.DistributeHorizontally()));
 
         registry.Register("freep.arrange.distribute-v",
-            new ActionCommand(() => editor.DistributeVertically()));
+            new ActionRibbonCommand(() => editor.DistributeVertically()));
 
         // ── Wave 12B: Find & Replace ──────────────────────────────────────────────
 
         registry.Register("freep.find",
-            new ActionCommand(() => onFind?.Invoke()));
+            new ActionRibbonCommand(() => onFind?.Invoke()));
 
         registry.Register("freep.replace",
-            new ActionCommand(() => onFindReplace?.Invoke()));
+            new ActionRibbonCommand(() => onFindReplace?.Invoke()));
 
         return registry;
     }
@@ -509,7 +509,7 @@ internal static class FreePRibbonCommands
         string                id,
         TransitionKind        kind)
     {
-        registry.Register(id, new ActionCommand(() =>
+        registry.Register(id, new ActionRibbonCommand(() =>
         {
             if (kind == TransitionKind.None)
             {
@@ -531,7 +531,7 @@ internal static class FreePRibbonCommands
         EditingSession        editor,
         string                id,
         AnimationPreset       preset)
-        => registry.Register(id, new ActionCommand(() =>
+        => registry.Register(id, new ActionRibbonCommand(() =>
             editor.AddAnimation(0, new ShapeAnimation
             {
                 Kind       = AnimationKind.Entrance,
@@ -545,7 +545,7 @@ internal static class FreePRibbonCommands
         EditingSession        editor,
         string                id,
         AnimationPreset       preset)
-        => registry.Register(id, new ActionCommand(() =>
+        => registry.Register(id, new ActionRibbonCommand(() =>
             editor.AddAnimation(0, new ShapeAnimation
             {
                 Kind       = AnimationKind.Emphasis,
@@ -559,7 +559,7 @@ internal static class FreePRibbonCommands
         EditingSession        editor,
         string                id,
         AnimationPreset       preset)
-        => registry.Register(id, new ActionCommand(() =>
+        => registry.Register(id, new ActionRibbonCommand(() =>
             editor.AddAnimation(0, new ShapeAnimation
             {
                 Kind       = AnimationKind.Exit,
@@ -613,25 +613,6 @@ internal static class FreePRibbonCommands
     }
 
     // ── Inner helpers ─────────────────────────────────────────────────────────────
-
-    /// <summary>A fire-and-forget command over a plain delegate.</summary>
-    private sealed class ActionCommand : IRibbonCommand
-    {
-        private readonly Action _action;
-        public ActionCommand(Action action) => _action = action;
-        public void Execute(RibbonCommandContext context) => _action();
-    }
-
-    /// <summary>
-    /// A command that receives the full <see cref="RibbonCommandContext"/> so it can inspect
-    /// e.g. <see cref="RibbonCommandContext.SelectedValue"/> from a ComboBox.
-    /// </summary>
-    private sealed class ContextAwareCommand : IRibbonCommand
-    {
-        private readonly Action<RibbonCommandContext> _action;
-        public ContextAwareCommand(Action<RibbonCommandContext> action) => _action = action;
-        public void Execute(RibbonCommandContext context) => _action(context);
-    }
 
     /// <summary>
     /// Stateful toggle that routes through the editor and updates the ribbon state store.

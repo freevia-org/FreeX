@@ -137,12 +137,3 @@ internal sealed record RibbonHostCallbacks(
     /// </summary>
     Action? OpenWatermarkDialog = null);
 
-internal sealed class RelayCommand(Action execute) : IRibbonCommand
-{
-    public void Execute(RibbonCommandContext context) => execute();
-}
-
-internal sealed class RelayValueCommand(Action<string?> execute) : IRibbonCommand
-{
-    public void Execute(RibbonCommandContext context) => execute(context.SelectedValue);
-}
