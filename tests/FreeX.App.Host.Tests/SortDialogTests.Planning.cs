@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -96,9 +97,16 @@ public sealed partial class SortDialogTests
     public void SortDialogPlanningFacade_ForwardsPureWorkToPlanner()
     {
         var planningSource = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
 
         planningSource.Should().Contain("using FreeX.App.Services;");
         planningSource.Should().NotContain("internal static class SortDialogPlanner");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "QuickSortRangePlanner.cs"))
+            .Should()
+            .BeFalse("quick sort range/header detection should live in Services instead of WPF Host");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Services", "QuickSortRangePlanner.cs"))
+            .Should()
+            .BeTrue("quick sort range/header detection should be available to all hosts");
         planningSource.Should().Contain("SortDialogPlanner.BuildSortKeys(levels, PlannerText)");
         planningSource.Should().Contain("SortDialogPlanner.BuildOrderChoices(sortOn, PlannerText)");
         planningSource.Should().Contain("SortDialogPlanner.AddLevel(levels, columnOffset, ascending, PlannerText)");

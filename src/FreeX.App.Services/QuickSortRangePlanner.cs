@@ -1,18 +1,18 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
-internal readonly record struct QuickSortRangePlan(GridRange Range, uint SortByColOffset);
+public readonly record struct QuickSortRangePlan(GridRange Range, uint SortByColOffset);
 
-internal static class QuickSortRangePlanner
+public static class QuickSortRangePlanner
 {
     public static QuickSortRangePlan Create(Sheet sheet, GridRange selectedRange, CellAddress? activeCell)
     {
         var sortCell = ResolveActiveCell(selectedRange, activeCell);
         var candidateRange = ResolveCandidateRange(sheet, selectedRange, sortCell);
         var sortByColOffset = ResolveSortByColumnOffset(candidateRange, sortCell);
-        var sortRange = SortDialog.ExcludeHeaderRow(candidateRange, HasLikelyHeaderRow(sheet, candidateRange));
+        var sortRange = SortDialogPlanner.ExcludeHeaderRow(candidateRange, HasLikelyHeaderRow(sheet, candidateRange));
 
         if (sortByColOffset >= sortRange.ColCount)
             sortByColOffset = 0;

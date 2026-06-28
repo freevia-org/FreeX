@@ -483,7 +483,8 @@ public sealed partial class DataToolDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         source.Should().Contain("new AdvancedFilterDialog(");
-        source.Should().Contain("AdvancedFilterDefaultListRangePlanner.Create(sheet, selected)");
+        source.Should().Contain("AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected)");
+        source.Should().NotContain("AdvancedFilterDefaultListRangePlanner.");
         source.Should().Contain("ResolveSheetIdByName,");
         source.Should().Contain("request => ApplyAdvancedFilterRangeSelection(dialog, request)");
         source.Should().Contain("private void ApplyAdvancedFilterRangeSelection(");

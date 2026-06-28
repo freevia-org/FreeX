@@ -1,7 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Filtering;
 
 public enum FilterPromptPlanKind
 {
@@ -9,6 +9,21 @@ public enum FilterPromptPlanKind
     Average,
     Condition,
     AllowedValues
+}
+
+public enum FilterPromptPlanError
+{
+    None,
+    TopBottomSyntax,
+    PercentageRange,
+    PositiveItemCount,
+    CompositeSyntax,
+    DateBetweenSyntax,
+    BetweenSyntax,
+    UnsupportedCriterion,
+    TextToMatch,
+    ComparisonNumber,
+    DateFormat
 }
 
 public sealed record FilterPromptPlan(
@@ -70,17 +85,17 @@ public static class FilterPromptPlanner
         "<="
     ];
 
-    public static bool TryPlan(string input, out FilterPromptPlan? plan, out string? error)
+    public static bool TryPlan(string input, out FilterPromptPlan? plan, out FilterPromptPlanError error)
     {
         plan = null;
-        error = null;
+        error = FilterPromptPlanError.None;
 
         var filterText = input.TrimStart();
         if (IsTopBottomInput(filterText))
         {
-            if (!FilterInputParser.TryParseTopBottom(input, out var count, out var top, out var percent, out error))
+            if (!FilterInputParser.TryParseTopBottom(input, out var count, out var top, out var percent, out var parserError))
             {
-                error = LocalizeFilterInputError(error);
+                error = ToPlanError(parserError);
                 return false;
             }
 
@@ -96,9 +111,9 @@ public static class FilterPromptPlanner
 
         if (IsCriterionInput(filterText))
         {
-            if (!FilterInputParser.TryParseCriterion(input, out var criterion, out error) || criterion is null)
+            if (!FilterInputParser.TryParseCriterion(input, out var criterion, out var parserError) || criterion is null)
             {
-                error = LocalizeFilterInputError(error);
+                error = ToPlanError(parserError);
                 return false;
             }
 
@@ -136,19 +151,18 @@ public static class FilterPromptPlanner
         return false;
     }
 
-    private static string LocalizeFilterInputError(string? error) =>
+    private static FilterPromptPlanError ToPlanError(string? error) =>
         error switch
         {
-            "Enter top:n, bottom:n, toppercent:n, or bottompercent:n." => UiText.Get("FilterPrompt_ErrorTopBottomSyntax"),
-            "Enter a percentage from 1 to 100." => UiText.Get("FilterPrompt_ErrorPercentageRange"),
-            "Enter a positive item count." => UiText.Get("FilterPrompt_ErrorPositiveItemCount"),
-            "Enter a composite filter as and:criterion1|criterion2 or or:criterion1|criterion2." => UiText.Get("FilterPrompt_ErrorCompositeSyntax"),
-            "Enter a date-between filter as datebetween:yyyy-mm-dd:yyyy-mm-dd." => UiText.Get("FilterPrompt_ErrorDateBetweenSyntax"),
-            "Enter a between filter as between:min:max." => UiText.Get("FilterPrompt_ErrorBetweenSyntax"),
-            "Enter a supported filter criterion." => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion"),
-            "Enter text to match." => UiText.Get("FilterPrompt_ErrorTextToMatch"),
-            "Enter a valid number after the comparison operator." => UiText.Get("FilterPrompt_ErrorComparisonNumber"),
-            "Enter dates as yyyy-mm-dd." => UiText.Get("FilterPrompt_ErrorDateFormat"),
-            _ => UiText.Get("MainWindowMessage_FilterUnsupportedCriterion")
+            "Enter top:n, bottom:n, toppercent:n, or bottompercent:n." => FilterPromptPlanError.TopBottomSyntax,
+            "Enter a percentage from 1 to 100." => FilterPromptPlanError.PercentageRange,
+            "Enter a positive item count." => FilterPromptPlanError.PositiveItemCount,
+            "Enter a composite filter as and:criterion1|criterion2 or or:criterion1|criterion2." => FilterPromptPlanError.CompositeSyntax,
+            "Enter a date-between filter as datebetween:yyyy-mm-dd:yyyy-mm-dd." => FilterPromptPlanError.DateBetweenSyntax,
+            "Enter a between filter as between:min:max." => FilterPromptPlanError.BetweenSyntax,
+            "Enter text to match." => FilterPromptPlanError.TextToMatch,
+            "Enter a valid number after the comparison operator." => FilterPromptPlanError.ComparisonNumber,
+            "Enter dates as yyyy-mm-dd." => FilterPromptPlanError.DateFormat,
+            _ => FilterPromptPlanError.UnsupportedCriterion
         };
 }
