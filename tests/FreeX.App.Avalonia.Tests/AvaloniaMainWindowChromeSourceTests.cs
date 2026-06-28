@@ -304,6 +304,35 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void BackstageDialogs_UseSharedAvaloniaBackstageChrome()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Backstage.cs"));
+        var sharedSource = File.ReadAllText(RepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaBackstageChrome.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateDialogLayout(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateHeading(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateSectionHeader(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateNote(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateDetailGrid(");
+        source.Should().Contain("AvaloniaBackstageChrome.AddDetailRow(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreateActionButton(");
+        source.Should().NotContain("new ScrollViewer");
+        source.Should().NotContain("var rowIndex = grid.RowDefinitions.Count");
+        source.Should().NotContain("new RowDefinition(GridLength.Auto)");
+        source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*\")");
+        source.Should().NotContain("            LineHeight = 20");
+
+        sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
+        sharedSource.Should().Contain("public static DockPanel CreateDialogLayout(");
+        sharedSource.Should().Contain("public static void AddDetailRow(");
+    }
+
+    [Fact]
     public void NativeFileMenu_InstallsForMacOsDockAndMirrorsBackstageCommandGroups()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
