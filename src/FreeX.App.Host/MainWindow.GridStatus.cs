@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Automation.Peers;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -11,20 +12,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private sealed record ColumnResizeSnapshot(
-        SheetId SheetId,
-        uint StartCol,
-        uint EndCol,
-        Dictionary<uint, double> OriginalWidths,
-        HashSet<uint> OriginalHiddenCols);
-
-    private sealed record RowResizeSnapshot(
-        SheetId SheetId,
-        uint StartRow,
-        uint EndRow,
-        Dictionary<uint, double> OriginalHeights,
-        HashSet<uint> OriginalHiddenRows);
-
     private void InvalidateNavigationCaches()
     {
         _navigationCacheRevision++;
@@ -318,33 +305,17 @@ public partial class MainWindow
         }
     }
 
-    private (uint start, uint end) GetSelectedColRange(uint col)
-    {
-        var sel = SheetGrid.SelectedRange;
-        if (sel.HasValue && col >= sel.Value.Start.Col && col <= sel.Value.End.Col
-            && sel.Value.Start.Col != sel.Value.End.Col)
-            return (sel.Value.Start.Col, sel.Value.End.Col);
-        return (col, col);
-    }
+    private (uint start, uint end) GetSelectedColRange(uint col) =>
+        GridResizePreviewPlanner.GetSelectedColumnResizeRange(SheetGrid.SelectedRange, col);
 
     private (uint start, uint end) GetColumnResizeRange(Sheet sheet, uint col) =>
-        sheet.HiddenCols.Contains(col)
-            ? GetContiguousHiddenColumnRange(sheet, col)
-            : GetSelectedColRange(col);
+        GridResizePreviewPlanner.GetColumnResizeRange(sheet, SheetGrid.SelectedRange, col);
 
-    private (uint start, uint end) GetSelectedRowRange(uint row)
-    {
-        var sel = SheetGrid.SelectedRange;
-        if (sel.HasValue && row >= sel.Value.Start.Row && row <= sel.Value.End.Row
-            && sel.Value.Start.Row != sel.Value.End.Row)
-            return (sel.Value.Start.Row, sel.Value.End.Row);
-        return (row, row);
-    }
+    private (uint start, uint end) GetSelectedRowRange(uint row) =>
+        GridResizePreviewPlanner.GetSelectedRowResizeRange(SheetGrid.SelectedRange, row);
 
     private (uint start, uint end) GetRowResizeRange(Sheet sheet, uint row) =>
-        sheet.HiddenRows.Contains(row)
-            ? GetContiguousHiddenRowRange(sheet, row)
-            : GetSelectedRowRange(row);
+        GridResizePreviewPlanner.GetRowResizeRange(sheet, SheetGrid.SelectedRange, row);
 
     private void OnColumnResizing(uint col, double newWidthPx)
     {
@@ -356,11 +327,7 @@ public partial class MainWindow
 
         var (startCol, endCol) = GetColumnResizeRange(sheet, col);
         CaptureColumnResizeSnapshot(sheet, startCol, endCol);
-        ApplyColumnResizePreview(
-            sheet,
-            startCol,
-            endCol,
-            ColumnWidthPixelMapper.PixelsToColumnWidth(newWidthPx));
+        GridResizePreviewPlanner.ApplyColumnResizePreview(sheet, startCol, endCol, newWidthPx);
         UpdateViewport();
     }
 
@@ -368,8 +335,8 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        var (startCol, endCol) = _columnResizeSnapshot is { } snap && snap.SheetId == sheet.Id
-            ? (snap.StartCol, snap.EndCol)
+        var (startCol, endCol) = _columnResizeSnapshot is { SheetId: var sheetId } snap && sheetId == sheet.Id
+            ? (snap.StartIndex, snap.EndIndex)
             : GetColumnResizeRange(sheet, col);
         var restoredPreview = RestoreColumnResizePreview(sheet);
         if (!TryExecuteGroupedSheetCommand(
@@ -410,7 +377,7 @@ public partial class MainWindow
 
         var (startRow, endRow) = GetRowResizeRange(sheet, row);
         CaptureRowResizeSnapshot(sheet, startRow, endRow);
-        ApplyRowResizePreview(sheet, startRow, endRow, newHeightPx);
+        GridResizePreviewPlanner.ApplyRowResizePreview(sheet, startRow, endRow, newHeightPx);
         UpdateViewport();
     }
 
@@ -431,8 +398,8 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        var (startRow, endRow) = _rowResizeSnapshot is { } snap && snap.SheetId == sheet.Id
-            ? (snap.StartRow, snap.EndRow)
+        var (startRow, endRow) = _rowResizeSnapshot is { SheetId: var sheetId } snap && sheetId == sheet.Id
+            ? (snap.StartIndex, snap.EndIndex)
             : GetRowResizeRange(sheet, row);
         var restoredPreview = RestoreRowResizePreview(sheet);
         if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, startRow, endRow, newHeightPx)))
@@ -455,17 +422,17 @@ public partial class MainWindow
 
     private void CaptureColumnResizeSnapshot(Sheet sheet, uint startCol, uint endCol)
     {
-        if (_columnResizeSnapshot is { } existing &&
-            existing.SheetId == sheet.Id &&
-            existing.StartCol == startCol && existing.EndCol == endCol)
+        if (GridResizePreviewPlanner.SnapshotMatches(
+                _columnResizeSnapshot,
+                sheet,
+                GridResizeAxis.Column,
+                startCol,
+                endCol))
+        {
             return;
+        }
 
-        _columnResizeSnapshot = new ColumnResizeSnapshot(
-            sheet.Id,
-            startCol,
-            endCol,
-            CaptureDimensionSnapshot(sheet.ColumnWidths, startCol, endCol),
-            CaptureIndexSnapshot(sheet.HiddenCols, startCol, endCol));
+        _columnResizeSnapshot = GridResizePreviewPlanner.CaptureColumnSnapshot(sheet, startCol, endCol);
     }
 
     private void OnResizeCanceled()
@@ -489,148 +456,31 @@ public partial class MainWindow
 
     private void CaptureRowResizeSnapshot(Sheet sheet, uint startRow, uint endRow)
     {
-        if (_rowResizeSnapshot is { } existing &&
-            existing.SheetId == sheet.Id &&
-            existing.StartRow == startRow && existing.EndRow == endRow)
+        if (GridResizePreviewPlanner.SnapshotMatches(
+                _rowResizeSnapshot,
+                sheet,
+                GridResizeAxis.Row,
+                startRow,
+                endRow))
+        {
             return;
-
-        _rowResizeSnapshot = new RowResizeSnapshot(
-            sheet.Id,
-            startRow,
-            endRow,
-            CaptureDimensionSnapshot(sheet.RowHeights, startRow, endRow),
-            CaptureIndexSnapshot(sheet.HiddenRows, startRow, endRow));
-    }
-
-    private static Dictionary<uint, double> CaptureDimensionSnapshot(
-        Dictionary<uint, double> dimensions,
-        uint start,
-        uint end)
-    {
-        var snapshot = new Dictionary<uint, double>();
-        for (var index = start; index <= end; index++)
-        {
-            if (dimensions.TryGetValue(index, out var size))
-                snapshot[index] = size;
         }
 
-        return snapshot;
+        _rowResizeSnapshot = GridResizePreviewPlanner.CaptureRowSnapshot(sheet, startRow, endRow);
     }
-
-    private static HashSet<uint> CaptureIndexSnapshot(HashSet<uint> indexes, uint start, uint end)
-    {
-        var snapshot = new HashSet<uint>();
-        for (var index = start; index <= end; index++)
-        {
-            if (indexes.Contains(index))
-                snapshot.Add(index);
-        }
-
-        return snapshot;
-    }
-
-    private static void RestoreDimensionSnapshot(
-        Dictionary<uint, double> dimensions,
-        uint start,
-        uint end,
-        IReadOnlyDictionary<uint, double> snapshot)
-    {
-        for (var index = start; index <= end; index++)
-            dimensions.Remove(index);
-
-        foreach (var (index, size) in snapshot)
-            dimensions[index] = size;
-    }
-
-    private static void RestoreIndexSnapshot(HashSet<uint> indexes, uint start, uint end, IReadOnlySet<uint> snapshot)
-    {
-        for (var index = start; index <= end; index++)
-            indexes.Remove(index);
-
-        foreach (var index in snapshot)
-            indexes.Add(index);
-    }
-
-    private static void ApplyDimensionResizePreview(
-        Dictionary<uint, double> dimensions,
-        HashSet<uint> hiddenIndexes,
-        uint start,
-        uint end,
-        double size)
-    {
-        for (var index = start; index <= end; index++)
-        {
-            if (size == 0)
-            {
-                dimensions.Remove(index);
-                hiddenIndexes.Add(index);
-            }
-            else
-            {
-                dimensions[index] = size;
-                hiddenIndexes.Remove(index);
-            }
-        }
-    }
-
-    private static void ApplyColumnResizePreview(Sheet sheet, uint startCol, uint endCol, double width) =>
-        ApplyDimensionResizePreview(sheet.ColumnWidths, sheet.HiddenCols, startCol, endCol, width);
-
-    private static void ApplyRowResizePreview(Sheet sheet, uint startRow, uint endRow, double height) =>
-        ApplyDimensionResizePreview(sheet.RowHeights, sheet.HiddenRows, startRow, endRow, height);
 
     private bool RestoreColumnResizePreview(Sheet sheet)
     {
-        if (_columnResizeSnapshot is not { } snapshot || snapshot.SheetId != sheet.Id)
-        {
-            _columnResizeSnapshot = null;
-            return false;
-        }
-
-        RestoreDimensionSnapshot(sheet.ColumnWidths, snapshot.StartCol, snapshot.EndCol, snapshot.OriginalWidths);
-        RestoreIndexSnapshot(sheet.HiddenCols, snapshot.StartCol, snapshot.EndCol, snapshot.OriginalHiddenCols);
+        var restored = GridResizePreviewPlanner.RestoreColumnResizePreview(sheet, _columnResizeSnapshot);
         _columnResizeSnapshot = null;
-        return true;
+        return restored;
     }
 
     private bool RestoreRowResizePreview(Sheet sheet)
     {
-        if (_rowResizeSnapshot is not { } snapshot || snapshot.SheetId != sheet.Id)
-        {
-            _rowResizeSnapshot = null;
-            return false;
-        }
-
-        RestoreDimensionSnapshot(sheet.RowHeights, snapshot.StartRow, snapshot.EndRow, snapshot.OriginalHeights);
-        RestoreIndexSnapshot(sheet.HiddenRows, snapshot.StartRow, snapshot.EndRow, snapshot.OriginalHiddenRows);
+        var restored = GridResizePreviewPlanner.RestoreRowResizePreview(sheet, _rowResizeSnapshot);
         _rowResizeSnapshot = null;
-        return true;
-    }
-
-    private static (uint start, uint end) GetContiguousHiddenColumnRange(Sheet sheet, uint col)
-    {
-        var startCol = col;
-        while (startCol > 1 && sheet.HiddenCols.Contains(startCol - 1))
-            startCol--;
-
-        var endCol = col;
-        while (endCol < CellAddress.MaxCol && sheet.HiddenCols.Contains(endCol + 1))
-            endCol++;
-
-        return (startCol, endCol);
-    }
-
-    private static (uint start, uint end) GetContiguousHiddenRowRange(Sheet sheet, uint row)
-    {
-        var startRow = row;
-        while (startRow > 1 && sheet.HiddenRows.Contains(startRow - 1))
-            startRow--;
-
-        var endRow = row;
-        while (endRow < CellAddress.MaxRow && sheet.HiddenRows.Contains(endRow + 1))
-            endRow++;
-
-        return (startRow, endRow);
+        return restored;
     }
 
 }

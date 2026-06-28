@@ -165,6 +165,10 @@ public sealed partial class MainWindowSourceHygieneTests
         gridSource.Should().Contain("private void OnPageMarginsChanged(");
         gridSource.Should().Contain("private void CaptureColumnResizeSnapshot(");
         gridSource.Should().Contain("private void CaptureRowResizeSnapshot(");
+        gridSource.Should().Contain("GridResizePreviewPlanner.CaptureColumnSnapshot(sheet, startCol, endCol)");
+        gridSource.Should().Contain("GridResizePreviewPlanner.CaptureRowSnapshot(sheet, startRow, endRow)");
+        gridSource.Should().Contain("GridResizePreviewPlanner.ApplyColumnResizePreview(sheet, startCol, endCol, newWidthPx)");
+        gridSource.Should().Contain("GridResizePreviewPlanner.ApplyRowResizePreview(sheet, startRow, endRow, newHeightPx)");
         gridSource.Should().Contain("StatusBarCalculator");
     }
 
@@ -918,15 +922,25 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void GridResizeSnapshots_LiveWithGridStatusController()
+    public void GridResizeSnapshots_DelegatePolicyToPresentationPlanner()
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var gridStatusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.GridStatus.cs");
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Presentation",
+            "GridInteraction",
+            "GridResizePreviewPlanner.cs"));
 
         mainSource.Should().NotContain("private sealed record ColumnResizeSnapshot(");
         mainSource.Should().NotContain("private sealed record RowResizeSnapshot(");
 
-        gridStatusSource.Should().Contain("private sealed record ColumnResizeSnapshot(");
-        gridStatusSource.Should().Contain("private sealed record RowResizeSnapshot(");
+        gridStatusSource.Should().NotContain("private sealed record ColumnResizeSnapshot(");
+        gridStatusSource.Should().NotContain("private sealed record RowResizeSnapshot(");
+        mainSource.Should().Contain("GridResizePreviewSnapshot?");
+        gridStatusSource.Should().Contain("GridResizePreviewPlanner.RestoreColumnResizePreview(sheet, _columnResizeSnapshot)");
+        gridStatusSource.Should().Contain("GridResizePreviewPlanner.RestoreRowResizePreview(sheet, _rowResizeSnapshot)");
+        plannerSource.Should().Contain("public sealed record GridResizePreviewSnapshot");
+        plannerSource.Should().Contain("public static class GridResizePreviewPlanner");
     }
 }

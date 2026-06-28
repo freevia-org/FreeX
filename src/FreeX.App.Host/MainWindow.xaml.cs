@@ -7,6 +7,7 @@ using FreeX.Core.Calc;
 using FreeX.Core.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using Free.Shared.Theme.Wpf;
@@ -234,8 +235,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private int _formulaReferenceGridOverlayActiveCount;
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
-    private ColumnResizeSnapshot? _columnResizeSnapshot;
-    private RowResizeSnapshot? _rowResizeSnapshot;
+    private GridResizePreviewSnapshot? _columnResizeSnapshot;
+    private GridResizePreviewSnapshot? _rowResizeSnapshot;
     private Action<CommandOutcome>? _repeatPostAction;
     private string? _pivotFieldMenuContextCaption;
     private PivotFieldDropZone? _pivotFieldMenuContextZone;
