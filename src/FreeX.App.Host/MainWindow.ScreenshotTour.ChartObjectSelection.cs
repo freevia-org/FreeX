@@ -524,7 +524,7 @@ public partial class MainWindow
         string outputDir,
         ChartObjectSelectionTourContext context)
     {
-        var dialog = new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet)) { Owner = this };
+        var dialog = new SelectionPaneDialog(SelectionPaneDialog.BuildItems(context.Sheet)) { Owner = this };
         try
         {
             dialog.Show();
@@ -542,7 +542,7 @@ public partial class MainWindow
                 dialog.ActualHeight,
                 "Selection Pane reflects submitted rename, hidden-picture visibility state, and text-box bring-forward order for selected objects.",
                 "object-selection",
-                SelectionPanePlanner.BuildItems(context.Sheet).Select(item => $"{item.Kind}:{item.Name}:{item.IsVisible}").ToArray());
+                SelectionPaneDialog.BuildItems(context.Sheet).Select(item => $"{item.Kind}:{item.Name}:{item.IsVisible}").ToArray());
         }
         finally
         {

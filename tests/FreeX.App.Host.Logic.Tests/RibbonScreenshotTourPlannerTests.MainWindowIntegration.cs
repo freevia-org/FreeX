@@ -877,7 +877,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("new ShapeEffectsDialog(context.Shape.GetEffectiveEffectPreset())");
         source.Should().Contain("new ObjectSizeDialog(context.Shape.Width, context.Shape.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
         source.Should().Contain("new FormatPictureDialog(picture)");
-        source.Should().Contain("new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet))");
+        source.Should().Contain("new SelectionPaneDialog(SelectionPaneDialog.BuildItems(context.Sheet))");
         source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, \"Crop Picture\")");
         source.Should().Contain("SelectionPaneToggleVisibilityButton");
         source.Should().Contain("freex_draw_object_formatting_draw_tab_baseline");

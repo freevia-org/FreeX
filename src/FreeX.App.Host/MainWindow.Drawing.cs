@@ -692,7 +692,7 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        var items = SelectionPanePlanner.BuildItems(sheet);
+        var items = SelectionPaneDialog.BuildItems(sheet);
         if (items.Count == 0)
         {
             ShowOwnedMessage(

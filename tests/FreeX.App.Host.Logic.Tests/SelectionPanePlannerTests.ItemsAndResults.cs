@@ -32,7 +32,7 @@ public sealed partial class SelectionPanePlannerTests
         sheet.DrawingShapes.Add(shape);
         sheet.TextBoxes.Add(textBox);
 
-        var items = SelectionPanePlanner.BuildItems(sheet);
+        var items = SelectionPaneDialog.BuildItems(sheet);
 
         items.Select(item => item.Name).Should().Equal("Executive Notes", "Rectangle 1", "Chart 1");
         items.Select(item => item.Kind).Should().Equal(
@@ -54,7 +54,7 @@ public sealed partial class SelectionPanePlannerTests
         sheet.Pictures.Add(middle);
         sheet.TextBoxes.Add(front);
 
-        var items = SelectionPanePlanner.BuildItems(sheet);
+        var items = SelectionPaneDialog.BuildItems(sheet);
 
         var frontItem = items.Single(item => item.Id == front.Id);
         var middleItem = items.Single(item => item.Id == middle.Id);

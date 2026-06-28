@@ -6997,7 +6997,7 @@ public partial class MainWindow
         string outputDir,
         DrawObjectFormattingTourContext context)
     {
-        var dialog = new SelectionPaneDialog(SelectionPanePlanner.BuildItems(context.Sheet)) { Owner = this };
+        var dialog = new SelectionPaneDialog(SelectionPaneDialog.BuildItems(context.Sheet)) { Owner = this };
         try
         {
             dialog.Show();
