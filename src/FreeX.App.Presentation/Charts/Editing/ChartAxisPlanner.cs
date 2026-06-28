@@ -46,6 +46,37 @@ public enum ChartAxisValidationIssue
     LineThicknessOutOfRange,
 }
 
+public enum ChartAxisQuickCommand
+{
+    TickMarks,
+    Labels,
+    LabelFont,
+    LabelAngle,
+    AxisLine,
+    Gridlines,
+    GridlineStyle,
+    NumberFormat,
+}
+
+public enum ChartAxisCommandIssue
+{
+    None,
+    UnsupportedLogScale,
+    UnsupportedBounds,
+    NumericBoundsRequired,
+}
+
+public readonly record struct ChartAxisCommandPlan(ChartLayoutOptions? Options, ChartAxisCommandIssue Issue)
+{
+    public bool Success => Options is not null && Issue == ChartAxisCommandIssue.None;
+
+    public static ChartAxisCommandPlan Succeeded(ChartLayoutOptions options) =>
+        new(options, ChartAxisCommandIssue.None);
+
+    public static ChartAxisCommandPlan Failed(ChartAxisCommandIssue issue) =>
+        new(null, issue);
+}
+
 /// <summary>
 /// Portable (no UI) planner for the "Format Axis" editing dialog: per-axis (X/Y) bounds (min/max, with null
 /// meaning auto), major unit, log scale, axis number format, and major/minor gridline visibility.
@@ -264,8 +295,196 @@ public static class ChartAxisPlanner
                 ClearYAxisBounds: clearBounds);
     }
 
+    public static bool CanToggleSecondaryAxis(ChartModel chart)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        return ChartTypeSupport.SupportsSecondaryAxis(chart.Type) &&
+               (chart.ShowSecondaryAxis || ChartOptionCycler.GetSeriesCount(chart) >= 2);
+    }
+
+    public static ChartLayoutOptions PlanSecondaryAxisToggle(ChartModel chart)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        return new ChartLayoutOptions(
+            ShowSecondaryAxis: !chart.ShowSecondaryAxis,
+            SecondaryAxisSeriesIndexes: []);
+    }
+
+    public static ChartLayoutOptions PlanQuickCommand(
+        ChartModel chart,
+        bool useXAxis,
+        ChartAxisQuickCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        return command switch
+        {
+            ChartAxisQuickCommand.TickMarks => PlanTickMarks(chart, useXAxis),
+            ChartAxisQuickCommand.Labels => useXAxis
+                ? new ChartLayoutOptions(ShowXAxisLabels: !chart.ShowXAxisLabels)
+                : new ChartLayoutOptions(ShowYAxisLabels: !chart.ShowYAxisLabels),
+            ChartAxisQuickCommand.LabelFont => PlanLabelFont(chart, useXAxis),
+            ChartAxisQuickCommand.LabelAngle => PlanLabelAngle(chart, useXAxis),
+            ChartAxisQuickCommand.AxisLine => PlanAxisLine(chart, useXAxis),
+            ChartAxisQuickCommand.Gridlines => PlanGridlines(chart, useXAxis),
+            ChartAxisQuickCommand.GridlineStyle => PlanGridlineStyle(chart, useXAxis),
+            ChartAxisQuickCommand.NumberFormat => PlanNumberFormat(chart, useXAxis),
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
+        };
+    }
+
+    public static ChartAxisCommandPlan PlanLogScaleToggle(Sheet sheet, ChartModel chart, bool useXAxis)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(chart);
+
+        if (useXAxis && !ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
+            return ChartAxisCommandPlan.Failed(ChartAxisCommandIssue.UnsupportedLogScale);
+
+        if (!useXAxis && !ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
+            return ChartAxisCommandPlan.Failed(ChartAxisCommandIssue.UnsupportedLogScale);
+
+        var enableLog = useXAxis ? !chart.XAxisLogScale : !chart.YAxisLogScale;
+        var options = useXAxis
+            ? new ChartLayoutOptions(XAxisLogScale: enableLog)
+            : new ChartLayoutOptions(YAxisLogScale: enableLog);
+
+        if (enableLog && ChartOptionCycler.TryGetAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
+        {
+            var positiveMinimum = minimum > 0 ? minimum : 1;
+            var positiveMaximum = maximum > positiveMinimum ? maximum : positiveMinimum * 10;
+            options = useXAxis
+                ? options with { XAxisMinimum = positiveMinimum, XAxisMaximum = positiveMaximum }
+                : options with { YAxisMinimum = positiveMinimum, YAxisMaximum = positiveMaximum };
+        }
+
+        return ChartAxisCommandPlan.Succeeded(options);
+    }
+
+    public static ChartAxisCommandPlan PlanBoundsToggle(Sheet sheet, ChartModel chart, bool useXAxis)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(chart);
+
+        var hasBounds = useXAxis
+            ? chart.XAxisMinimum is not null || chart.XAxisMaximum is not null
+            : chart.YAxisMinimum is not null || chart.YAxisMaximum is not null;
+        if (!hasBounds &&
+            (useXAxis
+                ? !ChartTypeSupport.SupportsXAxisBounds(chart.Type)
+                : !ChartTypeSupport.SupportsYAxisBounds(chart.Type)))
+            return ChartAxisCommandPlan.Failed(ChartAxisCommandIssue.UnsupportedBounds);
+
+        if (hasBounds)
+        {
+            var clearOptions = useXAxis
+                ? new ChartLayoutOptions(ClearXAxisBounds: true)
+                : new ChartLayoutOptions(ClearYAxisBounds: true);
+            return ChartAxisCommandPlan.Succeeded(clearOptions);
+        }
+
+        if (!ChartOptionCycler.TryGetAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
+            return ChartAxisCommandPlan.Failed(ChartAxisCommandIssue.NumericBoundsRequired);
+
+        var majorUnit = Math.Max(double.Epsilon, (maximum - minimum) / 5);
+        var minorUnit = Math.Max(double.Epsilon, majorUnit / 2);
+        var options = useXAxis
+            ? new ChartLayoutOptions(
+                XAxisMinimum: minimum,
+                XAxisMaximum: maximum,
+                XAxisMajorUnit: majorUnit,
+                XAxisMinorUnit: minorUnit)
+            : new ChartLayoutOptions(
+                YAxisMinimum: minimum,
+                YAxisMaximum: maximum,
+                YAxisMajorUnit: majorUnit,
+                YAxisMinorUnit: minorUnit);
+        return ChartAxisCommandPlan.Succeeded(options);
+    }
+
     private static double? FiniteOrNull(double? value) =>
         value is { } number && double.IsFinite(number) ? number : null;
+
+    private static ChartLayoutOptions PlanTickMarks(ChartModel chart, bool useXAxis)
+    {
+        var (major, minor) = useXAxis
+            ? ChartOptionCycler.NextAxisTickState(chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle)
+            : ChartOptionCycler.NextAxisTickState(chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle);
+        return useXAxis
+            ? new ChartLayoutOptions(XAxisMajorTickStyle: major, XAxisMinorTickStyle: minor)
+            : new ChartLayoutOptions(YAxisMajorTickStyle: major, YAxisMinorTickStyle: minor);
+    }
+
+    private static ChartLayoutOptions PlanLabelFont(ChartModel chart, bool useXAxis)
+    {
+        var currentColor = useXAxis ? chart.XAxisLabelTextColor : chart.YAxisLabelTextColor;
+        var currentSize = useXAxis ? chart.XAxisLabelFontSize : chart.YAxisLabelFontSize;
+        var nextColor = ChartQuickFormatCycler.NextSeriesColor(currentColor);
+        var nextSize = currentSize >= 14 ? 9 : currentSize + 1;
+        return useXAxis
+            ? new ChartLayoutOptions(XAxisLabelTextColor: nextColor, XAxisLabelFontSize: nextSize)
+            : new ChartLayoutOptions(YAxisLabelTextColor: nextColor, YAxisLabelFontSize: nextSize);
+    }
+
+    private static ChartLayoutOptions PlanLabelAngle(ChartModel chart, bool useXAxis)
+    {
+        var currentAngle = useXAxis ? chart.XAxisLabelAngle : chart.YAxisLabelAngle;
+        var nextAngle = ChartOptionCycler.NextAxisLabelAngle(currentAngle);
+        return useXAxis
+            ? new ChartLayoutOptions(XAxisLabelAngle: nextAngle)
+            : new ChartLayoutOptions(YAxisLabelAngle: nextAngle);
+    }
+
+    private static ChartLayoutOptions PlanAxisLine(ChartModel chart, bool useXAxis)
+    {
+        var currentColor = useXAxis ? chart.XAxisLineColor : chart.YAxisLineColor;
+        var currentThickness = useXAxis ? chart.XAxisLineThickness : chart.YAxisLineThickness;
+        var (nextColor, nextThickness) = ChartOptionCycler.NextAxisLineState(currentColor, currentThickness);
+        return useXAxis
+            ? new ChartLayoutOptions(XAxisLineColor: nextColor, XAxisLineThickness: nextThickness)
+            : new ChartLayoutOptions(YAxisLineColor: nextColor, YAxisLineThickness: nextThickness);
+    }
+
+    private static ChartLayoutOptions PlanGridlines(ChartModel chart, bool useXAxis)
+    {
+        var (showMajor, showMinor) = useXAxis
+            ? ChartQuickFormatCycler.NextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines)
+            : ChartQuickFormatCycler.NextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
+        return useXAxis
+            ? new ChartLayoutOptions(ShowXAxisMajorGridlines: showMajor, ShowXAxisMinorGridlines: showMinor)
+            : new ChartLayoutOptions(ShowYAxisMajorGridlines: showMajor, ShowYAxisMinorGridlines: showMinor);
+    }
+
+    private static ChartLayoutOptions PlanGridlineStyle(ChartModel chart, bool useXAxis)
+    {
+        var currentMajorColor = useXAxis ? chart.XAxisMajorGridlineColor : chart.YAxisMajorGridlineColor;
+        var currentMinorColor = useXAxis ? chart.XAxisMinorGridlineColor : chart.YAxisMinorGridlineColor;
+        var currentThickness = useXAxis ? chart.XAxisGridlineThickness : chart.YAxisGridlineThickness;
+        var nextMajorColor = ChartQuickFormatCycler.NextSeriesColor(currentMajorColor);
+        var nextMinorColor = ChartQuickFormatCycler.NextSeriesColor(currentMinorColor ?? currentMajorColor);
+        var nextThickness = currentThickness >= 3 ? 1 : currentThickness + 0.5;
+        return useXAxis
+            ? new ChartLayoutOptions(
+                XAxisMajorGridlineColor: nextMajorColor,
+                XAxisMinorGridlineColor: nextMinorColor,
+                XAxisGridlineThickness: nextThickness,
+                ShowXAxisMajorGridlines: true)
+            : new ChartLayoutOptions(
+                YAxisMajorGridlineColor: nextMajorColor,
+                YAxisMinorGridlineColor: nextMinorColor,
+                YAxisGridlineThickness: nextThickness,
+                ShowYAxisMajorGridlines: true);
+    }
+
+    private static ChartLayoutOptions PlanNumberFormat(ChartModel chart, bool useXAxis)
+    {
+        var next = ChartOptionCycler.NextDataLabelNumberFormat(useXAxis ? chart.XAxisNumberFormat : chart.YAxisNumberFormat);
+        return useXAxis
+            ? new ChartLayoutOptions(XAxisNumberFormat: next)
+            : new ChartLayoutOptions(YAxisNumberFormat: next);
+    }
 
     private static double? PositiveFiniteOrNull(double? value) =>
         value is { } number && IsPositiveFinite(number) ? number : null;
