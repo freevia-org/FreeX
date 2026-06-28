@@ -2,8 +2,9 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using ServicesAdvancedFilterOutputMode = FreeX.App.Services.AdvancedFilterOutputMode;
+using ServicesAdvancedFilterPlanError = FreeX.App.Services.AdvancedFilterPlanError;
 
 namespace FreeX.App.Host;
 
@@ -221,28 +222,14 @@ public sealed partial class AdvancedFilterDialog : Window
             : Visibility.Visible;
     }
 
-    private void FocusInvalidRangeInput(string? error)
+    private void FocusInvalidRangeInput(ServicesAdvancedFilterPlanError error)
     {
         TextBox target;
-        if (string.Equals(error, UiText.Get("AdvancedFilter_EnterValidCriteriaRange"), StringComparison.Ordinal))
+        if (IsAdvancedFilterCriteriaError(error))
         {
             target = _criteriaRangeBox;
         }
-        else if (string.Equals(error, UiText.Get("AdvancedFilter_CriteriaRangeMustIncludeHeaders"), StringComparison.Ordinal))
-        {
-            target = _criteriaRangeBox;
-        }
-        else if (string.Equals(error, AdvancedFilterCommand.CriteriaRangeTooLargeMessage, StringComparison.Ordinal))
-        {
-            target = _criteriaRangeBox;
-        }
-        else if (string.Equals(error, UiText.Get("AdvancedFilter_EnterValidCopyToRange"), StringComparison.Ordinal))
-        {
-            _copyToAnotherLocationButton.IsChecked = true;
-            UpdateCopyToState();
-            target = _copyToBox;
-        }
-        else if (string.Equals(error, AdvancedFilterCommand.CopyOutputTooLargeMessage, StringComparison.Ordinal))
+        else if (IsAdvancedFilterCopyDestinationError(error))
         {
             _copyToAnotherLocationButton.IsChecked = true;
             UpdateCopyToState();
@@ -258,19 +245,22 @@ public sealed partial class AdvancedFilterDialog : Window
 
     private void Accept()
     {
-        if (!TryParse(
+        var outputMode = _copyToAnotherLocationButton.IsChecked == true
+            ? ServicesAdvancedFilterOutputMode.CopyToAnotherLocation
+            : ServicesAdvancedFilterOutputMode.FilterInPlace;
+        var planResult = CreateAdvancedFilterPlan(
                 _sheetId,
                 _listRangeBox.Text,
                 _criteriaRangeBox.Text,
                 _copyToBox.Text,
-                _copyToAnotherLocationButton.IsChecked == true,
+                outputMode,
                 _uniqueBox.IsChecked == true,
-                _resolveSheetId,
-                out var result,
-                out var error))
+                _resolveSheetId);
+
+        if (!TryCreateDialogResult(planResult, out var result, out var error))
         {
             DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("AdvancedFilter_EnterValidFilterRanges"), Title);
-            FocusInvalidRangeInput(error);
+            FocusInvalidRangeInput(planResult.Error);
             return;
         }
 

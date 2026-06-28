@@ -181,6 +181,25 @@ public sealed partial class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialog_RejectsMissingCopyToRangeWhenCopyModeSelected()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToCellText: "",
+            copyToAnotherLocation: true,
+            uniqueRecordsOnly: false,
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Enter a valid copy-to cell or one-row header range.");
+    }
+
+    [Fact]
     public void AdvancedFilterDialog_InPlaceModeIgnoresCopyToText()
     {
         var sheetId = SheetId.New();
@@ -361,10 +380,14 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void AdvancedFilterDialogInvalidRange_RefocusesAndSelectsInvalidRangeInput()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "AdvancedFilterDialog.cs",
+            "AdvancedFilterDialog.Planning.cs");
 
-        source.Should().Contain("FocusInvalidRangeInput(error);");
-        source.Should().Contain("private void FocusInvalidRangeInput(string? error)");
+        source.Should().Contain("FocusInvalidRangeInput(planResult.Error);");
+        source.Should().Contain("private void FocusInvalidRangeInput(ServicesAdvancedFilterPlanError error)");
+        source.Should().Contain("IsAdvancedFilterCriteriaError(error)");
+        source.Should().Contain("IsAdvancedFilterCopyDestinationError(error)");
         source.Should().Contain("UiText.Get(\"AdvancedFilter_CriteriaRangeMustIncludeHeaders\")");
         source.Should().Contain("_copyToAnotherLocationButton.IsChecked = true;");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
