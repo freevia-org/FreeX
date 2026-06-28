@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
@@ -307,6 +308,22 @@ public sealed class AnimationPaneTests
         CountAnimationRows(pane).Should().Be(0, "pane should refresh when slide changes");
     }
 
+    [Fact]
+    public void AnimationPane_UsesSharedPlannerForPolicy()
+    {
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "AnimationPane.cs");
+
+        source.Should().Contain("AnimationPanePlanner.FormatEffect(anim)");
+        source.Should().Contain("AnimationPanePlanner.TriggerLabels");
+        source.Should().Contain("AnimationPanePlanner.TryGetTrigger(");
+        source.Should().Contain("AnimationPanePlanner.FormatDuration(anim.DurationMs)");
+        source.Should().Contain("AnimationPanePlanner.BuildDurationEditPlan(");
+        source.Should().NotContain("private static string FormatEffect");
+        source.Should().NotContain("private static string FormatDuration");
+        source.Should().NotContain("private static bool TryParseDuration");
+        source.Should().NotContain("double.TryParse");
+    }
+
     // ── Test-seam helpers ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -345,5 +362,26 @@ public sealed class AnimationPaneTests
                 names.Add(nameBlock.Text ?? string.Empty);
         }
         return names;
+    }
+
+    private static string ReadWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate workspace file.",
+            Path.Combine(relativeParts));
     }
 }

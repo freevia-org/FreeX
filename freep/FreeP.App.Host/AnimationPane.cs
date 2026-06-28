@@ -214,7 +214,7 @@ public sealed class AnimationPane : Border
         };
 
         // ── Effect label (Kind + Preset) ────────────────────────────────────────
-        var effectText = FormatEffect(anim);
+        var effectText = AnimationPanePlanner.FormatEffect(anim);
         var effectLabel = new TextBlock
         {
             Text              = effectText,
@@ -236,10 +236,9 @@ public sealed class AnimationPane : Border
             Margin            = new Thickness(2, 2, 2, 2),
             ToolTip           = "Trigger",
         };
-        triggerCombo.Items.Add("On Click");
-        triggerCombo.Items.Add("With Previous");
-        triggerCombo.Items.Add("After Previous");
-        triggerCombo.SelectedIndex = (int)anim.Trigger;
+        foreach (var label in AnimationPanePlanner.TriggerLabels)
+            triggerCombo.Items.Add(label);
+        triggerCombo.SelectedIndex = AnimationPanePlanner.ToTriggerIndex(anim.Trigger);
 
         // Capture by value for the closure.
         int capturedIndex = index;
@@ -248,7 +247,8 @@ public sealed class AnimationPane : Border
             var anims = _editor.CurrentSlideAnimations;
             if (capturedIndex >= anims.Count) return;
             var current = anims[capturedIndex];
-            var newTrigger = (AnimationTrigger)triggerCombo.SelectedIndex;
+            if (!AnimationPanePlanner.TryGetTrigger(triggerCombo.SelectedIndex, out var newTrigger))
+                return;
             if (current.Trigger == newTrigger) return;
             var updated = CloneAnimation(current);
             updated.Trigger = newTrigger;
@@ -258,7 +258,7 @@ public sealed class AnimationPane : Border
         // ── Duration field ──────────────────────────────────────────────────────
         var durationBox = new TextBox
         {
-            Text              = FormatDuration(anim.DurationMs),
+            Text              = AnimationPanePlanner.FormatDuration(anim.DurationMs),
             FontSize          = 10,
             Width             = 48,
             VerticalAlignment = VerticalAlignment.Center,
@@ -271,16 +271,17 @@ public sealed class AnimationPane : Border
             var anims = _editor.CurrentSlideAnimations;
             if (capturedIndex >= anims.Count) return;
             var current = anims[capturedIndex];
-            if (TryParseDuration(durationBox.Text, out int ms) && ms != current.DurationMs)
+            var plan = AnimationPanePlanner.BuildDurationEditPlan(durationBox.Text, current.DurationMs);
+            if (plan.ShouldUpdate)
             {
                 var updated = CloneAnimation(current);
-                updated.DurationMs = ms;
+                updated.DurationMs = plan.DurationMs;
                 _editor.SetAnimation(capturedIndex, updated);
             }
             else
             {
                 // Revert to current value on parse error.
-                durationBox.Text = FormatDuration(current.DurationMs);
+                durationBox.Text = plan.DisplayText;
             }
         };
 
@@ -435,40 +436,6 @@ public sealed class AnimationPane : Border
         if (slide is null) return $"Shape {shapeId}";
         var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
         return string.IsNullOrWhiteSpace(shape?.Name) ? $"Shape {shapeId}" : shape!.Name;
-    }
-
-    private static string FormatEffect(ShapeAnimation anim)
-    {
-        var kindPrefix = anim.Kind switch
-        {
-            AnimationKind.Entrance  => "In",
-            AnimationKind.Exit      => "Out",
-            AnimationKind.Emphasis  => "Em",
-            AnimationKind.Motion    => "Mv",
-            _                       => "?"
-        };
-        return anim.Kind == AnimationKind.Motion
-            ? "Mv: Motion"
-            : $"{kindPrefix}: {anim.Preset}";
-    }
-
-    private static string FormatDuration(int ms)
-    {
-        double sec = ms / 1000.0;
-        return sec.ToString("0.##");
-    }
-
-    private static bool TryParseDuration(string text, out int ms)
-    {
-        if (double.TryParse(text, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out double sec)
-            && sec > 0)
-        {
-            ms = (int)(sec * 1000.0);
-            return true;
-        }
-        ms = 0;
-        return false;
     }
 
     /// <summary>Creates a mutable shallow copy of <paramref name="src"/> for SetAnimation.</summary>
