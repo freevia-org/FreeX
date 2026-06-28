@@ -168,20 +168,7 @@ public partial class MainWindow
     }
 
     private StatusBarOptionVisibility GetStatusBarOptionVisibility() =>
-        new(
-            CellMode: _options.StatusBarShowCellMode,
-            EndMode: _options.StatusBarShowEndMode,
-            SelectionMode: _options.StatusBarShowSelectionMode,
-            PageNumber: _options.StatusBarShowPageNumber,
-            Average: _options.StatusBarShowAverage,
-            Count: _options.StatusBarShowCount,
-            NumericalCount: _options.StatusBarShowNumericalCount,
-            Minimum: _options.StatusBarShowMinimum,
-            Maximum: _options.StatusBarShowMaximum,
-            Sum: _options.StatusBarShowSum,
-            ViewShortcuts: _options.StatusBarShowViewShortcuts,
-            Zoom: _options.StatusBarShowZoom,
-            ZoomSlider: _options.StatusBarShowZoomSlider);
+        StatusBarOptionVisibilityStore.ToVisibility(_options);
 
     // Tracks the runtime-built status-bar customize toggle items by their persisted-option Tag so the menu's
     // live checked state can be refreshed on open without relying on hand-authored x:Name fields.
@@ -207,50 +194,8 @@ public partial class MainWindow
             return;
 
         var isChecked = menuItem.IsChecked;
-        switch (option)
-        {
-            case StatusBarOptionTags.CellMode:
-                _options.StatusBarShowCellMode = isChecked;
-                break;
-            case StatusBarOptionTags.EndMode:
-                _options.StatusBarShowEndMode = isChecked;
-                break;
-            case StatusBarOptionTags.SelectionMode:
-                _options.StatusBarShowSelectionMode = isChecked;
-                break;
-            case StatusBarOptionTags.PageNumber:
-                _options.StatusBarShowPageNumber = isChecked;
-                break;
-            case StatusBarOptionTags.Average:
-                _options.StatusBarShowAverage = isChecked;
-                break;
-            case StatusBarOptionTags.Count:
-                _options.StatusBarShowCount = isChecked;
-                break;
-            case StatusBarOptionTags.NumericalCount:
-                _options.StatusBarShowNumericalCount = isChecked;
-                break;
-            case StatusBarOptionTags.Minimum:
-                _options.StatusBarShowMinimum = isChecked;
-                break;
-            case StatusBarOptionTags.Maximum:
-                _options.StatusBarShowMaximum = isChecked;
-                break;
-            case StatusBarOptionTags.Sum:
-                _options.StatusBarShowSum = isChecked;
-                break;
-            case StatusBarOptionTags.ViewShortcuts:
-                _options.StatusBarShowViewShortcuts = isChecked;
-                break;
-            case StatusBarOptionTags.Zoom:
-                _options.StatusBarShowZoom = isChecked;
-                break;
-            case StatusBarOptionTags.ZoomSlider:
-                _options.StatusBarShowZoomSlider = isChecked;
-                break;
-            default:
-                return;
-        }
+        if (!StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked))
+            return;
 
         if (!_options.Save())
         {

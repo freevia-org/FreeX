@@ -19,7 +19,7 @@ public enum AppOptionsObjectDisplay
     Nothing
 }
 
-public sealed class AppOptions : INormalizableApplicationOptions
+public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOptionVisibilityStore
 {
     public const string DefaultFontNameFallback = "Calibri";
     public const int DefaultFontSizeFallback = 11;
