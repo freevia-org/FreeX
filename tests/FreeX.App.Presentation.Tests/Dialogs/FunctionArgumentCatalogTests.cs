@@ -76,6 +76,18 @@ public sealed class FunctionArgumentCatalogTests
     // ----- Preview builder -----
 
     [Fact]
+    public void BuildFormula_TwoArguments_RendersCallWithoutEqualsPrefix()
+    {
+        FunctionArgumentCatalog.BuildFormula("SUM", ["A1", "A2"]).Should().Be("SUM(A1, A2)");
+    }
+
+    [Fact]
+    public void BuildFormula_TrimsTrailingBlankArguments()
+    {
+        FunctionArgumentCatalog.BuildFormula("IF", ["A1>0", "1", "   "]).Should().Be("IF(A1>0, 1)");
+    }
+
+    [Fact]
     public void BuildPreview_TwoArguments_RendersCommaSeparated()
     {
         FunctionArgumentCatalog.BuildPreview("SUM", ["A1", "A2"]).Should().Be("=SUM(A1, A2)");
