@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Input;
+using FreeX.App.Presentation.CustomViews;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -60,7 +61,7 @@ public sealed partial class CustomViewsDialog : Window
     private void ShowButton_Click(object sender, RoutedEventArgs e)
     {
         if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }
-        var outcome = _commandBus.Execute(_workbook.Id, new ApplyCustomViewCommand(vm.Name));
+        var outcome = _commandBus.Execute(_workbook.Id, CustomViewsPlanner.BuildApplyCommand(vm.Name));
         if (!outcome.Success)
         {
             DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("CustomViews_ApplyFailedMessage"), UiText.Get("CustomViews_CustomViews"));
@@ -81,7 +82,7 @@ public sealed partial class CustomViewsDialog : Window
         var name = dialog.Result.ViewName;
         if (string.IsNullOrWhiteSpace(name)) return;
 
-        var outcome = _commandBus.Execute(_workbook.Id, new SaveCustomViewCommand(
+        var outcome = _commandBus.Execute(_workbook.Id, CustomViewsPlanner.BuildSaveCommand(
             name,
             dialog.Result.IncludePrintSettings,
             dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings));
@@ -100,7 +101,7 @@ public sealed partial class CustomViewsDialog : Window
     {
         if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }
 
-        var outcome = _commandBus.Execute(_workbook.Id, new DeleteCustomViewCommand(vm.Name));
+        var outcome = _commandBus.Execute(_workbook.Id, CustomViewsPlanner.BuildDeleteCommand(vm.Name));
         if (!outcome.Success)
         {
             DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("CustomViews_DeleteFailedMessage"), UiText.Get("CustomViews_CustomViews"));
