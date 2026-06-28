@@ -187,7 +187,7 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("Target = textBox");
         source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
         source.Should().NotContain("Header = \"Inputs\"");
-        source.Should().Contain("DataTableInputParser.GetDefaultFormulaCell");
+        source.Should().Contain("DataTableInputParser.TryParse(");
     }
 
     [Fact]

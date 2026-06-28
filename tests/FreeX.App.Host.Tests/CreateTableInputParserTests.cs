@@ -8,7 +8,7 @@ public sealed class CreateTableInputParserTests
     private static readonly SheetId SheetId = SheetId.New();
 
     [Fact]
-    public void TryParse_ParsesRangeHeaderFlagAndTrimmedStyle()
+    public void TryParse_ProjectsSharedResultToHostDialogResult()
     {
         CreateTableInputParser.TryParse(
                 SheetId,
@@ -41,5 +41,16 @@ public sealed class CreateTableInputParserTests
             .Should().BeFalse();
 
         error.Should().Be(expectedError);
+    }
+
+    [Fact]
+    public void Source_DelegatesParsingToPresentationParser()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("CreateTableInputParser.cs");
+
+        source.Should().Contain("FreeX.App.Presentation.TableUI.CreateTableInputParser");
+        source.Should().Contain("SharedCreateTableInputParser.TryParse");
+        source.Should().NotContain("GridRange.Parse");
+        source.Should().NotContain("CellAddress.Parse");
     }
 }

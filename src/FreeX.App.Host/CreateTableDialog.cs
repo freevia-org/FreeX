@@ -60,21 +60,8 @@ public sealed class CreateTableDialog : Window
         bool firstRowHasHeaders,
         string tableStyleName,
         out CreateTableDialogResult result,
-        out string? error)
-    {
-        var parsed = CreateTableInputParser.TryParse(sheetId, rangeText, firstRowHasHeaders, tableStyleName, out result, out error);
-        error = LocalizeParseError(error);
-        return parsed;
-    }
-
-    private static string? LocalizeParseError(string? error) =>
-        error switch
-        {
-            "Enter a table range." => UiText.Get("CreateTable_MissingRangeMessage"),
-            "Table range must include at least two rows." => UiText.Get("CreateTable_MinimumRowsMessage"),
-            "Enter a valid table range." => UiText.Get("CreateTable_InvalidRangeMessage"),
-            _ => error
-        };
+        out string? error) =>
+        CreateTableInputParser.TryParse(sheetId, rangeText, firstRowHasHeaders, tableStyleName, out result, out error);
 
     public static CreateTableRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
         new(currentText.Trim(), CollapseDialog: true);

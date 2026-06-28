@@ -139,20 +139,23 @@ public sealed class SubtotalDialog : Window
         bool pageBreakBetweenGroups,
         bool summaryBelowData)
     {
-        if (!SubtotalFunctionService.TryParse(functionText, out var functionNumber))
-            throw new ArgumentException(UiText.Get("Subtotal_UnsupportedSubtotalFunction"), nameof(functionText));
+        if (SubtotalDialogInputParser.TryCreateResult(
+                groupColumnOffset,
+                subtotalColumnOffsets,
+                functionText,
+                replaceCurrentSubtotals,
+                pageBreakBetweenGroups,
+                summaryBelowData,
+                out var result,
+                out var error))
+        {
+            return result;
+        }
 
-        var offsets = subtotalColumnOffsets.Distinct().ToList();
-        if (offsets.Count == 0)
-            throw new ArgumentException(UiText.Get("Subtotal_AtLeastOneSubtotalColumnIsRequired"), nameof(subtotalColumnOffsets));
-
-        return new SubtotalDialogResult(
-            groupColumnOffset,
-            offsets,
-            functionNumber,
-            replaceCurrentSubtotals,
-            pageBreakBetweenGroups,
-            summaryBelowData);
+        var parameterName = string.Equals(error, UiText.Get("Subtotal_UnsupportedSubtotalFunction"), StringComparison.Ordinal)
+            ? nameof(functionText)
+            : nameof(subtotalColumnOffsets);
+        throw new ArgumentException(error, parameterName);
     }
 
     public static SubtotalDialogResult CreateRemoveAllResult() =>

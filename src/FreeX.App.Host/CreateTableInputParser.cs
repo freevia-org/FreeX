@@ -1,5 +1,7 @@
 using FreeX.App.Services;
 using FreeX.Core.Model;
+using SharedCreateTableInputParseIssue = FreeX.App.Presentation.TableUI.CreateTableInputParseIssue;
+using SharedCreateTableInputParser = FreeX.App.Presentation.TableUI.CreateTableInputParser;
 
 namespace FreeX.App.Host;
 
@@ -13,22 +15,30 @@ public static class CreateTableInputParser
         out CreateTableDialogResult result,
         out string? error)
     {
-        var parsed = CreateTableDialogPlanner.TryParse(
-            sheetId,
-            rangeText,
-            firstRowHasHeaders,
-            tableStyleName,
-            out var plan,
-            out var errorKey);
-        if (parsed)
+        if (SharedCreateTableInputParser.TryParse(
+                sheetId,
+                rangeText,
+                firstRowHasHeaders,
+                tableStyleName,
+                out var parsed,
+                out var issue))
         {
-            result = new CreateTableDialogResult(plan.Range, plan.FirstRowHasHeaders, plan.TableStyleName);
+            result = new CreateTableDialogResult(parsed.Range, parsed.FirstRowHasHeaders, parsed.TableStyleName);
             error = null;
             return true;
         }
 
         result = default!;
-        error = errorKey is null ? null : UiText.Get(errorKey);
+        error = DescribeIssue(issue);
         return false;
     }
+
+    private static string? DescribeIssue(SharedCreateTableInputParseIssue issue) =>
+        issue switch
+        {
+            SharedCreateTableInputParseIssue.MissingRange => UiText.Get(CreateTableDialogPlanner.MissingRangeMessageKey),
+            SharedCreateTableInputParseIssue.MinimumRows => UiText.Get(CreateTableDialogPlanner.MinimumRowsMessageKey),
+            SharedCreateTableInputParseIssue.InvalidRange => UiText.Get(CreateTableDialogPlanner.InvalidRangeMessageKey),
+            _ => null
+        };
 }

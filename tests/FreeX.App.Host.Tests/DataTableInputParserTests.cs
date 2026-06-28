@@ -8,41 +8,55 @@ public sealed class DataTableInputParserTests
     private static readonly SheetId SheetId = SheetId.New();
     private static readonly GridRange Range = new(new CellAddress(SheetId, 3, 2), new CellAddress(SheetId, 8, 5));
 
-    [Theory]
-    [InlineData("two", true)]
-    [InlineData("2", true)]
-    [InlineData("one", false)]
-    [InlineData("1", false)]
-    [InlineData("anything", false)]
-    public void IsTwoVariableMode_RecognizesTwoVariableAliases(string input, bool expected)
+    [Fact]
+    public void TryParse_ProjectsSharedResultToHostDialogResult()
     {
-        DataTableInputParser.IsTwoVariableMode(input).Should().Be(expected);
+        DataTableInputParser.TryParse(
+                SheetId,
+                Range,
+                rowInputCellText: "A1",
+                columnInputCellText: "C1",
+                out var result,
+                out var error)
+            .Should().BeTrue(error);
+
+        result.Mode.Should().Be(DataTableMode.TwoVariable);
+        result.FormulaCell.Should().Be(new CellAddress(SheetId, 3, 2));
+        result.RowInputCell.Should().Be(new CellAddress(SheetId, 1, 1));
+        result.ColumnInputCell.Should().Be(new CellAddress(SheetId, 1, 3));
     }
 
     [Theory]
-    [InlineData(false, 3, 3)]
-    [InlineData(true, 3, 2)]
-    public void GetDefaultFormulaCell_UsesExcelAdjacentFormulaDefaults(bool twoVariable, uint expectedRow, uint expectedCol)
+    [InlineData("", "", "Enter either a row input cell or a column input cell.")]
+    [InlineData("bad", "", "Enter a valid row input cell.")]
+    [InlineData("", "bad", "Enter a valid column input cell.")]
+    [InlineData("B3", "", "Row input cell cannot be inside the data table range.")]
+    [InlineData("", "C4", "Column input cell cannot be inside the data table range.")]
+    [InlineData("A1", "A1", "Row and column input cells must be different.")]
+    public void TryParse_LocalizesSharedParserIssues(
+        string rowInputCellText,
+        string columnInputCellText,
+        string expectedError)
     {
-        DataTableInputParser.GetDefaultFormulaCell(Range, twoVariable)
-            .Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
+        DataTableInputParser.TryParse(
+                SheetId,
+                Range,
+                rowInputCellText,
+                columnInputCellText,
+                out _,
+                out var error)
+            .Should().BeFalse();
+
+        error.Should().Be(expectedError);
     }
 
-    [Theory]
-    [InlineData(" C5 ", true, 5, 3)]
-    [InlineData("$C$5", true, 5, 3)]
-    [InlineData("C$5", true, 5, 3)]
-    [InlineData("$C5", true, 5, 3)]
-    [InlineData("R5C3", true, 5, 3)]
-    [InlineData("bad", false, 0, 0)]
-    [InlineData("$C", false, 0, 0)]
-    [InlineData("R0C3", false, 0, 0)]
-    public void TryParseCell_ParsesTrimmedCellAddress(string input, bool expected, uint row, uint col)
+    [Fact]
+    public void Source_DelegatesParsingToPresentationParser()
     {
-        var result = DataTableInputParser.TryParseCell(input, SheetId, out var address);
+        var source = DialogSourceTestSupport.ReadHostSources("DataTableInputParser.cs");
 
-        result.Should().Be(expected);
-        if (expected)
-            address.Should().Be(new CellAddress(SheetId, row, col));
+        source.Should().Contain("FreeX.App.Presentation.DataTools.DataTableInputParser");
+        source.Should().Contain("SharedDataTableInputParser.TryParse");
+        source.Should().NotContain("CellReferenceInputParser.TryParseCell");
     }
 }

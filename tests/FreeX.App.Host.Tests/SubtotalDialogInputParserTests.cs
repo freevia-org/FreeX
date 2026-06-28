@@ -5,7 +5,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class SubtotalDialogInputParserTests
 {
     [Fact]
-    public void TryParse_CreatesDialogResultFromZeroBasedOffsets()
+    public void TryParse_ProjectsSharedResultToHostDialogResult()
     {
         SubtotalDialogInputParser.TryParse(
                 groupColumnText: "0",
@@ -49,5 +49,16 @@ public sealed class SubtotalDialogInputParserTests
             .Should().BeFalse();
 
         error.Should().Be(expectedError);
+    }
+
+    [Fact]
+    public void Source_DelegatesParsingToPresentationParser()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialogInputParser.cs");
+
+        source.Should().Contain("FreeX.App.Presentation.DataTools.SubtotalDialogInputParser");
+        source.Should().Contain("SharedSubtotalDialogInputParser.TryParse");
+        source.Should().NotContain("uint.TryParse");
+        source.Should().NotContain("SubtotalFunctionService.TryParse");
     }
 }

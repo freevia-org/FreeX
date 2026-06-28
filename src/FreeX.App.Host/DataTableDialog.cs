@@ -92,75 +92,14 @@ public sealed class DataTableDialog : Window
         string? rowInputCellText,
         string? columnInputCellText,
         out DataTableDialogResult result,
-        out string? error)
-    {
-        result = default!;
-        error = null;
-
-        var hasRowInput = !string.IsNullOrWhiteSpace(rowInputCellText);
-        var hasColumnInput = !string.IsNullOrWhiteSpace(columnInputCellText);
-        if (!TryParseOptionalCell(currentSheetId, rowInputCellText, hasRowInput, out var rowInputCell))
-        {
-            error = UiText.Get("DataTable_InvalidRowInputMessage");
-            return false;
-        }
-
-        if (!TryParseOptionalCell(currentSheetId, columnInputCellText, hasColumnInput, out var columnInputCell))
-        {
-            error = UiText.Get("DataTable_InvalidColumnInputMessage");
-            return false;
-        }
-
-        if (!hasRowInput && !hasColumnInput)
-        {
-            error = UiText.Get("DataTable_MissingInputMessage");
-            return false;
-        }
-
-        if (rowInputCell is { } rowCell && range.Contains(rowCell))
-        {
-            error = UiText.Get("DataTable_RowInputInsideRangeMessage");
-            return false;
-        }
-
-        if (columnInputCell is { } columnCell && range.Contains(columnCell))
-        {
-            error = UiText.Get("DataTable_ColumnInputInsideRangeMessage");
-            return false;
-        }
-
-        if (rowInputCell is { } rowInput && columnInputCell is { } columnInput && rowInput == columnInput)
-        {
-            error = UiText.Get("DataTable_SameInputCellMessage");
-            return false;
-        }
-
-        var mode = hasRowInput && hasColumnInput ? DataTableMode.TwoVariable : DataTableMode.OneVariable;
-        var orientation = hasRowInput && !hasColumnInput
-            ? DataTableInputOrientation.Row
-            : DataTableInputOrientation.Column;
-        var formulaCell = DataTableInputParser.GetDefaultFormulaCell(range, orientation, mode == DataTableMode.TwoVariable);
-
-        result = new DataTableDialogResult(mode, orientation, formulaCell, rowInputCell, columnInputCell);
-        return true;
-    }
-
-    private static bool TryParseOptionalCell(
-        SheetId sheetId,
-        string? text,
-        bool shouldParse,
-        out CellAddress? address)
-    {
-        address = null;
-        if (!shouldParse)
-            return true;
-
-        if (!DataTableInputParser.TryParseCell(text!, sheetId, out var parsed))
-            return false;
-
-        address = parsed;
-        return true;
-    }
+        out string? error) =>
+        DataTableInputParser.TryParse(
+            currentSheetId,
+            range,
+            rowInputCellText,
+            columnInputCellText,
+            out result,
+            out error);
 
     public static DataTableRangeSelectionRequest CreateRangeSelectionRequest(
         DataTableRangeSelectionTarget target,
