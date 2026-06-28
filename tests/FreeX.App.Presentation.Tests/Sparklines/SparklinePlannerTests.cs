@@ -10,10 +10,53 @@ public sealed class SparklinePlannerTests
     private static readonly SheetId Sheet = SheetId.New();
 
     [Fact]
+    public void SparklineDialogPlanning_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var hostDialogPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "SparklineDialog.cs");
+
+        File.Exists(Path.Combine(presentationRoot, "SparklineUI", "SparklinePlanner.cs"))
+            .Should()
+            .BeTrue("sparkline dialog result and validation planning should be shared by renderers");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "SparklineDialogPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared SparklinePlanner instead of carrying a renderer-local facade");
+        File.ReadAllText(hostDialogPath)
+            .Should()
+            .Contain("SparklinePlanner.CreateDialogResult")
+            .And
+            .Contain("SparklinePlanner.CreateRangeSelectionRequest")
+            .And
+            .Contain("SparklinePlanner.ValidateDialogInputs")
+            .And
+            .NotContain("public sealed record SparklineDialogResult")
+            .And
+            .NotContain("public enum SparklineRangeSelectionTarget");
+    }
+
+    [Fact]
     public void Catalog_ExposesAllKindsAndToggles()
     {
         SparklinePlanner.Kinds.Should().Equal(SparklineKind.Line, SparklineKind.Column, SparklineKind.WinLoss);
         SparklinePlanner.PointToggles.Should().HaveCount(Enum.GetValues<SparklinePointToggle>().Length);
+    }
+
+    [Fact]
+    public void CreateDialogResult_TrimsRangeAndLocation()
+    {
+        SparklinePlanner.CreateDialogResult(" A1:E1 ", " F1 ", SparklineKind.Column)
+            .Should()
+            .Be(new SparklineDialogResult("A1:E1", "F1", SparklineKind.Column));
+    }
+
+    [Fact]
+    public void CreateRangeSelectionRequest_TrimsCurrentTextAndRequestsCollapse()
+    {
+        SparklinePlanner.CreateRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, " A1:E1 ")
+            .Should()
+            .Be(new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, "A1:E1", CollapseDialog: true));
     }
 
     [Theory]
@@ -46,6 +89,19 @@ public sealed class SparklinePlannerTests
 
         SparklinePlanner.ValidateInsert("A1:E1", "not-a-cell", Sheet, out _, out _)
             .Should().Be(SparklineInputValidation.InvalidLocation);
+    }
+
+    [Fact]
+    public void ValidateDialogInputs_UsesSharedInsertParser()
+    {
+        SparklinePlanner.ValidateDialogInputs("A1:E1", "F1", Sheet)
+            .Should().Be(SparklineInputValidation.Valid);
+        SparklinePlanner.ValidateDialogInputs("A1:E1", "F1:G1", Sheet)
+            .Should().Be(SparklineInputValidation.InvalidLocation);
+        SparklinePlanner.ValidateDialogInputs("A1", "F1", Sheet)
+            .Should().Be(SparklineInputValidation.InvalidDataRange);
+        SparklinePlanner.ValidateDialogInputs("A1:A4097", "F1", Sheet)
+            .Should().Be(SparklineInputValidation.InvalidDataRange);
     }
 
     [Theory]

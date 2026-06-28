@@ -2,6 +2,17 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
 
+public enum ScenarioManagerAction
+{
+    Add,
+    Edit,
+    Save,
+    Show,
+    Delete,
+    List,
+    Report
+}
+
 public enum ScenarioManagerOperation
 {
     OpenManager,
@@ -56,6 +67,53 @@ public sealed record ScenarioManagerPlan(
 
 public static class ScenarioManagerPlanner
 {
+    public static ScenarioManagerAction GetDefaultAction(int scenarioCount) =>
+        scenarioCount == 0 ? ScenarioManagerAction.Save : ScenarioManagerAction.Show;
+
+    public static bool TryParseAction(string? input, out ScenarioManagerAction action)
+    {
+        switch ((input ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "save":
+                action = ScenarioManagerAction.Save;
+                return true;
+            case "add":
+                action = ScenarioManagerAction.Add;
+                return true;
+            case "edit":
+                action = ScenarioManagerAction.Edit;
+                return true;
+            case "show":
+            case "apply":
+                action = ScenarioManagerAction.Show;
+                return true;
+            case "delete":
+            case "remove":
+                action = ScenarioManagerAction.Delete;
+                return true;
+            case "list":
+            case "manager":
+                action = ScenarioManagerAction.List;
+                return true;
+            case "report":
+            case "summary":
+                action = ScenarioManagerAction.Report;
+                return true;
+            default:
+                action = default;
+                return false;
+        }
+    }
+
+    public static string GetDefaultScenarioName(int scenarioCount) =>
+        $"Scenario {scenarioCount + 1}";
+
+    public static string FormatSavedMessage(string name, int changingCellCount) =>
+        $"Scenario '{NormalizeName(name)}' saved for {changingCellCount} changing cell(s).";
+
+    public static string FormatScenarioList(IEnumerable<WorkbookScenario> scenarios) =>
+        string.Join(Environment.NewLine, scenarios.Select(s => $"{s.Name}: {s.ChangingCells.Count} changing cell(s)"));
+
     public static ScenarioManagerPlan CreateDialogPlan(
         Workbook? workbook,
         string? selectedScenarioName = null)
