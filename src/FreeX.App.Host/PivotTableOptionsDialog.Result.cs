@@ -1,48 +1,12 @@
 using FreeX.Core.Model;
+using FreeX.App.Presentation.PivotUI;
 
 namespace FreeX.App.Host;
 
 public sealed partial class PivotTableOptionsDialog
 {
     public static PivotTableOptionsDialogResult FromPivotTable(PivotTableModel pivotTable, PivotCacheModel? cache = null) =>
-        CreateResult(
-            pivotTable.ShowRowGrandTotals,
-            pivotTable.ShowColumnGrandTotals,
-            pivotTable.ShowSubtotals,
-            pivotTable.SubtotalPlacement,
-            pivotTable.RepeatItemLabels,
-            pivotTable.BlankLineAfterItems,
-            pivotTable.StyleName,
-            pivotTable.ShowRowHeaders,
-            pivotTable.ShowColumnHeaders,
-            pivotTable.ShowRowStripes,
-            pivotTable.ShowColumnStripes,
-            pivotTable.ReportLayout,
-            pivotTable.EmptyValueText,
-            refreshOnOpen: cache?.RefreshOnLoad ?? false,
-            saveSourceData: cache?.SaveData ?? true,
-            enableRefresh: cache?.EnableRefresh ?? true,
-            preserveSourceSortFilter: cache?.PreserveSourceSortFilter ?? true,
-            missingItemsLimit: cache?.MissingItemsLimit,
-            printTitles: pivotTable.PrintTitles,
-            printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
-            altTextTitle: pivotTable.AltTextTitle,
-            altTextDescription: pivotTable.AltTextDescription,
-            compactRowLabelIndent: pivotTable.CompactRowLabelIndent,
-            showExpandCollapseButtons: pivotTable.ShowExpandCollapseButtons,
-            autofitColumnsOnUpdate: pivotTable.AutofitColumnsOnUpdate,
-            preserveFormattingOnUpdate: pivotTable.PreserveFormattingOnUpdate,
-            showFieldHeaders: pivotTable.ShowFieldHeaders,
-            showContextualTooltips: pivotTable.ShowContextualTooltips,
-            showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips,
-            showClassicLayout: pivotTable.ShowClassicLayout,
-            mergeAndCenterLabels: pivotTable.MergeAndCenterLabels,
-            showItemsWithNoDataOnRows: pivotTable.ShowItemsWithNoDataOnRows,
-            showItemsWithNoDataOnColumns: pivotTable.ShowItemsWithNoDataOnColumns,
-            pageOverThenDown: pivotTable.PageOverThenDown,
-            pageWrap: pivotTable.PageWrap,
-            errorValueText: pivotTable.ErrorCaption,
-            enableDrill: pivotTable.EnableDrill);
+        FromShared(PivotOptionsPlanner.CaptureDialogValues(pivotTable, cache));
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -82,30 +46,30 @@ public sealed partial class PivotTableOptionsDialog
         int pageWrap = 0,
         string? errorValueText = null,
         bool enableDrill = true) =>
-        new(
+        FromShared(PivotOptionsPlanner.CreateDialogValues(
             showRowGrandTotals,
             showColumnGrandTotals,
             showSubtotals,
             subtotalPlacement,
             repeatItemLabels,
             blankLineAfterItems,
-            PivotStyleCatalog.NormalizeStyleName(styleName),
+            styleName,
             showRowHeaders,
             showColumnHeaders,
             showRowStripes,
             showColumnStripes,
             reportLayout,
-            NormalizeEmptyValueText(emptyValueText),
+            emptyValueText,
             refreshOnOpen,
             saveSourceData,
             enableRefresh,
             preserveSourceSortFilter,
-            NormalizeMissingItemsLimit(missingItemsLimit),
+            missingItemsLimit,
             printTitles,
             printExpandCollapseButtons,
-            NormalizeOptionalText(altTextTitle),
-            NormalizeOptionalText(altTextDescription),
-            NormalizeCompactRowLabelIndent(compactRowLabelIndent),
+            altTextTitle,
+            altTextDescription,
+            compactRowLabelIndent,
             showExpandCollapseButtons,
             autofitColumnsOnUpdate,
             preserveFormattingOnUpdate,
@@ -117,20 +81,49 @@ public sealed partial class PivotTableOptionsDialog
             showItemsWithNoDataOnRows,
             showItemsWithNoDataOnColumns,
             pageOverThenDown,
-            NormalizePageWrap(pageWrap),
-            NormalizeErrorValueText(errorValueText),
-            enableDrill);
+            pageWrap,
+            errorValueText,
+            enableDrill));
 
-    private static string? NormalizeEmptyValueText(string? text) => NormalizeOptionalText(text);
-
-    private static string? NormalizeErrorValueText(string? text) => NormalizeOptionalText(text);
-
-    private static int ParseCompactRowLabelIndent(string? text) =>
-        int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value)
-            ? NormalizeCompactRowLabelIndent(value)
-            : 1;
-
-    private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
+    private static PivotTableOptionsDialogResult FromShared(PivotOptionsDialogValues values) =>
+        new(
+            values.ShowRowGrandTotals,
+            values.ShowColumnGrandTotals,
+            values.ShowSubtotals,
+            values.SubtotalPlacement,
+            values.RepeatItemLabels,
+            values.BlankLineAfterItems,
+            values.StyleName,
+            values.ShowRowHeaders,
+            values.ShowColumnHeaders,
+            values.ShowRowStripes,
+            values.ShowColumnStripes,
+            values.ReportLayout,
+            values.EmptyValueText,
+            values.RefreshOnOpen,
+            values.SaveSourceData,
+            values.EnableRefresh,
+            values.PreserveSourceSortFilter,
+            values.MissingItemsLimit,
+            values.PrintTitles,
+            values.PrintExpandCollapseButtons,
+            values.AltTextTitle,
+            values.AltTextDescription,
+            values.CompactRowLabelIndent,
+            values.ShowExpandCollapseButtons,
+            values.AutofitColumnsOnUpdate,
+            values.PreserveFormattingOnUpdate,
+            values.ShowFieldHeaders,
+            values.ShowContextualTooltips,
+            values.ShowPropertiesInTooltips,
+            values.ShowClassicLayout,
+            values.MergeAndCenterLabels,
+            values.ShowItemsWithNoDataOnRows,
+            values.ShowItemsWithNoDataOnColumns,
+            values.PageOverThenDown,
+            values.PageWrap,
+            values.ErrorValueText,
+            values.EnableDrill);
 
     private const string PageFieldLayoutDownThenOver = "Down, then over";
     private const string PageFieldLayoutOverThenDown = "Over, then down";
@@ -139,29 +132,13 @@ public sealed partial class PivotTableOptionsDialog
     private static bool PageFieldLayoutForLabel(string? label) =>
         string.Equals(label, PageFieldLayoutOverThenDown, StringComparison.OrdinalIgnoreCase);
 
-    private static int ParsePageWrap(string? text) =>
-        int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value)
-            ? NormalizePageWrap(value)
-            : 0;
-
-    private static int NormalizePageWrap(int pageWrap) => Math.Clamp(pageWrap, 0, 255);
-
-    private const int MaximumMissingItemsLimit = 1_048_576;
     private const string MissingItemsAutomatic = "Automatic";
     private const string MissingItemsNone = "None";
     private const string MissingItemsMaximum = "Maximum";
     private static readonly string[] MissingItemsLimitLabels = [MissingItemsAutomatic, MissingItemsNone, MissingItemsMaximum];
 
-    private static int? NormalizeMissingItemsLimit(int? value) =>
-        value switch
-        {
-            null => null,
-            <= 0 => 0,
-            _ => MaximumMissingItemsLimit
-        };
-
     private static string LabelForMissingItemsLimit(int? value) =>
-        value switch
+        PivotOptionsPlanner.NormalizeMissingItemsLimit(value) switch
         {
             null => MissingItemsAutomatic,
             <= 0 => MissingItemsNone,
@@ -172,14 +149,6 @@ public sealed partial class PivotTableOptionsDialog
         string.Equals(label, MissingItemsNone, StringComparison.OrdinalIgnoreCase)
             ? 0
             : string.Equals(label, MissingItemsMaximum, StringComparison.OrdinalIgnoreCase)
-                ? MaximumMissingItemsLimit
+                ? PivotOptionsPlanner.MaxMissingItemsLimit
                 : null;
-
-    private static string? NormalizeOptionalText(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-
-        return text.Trim();
-    }
 }

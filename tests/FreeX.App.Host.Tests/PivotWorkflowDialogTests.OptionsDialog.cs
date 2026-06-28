@@ -198,6 +198,24 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableOptionsDialogResult_DelegatesNormalizationToSharedPlanner()
+    {
+        var resultSource = DialogSourceTestSupport.ReadHostSources("PivotTableOptionsDialog.Result.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("PivotTableOptionsDialog.cs");
+
+        resultSource.Should().Contain("PivotOptionsPlanner.CaptureDialogValues(pivotTable, cache)");
+        resultSource.Should().Contain("PivotOptionsPlanner.CreateDialogValues(");
+        resultSource.Should().Contain("private static PivotTableOptionsDialogResult FromShared(PivotOptionsDialogValues values)");
+        resultSource.Should().NotContain("private static string? NormalizeOptionalText");
+        resultSource.Should().NotContain("NormalizeCompactRowLabelIndent(int indent)");
+
+        dialogSource.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(result.StyleName)");
+        dialogSource.Should().Contain("PivotStyleGalleryPlanner.FindStyleIndex(styleNames, result.StyleName)");
+        dialogSource.Should().Contain("PivotOptionsPlanner.TryParseCompactRowLabelIndent(_compactIndentBox.Text");
+        dialogSource.Should().Contain("PivotOptionsPlanner.TryParsePageWrap(_pageWrapBox.Text");
+    }
+
+    [Fact]
     public void PivotTableOptionsDialog_FromPivotTable_UsesCurrentPivotSettings()
     {
         var sheetId = new SheetId(Guid.NewGuid());

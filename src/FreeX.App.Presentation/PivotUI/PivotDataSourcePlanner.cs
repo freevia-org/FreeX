@@ -50,6 +50,10 @@ public static class PivotDataSourcePlanner
         return FormatSourceRange(pivotTable.SourceRange);
     }
 
+    /// <summary>Normalizes reference text collected from a dialog or range-selection request.</summary>
+    public static string NormalizeReferenceText(string? referenceText) =>
+        referenceText?.Trim() ?? string.Empty;
+
     /// <summary>
     /// Validates the dialog's reference text and resolves it through <paramref name="resolve"/>. On success
     /// returns the change with the resolved range and trimmed text; on failure reports a user-facing message.
@@ -64,7 +68,7 @@ public static class PivotDataSourcePlanner
         change = null;
         error = null;
 
-        var trimmed = referenceText?.Trim() ?? string.Empty;
+        var trimmed = NormalizeReferenceText(referenceText);
         if (trimmed.Length == 0)
         {
             error = EmptyReferenceMessage;
