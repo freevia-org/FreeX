@@ -28,6 +28,9 @@ public sealed class StatusBarViewModelCache
         _textProvider = textProvider;
     }
 
+    public StatusBarViewModel GetReady(StatusBarViewMode viewMode, int zoomPercent) =>
+        GetReady(viewMode, zoomPercent, _textProvider.GetReadyText());
+
     public StatusBarViewModel GetReady(StatusBarViewMode viewMode, int zoomPercent, string text)
     {
         RefreshCultureState();

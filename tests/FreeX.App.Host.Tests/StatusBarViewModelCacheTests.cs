@@ -41,6 +41,17 @@ public sealed class StatusBarViewModelCacheTests
     }
 
     [Fact]
+    public void GetReady_UsesProviderReadyTextWhenNoOverrideIsSupplied()
+    {
+        var cache = new StatusBarViewModelCache(new ResourceKeyStatusBarTextProvider(
+            key => key == StatusBarTextResourceKeys.ReadyText ? "Shared Ready" : key));
+
+        var state = cache.GetReady(StatusBarViewMode.Normal, zoomPercent: 0);
+
+        state.ReadyText.Should().Be("Shared Ready");
+    }
+
+    [Fact]
     public void Clear_DropsCachedModels()
     {
         var cache = CreateCache();

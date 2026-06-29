@@ -33,8 +33,7 @@ public partial class MainWindow
         {
             ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
                 viewMode,
-                zoomPercent: 0,
-                UiText.Get("MainWindow_Text_Ready")));
+                zoomPercent: 0));
             return;
         }
 
@@ -140,8 +139,7 @@ public partial class MainWindow
         var state = _lastStatusBarDisplayState ??
             _statusBarDisplayStateCache.GetReady(
                 GetCurrentStatusBarViewMode(),
-                zoomPercent: 0,
-                UiText.Get("MainWindow_Text_Ready"));
+                zoomPercent: 0);
         ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);
     }
 

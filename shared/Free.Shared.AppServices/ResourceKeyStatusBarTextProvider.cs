@@ -10,6 +10,9 @@ public sealed class ResourceKeyStatusBarTextProvider : IStatusBarTextProvider
         _getText = getText;
     }
 
+    public string GetReadyText() =>
+        _getText(StatusBarTextResourceKeys.ReadyText);
+
     public string GetReadoutFormat(StatusBarReadoutKind kind) =>
         _getText(StatusBarTextResourceKeys.ReadoutFormat(kind));
 
