@@ -1,6 +1,6 @@
-namespace FreeX.App.Host;
+namespace FreeX.Ribbon.Definitions;
 
-internal static class RibbonAdaptiveLayoutEngine
+public static class RibbonAdaptiveLayoutEngine
 {
     private const double ResizeThresholdProbeDelta = 0.5;
 
@@ -56,7 +56,7 @@ internal static class RibbonAdaptiveLayoutEngine
         string? selectedTabHeader = null)
     {
         var thresholds = new SortedSet<double>(RibbonAdaptiveTabProfiles.GetBreakpointThresholds(groupProfileKeys, selectedTabHeader));
-        foreach (var threshold in RibbonCollapsedGroupPresentationPlanner.BreakpointThresholds)
+        foreach (var threshold in Free.Shared.Ribbon.RibbonCollapsedGroupBreakpoints.Thresholds)
             thresholds.Add(threshold);
 
         foreach (var width in EnumerateThresholdCandidates(groups, fixedChromeWidth))
@@ -92,8 +92,8 @@ internal static class RibbonAdaptiveLayoutEngine
         var belowThreshold = Math.Max(0, threshold - ResizeThresholdProbeDelta);
         var aboveThreshold = threshold + ResizeThresholdProbeDelta;
         if (!string.Equals(
-                RibbonCollapsedGroupPresentationPlanner.GetCacheKey(belowThreshold),
-                RibbonCollapsedGroupPresentationPlanner.GetCacheKey(aboveThreshold),
+                Free.Shared.Ribbon.RibbonCollapsedGroupBreakpoints.GetCacheKey(belowThreshold),
+                Free.Shared.Ribbon.RibbonCollapsedGroupBreakpoints.GetCacheKey(aboveThreshold),
                 StringComparison.Ordinal))
         {
             return true;
@@ -580,7 +580,7 @@ internal static class RibbonAdaptiveLayoutEngine
             RibbonAdaptiveGroupState.Full => group.FullWidth,
             RibbonAdaptiveGroupState.SmallWithLabels => group.SmallWithLabelsWidth,
             RibbonAdaptiveGroupState.IconOnly => group.IconOnlyWidth,
-            RibbonAdaptiveGroupState.Collapsed => RibbonCollapsedGroupPresentationPlanner.GetPlannedWidth(group.CollapsedWidth, availableWidth),
+            RibbonAdaptiveGroupState.Collapsed => Free.Shared.Ribbon.RibbonCollapsedGroupBreakpoints.GetPlannedWidth(group.CollapsedWidth, availableWidth),
             _ => group.FullWidth
         };
 
@@ -626,7 +626,7 @@ internal static class RibbonAdaptiveLayoutEngine
     }
 }
 
-internal readonly record struct RibbonAdaptiveLayoutResult(
+public readonly record struct RibbonAdaptiveLayoutResult(
     IReadOnlyList<RibbonAdaptiveGroupState> States,
     double PlannedWidth,
     bool RequiresMeasuredCorrection);
