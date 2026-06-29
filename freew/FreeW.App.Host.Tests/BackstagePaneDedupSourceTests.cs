@@ -33,8 +33,9 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
         source.Should().Contain("Panes.BuildOptionsPane(");
         source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
-        source.Should().Contain("SisterBackstageAccountPanePlanner.Build(");
+        source.Should().Contain("PaneSpecs.BuildAccountPaneSpec(");
         source.Should().Contain("Panes.BuildAccountPane(");
+        source.Should().Contain("PaneSpecs.BuildExportPaneSpec(");
 
         if (appFolder == "freew")
         {
@@ -95,12 +96,19 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("new BackstageRecentPaneSpec(");
         source.Should().NotContain("new BackstageTemplatePaneSpec(");
         source.Should().NotContain("new BackstageInfoPaneSpec(");
+        source.Should().NotContain("new BackstageAccountPaneSpec(");
+        source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
         source.Should().NotContain("Color.FromRgb(");
         source.Should().NotContain("BackstageAccent(");
         source.Should().NotContain("No recent documents.");
         source.Should().NotContain("No recent presentations.");
         source.Should().NotContain("Blank document");
         source.Should().NotContain("Blank presentation");
+        source.Should().NotContain("Create PDF/XPS Document");
+        source.Should().NotContain("Create PDF Copy");
+        source.Should().NotContain("Create PDF or XPS");
+        source.Should().NotContain("Export to PDF...");
+        source.Should().NotContain("Publish a fixed-layout copy");
         source.Should().NotContain("new(\"Recent files kept\"");
         source.Should().NotContain("new(\"Default save format\"");
         source.Should().NotContain("new(\"UI language\"");

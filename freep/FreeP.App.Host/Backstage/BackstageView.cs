@@ -69,16 +69,8 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildExportPane()
     {
-        return Panes.BuildActionPane(new BackstageActionPaneSpec(
-            Heading: "Export",
-            Description: "Create a PDF copy of this presentation - one page per slide, with selectable text.",
-            Groups:
-            [
-                new("Create PDF Copy",
-                [
-                    new("Export to PDF...", "Publish a fixed-layout copy for sharing or presenting.", _backstage.HideThen(_actions.ExportPdf)),
-                ]),
-            ]));
+        return Panes.BuildActionPane(PaneSpecs.BuildExportPaneSpec(
+            _backstage.HideThen(_actions.ExportPdf)));
     }
 
     private UIElement BuildInfoPane()
@@ -126,19 +118,13 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildAccountPane()
     {
-        var plan = SisterBackstageAccountPanePlanner.Build(
+        return Panes.BuildAccountPane(PaneSpecs.BuildAccountPaneSpec(
             new SisterBackstageAccountPaneContext(
                 AppProduct.Current.ProductName,
                 EntryAssemblyVersion.Resolve(),
                 Environment.UserName,
                 Environment.MachineName,
-                _actions.DataFolder()));
-
-        return Panes.BuildAccountPane(new BackstageAccountPaneSpec(
-            "Account",
-            plan.Description,
-            plan.Groups,
-            plan.OptionsText,
+                _actions.DataFolder()),
             _backstage.ShowPane("Options")));
     }
 }
