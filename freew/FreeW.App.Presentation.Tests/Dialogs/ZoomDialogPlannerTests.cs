@@ -94,4 +94,12 @@ public sealed class ZoomDialogPlannerTests
 
         error.Should().Be(ZoomDialogValidationError.WholePercentRequired);
     }
+
+    [Fact]
+    public void ValidationMessageFor_ReturnsWordZoomCustomPercentMessage()
+    {
+        ZoomDialogPlanner.ValidationMessageFor(ZoomDialogValidationError.WholePercentRequired)
+            .Should()
+            .Be("Enter a whole zoom percentage.");
+    }
 }
