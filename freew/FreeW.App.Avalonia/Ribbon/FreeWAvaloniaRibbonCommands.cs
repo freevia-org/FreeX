@@ -563,9 +563,8 @@ internal static class FreeWAvaloniaRibbonCommands
     ///
     /// <para>
     /// Every command safely no-ops when no float is selected (the DocumentView methods guard on
-    /// <c>SelectedFloatingInfo</c>). Wrap, rotate/flip, z-order and size are wired through; shape
-    /// fill/outline editing is <b>deferred</b> (no DocumentView setter exists yet) and registered as
-    /// no-op openers so the registry-completeness guard continues to pass.
+    /// <c>SelectedFloatingInfo</c>). Wrap, rotate/flip, z-order, size, and shape/text-box fill/outline
+    /// commands are all generated from the shared object-format planner.
     /// </para>
     /// </summary>
     private static void RegisterFloatingFormatCommands(RibbonCommandRegistry r, DocumentView editor)
@@ -604,10 +603,78 @@ internal static class FreeWAvaloniaRibbonCommands
             }
         }
 
-        // Shape Styles fill/outline — DEFERRED: no DocumentView setter for shape fill/outline yet.
-        // Registered as safe no-op openers so the ribbon's registry-completeness guard passes.
-        r.Register("freew.shape-fill",    new ActionRibbonCommand(() => { /* deferred: shape fill edit */ }));
-        r.Register("freew.shape-outline", new ActionRibbonCommand(() => { /* deferred: shape outline edit */ }));
+        // Shape Styles fill/outline: top-level opener ids plus menu item commands.
+        RegisterShapeFillOutlineCommands(r, editor);
+    }
+
+    private static void RegisterShapeFillOutlineCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        r.Register(
+            ObjectFormatCommandPlanner.ShapeFillCommandId,
+            new ShapeStyleCommand(editor, () => { /* opener command */ }));
+        foreach (var command in ObjectFormatCommandPlanner.ShapeFillCommands())
+            r.Register(command.CommandId, new ShapeFillCommand(editor, command));
+
+        r.Register(
+            ObjectFormatCommandPlanner.ShapeOutlineCommandId,
+            new ShapeStyleCommand(editor, () => { /* opener command */ }));
+        foreach (var command in ObjectFormatCommandPlanner.ShapeOutlineCommands())
+            r.Register(command.CommandId, new ShapeOutlineCommand(editor, command));
+    }
+
+    private sealed class ShapeStyleCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (IsEnabled())
+                execute();
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
+
+        private bool IsEnabled() =>
+            ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind);
+    }
+
+    private sealed class ShapeFillCommand(DocumentView editor, ObjectFormatShapeFillCommand command) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind))
+                return;
+
+            if (command.Kind == ObjectFormatShapeFillKind.NoFill)
+            {
+                editor.SetSelectedShapeExtendedFill(null);
+                editor.SetSelectedShapeFill(null);
+            }
+            else if (ObjectFormatCommandPlanner.UsesExtendedShapeFill(command.Kind))
+            {
+                editor.SetSelectedShapeExtendedFill(ObjectFormatCommandPlanner.BuildShapeExtendedFill(command.Kind));
+            }
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind));
+    }
+
+    private sealed class ShapeOutlineCommand(DocumentView editor, ObjectFormatShapeOutlineCommand command) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var shape = editor.SelectedFloatingShape();
+            if (!ObjectFormatCommandPlanner.CanFormatShapeFillOutline(shape?.Kind) || shape is null)
+                return;
+
+            var plan = ObjectFormatCommandPlanner.PlanShapeOutline(
+                command.Kind,
+                shape.OutlineColorHex,
+                shape.OutlineWidthPt);
+            editor.SetSelectedShapeOutline(plan.ColorHex, plan.WidthPt, plan.Dash);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind));
     }
 
     private static void ExecuteFloatingTransform(DocumentView editor, ObjectFormatTransformCommand command)
