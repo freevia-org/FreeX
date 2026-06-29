@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using System.Windows;
 using Free.Shared.AppServices;
-using Free.Shared.IO;
+using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.Core.IO;
 
@@ -105,19 +104,19 @@ public sealed class FileLifecycleTests : IDisposable
     [StaFact]
     public void DialogPlans_DefaultToPptxAndKeepLegacyFxpFilters()
     {
-        var openPlan = GetOpenDialogPlan();
+        var openPlan = PresentationFileDialogPlanner.BuildOpenDialogPlan();
         openPlan.Filter.Should().Be(
             "PowerPoint presentations (*.pptx)|*.pptx|FreeP legacy presentations (*.fxp)|*.fxp|All files (*.*)|*.*");
         openPlan.DefaultExtensionWithDot.Should().Be(".pptx");
 
-        var savePlan = BuildSaveAsDialogPlan(null);
+        var savePlan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(null);
         savePlan.SuggestedFileName.Should().Be("Presentation.pptx");
         savePlan.DefaultExtensionWithDot.Should().Be(".pptx");
         savePlan.DefaultExtensionWithoutDot.Should().Be("pptx");
         savePlan.FilterIndex.Should().Be(1);
         savePlan.Filter.Should().Be(openPlan.Filter);
 
-        var legacySourcePlan = BuildSaveAsDialogPlan("Legacy.fxp");
+        var legacySourcePlan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan("Legacy.fxp");
         legacySourcePlan.SuggestedFileName.Should().Be("Legacy.pptx");
         legacySourcePlan.FilterIndex.Should().Be(1);
     }
@@ -243,24 +242,6 @@ public sealed class FileLifecycleTests : IDisposable
         var presentation = Presentation.CreateEmpty();
         presentation.Properties.Title = title;
         return presentation;
-    }
-
-    private static FileOpenDialogPlan GetOpenDialogPlan()
-    {
-        var field = typeof(FileCommands).GetField(
-            "OpenDialogPlan",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        field.Should().NotBeNull();
-        return (FileOpenDialogPlan)field!.GetValue(null)!;
-    }
-
-    private static FileSaveDialogPlan BuildSaveAsDialogPlan(string? currentPath)
-    {
-        var method = typeof(FileCommands).GetMethod(
-            "BuildSaveAsDialogPlan",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-        return (FileSaveDialogPlan)method!.Invoke(null, [currentPath])!;
     }
 
     private sealed class RecordingUserMessageService : IUserMessageService

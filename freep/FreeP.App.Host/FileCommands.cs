@@ -3,6 +3,7 @@ using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell;
+using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
@@ -37,23 +38,8 @@ internal sealed class FileCommands
     private readonly FileCommandWorkflow _workflow;
     private readonly FreePOptions _options;
 
-    private const string PptxExtension = ".pptx";
-
-    // FreeP's native document format is .pptx. .fxp remains open/save compatible for legacy tests and files.
-    private static readonly IReadOnlyList<FileDialogFormatDescriptor> Formats =
-    [
-        new FileDialogFormatDescriptor(PptxExtension, "PowerPoint presentations"),
-        new FileDialogFormatDescriptor(FxpFormat.Extension, "FreeP legacy presentations"),
-    ];
-
-    // Export-only target: PDF is a fixed-layout publish format, not a FreeP document format.
-    private static readonly IReadOnlyList<FileDialogFormatDescriptor> PdfFormats =
-        [new FileDialogFormatDescriptor(".pdf", "PDF documents")];
-
     private static readonly FileOpenDialogPlan OpenDialogPlan =
-        FileDialogRequestPlanner.BuildPerFormatOpenDialogPlan(Formats);
-
-    private static string DefaultExtension => OpenDialogPlan.DefaultExtensionWithDot;
+        PresentationFileDialogPlanner.BuildOpenDialogPlan();
 
     public FileCommands(
         Window window,
@@ -124,7 +110,7 @@ internal sealed class FileCommands
     /// <summary>File &gt; Save As. Always prompts for a target.</summary>
     public bool SaveAs()
     {
-        var plan = BuildSaveAsDialogPlan(_workflow.CurrentPath);
+        var plan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(SourceFileName(_workflow.CurrentPath));
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         return result.Chosen && SaveTo(result.FileName!);
     }
@@ -135,9 +121,7 @@ internal sealed class FileCommands
     /// </summary>
     public bool ExportPdf()
     {
-        var sourceName = _workflow.CurrentPath is { } current ? Path.GetFileName(current) : null;
-        var plan = FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(
-            PdfFormats, sourceName, "Presentation", ".pdf");
+        var plan = PresentationFileDialogPlanner.BuildPdfExportDialogPlan(SourceFileName(_workflow.CurrentPath));
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         if (!result.Chosen)
             return false;
@@ -182,13 +166,13 @@ internal sealed class FileCommands
     }
 
     private static Presentation ReadPresentation(string path) =>
-        IsLegacyFxpPath(path)
+        PresentationFileDialogPlanner.IsLegacyPresentationPath(path)
             ? FxpFormat.Read(path)
             : PptxPackageReader.Read(path);
 
     private static byte[] SerializePresentation(string path, Presentation presentation)
     {
-        if (IsLegacyFxpPath(path))
+        if (PresentationFileDialogPlanner.IsLegacyPresentationPath(path))
         {
             var json = FxpFormat.Serialize(presentation);
             return new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
@@ -199,21 +183,14 @@ internal sealed class FileCommands
         return stream.ToArray();
     }
 
-    private static bool IsLegacyFxpPath(string path) =>
-        string.Equals(Path.GetExtension(path), FxpFormat.Extension, StringComparison.OrdinalIgnoreCase);
-
     private string? PromptOpenPath()
     {
         var result = WpfFileDialogService.ShowOpenDialog(_window, OpenDialogPlan);
         return result.Chosen ? result.FileName : null;
     }
 
-    private static FileSaveDialogPlan BuildSaveAsDialogPlan(string? currentPath) =>
-        FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(
-            Formats,
-            currentPath is null ? null : Path.GetFileName(currentPath),
-            "Presentation",
-            DefaultExtension);
+    private static string? SourceFileName(string? path) =>
+        path is null ? null : Path.GetFileName(path);
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
     private SaveChangesPrompt PromptSaveChanges(string action) =>
