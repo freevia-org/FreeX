@@ -99,6 +99,19 @@ public sealed class FreeWOptionsTests : IDisposable
     }
 
     [Theory]
+    [InlineData("  en-us  ", "en-US")]
+    [InlineData(" QPS-PLOC ", "qps-ploc")]
+    [InlineData("not-a-culture", "")]
+    public void Normalize_CanonicalizesUiLanguage(string input, string expected)
+    {
+        var options = new FreeWOptions { UiLanguage = input };
+
+        options.Normalize();
+
+        options.UiLanguage.Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("0", 0)]
     [InlineData("15", 15)]
     [InlineData("  7  ", 7)]

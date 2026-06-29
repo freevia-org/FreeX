@@ -3,6 +3,7 @@
     <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
     <Project Path="shared/Free.Shared.IO/Free.Shared.IO.csproj" />
+    <Project Path="shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
     <Project Path="shared/Free.Shared.Pdf/Free.Shared.Pdf.csproj" />
     <Project Path="shared/Free.Shared.Pdf.Skia/Free.Shared.Pdf.Skia.csproj" />
@@ -21,6 +22,8 @@
     <Project Path="freew/FreeW.Core.IO.Tests/FreeW.Core.IO.Tests.csproj" />
     <Project Path="freew/FreeW.App.Presentation/FreeW.App.Presentation.csproj" />
     <Project Path="freew/FreeW.App.Presentation.Tests/FreeW.App.Presentation.Tests.csproj" />
+    <Project Path="freew/FreeW.App.Localization/FreeW.App.Localization.csproj" />
+    <Project Path="freew/FreeW.App.Localization.Tests/FreeW.App.Localization.Tests.csproj" />
     <Project Path="freew/FreeW.Ribbon.Definitions/FreeW.Ribbon.Definitions.csproj" />
     <Project Path="freew/FreeW.Ribbon.Definitions.Tests/FreeW.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />

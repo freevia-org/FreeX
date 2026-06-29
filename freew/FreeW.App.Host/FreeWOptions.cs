@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using FreeW.App.Localization;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -55,7 +56,7 @@ public sealed class FreeWOptions : INormalizableApplicationOptions, IApplication
     {
         RecentFilesCap = ApplicationOptionsNormalizer.NormalizeRecentFilesCap(RecentFilesCap);
         DefaultSaveFormat = ApplicationOptionsNormalizer.NormalizeDefaultSaveFormat(DefaultSaveFormat, DocxDefaultFormat);
-        UiLanguage = ApplicationOptionsNormalizer.NormalizeUiLanguage(UiLanguage);
+        UiLanguage = AppLanguageCatalog.NormalizeCultureName(UiLanguage);
         AutoFormat ??= AutoFormatOptions.Default;
         AutoCorrect ??= AutoCorrectOptions.Default;
         AutoCorrect.Normalize();

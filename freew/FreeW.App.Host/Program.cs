@@ -35,13 +35,11 @@ public static class Program
                     : BrandThemes.FreeW;
                 ActiveTheme = theme;
                 WpfThemeApplier.Apply(Application.Current, theme, "FreeW");
+                AppLocalization.ApplyAppLanguage(options.UiLanguage);
+                AppLocalization.ApplyCurrentCultureToWpf();
                 return new MainWindow(options, optionsStore);
             })
         {
-            InstallSharedSeams = () =>
-            {
-                ShellStrings.Current = DefaultShellStrings.Instance;
-                BackstageStrings.Current = DefaultBackstageStrings.Instance;
-            }
+            InstallSharedSeams = AppLocalization.InstallSharedSeams
         });
 }
