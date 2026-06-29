@@ -573,10 +573,7 @@ public sealed partial class XlsxFileAdapter
             return;
 
         XDocument doc;
-        using (var entryStream = entry.Open())
-        {
-            doc = XDocument.Load(entryStream, LoadOptions.PreserveWhitespace);
-        }
+        doc = OpcXml.LoadXml(entry, LoadOptions.PreserveWhitespace);
 
         var root = doc.Root;
         if (root is null)

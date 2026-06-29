@@ -325,16 +325,11 @@ internal static class Ooxml
     /// extension is the lower-case file extension (no dot) produced by <c>InlineImage.ExtensionFor</c>.
     /// Defaults to <c>image/png</c> for an unrecognised extension (the historical behaviour).
     /// </summary>
-    public static string ImageContentTypeForExtension(string extension) => extension switch
-    {
-        "jpeg" or "jpg" => "image/jpeg",
-        "gif" => "image/gif",
-        "bmp" => "image/bmp",
-        "tiff" or "tif" => "image/tiff",
-        "emf" => "image/x-emf",
-        "wmf" => "image/x-wmf",
-        _ => "image/png"
-    };
+    public static string ImageContentTypeForExtension(string extension) =>
+        OpcMediaTypes.TryGetDefaultContentType(extension, out var contentType) &&
+        contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            ? contentType
+            : "image/png";
 
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
     public static string ToW3CDtf(DateTimeOffset value) => OpcPackageProperties.ToW3CDtf(value);

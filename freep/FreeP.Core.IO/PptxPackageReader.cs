@@ -1349,14 +1349,14 @@ public static class PptxPackageReader
     private static string GuessPreservedContentType(string path)
     {
         var ext = path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..].ToLowerInvariant() : "";
+        if (ext is "png" or "jpg" or "jpeg" or "gif" or "svg" or "wmf" or "emf" &&
+            OpcMediaTypes.TryGetDefaultContentType(ext, out var contentType))
+        {
+            return contentType;
+        }
+
         return ext switch
         {
-            "png"  => "image/png",
-            "jpg" or "jpeg" => "image/jpeg",
-            "gif"  => "image/gif",
-            "svg"  => "image/svg+xml",
-            "wmf"  => "image/x-wmf",
-            "emf"  => "image/x-emf",
             "glb" or "gltf" => "model/gltf-binary",
             "xml"  => "application/xml",
             _      => "application/octet-stream",
@@ -2198,19 +2198,16 @@ public static class PptxPackageReader
     private static string GuessMediaContentType(string path)
     {
         var ext = path.Split('.').Last().ToLowerInvariant();
-        return ext switch
+        if (ext == "m4v")
+            return "video/mp4";
+
+        if (ext is "mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma" &&
+            OpcMediaTypes.TryGetDefaultContentType(ext, out var contentType))
         {
-            "mp4"  => "video/mp4",
-            "m4v"  => "video/mp4",
-            "mov"  => "video/quicktime",
-            "avi"  => "video/x-msvideo",
-            "wmv"  => "video/x-ms-wmv",
-            "mp3"  => "audio/mpeg",
-            "m4a"  => "audio/mp4",
-            "wav"  => "audio/wav",
-            "wma"  => "audio/x-ms-wma",
-            _      => "video/mp4"
-        };
+            return contentType;
+        }
+
+        return "video/mp4";
     }
 
     // ── p:cxnSp ──────────────────────────────────────────────────────────────────
@@ -3813,17 +3810,13 @@ public static class PptxPackageReader
     private static string GuessContentType(string path)
     {
         var ext = path.Split('.').Last().ToLowerInvariant();
-        return ext switch
+        if (ext is "jpg" or "jpeg" or "gif" or "bmp" or "tif" or "tiff" or "svg" or "wmf" or "emf" &&
+            OpcMediaTypes.TryGetDefaultContentType(ext, out var contentType))
         {
-            "jpg" or "jpeg" => "image/jpeg",
-            "gif" => "image/gif",
-            "bmp" => "image/bmp",
-            "tif" or "tiff" => "image/tiff",
-            "svg" => "image/svg+xml",
-            "wmf" => "image/x-wmf",
-            "emf" => "image/x-emf",
-            _ => "image/png"
-        };
+            return contentType;
+        }
+
+        return "image/png";
     }
 
     // ── Value parsers ─────────────────────────────────────────────────────────────

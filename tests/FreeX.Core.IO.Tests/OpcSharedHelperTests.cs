@@ -44,6 +44,7 @@ public sealed class OpcSharedHelperTests
     [InlineData(".mp4", "video/mp4")]
     [InlineData("ogg", "audio/ogg")]
     [InlineData("aac", "audio/aac")]
+    [InlineData("tif", "image/tiff")]
     public void TryGetDefaultContentType_CoversSharedMediaDefaults(string extension, string expected)
     {
         OpcMediaTypes.TryGetDefaultContentType(extension, out var contentType).Should().BeTrue();
@@ -78,6 +79,20 @@ public sealed class OpcSharedHelperTests
         Action act = () => OpcXml.LoadXml(stream);
 
         act.Should().Throw<XmlException>();
+    }
+
+    [Fact]
+    public void LoadXml_WithLoadOptions_PreservesWhitespaceNodes()
+    {
+        using var stream = ToStream("""
+            <root>
+              <child />
+            </root>
+            """);
+
+        var document = OpcXml.LoadXml(stream, LoadOptions.PreserveWhitespace);
+
+        document.Root!.Nodes().OfType<XText>().Should().NotBeEmpty();
     }
 
     [Fact]

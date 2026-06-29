@@ -39,8 +39,7 @@ internal static class XlsxWorksheetCommentVisibilityReader
             XDocument relsXml;
             try
             {
-                using var relsStream = relsEntry.Open();
-                relsXml = XDocument.Load(relsStream);
+                relsXml = OpcXml.LoadXml(relsEntry);
             }
             catch
             {
@@ -71,8 +70,7 @@ internal static class XlsxWorksheetCommentVisibilityReader
             XDocument vml;
             try
             {
-                using var vmlStream = vmlEntry.Open();
-                vml = XDocument.Load(vmlStream);
+                vml = OpcXml.LoadXml(vmlEntry);
             }
             catch
             {

@@ -20,6 +20,7 @@ public static class OpcMediaTypes
             ["jpeg"] = "image/jpeg",
             ["gif"] = "image/gif",
             ["bmp"] = "image/bmp",
+            ["tif"] = "image/tiff",
             ["tiff"] = "image/tiff",
             ["svg"] = "image/svg+xml",
             ["wmf"] = "image/x-wmf",
