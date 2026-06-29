@@ -209,6 +209,8 @@ public sealed partial class MainWindow
             _session.Workbook,
             hasSelection,
             WorkbookExportPrintSurface.MacOs);
+        var exportPane = FreeXBackstageExportPanePlanner.Build(
+            CreateBackstageExportPaneRequest(scopePlan));
 
         var dialog = new Window
         {
@@ -226,9 +228,9 @@ public sealed partial class MainWindow
         var selectedFormat = scopePlan.DefaultOutputKind;
         var content = AvaloniaBackstageChrome.CreatePane(
             BuildBackstageExportPaneSpec(
-                scopePlan,
-                scope => selectedScope = scope,
-                outputKind => selectedFormat = outputKind),
+                exportPane,
+                scope => selectedScope = ToWorkbookExportScope(scope),
+                outputKind => selectedFormat = ToWorkbookExportOutputKind(outputKind)),
             BackstageChromeStyle);
 
         var exportButton = new Button
@@ -276,47 +278,73 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private static AvaloniaBackstagePaneSpec BuildBackstageExportPaneSpec(
-        WorkbookExportScopePlan scopePlan,
-        Action<WorkbookExportPrintScope> selectScope,
-        Action<WorkbookExportPrintOutputKind> selectOutputKind)
+    private static FreeXBackstageExportPaneRequest CreateBackstageExportPaneRequest(
+        WorkbookExportScopePlan scopePlan)
     {
-        var elements = new List<AvaloniaBackstagePaneElementSpec>();
-        if (!scopePlan.CanExport)
+        var scopeOptions = new List<FreeXBackstageExportScopeOptionRequest>(scopePlan.Scopes.Count);
+        foreach (var option in scopePlan.Scopes)
         {
-            elements.Add(new AvaloniaBackstageNoteElementSpec(
-                UiText.Get("Backstage_Export_Unavailable"),
-                "BackstageExportUnavailable"));
+            scopeOptions.Add(new FreeXBackstageExportScopeOptionRequest(
+                ToBackstageExportScopeId(option.Scope),
+                option.IsAvailable,
+                option.IsDefault));
         }
 
-        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get("Backstage_Export_ScopeHeader")));
-        elements.Add(new AvaloniaBackstageRadioGroupElementSpec(
-            "BackstageExportScope",
-            BuildBackstageExportScopeOptions(scopePlan, selectScope)));
+        var outputKindOptions = new List<FreeXBackstageExportOutputKindOptionRequest>(
+            scopePlan.SupportedOutputKinds.Count);
+        foreach (var outputKind in scopePlan.SupportedOutputKinds)
+        {
+            outputKindOptions.Add(new FreeXBackstageExportOutputKindOptionRequest(
+                ToBackstageExportOutputKindId(outputKind),
+                outputKind == scopePlan.DefaultOutputKind));
+        }
 
-        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get("Backstage_Export_FormatHeader")));
+        return new FreeXBackstageExportPaneRequest(
+            scopeOptions,
+            outputKindOptions,
+            scopePlan.CanExport);
+    }
+
+    private static AvaloniaBackstagePaneSpec BuildBackstageExportPaneSpec(
+        FreeXBackstageExportPanePlan panePlan,
+        Action<FreeXBackstageExportScopeId> selectScope,
+        Action<FreeXBackstageExportOutputKindId> selectOutputKind)
+    {
+        var elements = new List<AvaloniaBackstagePaneElementSpec>();
+        if (panePlan.ShowUnavailableNote)
+        {
+            elements.Add(new AvaloniaBackstageNoteElementSpec(
+                UiText.Get(panePlan.UnavailableNoteKey),
+                panePlan.UnavailableAutomationId));
+        }
+
+        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(panePlan.ScopeHeaderKey)));
         elements.Add(new AvaloniaBackstageRadioGroupElementSpec(
-            "BackstageExportFormat",
-            BuildBackstageExportFormatOptions(scopePlan, selectOutputKind)));
+            panePlan.ScopeGroupAutomationId,
+            BuildBackstageExportScopeOptions(panePlan.ScopeOptions, selectScope)));
+
+        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(panePlan.FormatHeaderKey)));
+        elements.Add(new AvaloniaBackstageRadioGroupElementSpec(
+            panePlan.FormatGroupAutomationId,
+            BuildBackstageExportFormatOptions(panePlan.OutputKindOptions, selectOutputKind)));
 
         return new AvaloniaBackstagePaneSpec(elements);
     }
 
     private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportScopeOptions(
-        WorkbookExportScopePlan scopePlan,
-        Action<WorkbookExportPrintScope> selectScope)
+        IReadOnlyList<FreeXBackstageExportScopeOptionPlan> scopeOptions,
+        Action<FreeXBackstageExportScopeId> selectScope)
     {
         var options = new List<AvaloniaBackstageRadioOptionSpec>();
-        foreach (var option in scopePlan.Scopes)
+        foreach (var option in scopeOptions)
         {
-            var backstageScope = ToBackstageExportScopeId(option.Scope);
             var capturedScope = option.Scope;
             options.Add(new AvaloniaBackstageRadioOptionSpec(
-                UiText.Get(FreeXBackstagePaneCatalog.GetExportScopeLabelKey(backstageScope, option.IsAvailable)),
-                FreeXBackstagePaneCatalog.GetExportScopeAutomationId(backstageScope),
+                UiText.Get(option.LabelKey),
+                option.AutomationId,
                 () => selectScope(capturedScope))
             {
-                IsEnabled = option.IsAvailable,
+                IsEnabled = option.IsEnabled,
                 IsChecked = option.IsDefault,
             });
         }
@@ -325,20 +353,19 @@ public sealed partial class MainWindow
     }
 
     private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportFormatOptions(
-        WorkbookExportScopePlan scopePlan,
-        Action<WorkbookExportPrintOutputKind> selectOutputKind)
+        IReadOnlyList<FreeXBackstageExportOutputKindOptionPlan> outputKindOptions,
+        Action<FreeXBackstageExportOutputKindId> selectOutputKind)
     {
         var options = new List<AvaloniaBackstageRadioOptionSpec>();
-        foreach (var outputKind in scopePlan.SupportedOutputKinds)
+        foreach (var option in outputKindOptions)
         {
-            var backstageOutputKind = ToBackstageExportOutputKindId(outputKind);
-            var capturedKind = outputKind;
+            var capturedKind = option.OutputKind;
             options.Add(new AvaloniaBackstageRadioOptionSpec(
-                UiText.Get(FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(backstageOutputKind)),
-                FreeXBackstagePaneCatalog.GetExportOutputKindAutomationId(backstageOutputKind),
+                UiText.Get(option.LabelKey),
+                option.AutomationId,
                 () => selectOutputKind(capturedKind))
             {
-                IsChecked = outputKind == scopePlan.DefaultOutputKind,
+                IsChecked = option.IsDefault,
             });
         }
 
@@ -356,12 +383,30 @@ public sealed partial class MainWindow
             _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
         };
 
+    private static WorkbookExportPrintScope ToWorkbookExportScope(FreeXBackstageExportScopeId scope) =>
+        scope switch
+        {
+            FreeXBackstageExportScopeId.SelectedRange => WorkbookExportPrintScope.SelectedRange,
+            FreeXBackstageExportScopeId.VisibleWorkbook => WorkbookExportPrintScope.VisibleWorkbook,
+            FreeXBackstageExportScopeId.ActiveSheet => WorkbookExportPrintScope.ActiveSheet,
+            _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
+        };
+
     private static FreeXBackstageExportOutputKindId ToBackstageExportOutputKindId(
         WorkbookExportPrintOutputKind outputKind) =>
         outputKind switch
         {
             WorkbookExportPrintOutputKind.Xps => FreeXBackstageExportOutputKindId.Xps,
             WorkbookExportPrintOutputKind.Pdf => FreeXBackstageExportOutputKindId.Pdf,
+            _ => throw new ArgumentOutOfRangeException(nameof(outputKind), outputKind, null)
+        };
+
+    private static WorkbookExportPrintOutputKind ToWorkbookExportOutputKind(
+        FreeXBackstageExportOutputKindId outputKind) =>
+        outputKind switch
+        {
+            FreeXBackstageExportOutputKindId.Xps => WorkbookExportPrintOutputKind.Xps,
+            FreeXBackstageExportOutputKindId.Pdf => WorkbookExportPrintOutputKind.Pdf,
             _ => throw new ArgumentOutOfRangeException(nameof(outputKind), outputKind, null)
         };
 

@@ -294,8 +294,13 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         // The parity-captured Account pane mirrors the WPF host page ("Local account information"
         // with the local app/OS identity rows) rather than the 4-row product-info catalog, so the
         // Linux capture no longer mislabels Account as "Product information".
-        captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows()");
+        captureSource.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
+        captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows(pane)");
         captureSource.Should().Contain("Backstage_Account_LocalInfoHeading");
+        captureSource.Should().NotContain("Backstage_Account_CurrentWorkbookNotSaved");
+        hostCaptureSource.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
+        hostCaptureSource.Should().Contain("ResolveBackstageAccountValue(detail.Value)");
+        hostCaptureSource.Should().NotContain("(\"FreeX user name\", \"quinn\")");
         captureSource.Should().Contain("CreateParityCapturedBackstageContentScroll(content)");
         captureSource.Should().Contain("CreateParityCapturedBackstageScrollbar()");
         captureSource.Should().Contain("CreateParityCapturedStatusBarFooter()");
@@ -316,17 +321,24 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "FreeX.App.Presentation",
             "Backstage",
             "FreeXBackstageAccountPanePlanner.cs"));
+        var exportPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "Backstage",
+            "FreeXBackstageExportPanePlanner.cs"));
 
         source.Should().Contain("WorkbookInfoDisplayPlanner.Build(");
         source.Should().Contain("WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog");
         source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
         source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
-        source.Should().Contain("FreeXBackstagePaneCatalog.GetExportScopeLabelKey(");
-        source.Should().Contain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(");
+        source.Should().Contain("FreeXBackstageExportPanePlanner.Build(");
+        source.Should().Contain("CreateBackstageExportPaneRequest(scopePlan)");
+        source.Should().Contain("BuildBackstageExportPaneSpec(");
+        source.Should().Contain("UiText.Get(option.LabelKey)");
         source.Should().Contain("ToBackstageExportScopeId(option.Scope)");
         source.Should().Contain("ToBackstageExportOutputKindId(outputKind)");
-        source.Should().NotContain("GetExportScopeLabelKey(option.Scope");
-        source.Should().NotContain("GetExportOutputKindLabelKey(outputKind");
+        source.Should().NotContain("FreeXBackstagePaneCatalog.GetExportScopeLabelKey(");
+        source.Should().NotContain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(");
         source.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
         source.Should().Contain("foreach (var detail in plan.Details)");
         source.Should().Contain("foreach (var action in plan.Actions)");
@@ -337,6 +349,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         accountPlannerSource.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountDetails()");
         accountPlannerSource.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountActions(request.OptionsAvailable)");
         accountPlannerSource.Should().Contain("Backstage_Account_CurrentWorkbookUnsaved");
+        exportPlannerSource.Should().Contain("FreeXBackstagePaneCatalog.GetExportScopeLabelKey(request.Scope");
+        exportPlannerSource.Should().Contain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(request.OutputKind");
+        exportPlannerSource.Should().Contain("Backstage_Export_ScopeHeader");
         source.Should().NotContain("FormatBackstageFileSize");
         source.Should().NotContain("FormatBackstageLastModified");
         source.Should().NotContain("FormatBackstageProtection");
