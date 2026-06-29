@@ -141,12 +141,7 @@ public sealed class MainWindow : Window
         };
         _notesBox.TextChanged += OnNotesTextChanged;
 
-        _statusText = new TextBlock
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            Foreground        = Brushes.White,
-            Margin            = new Thickness(8, 0),
-        };
+        _statusText = SisterAppStatusBarChrome.CreateInfoText(foreground: Brushes.White, margin: new Thickness(8, 0));
 
         // ── Root layout ───────────────────────────────────────────────────────
 

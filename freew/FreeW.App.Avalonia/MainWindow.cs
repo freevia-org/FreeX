@@ -39,12 +39,12 @@ public sealed class MainWindow : Window
 
     private readonly IReadOnlyList<IDocumentFileAdapter> _adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
     private readonly DocumentView _editor = new();
-    private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    private readonly TextBlock _status = SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0));
     // AV-MAIL: the Mailings engine (recipients / merge fields / preview / finish-merge) shared with the ribbon.
     private MailMergeEngine? _mailMerge;
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    private readonly TextBlock _zoomLabel = SisterAppStatusBarChrome.CreateInfoText("100%", margin: new Thickness(8, 0));
     private readonly ScaleTransform _zoom = new(1, 1);
     // Status-bar view-mode buttons (Print / Web / Draft).
     private readonly Button _btnPrintLayout  = MakeViewModeButton("Print");
@@ -591,7 +591,6 @@ public sealed class MainWindow : Window
 
     private IReadOnlyList<Control> BuildStatusRightItems()
     {
-        _zoomLabel.Text = "100%";
         var viewModeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,

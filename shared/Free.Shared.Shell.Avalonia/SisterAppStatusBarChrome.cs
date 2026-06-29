@@ -24,6 +24,8 @@ public sealed record SisterAppStatusBarBuildResult(
 /// </summary>
 public static class SisterAppStatusBarChrome
 {
+    private static readonly Thickness DefaultSeparatorMargin = new(8, 3, 8, 3);
+
     public static SisterAppStatusBarBuildResult Build(SisterAppStatusBarSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -67,4 +69,28 @@ public static class SisterAppStatusBarChrome
 
         return new SisterAppStatusBarBuildResult(root, layout);
     }
+
+    public static TextBlock CreateInfoText(
+        string text = "",
+        IBrush? foreground = null,
+        Thickness margin = default,
+        double fontSize = 12) =>
+        new()
+        {
+            Text = text,
+            Foreground = foreground,
+            FontSize = fontSize,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = margin,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+
+    public static Border CreateSeparator(IBrush? brush = null, Thickness margin = default) =>
+        new()
+        {
+            Width = 1,
+            Margin = margin.Equals(default(Thickness)) ? DefaultSeparatorMargin : margin,
+            Background = brush ?? new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
 }

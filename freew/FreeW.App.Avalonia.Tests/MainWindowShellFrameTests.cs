@@ -1,6 +1,10 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Layout;
+using Avalonia.Media;
 using System.Threading;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -47,8 +51,35 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("using Free.Shared.Shell.Avalonia;");
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
+        mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0))");
+        mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(\"100%\", margin: new Thickness(8, 0))");
         mainWindow.Should().Contain("BottomPanelsAboveStatus: [findBar]");
         mainWindow.Should().Contain("RightItems: BuildStatusRightItems()");
+        mainWindow.Should().NotContain("private readonly TextBlock _zoomLabel = new()");
+    }
+
+    [Fact]
+    public void StatusBarChrome_CreatesSharedInfoTextAndSeparatorStyles()
+    {
+        var text = SisterAppStatusBarChrome.CreateInfoText(
+            "Ready",
+            foreground: Brushes.White,
+            margin: new Thickness(3, 4, 5, 6),
+            fontSize: 13);
+        var separator = SisterAppStatusBarChrome.CreateSeparator();
+
+        text.Text.Should().Be("Ready");
+        text.Foreground.Should().BeSameAs(Brushes.White);
+        text.Margin.Should().Be(new Thickness(3, 4, 5, 6));
+        text.FontSize.Should().Be(13);
+        text.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+        text.TextTrimming.Should().Be(TextTrimming.CharacterEllipsis);
+
+        separator.Width.Should().Be(1);
+        separator.Margin.Should().Be(new Thickness(8, 3, 8, 3));
+        separator.VerticalAlignment.Should().Be(VerticalAlignment.Stretch);
+        separator.Background.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
     }
 
     private static async Task<bool> OnUiThread(Action action)
