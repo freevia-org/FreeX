@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -24,14 +25,16 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
+        var state = ChartSizeDialogPlanner.BuildInitialState(widthPt, heightPt, CultureInfo.CurrentCulture);
+
         _widthBox = new TextBox
         {
-            Text = widthPt.ToString("0.##", CultureInfo.CurrentCulture),
+            Text = state.WidthText,
             MinWidth = 120
         };
         _heightBox = new TextBox
         {
-            Text = heightPt.ToString("0.##", CultureInfo.CurrentCulture),
+            Text = state.HeightText,
             MinWidth = 120
         };
 
@@ -65,17 +68,17 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        if (!double.TryParse(_widthBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var w) || w <= 0)
+        if (!ChartSizeDialogPlanner.TryBuildResult(
+            new ChartSizeDialogInput(_widthBox.Text, _heightBox.Text),
+            CultureInfo.CurrentCulture,
+            out var result,
+            out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a positive width in points.");
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? ChartSizeDialogPlanner.WidthValidationMessage);
             return;
         }
-        if (!double.TryParse(_heightBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var h) || h <= 0)
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter a positive height in points.");
-            return;
-        }
-        _result = (w, h);
+
+        _result = (result!.WidthPt, result.HeightPt);
         Close();
     }
 
