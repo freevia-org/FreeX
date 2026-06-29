@@ -37,6 +37,25 @@ public sealed class ChartCommandSourceTests
     }
 
     [Fact]
+    public void ChartHandlers_UseSharedWorkflowCommandDescriptorsForCoreDialogFlows()
+    {
+        var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");
+
+        source.Should().Contain("ChartWorkflowCommandCatalog.ChangeChartType");
+        source.Should().Contain("ChartWorkflowCommandCatalog.SelectDataSource");
+        source.Should().Contain("ChartWorkflowCommandCatalog.MoveChart");
+        source.Should().Contain("ChartWorkflowCommandCatalog.FormatChartArea");
+        source.Should().Contain("TryGetActiveNormalChart(ChartWorkflowCommandDescriptor command");
+        source.Should().Contain("TryGetFirstChartForDialog(ChartWorkflowCommandDescriptor command");
+        source.Should().Contain("UiText.Get(command.HostMissingSelectionMessageResourceKey)");
+        source.Should().NotContain("TryGetActiveNormalChart(\"Change Chart Type\"");
+        source.Should().NotContain("TryGetActiveNormalChart(\"Select Data Source\"");
+        source.Should().NotContain("TryGetActiveNormalChart(\"Move Chart\"");
+        source.Should().NotContain("TryGetFirstChartForDialog(\"Format Chart Area\"");
+        source.Should().NotContain("Insert or select a chart before formatting the chart area.");
+    }
+
+    [Fact]
     public void InsertChartCommand_UsesVisiblePlacementAndSelectsInsertedChart()
     {
         var source = ReadHostSourceFile("MainWindow.ChartCommands.cs");

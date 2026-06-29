@@ -112,14 +112,15 @@ public partial class MainWindow
 
     private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetActiveNormalChart("Change Chart Type", out var chart))
+        var command = ChartWorkflowCommandCatalog.ChangeChartType;
+        if (!TryGetActiveNormalChart(command, out var chart))
             return;
 
         var dialog = new ChangeChartTypeDialog(chart.Type) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), "Change Chart Type"))
+        if (!TryExecuteCommand(new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), command.Label))
             return;
 
         UpdateViewport();
@@ -127,7 +128,8 @@ public partial class MainWindow
 
     private void SelectChartDataSourceBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetActiveNormalChart("Select Data Source", out var chart))
+        var command = ChartWorkflowCommandCatalog.SelectDataSource;
+        if (!TryGetActiveNormalChart(command, out var chart))
             return;
 
         SelectDataSourceDialog? dialog = null;
@@ -158,7 +160,7 @@ public partial class MainWindow
                     dataRange,
                     firstRowIsHeader: chart.FirstRowIsHeader,
                     firstColIsCategories: dialog.Result.FirstColumnIsCategories),
-                "Select Data Source"))
+                command.Label))
             return;
 
         UpdateViewport();
@@ -179,7 +181,8 @@ public partial class MainWindow
 
     private void MoveChartBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetActiveNormalChart("Move Chart", out var chart))
+        var command = ChartWorkflowCommandCatalog.MoveChart;
+        if (!TryGetActiveNormalChart(command, out var chart))
             return;
 
         var currentSheet = _workbook.GetSheet(_currentSheetId);
@@ -192,7 +195,7 @@ public partial class MainWindow
 
         if (dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet)
         {
-            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), "Move Chart"))
+            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), command.Label))
                 return;
 
             var createdSheet = _workbook.GetSheet(dialog.Result.TargetName);
@@ -210,7 +213,7 @@ public partial class MainWindow
                 return;
             }
 
-            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), "Move Chart"))
+            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), command.Label))
                 return;
 
             _currentSheetId = targetSheet.Id;
@@ -265,18 +268,25 @@ public partial class MainWindow
 
     private void FormatChartAreaBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog("Format Chart Area", "Insert or select a chart before formatting the chart area.", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatChartArea;
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
         var dialog = new ChartAreaLegendDialog(chart) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult("Format Chart Area", chart, dialog.Result.ToOptions()))
+        if (!ApplyChartLayoutDialogResult(command.Label, chart, dialog.Result.ToOptions()))
             return;
 
         UpdateViewport();
     }
+
+    private bool TryGetActiveNormalChart(ChartWorkflowCommandDescriptor command, out ChartModel chart) =>
+        TryGetActiveNormalChart(command.Label, out chart);
+
+    private bool TryGetFirstChartForDialog(ChartWorkflowCommandDescriptor command, out ChartModel chart) =>
+        TryGetFirstChartForDialog(command.Label, UiText.Get(command.HostMissingSelectionMessageResourceKey), out chart);
 
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {

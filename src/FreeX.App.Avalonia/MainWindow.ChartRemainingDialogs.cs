@@ -154,7 +154,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Move Chart", out var chart))
+        var command = ChartWorkflowCommandCatalog.MoveChart;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
         var current = ChartMovePlanner.DefaultFor(_session.ActiveSheet.Name);
@@ -169,7 +170,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Move Chart", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
         if (plan.TargetKind == ChartMoveTargetKind.NewSheet)
@@ -286,7 +287,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Format Chart Area", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatChartArea;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
         var current = ChartAreaFormatPlanner.Read(chart);
@@ -301,10 +303,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Format Chart Area", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Format Chart Area", chart, ChartAreaFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartAreaFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartAreaFormatInput?> ShowFormatChartAreaDialogAsync(ChartAreaFormatInput current)
