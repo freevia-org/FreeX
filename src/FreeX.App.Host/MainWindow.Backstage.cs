@@ -504,10 +504,9 @@ public partial class MainWindow
             // resolves the new one — their mutations would target the wrong workbook.
             NotifyOtherWindowsOfWorkbookChange();
 
-            // P2b: the recent-files registration DECISION routes through the shared planner
-            // (skip suppressed snapshots/transient paths); the MRU store write stays FreeX-specific.
-            if (FileLifecyclePlanner.PlanRecentRegistration(path, suppressRecentFiles) == RecentFileRegistration.Register)
-                _recentFiles.AddOrUpdate(path);
+            RecentFileRegistrationService.RegisterIfNeeded(
+                _recentFiles,
+                new RecentFileRegistrationRequest(path, suppressRecentFiles));
             ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
             operationCancellation.Token.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
@@ -1000,10 +999,9 @@ public partial class MainWindow
             {
                 _currentFilePath = target.Path;
                 _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
-                // P2b: recent-files registration DECISION via the shared planner (a saved target is
-                // always a real, non-suppressed path); the MRU store write stays FreeX-specific.
-                if (FileLifecyclePlanner.PlanRecentRegistration(target.Path, suppressRecentFiles: false) == RecentFileRegistration.Register)
-                    _recentFiles.AddOrUpdate(target.Path);
+                RecentFileRegistrationService.RegisterIfNeeded(
+                    _recentFiles,
+                    new RecentFileRegistrationRequest(target.Path));
             }
 
             if (plan.MarkSaved)

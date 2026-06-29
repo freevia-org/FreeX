@@ -19845,7 +19845,11 @@ public sealed partial class MainWindow : Window
             !File.Exists(target.Path))
             return;
 
-        _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
+        RecentFileRegistrationService.RegisterIfNeeded(
+            _recentFiles,
+            new RecentFileRegistrationRequest(
+                target.Path,
+                FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity));
         RefreshNativeOpenRecentMenu(!_isOpening && !_isSaving);
     }
 
@@ -21040,16 +21044,15 @@ public sealed partial class MainWindow : Window
                     return;
                 }
 
-                var requestedPath = path;
-                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
+                if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
                 {
                     ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
                     return;
                 }
 
-                path = exportPathPlan.Path;
+                path = exportTargetPlan.Path;
                 try
                 {
                     _statusText.Text = "Exporting PDF...";
@@ -21346,16 +21349,15 @@ public sealed partial class MainWindow : Window
                     return;
                 }
 
-                var requestedPath = path;
-                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
+                if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
                 {
                     ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
                     return;
                 }
 
-                path = exportPathPlan.Path;
+                path = exportTargetPlan.Path;
                 try
                 {
                     _statusText.Text = "Exporting PDF...";

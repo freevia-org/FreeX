@@ -262,10 +262,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("SuggestedFileType = fileTypes[0]");
         source.Should().Contain("ShowOverwritePrompt = true");
         source.Should().Contain("storageFile.TryGetLocalPath()");
-        source.Should().Contain("var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);");
-        source.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
-        source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)");
-        source.Should().Contain("path = exportPathPlan.Path;");
+        source.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
+        source.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
+        source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)");
+        source.Should().Contain("path = exportTargetPlan.Path;");
         source.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
         var normalizedOverwriteDialog = ExtractSourceBlock(
             source,
@@ -327,9 +327,9 @@ public sealed class AvaloniaShellSourceTests
         var printSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
         var cupsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "CupsPlatformPrinter.cs"));
 
-        printSource.Should().Contain("var requestedPath = path;");
-        printSource.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
-        printSource.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)");
+        printSource.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
+        printSource.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
+        printSource.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)");
         printSource.Should().Contain("UiText.Get(\"Print_SaveCanceled\")");
         printSource.Should().Contain("ShowPortablePdfSavePickerAsync(UiText.Get(\"Print_SaveAsPdfButton\"))");
 
@@ -898,7 +898,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)");
         source.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
-        source.Should().Contain("_recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);");
+        source.Should().Contain("RecentFileRegistrationService.RegisterIfNeeded(");
+        source.Should().Contain("new RecentFileRegistrationRequest(");
+        source.Should().Contain("FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity");
         source.Should().Contain("RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
         normalizedSource.Should().Contain("_session = _sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true);\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
