@@ -15,8 +15,8 @@ public static class DrawingInsertionPlanner
 {
     public const double DefaultShapeWidth = 120d;
     public const double DefaultShapeHeight = 70d;
-    public const double DefaultTextBoxWidth = 180d;
-    public const double DefaultTextBoxHeight = 80d;
+    public const double DefaultTextBoxWidth = TextBoxModel.DefaultWidth;
+    public const double DefaultTextBoxHeight = TextBoxModel.DefaultHeight;
     public const string TextBoxPlaceholder = "Text Box";
 
     public const DrawingShapeKind DefaultShape = DrawingShapeKind.Rectangle;

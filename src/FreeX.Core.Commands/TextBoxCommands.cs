@@ -16,8 +16,8 @@ public sealed class AddTextBoxCommand : IWorkbookCommand
         SheetId sheetId,
         CellAddress anchor,
         string text,
-        double width = 180,
-        double height = 80)
+        double width = TextBoxModel.DefaultWidth,
+        double height = TextBoxModel.DefaultHeight)
     {
         _sheetId = sheetId;
         _textBox = new TextBoxModel
@@ -353,17 +353,8 @@ internal static class TextBoxCommandGuards
         Guid textBoxId,
         [NotNullWhen(true)] out TextBoxModel? textBox)
     {
-        foreach (var item in sheet.TextBoxes)
-        {
-            if (item.Id != textBoxId)
-                continue;
-
-            textBox = item;
-            return true;
-        }
-
-        textBox = null;
-        return false;
+        textBox = TextBoxModel.FindById(sheet.TextBoxes, textBoxId);
+        return textBox is not null;
     }
 
     public static CommandOutcome TextBoxNotFound() =>

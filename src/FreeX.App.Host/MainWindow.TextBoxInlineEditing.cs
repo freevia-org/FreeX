@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using FreeX.App.Services;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using WpfTextBox = System.Windows.Controls.TextBox;
@@ -13,10 +14,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private const double TextBoxInlineEditorMinimumWidth = 24.0;
-    private const double TextBoxInlineEditorMinimumHeight = 18.0;
-    private const double TextBoxInlineEditorInset = 4.0;
-
     private void OnTextBoxEditRequested(Guid textBoxId) =>
         BeginTextBoxInlineEdit(textBoxId);
 
@@ -116,8 +113,8 @@ public partial class MainWindow
                 textBox.Anchor,
                 textBox.Width,
                 textBox.Height,
-                TextBoxInlineEditorMinimumWidth,
-                TextBoxInlineEditorMinimumHeight,
+                TextBoxFrameLayoutPlanner.MinimumWidth,
+                TextBoxFrameLayoutPlanner.MinimumHeight,
                 out var unscaledRect,
                 textBox.AnchorOffsetX,
                 textBox.AnchorOffsetY))
@@ -126,21 +123,9 @@ public partial class MainWindow
         }
 
         var zoom = _zoomLevel;
-        var rect = new Rect(
-            unscaledRect.Left * zoom,
-            unscaledRect.Top * zoom,
-            unscaledRect.Width * zoom,
-            unscaledRect.Height * zoom);
-
-        Canvas.SetLeft(_textBoxInlineEditorChrome, rect.Left);
-        Canvas.SetTop(_textBoxInlineEditorChrome, rect.Top);
-        _textBoxInlineEditorChrome.Width = rect.Width;
-        _textBoxInlineEditorChrome.Height = rect.Height;
-
-        Canvas.SetLeft(_textBoxInlineEditor, rect.Left + TextBoxInlineEditorInset);
-        Canvas.SetTop(_textBoxInlineEditor, rect.Top + TextBoxInlineEditorInset);
-        _textBoxInlineEditor.Width = Math.Max(1, rect.Width - (TextBoxInlineEditorInset * 2));
-        _textBoxInlineEditor.Height = Math.Max(1, rect.Height - (TextBoxInlineEditorInset * 2));
+        var layout = TextBoxFrameLayoutPlanner.CreateScaled(ToLayoutRect(unscaledRect), zoom);
+        ApplyTextBoxInlineElementBounds(_textBoxInlineEditorChrome, layout.Bounds);
+        ApplyTextBoxInlineElementBounds(_textBoxInlineEditor, layout.TextBounds);
         return true;
     }
 
@@ -184,6 +169,17 @@ public partial class MainWindow
             SheetGrid.InvalidateVisual();
 
         return true;
+    }
+
+    private static LayoutRect ToLayoutRect(Rect rect) =>
+        new(rect.Left, rect.Top, rect.Width, rect.Height);
+
+    private static void ApplyTextBoxInlineElementBounds(FrameworkElement element, LayoutRect bounds)
+    {
+        Canvas.SetLeft(element, bounds.Left);
+        Canvas.SetTop(element, bounds.Top);
+        element.Width = bounds.Width;
+        element.Height = bounds.Height;
     }
 
     private bool TryCommitTextBoxInlineEdit(out bool textChanged)
@@ -261,12 +257,6 @@ public partial class MainWindow
         if (sheet is null)
             return null;
 
-        foreach (var textBox in sheet.TextBoxes)
-        {
-            if (textBox.Id == textBoxId)
-                return textBox;
-        }
-
-        return null;
+        return TextBoxModel.FindById(sheet.TextBoxes, textBoxId);
     }
 }

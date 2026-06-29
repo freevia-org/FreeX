@@ -1,30 +1,36 @@
 using System.Windows;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
 
 public static class GridShapePlacementPlanner
 {
-    public const double DefaultShapeWidth = 120;
-    public const double DefaultShapeHeight = 70;
-    public const double MinimumShapeSize = GridObjectDragPlanner.MinimumObjectSize;
-    public const double MeaningfulDragThreshold = 4;
+    public const double DefaultShapeWidth = DrawingInsertionPlanner.DefaultShapeWidth;
+    public const double DefaultShapeHeight = DrawingInsertionPlanner.DefaultShapeHeight;
+    public const double MinimumShapeSize = DrawingObjectPlacementPlanner.MinimumObjectSize;
+    public const double MeaningfulDragThreshold = DrawingObjectPlacementPlanner.MeaningfulDragThreshold;
 
     public static bool IsMeaningfulDrag(Point start, Point current, double threshold = MeaningfulDragThreshold) =>
-        Math.Abs(current.X - start.X) >= threshold ||
-        Math.Abs(current.Y - start.Y) >= threshold;
+        DrawingObjectPlacementPlanner.IsMeaningfulDrag(ToLayoutPoint(start), ToLayoutPoint(current), threshold);
 
     public static Rect CalculatePreviewRect(
         Point start,
         Point current,
         double minimumSize = MinimumShapeSize)
-    {
-        var left = Math.Min(start.X, current.X);
-        var top = Math.Min(start.Y, current.Y);
-        var width = Math.Max(minimumSize, Math.Abs(current.X - start.X));
-        var height = Math.Max(minimumSize, Math.Abs(current.Y - start.Y));
-        return new Rect(left, top, width, height);
-    }
+        => ToWpfRect(DrawingObjectPlacementPlanner.CalculatePreviewRect(
+            ToLayoutPoint(start),
+            ToLayoutPoint(current),
+            minimumSize));
+
+    public static Point CalculateAnchorPoint(
+        Point start,
+        Point current,
+        double minimumSize = MinimumShapeSize) =>
+        ToWpfPoint(DrawingObjectPlacementPlanner.CalculateAnchorPoint(
+            ToLayoutPoint(start),
+            ToLayoutPoint(current),
+            minimumSize));
 
     public static ShapePlacementRequest CreateRequest(
         DrawingShapeKind kind,
@@ -32,13 +38,22 @@ public static class GridShapePlacementPlanner
         Point start,
         Point current)
     {
-        if (!IsMeaningfulDrag(start, current))
-            return new ShapePlacementRequest(kind, anchor, DefaultShapeWidth, DefaultShapeHeight);
-
+        var plan = DrawingObjectPlacementPlanner.PlanDrag(
+            ToLayoutPoint(start),
+            ToLayoutPoint(current),
+            DefaultShapeWidth,
+            DefaultShapeHeight,
+            MinimumShapeSize);
         return new ShapePlacementRequest(
             kind,
             anchor,
-            Math.Max(MinimumShapeSize, Math.Abs(current.X - start.X)),
-            Math.Max(MinimumShapeSize, Math.Abs(current.Y - start.Y)));
+            plan.Width,
+            plan.Height);
     }
+
+    private static LayoutPoint ToLayoutPoint(Point point) => new(point.X, point.Y);
+
+    private static Point ToWpfPoint(LayoutPoint point) => new(point.X, point.Y);
+
+    private static Rect ToWpfRect(LayoutRect rect) => new(rect.Left, rect.Top, rect.Width, rect.Height);
 }
