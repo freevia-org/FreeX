@@ -386,11 +386,11 @@ internal static class XlsxWorksheetChartWriter
         XNamespace markupCompatNs) =>
         new(spreadsheetDrawingNs + "absoluteAnchor",
             new XElement(spreadsheetDrawingNs + "pos",
-                new XAttribute("x", PixelsToEmus(chart.Left)),
-                new XAttribute("y", PixelsToEmus(chart.Top))),
+                new XAttribute("x", DrawingMlUnits.PixelsToEmu(chart.Left)),
+                new XAttribute("y", DrawingMlUnits.PixelsToEmu(chart.Top))),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(chart.Width)),
-                new XAttribute("cy", PixelsToEmus(chart.Height))),
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(chart.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(chart.Height))),
             ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
@@ -411,8 +411,8 @@ internal static class XlsxWorksheetChartWriter
         return new XElement(spreadsheetDrawingNs + "oneCellAnchor",
             ToAnchorMarkerXml("from", from, spreadsheetDrawingNs),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(chart.Width)),
-                new XAttribute("cy", PixelsToEmus(chart.Height))),
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(chart.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(chart.Height))),
             ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
     }
@@ -518,11 +518,11 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "spPr",
                 new XElement(drawingNs + "xfrm",
                     new XElement(drawingNs + "off",
-                        new XAttribute("x", PixelsToEmus(chart.Left)),
-                        new XAttribute("y", PixelsToEmus(chart.Top))),
+                        new XAttribute("x", DrawingMlUnits.PixelsToEmu(chart.Left)),
+                        new XAttribute("y", DrawingMlUnits.PixelsToEmu(chart.Top))),
                     new XElement(drawingNs + "ext",
-                        new XAttribute("cx", PixelsToEmus(chart.Width)),
-                        new XAttribute("cy", PixelsToEmus(chart.Height)))),
+                        new XAttribute("cx", DrawingMlUnits.PixelsToEmu(chart.Width)),
+                        new XAttribute("cy", DrawingMlUnits.PixelsToEmu(chart.Height)))),
                 new XElement(drawingNs + "prstGeom",
                     new XAttribute("prst", "rect"),
                     new XElement(drawingNs + "avLst")),
@@ -561,9 +561,9 @@ internal static class XlsxWorksheetChartWriter
     private static XElement ToAnchorMarkerXml(string name, AnchorMarker marker, XNamespace spreadsheetDrawingNs) =>
         new(spreadsheetDrawingNs + name,
             new XElement(spreadsheetDrawingNs + "col", marker.Column),
-            new XElement(spreadsheetDrawingNs + "colOff", PixelsToEmus(marker.ColumnOffset)),
+            new XElement(spreadsheetDrawingNs + "colOff", DrawingMlUnits.PixelsToEmu(marker.ColumnOffset)),
             new XElement(spreadsheetDrawingNs + "row", marker.Row),
-            new XElement(spreadsheetDrawingNs + "rowOff", PixelsToEmus(marker.RowOffset)));
+            new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlUnits.PixelsToEmu(marker.RowOffset)));
 
     private static AnchorMarker ToAnchorMarker(Sheet sheet, double left, double top) =>
         new(
@@ -603,9 +603,6 @@ internal static class XlsxWorksheetChartWriter
         public uint Row => RowAxis.Index;
         public double RowOffset => RowAxis.Offset;
     }
-
-    private static long PixelsToEmus(double pixels) =>
-        (long)Math.Round(Math.Max(0, pixels) * 9525.0);
 
     private static string DrawingName(string? name, string fallback) =>
         string.IsNullOrWhiteSpace(name) ? fallback : name;

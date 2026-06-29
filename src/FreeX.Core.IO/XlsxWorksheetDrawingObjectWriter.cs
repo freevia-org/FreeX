@@ -306,8 +306,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)picture.Anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
                 new XElement(spreadsheetDrawingNs + "rowOff", "0")),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(picture.Width)),
-                new XAttribute("cy", PixelsToEmus(picture.Height))),
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(picture.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(picture.Height))),
             new XElement(spreadsheetDrawingNs + "pic",
                 new XElement(spreadsheetDrawingNs + "nvPicPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -361,8 +361,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(textBox.Anchor, spreadsheetDrawingNs),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(textBox.Width)),
-                new XAttribute("cy", PixelsToEmus(textBox.Height))),
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(textBox.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(textBox.Height))),
             new XElement(spreadsheetDrawingNs + "sp",
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -399,8 +399,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(shape.Width)),
-                new XAttribute("cy", PixelsToEmus(shape.Height))),
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(shape.Width)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(shape.Height))),
             new XElement(spreadsheetDrawingNs + "sp",
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -473,7 +473,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         {
             var textLn = new XElement(drawingNs + "ln");
             if (shape.ShapeTextOutlineWidthPoints > 0)
-                textLn.Add(new XAttribute("w", ((long)Math.Round(shape.ShapeTextOutlineWidthPoints * 12700)).ToString(CultureInfo.InvariantCulture)));
+                textLn.Add(new XAttribute("w", DrawingMlUnits.PointsToEmu(shape.ShapeTextOutlineWidthPoints).ToString(CultureInfo.InvariantCulture)));
             var outlineFill = ToSolidFill(shape.ShapeTextOutlineThemeColor, shape.ShapeTextOutlineColor, drawingNs);
             if (outlineFill is not null)
                 textLn.Add(outlineFill);
@@ -594,8 +594,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         if (shapeWidthPixels > 0 && shapeHeightPixels > 0)
         {
             extElement = new XElement(drawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(shapeWidthPixels)),
-                new XAttribute("cy", PixelsToEmus(shapeHeightPixels)));
+                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(shapeWidthPixels)),
+                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(shapeHeightPixels)));
         }
 
         return new XElement(drawingNs + "xfrm",
@@ -710,8 +710,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         if (fill is null)
             return null;
 
-        // w attribute: 12700 EMU per point; omit if zero/default to keep output compact
-        var wEmu = outlineWidthPoints > 0 ? (long)Math.Round(outlineWidthPoints * 12700) : 0;
+        // Omit zero/default outline widths to keep output compact.
+        var wEmu = outlineWidthPoints > 0 ? DrawingMlUnits.PointsToEmu(outlineWidthPoints) : 0;
         var prstDashVal = outlineDash switch
         {
             DrawingShapeOutlineDash.Dash => "dash",
@@ -876,6 +876,4 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static string DrawingName(string? name, string fallback) =>
         string.IsNullOrWhiteSpace(name) ? fallback : name;
 
-    private static long PixelsToEmus(double pixels) =>
-        (long)Math.Round(Math.Max(0, pixels) * 9525.0);
 }

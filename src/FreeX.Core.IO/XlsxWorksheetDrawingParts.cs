@@ -63,7 +63,7 @@ internal sealed record XlsxShapePackagePart(
     double? XfrmWidthPixels,
     /// <summary>Pre-rotation height in DIP pixels from &lt;a:xfrm&gt;&lt;a:ext cy&gt;, or null if absent.</summary>
     double? XfrmHeightPixels,
-    /// <summary>Outline width in points (12700 EMU = 1 pt); 0 = use default.</summary>
+    /// <summary>Outline width in points; 0 = use default.</summary>
     double OutlineWidthPoints,
     /// <summary>True when &lt;a:ln&gt;&lt;a:noFill/&gt; is present — explicitly no border.</summary>
     bool OutlineHasNoFill,
@@ -821,20 +821,19 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (cxEmu <= 0 && cyEmu <= 0)
             return (null, null);
 
-        // 9525 EMU per DIP pixel (96 DPI)
-        return (cxEmu / 9525.0, cyEmu / 9525.0);
+        return (DrawingMlUnits.EmuToPixels(cxEmu), DrawingMlUnits.EmuToPixels(cyEmu));
     }
 
     /// <summary>
     /// Reads the outline width in points from <c>&lt;a:ln w="..."/&gt;</c>.
-    /// The <c>w</c> attribute is in EMU (1 pt = 12700 EMU).  Returns 0 when absent.
+    /// The <c>w</c> attribute is in EMU. Returns 0 when absent.
     /// </summary>
     private static double ReadDrawingOutlineWidthPoints(XElement? lnElement)
     {
         var wValue = lnElement?.Attribute("w")?.Value;
         if (!double.TryParse(wValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var emu) || emu <= 0)
             return 0;
-        return emu / 12700.0;
+        return emu / DrawingMlUnits.EmuPerPoint;
     }
 
     /// <summary>

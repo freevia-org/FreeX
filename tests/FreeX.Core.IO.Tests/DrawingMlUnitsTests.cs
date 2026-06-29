@@ -23,6 +23,10 @@ public sealed class DrawingMlUnitsTests
     public void EmuPerInch_Is72xEmuPerPoint()
         => DrawingMlUnits.EmuPerInch.Should().Be(72L * DrawingMlUnits.EmuPerPoint);
 
+    [Fact]
+    public void EmuPerPixel_Is9525()
+        => DrawingMlUnits.EmuPerPixel.Should().Be(9525L);
+
     // ── EMU ↔ points ─────────────────────────────────────────────────────────
 
     [Theory]
@@ -57,6 +61,47 @@ public sealed class DrawingMlUnitsTests
         var emu = DrawingMlUnits.PointsToEmu(points);
         var back = DrawingMlUnits.EmuToPoints(emu.ToString());
         back.Should().BeApproximately(points, 1e-9);
+    }
+
+    [Theory]
+    [InlineData(0, 0L)]
+    [InlineData(1, 9525L)]
+    [InlineData(0.5, 4762L)]
+    [InlineData(10, 95250L)]
+    [InlineData(-5, 0L)]
+    public void PixelsToEmu_ReturnsExpected(double pixels, long expectedEmu)
+        => DrawingMlUnits.PixelsToEmu(pixels).Should().Be(expectedEmu);
+
+    [Theory]
+    [InlineData("9525", 1.0)]
+    [InlineData("0", 0.0)]
+    [InlineData("4762.5", 0.5)]
+    [InlineData("95250", 10.0)]
+    [InlineData(null, 0.0)]
+    [InlineData("", 0.0)]
+    [InlineData("abc", 0.0)]
+    public void EmuToPixels_ReturnsExpected(string? emuText, double expectedPixels)
+        => DrawingMlUnits.EmuToPixels(emuText).Should().BeApproximately(expectedPixels, 1e-9);
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(1.0)]
+    [InlineData(10.0)]
+    public void EmuRoundTrip_Pixels(double pixels)
+    {
+        var emu = DrawingMlUnits.PixelsToEmu(pixels);
+        var back = DrawingMlUnits.EmuToPixels(emu.ToString());
+        back.Should().BeApproximately(pixels, 1e-9);
+    }
+
+    [Fact]
+    public void EmuRoundTrip_FractionalPixels_PreservesRoundedEmuBehavior()
+    {
+        var emu = DrawingMlUnits.PixelsToEmu(1.5);
+        var back = DrawingMlUnits.EmuToPixels(emu.ToString());
+
+        emu.Should().Be(14288L);
+        back.Should().BeApproximately(14288d / DrawingMlUnits.EmuPerPixel, 1e-9);
     }
 
     // ── dxa ↔ points ─────────────────────────────────────────────────────────
