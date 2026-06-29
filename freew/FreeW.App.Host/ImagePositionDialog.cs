@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -14,15 +15,6 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _hAnchorBox, _vAnchorBox;
     private (double HOffset, double VOffset, HorizontalAnchor HAnchor, VerticalAnchor VAnchor)? _result;
 
-    private static readonly string[] HAnchorLabels = ["Column", "Margin", "Page"];
-    private static readonly string[] VAnchorLabels = ["Paragraph", "Margin", "Page"];
-
-    private static HorizontalAnchor ParseH(string? s) => s switch { "Margin" => HorizontalAnchor.Margin, "Page" => HorizontalAnchor.Page, _ => HorizontalAnchor.Column };
-    private static VerticalAnchor ParseV(string? s) => s switch { "Margin" => VerticalAnchor.Margin, "Page" => VerticalAnchor.Page, _ => VerticalAnchor.Paragraph };
-
-    private static string LabelH(HorizontalAnchor a) => a switch { HorizontalAnchor.Margin => "Margin", HorizontalAnchor.Page => "Page", _ => "Column" };
-    private static string LabelV(VerticalAnchor a) => a switch { VerticalAnchor.Margin => "Margin", VerticalAnchor.Page => "Page", _ => "Paragraph" };
-
     private ImagePositionDialog(Window? owner, double hOffPt, double vOffPt, HorizontalAnchor hAnchor, VerticalAnchor vAnchor)
     {
         Owner = owner;
@@ -33,11 +25,18 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _hBox = new TextBox { Text = hOffPt.ToString("0.##", CultureInfo.CurrentCulture), MinWidth = 80 };
-        _vBox = new TextBox { Text = vOffPt.ToString("0.##", CultureInfo.CurrentCulture), MinWidth = 80 };
+        var state = ImagePositionDialogPlanner.BuildInitialState(
+            hOffPt,
+            vOffPt,
+            hAnchor,
+            vAnchor,
+            CultureInfo.CurrentCulture);
 
-        _hAnchorBox = Combo(HAnchorLabels, LabelH(hAnchor));
-        _vAnchorBox = Combo(VAnchorLabels, LabelV(vAnchor));
+        _hBox = new TextBox { Text = state.HorizontalOffsetText, MinWidth = 80 };
+        _vBox = new TextBox { Text = state.VerticalOffsetText, MinWidth = 80 };
+
+        _hAnchorBox = Combo(ImagePositionDialogPlanner.HorizontalAnchorItems, state.HorizontalAnchorIndex);
+        _vAnchorBox = Combo(ImagePositionDialogPlanner.VerticalAnchorItems, state.VerticalAnchorIndex);
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -65,24 +64,34 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private static TextBlock Label(string text) =>
         new() { Text = text, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 0) };
 
-    private static ComboBox Combo(string[] items, string selected)
+    private static ComboBox Combo<TValue>(IReadOnlyList<ImageDialogChoice<TValue>> items, int selectedIndex)
     {
         var cb = new ComboBox { MinWidth = 100 };
-        foreach (var item in items) cb.Items.Add(item);
-        cb.SelectedItem = selected;
+        foreach (var item in items)
+            cb.Items.Add(item.Label);
+        cb.SelectedIndex = selectedIndex;
         return cb;
     }
 
     private void Accept()
     {
-        var okH = double.TryParse(_hBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var h);
-        var okV = double.TryParse(_vBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var v);
-        if (!okH || !okV)
+        if (!ImagePositionDialogPlanner.TryBuildResult(
+                new ImagePositionDialogInput(
+                    _hBox.Text,
+                    _vBox.Text,
+                    _hAnchorBox.SelectedIndex,
+                    _vAnchorBox.SelectedIndex),
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter valid numeric offsets in points.");
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation?.Message ?? ImagePositionDialogPlanner.OffsetValidationMessage);
             return;
         }
-        _result = (h, v, ParseH(_hAnchorBox.SelectedItem?.ToString()), ParseV(_vAnchorBox.SelectedItem?.ToString()));
+
+        _result = (result!.HorizontalOffset, result.VerticalOffset, result.HorizontalAnchor, result.VerticalAnchor);
         Close();
     }
 

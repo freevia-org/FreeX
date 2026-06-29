@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -14,7 +15,7 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _widthBox;
     private readonly TextBox _heightBox;
     private readonly CheckBox _lockCheck;
-    private readonly double _aspect; // height / width of the original image
+    private readonly double _aspect;
     private bool _updating;          // re-entry guard when syncing width↔height
     private (double Width, double Height)? _result;
 
@@ -28,11 +29,16 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _aspect = currentWidthPt > 0 ? currentHeightPt / currentWidthPt : 1.0;
+        var state = ImageSizeDialogPlanner.BuildInitialState(
+            currentWidthPt,
+            currentHeightPt,
+            CultureInfo.CurrentCulture);
 
-        _widthBox  = new TextBox { Text = currentWidthPt.ToString("0.##", CultureInfo.CurrentCulture), MinWidth = 120 };
-        _heightBox = new TextBox { Text = currentHeightPt.ToString("0.##", CultureInfo.CurrentCulture), MinWidth = 120 };
-        _lockCheck = new CheckBox { Content = "Lock aspect ratio", IsChecked = true, Margin = new Thickness(0, 6, 0, 0) };
+        _aspect = state.AspectRatio;
+
+        _widthBox = new TextBox { Text = state.WidthText, MinWidth = 120 };
+        _heightBox = new TextBox { Text = state.HeightText, MinWidth = 120 };
+        _lockCheck = new CheckBox { Content = "Lock aspect ratio", IsChecked = state.LockAspectRatio, Margin = new Thickness(0, 6, 0, 0) };
 
         _widthBox.TextChanged  += OnWidthChanged;
         _heightBox.TextChanged += OnHeightChanged;
@@ -64,10 +70,15 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void OnWidthChanged(object sender, TextChangedEventArgs e)
     {
         if (_updating) return;
-        if (_lockCheck.IsChecked == true && double.TryParse(_widthBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var w) && w > 0)
+        if (ImageSizeDialogPlanner.TryBuildLockedHeightText(
+                _widthBox.Text,
+                _aspect,
+                _lockCheck.IsChecked == true,
+                CultureInfo.CurrentCulture,
+                out var heightText))
         {
             _updating = true;
-            _heightBox.Text = (w * _aspect).ToString("0.##", CultureInfo.CurrentCulture);
+            _heightBox.Text = heightText;
             _updating = false;
         }
     }
@@ -75,27 +86,35 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void OnHeightChanged(object sender, TextChangedEventArgs e)
     {
         if (_updating) return;
-        if (_lockCheck.IsChecked == true && double.TryParse(_heightBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var h) && h > 0 && _aspect > 0)
+        if (ImageSizeDialogPlanner.TryBuildLockedWidthText(
+                _heightBox.Text,
+                _aspect,
+                _lockCheck.IsChecked == true,
+                CultureInfo.CurrentCulture,
+                out var widthText))
         {
             _updating = true;
-            _widthBox.Text = (h / _aspect).ToString("0.##", CultureInfo.CurrentCulture);
+            _widthBox.Text = widthText;
             _updating = false;
         }
     }
 
     private void Accept()
     {
-        var okW = double.TryParse(_widthBox.Text,  NumberStyles.Float, CultureInfo.CurrentCulture, out var width)  && width  > 0;
-        var okH = double.TryParse(_heightBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var height) && height > 0;
-        if (okW && okH)
+        if (!ImageSizeDialogPlanner.TryBuildResult(
+                new ImageSizeDialogInput(_widthBox.Text, _heightBox.Text),
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var validation))
         {
-            _result = (width, height);
-            Close();
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation?.Message ?? ImageSizeDialogPlanner.PositiveSizeValidationMessage);
+            return;
         }
-        else
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter positive values for both width and height (in points).");
-        }
+
+        _result = (result!.Width, result.Height);
+        Close();
     }
 
     /// <summary>
