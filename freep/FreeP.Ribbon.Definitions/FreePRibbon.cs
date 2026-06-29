@@ -18,14 +18,14 @@ public static class FreePRibbon
             return FreePAvaloniaRibbonDefinition.Build();
 
         return new RibbonDefinitionBuilder()
-            .Tab("home", "Home", "H", tab =>
+            .Tab("home", FreePRibbonText.HomeTabLabel, FreePRibbonText.HomeTabKeyTip, tab =>
             {
-                tab.Group("slides", "Slides", "S", 100, g =>
+                tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, 100, g =>
                 {
                     // New Slide is the hero; the rest are compact stubs, mirroring PowerPoint's Slides group.
-                    g.Large("freep.new-slide", "New Slide", RibbonCommandIconKind.Insert, "N");
-                    g.Medium("freep.duplicate-slide", "Duplicate Slide", RibbonCommandIconKind.Copy, "D");
-                    g.Medium("freep.delete-slide", "Delete Slide", RibbonCommandIconKind.Delete, "X");
+                    g.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert, FreePRibbonText.NewSlideKeyTip);
+                    g.Medium("freep.duplicate-slide", FreePRibbonText.DuplicateSlideLabel, RibbonCommandIconKind.Copy, FreePRibbonText.DuplicateSlideKeyTip);
+                    g.Medium("freep.delete-slide", FreePRibbonText.DeleteSlideLabel, RibbonCommandIconKind.Delete, FreePRibbonText.DeleteSlideKeyTip);
                     g.Medium("freep.layout", "Layout", RibbonCommandIconKind.Grid, "L");
                 });
                 tab.Group("clipboard", "Clipboard", "C", 90, g =>
@@ -180,10 +180,10 @@ public static class FreePRibbon
                 });
 
                 // Slide Show buttons live here for quick access from the Transitions tab.
-                tab.Group("slideshow-from-transitions", "Slide Show", "L", 80, g =>
+                tab.Group("slideshow-from-transitions", FreePRibbonText.SlideShowGroupLabel, FreePRibbonText.SlideShowGroupWpfKeyTip, 80, g =>
                 {
-                    g.Large("freep.slideshow.from-beginning",     "From Beginning",     RibbonCommandIconKind.Next,     "B");
-                    g.Large("freep.slideshow.from-current-slide", "From Current Slide", RibbonCommandIconKind.Previous, "C");
+                    g.Large("freep.slideshow.from-beginning",     FreePRibbonText.SlideShowFromBeginningLabel,     RibbonCommandIconKind.Next,     FreePRibbonText.SlideShowFromBeginningKeyTip);
+                    g.Large("freep.slideshow.from-current-slide", FreePRibbonText.SlideShowFromCurrentSlideLabel, RibbonCommandIconKind.Previous, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
                 });
             })
             // ── Wave 4C: Animations tab ───────────────────────────────────────────────

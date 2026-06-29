@@ -82,6 +82,47 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void GetNeutralResourceKeys_CoversRibbonHomeShellFoundation()
+    {
+        Loc.GetNeutralResourceKeys().Should().Contain([
+            "Ribbon_Tab_Home_Label",
+            "Ribbon_Tab_Home_KeyTip",
+            "Ribbon_Group_File_Label",
+            "Ribbon_Group_File_KeyTip",
+            "Ribbon_Command_FileNew_Label",
+            "Ribbon_Command_FileNew_KeyTip",
+            "Ribbon_Command_FileOpen_Label",
+            "Ribbon_Command_FileOpen_KeyTip",
+            "Ribbon_Command_FileSave_Label",
+            "Ribbon_Command_FileSave_KeyTip",
+            "Ribbon_Command_FileSaveAs_Label",
+            "Ribbon_Command_FileSaveAs_KeyTip",
+            "Ribbon_Group_Slides_Label",
+            "Ribbon_Group_Slides_KeyTip",
+            "Ribbon_Command_NewSlide_Label",
+            "Ribbon_Command_NewSlide_KeyTip",
+            "Ribbon_Command_NewSlide_AvaloniaKeyTip",
+            "Ribbon_Command_DuplicateSlide_Label",
+            "Ribbon_Command_DuplicateSlide_KeyTip",
+            "Ribbon_Command_DeleteSlide_Label",
+            "Ribbon_Command_DeleteSlide_KeyTip",
+            "Ribbon_Group_Edit_Label",
+            "Ribbon_Group_Edit_KeyTip",
+            "Ribbon_Command_Undo_Label",
+            "Ribbon_Command_Undo_KeyTip",
+            "Ribbon_Command_Redo_Label",
+            "Ribbon_Command_Redo_KeyTip",
+            "Ribbon_Group_SlideShow_Label",
+            "Ribbon_Group_SlideShow_WpfKeyTip",
+            "Ribbon_Group_SlideShow_AvaloniaKeyTip",
+            "Ribbon_Command_SlideShowFromBeginning_Label",
+            "Ribbon_Command_SlideShowFromBeginning_KeyTip",
+            "Ribbon_Command_SlideShowFromCurrentSlide_Label",
+            "Ribbon_Command_SlideShowFromCurrentSlide_KeyTip"
+        ]);
+    }
+
+    [Fact]
     public void SharedHelpers_ExposeCatalogContracts()
     {
         Loc.PseudoLocalizationCultureName.Should().Be(LocalizedTextCatalog.PseudoLocalizationCultureName);

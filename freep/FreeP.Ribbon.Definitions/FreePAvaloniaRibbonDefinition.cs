@@ -11,32 +11,32 @@ internal static class FreePAvaloniaRibbonDefinition
     internal static RibbonDefinition Build()
     {
         return new RibbonDefinitionBuilder()
-            .Tab("home", "Home", "H", tab =>
+            .Tab("home", FreePRibbonText.HomeTabLabel, FreePRibbonText.HomeTabKeyTip, tab =>
             {
-                tab.Group("file", "File", "F", 100, g =>
+                tab.Group("file", FreePRibbonText.FileGroupLabel, FreePRibbonText.FileGroupKeyTip, 100, g =>
                 {
-                    g.Large("freep.file.new", "New", RibbonCommandIconKind.Insert, "N");
-                    g.Large("freep.file.open", "Open", RibbonCommandIconKind.Refresh, "O");
-                    g.Large("freep.file.save", "Save", RibbonCommandIconKind.Save, "S");
-                    g.Medium("freep.file.save-as", "Save As", RibbonCommandIconKind.Save, "A");
+                    g.Large("freep.file.new", FreePRibbonText.FileNewLabel, RibbonCommandIconKind.Insert, FreePRibbonText.FileNewKeyTip);
+                    g.Large("freep.file.open", FreePRibbonText.FileOpenLabel, RibbonCommandIconKind.Refresh, FreePRibbonText.FileOpenKeyTip);
+                    g.Large("freep.file.save", FreePRibbonText.FileSaveLabel, RibbonCommandIconKind.Save, FreePRibbonText.FileSaveKeyTip);
+                    g.Medium("freep.file.save-as", FreePRibbonText.FileSaveAsLabel, RibbonCommandIconKind.Save, FreePRibbonText.FileSaveAsKeyTip);
                 });
-                tab.Group("slides", "Slides", "S", 90, g =>
+                tab.Group("slides", FreePRibbonText.SlidesGroupLabel, FreePRibbonText.SlidesGroupKeyTip, 90, g =>
                 {
-                    g.Large("freep.new-slide", "New Slide", RibbonCommandIconKind.Insert, "I");
-                    g.Medium("freep.duplicate-slide", "Duplicate Slide", RibbonCommandIconKind.Copy, "D");
-                    g.Medium("freep.delete-slide", "Delete Slide", RibbonCommandIconKind.Delete, "X");
+                    g.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert, FreePRibbonText.NewSlideAvaloniaKeyTip);
+                    g.Medium("freep.duplicate-slide", FreePRibbonText.DuplicateSlideLabel, RibbonCommandIconKind.Copy, FreePRibbonText.DuplicateSlideKeyTip);
+                    g.Medium("freep.delete-slide", FreePRibbonText.DeleteSlideLabel, RibbonCommandIconKind.Delete, FreePRibbonText.DeleteSlideKeyTip);
                 });
-                tab.Group("edit", "Edit", "E", 80, g =>
+                tab.Group("edit", FreePRibbonText.EditGroupLabel, FreePRibbonText.EditGroupKeyTip, 80, g =>
                 {
-                    g.Large("freep.undo", "Undo", RibbonCommandIconKind.Undo, "U");
-                    g.Large("freep.redo", "Redo", RibbonCommandIconKind.Redo, "R");
+                    g.Large("freep.undo", FreePRibbonText.UndoLabel, RibbonCommandIconKind.Undo, FreePRibbonText.UndoKeyTip);
+                    g.Large("freep.redo", FreePRibbonText.RedoLabel, RibbonCommandIconKind.Redo, FreePRibbonText.RedoKeyTip);
                 });
-                tab.Group("slideshow", "Slide Show", "W", 70, g =>
+                tab.Group("slideshow", FreePRibbonText.SlideShowGroupLabel, FreePRibbonText.SlideShowGroupAvaloniaKeyTip, 70, g =>
                 {
-                    g.Large("freep.slideshow.from-beginning", "From Beginning",
-                        RibbonCommandIconKind.Next, "B");
-                    g.Large("freep.slideshow.from-current", "From Current Slide",
-                        RibbonCommandIconKind.Next, "C");
+                    g.Large("freep.slideshow.from-beginning", FreePRibbonText.SlideShowFromBeginningLabel,
+                        RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromBeginningKeyTip);
+                    g.Large("freep.slideshow.from-current", FreePRibbonText.SlideShowFromCurrentSlideLabel,
+                        RibbonCommandIconKind.Next, FreePRibbonText.SlideShowFromCurrentSlideKeyTip);
                 });
             })
             .Tab("insert", "Insert", "N", tab =>
