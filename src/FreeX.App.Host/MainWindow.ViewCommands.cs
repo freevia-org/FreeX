@@ -410,13 +410,27 @@ public partial class MainWindow
     private void CloseSysBtn_Click(object sender, RoutedEventArgs e) =>
         SystemCommands.CloseWindow(this);
 
+    private void ConfigureStatusZoomSlider()
+    {
+        var plan = StatusBarZoomSliderPlanner.Build((int)ZoomLevelMapper.DefaultZoomPercent);
+        ZoomSlider.Minimum = plan.MinimumSliderValue;
+        ZoomSlider.Maximum = plan.MaximumSliderValue;
+        ZoomSlider.SmallChange = plan.SmallChange;
+        ZoomSlider.LargeChange = plan.LargeChange;
+        ZoomSlider.Ticks = new System.Windows.Media.DoubleCollection(plan.SliderTickValues);
+        ZoomSlider.Value = plan.SliderValue;
+    }
+
+    private static double StatusZoomSliderValueForPercent(double zoomPercent) =>
+        StatusBarZoomSliderPlanner.Build((int)Math.Round(zoomPercent)).SliderValue;
+
     private void ZoomInBtn_Click(object sender, RoutedEventArgs e)
     {
-        ZoomSlider.Value = Math.Min(ZoomSlider.Maximum, ZoomSlider.Value + 5);
+        ZoomSlider.Value = Math.Min(ZoomSlider.Maximum, ZoomSlider.Value + StatusBarZoomSliderPlanner.SmallChange);
     }
     private void ZoomOutBtn_Click(object sender, RoutedEventArgs e)
     {
-        ZoomSlider.Value = Math.Max(ZoomSlider.Minimum, ZoomSlider.Value - 5);
+        ZoomSlider.Value = Math.Max(ZoomSlider.Minimum, ZoomSlider.Value - StatusBarZoomSliderPlanner.SmallChange);
     }
     private void ZoomPickerBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -428,7 +442,7 @@ public partial class MainWindow
             !FreeX.App.Services.ZoomLevelMapper.TryParseZoomPercent(tag, out var zoomPercent))
             return;
 
-        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);
     }
     private void ZoomCustomMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -446,7 +460,7 @@ public partial class MainWindow
                 SheetGrid.ActualHeight,
                 SheetGrid.SelectedRange?.ColCount ?? 1,
                 SheetGrid.SelectedRange?.RowCount ?? 1);
-            ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+            ZoomSlider.Value = StatusZoomSliderValueForPercent(zoomPercent);
         }
         finally
         {
@@ -471,7 +485,7 @@ public partial class MainWindow
 
     private void Zoom100Btn_Click(object sender, RoutedEventArgs e)
     {
-        ZoomSlider.Value = 100;
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(ZoomLevelMapper.DefaultZoomPercent);
     }
     private void ZoomSelectionBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -481,38 +495,40 @@ public partial class MainWindow
             SheetGrid.ActualHeight,
             range.ColCount,
             range.RowCount);
-        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(fitPct);
+        ZoomSlider.Value = StatusZoomSliderValueForPercent(fitPct);
     }
     private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (ZoomSlider == null || SheetGrid == null || StatusZoomText == null) return;
         if (_snapInProgress || _suppressZoomSync) return;
-        double sliderVal = e.NewValue;
+        var inputPlan = StatusBarZoomSliderPlanner.BuildInput(e.NewValue);
 
-        // Snap to 100% when near the midpoint
-        if (Math.Abs(sliderVal - 100.0) < 3.0)
+        if (inputPlan.SnappedToDefault)
         {
             _snapInProgress = true;
-            ZoomSlider.Value = 100.0;
-            _snapInProgress = false;
-            sliderVal = 100.0;
+            try
+            {
+                ZoomSlider.Value = inputPlan.SliderValue;
+            }
+            finally
+            {
+                _snapInProgress = false;
+            }
         }
 
-        double zoomPct = FreeX.App.Services.ZoomLevelMapper.SliderToZoomPercent(sliderVal);
-        var roundedZoomPct = (int)Math.Round(zoomPct);
         if (!TryExecuteGroupedSheetCommand(
                 "Zoom",
-                sheetId => new SetWorksheetZoomCommand(sheetId, roundedZoomPct)))
+                sheetId => new SetWorksheetZoomCommand(sheetId, inputPlan.ZoomPercent)))
             return;
 
-        SyncZoomFromSheet(roundedZoomPct, updateSlider: false);
+        SyncZoomFromSheet(inputPlan.ZoomPercent, updateSlider: false);
         UpdateViewport();
     }
 
     private void SyncZoomFromSheet(int zoomPercent, bool updateSlider = true)
     {
-        zoomPercent = Math.Clamp(zoomPercent, SetWorksheetZoomCommand.MinZoomPercent, SetWorksheetZoomCommand.MaxZoomPercent);
-        _zoomLevel = zoomPercent / 100.0;
+        var plan = StatusBarZoomSliderPlanner.Build(zoomPercent);
+        _zoomLevel = plan.ZoomPercent / 100.0;
         if (SheetGrid is not null)
         {
             SheetGrid.ZoomFactor = _zoomLevel;
@@ -520,9 +536,8 @@ public partial class MainWindow
         }
         if (StatusZoomText is not null)
         {
-            var zoomText = $"{zoomPercent}%";
-            StatusZoomText.Text = zoomText;
-            AutomationProperties.SetName(StatusZoomText, zoomText);
+            StatusZoomText.Text = plan.ZoomText;
+            AutomationProperties.SetName(StatusZoomText, plan.ZoomText);
         }
 
         if (!updateSlider || ZoomSlider is null)
@@ -531,7 +546,7 @@ public partial class MainWindow
         _suppressZoomSync = true;
         try
         {
-            ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+            ZoomSlider.Value = plan.SliderValue;
         }
         finally
         {

@@ -34,7 +34,7 @@ public sealed partial class MainWindow
     private StatusBarViewModel BuildStatusBarViewModel(string readyText) =>
         AvaloniaStatusBarSource.BuildModel(
             _session.SelectionStats,
-            ClampZoomPercent(_session.ZoomPercent),
+            StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent),
             StatusBarReadyTextPlanner.NormalizeTransientReadyText(readyText, "Ready"),
             _session.ActiveSheet.ViewMode);
 
@@ -67,7 +67,7 @@ public sealed partial class MainWindow
 
         _zoomText.IsVisible = visibility.ZoomVisible;
         _zoomText.Foreground = StatusBarForeground;
-        _zoomText.Text = FormatZoomPercent(plan.ZoomPercent);
+        _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(plan.ZoomPercent);
 
         _statusNormalViewButton.IsVisible = visibility.ViewShortcutsVisible;
         _statusPageLayoutViewButton.IsVisible = visibility.ViewShortcutsVisible;
@@ -79,9 +79,9 @@ public sealed partial class MainWindow
         _isUpdatingStatusZoomSlider = true;
         try
         {
-            var sliderValue = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(plan.ZoomPercent);
-            _statusZoomSlider.Value = sliderValue;
-            UpdateStatusZoomSliderThumb(sliderValue);
+            var sliderPlan = StatusBarZoomSliderPlanner.Build(plan.ZoomPercent);
+            _statusZoomSlider.Value = sliderPlan.SliderValue;
+            UpdateStatusZoomSliderThumb(sliderPlan.SliderValue);
         }
         finally
         {

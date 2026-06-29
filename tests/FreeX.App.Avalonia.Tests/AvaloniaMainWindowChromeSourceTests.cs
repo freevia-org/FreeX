@@ -710,15 +710,19 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var statusBarSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
         var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
 
-        mainSource.Should().Contain("_statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 60));");
-        mainSource.Should().Contain("_statusZoomSlider.Minimum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MinZoomPercent);");
-        mainSource.Should().Contain("_statusZoomSlider.Maximum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MaxZoomPercent);");
-        mainSource.Should().Contain("FreeX.App.Services.ZoomLevelMapper.SliderToZoomPercent(args.NewValue)");
-        statusBarSource.Should().Contain("FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(plan.ZoomPercent)");
+        mainSource.Should().Contain("var statusZoomPlan = StatusBarZoomSliderPlanner.Build(_session.ZoomPercent);");
+        mainSource.Should().Contain("_statusZoomSlider.Minimum = statusZoomPlan.MinimumSliderValue;");
+        mainSource.Should().Contain("_statusZoomSlider.Maximum = statusZoomPlan.MaximumSliderValue;");
+        mainSource.Should().Contain("var inputPlan = StatusBarZoomSliderPlanner.BuildInput(args.NewValue);");
+        mainSource.Should().Contain("foreach (var left in zoomSliderPlan.VisualTickLefts)");
+        mainSource.Should().Contain("StatusBarZoomSliderPlanner.BuildThumbPlan(");
+        statusBarSource.Should().Contain("var sliderPlan = StatusBarZoomSliderPlanner.Build(plan.ZoomPercent);");
         mainSource.Should().Contain("Width = 1,");
         mainSource.Should().Contain("Height = 4,");
         mainSource.Should().NotContain("BuildStatusZoomTick(left: 60, isMiddle: true)");
         mainSource.Should().NotContain("isMiddle ? 2 : 1");
+        mainSource.Should().NotContain("ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MinZoomPercent)");
+        mainSource.Should().NotContain("ZoomLevelMapper.SliderToZoomPercent(args.NewValue)");
         captureSource.Should().Contain("foreach (var left in new[] { 8d, 60d, 111d })");
         captureSource.Should().Contain("Canvas.SetLeft(canvas.Children[^1], 55.5);");
         captureSource.Should().NotContain("isMiddle ? 2 : 1");
