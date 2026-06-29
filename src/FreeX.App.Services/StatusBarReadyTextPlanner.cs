@@ -10,6 +10,13 @@ namespace FreeX.App.Services;
 /// </summary>
 public static class StatusBarReadyTextPlanner
 {
+    public static string NormalizeTransientReadyText(string? status, IStatusBarTextProvider textProvider)
+    {
+        ArgumentNullException.ThrowIfNull(textProvider);
+
+        return NormalizeTransientReadyText(status, textProvider.GetReadyText());
+    }
+
     public static string NormalizeTransientReadyText(string? status, string fallbackReadyText)
     {
         ArgumentNullException.ThrowIfNull(fallbackReadyText);
@@ -21,6 +28,16 @@ public static class StatusBarReadyTextPlanner
             status.StartsWith("Hiding ", StringComparison.OrdinalIgnoreCase)
                 ? fallbackReadyText
                 : status;
+    }
+
+    public static string BuildReadyText(
+        Sheet sheet,
+        CellAddress activeCell,
+        IStatusBarTextProvider textProvider)
+    {
+        ArgumentNullException.ThrowIfNull(textProvider);
+
+        return BuildReadyText(sheet, activeCell, textProvider.GetReadyText());
     }
 
     public static string BuildReadyText(Sheet sheet, CellAddress activeCell, string fallbackReadyText)

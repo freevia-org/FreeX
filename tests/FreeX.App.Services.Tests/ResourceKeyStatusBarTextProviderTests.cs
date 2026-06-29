@@ -5,6 +5,14 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class ResourceKeyStatusBarTextProviderTests
 {
+    [Fact]
+    public void GetReadyText_ResolvesSharedReadyResourceKey()
+    {
+        var provider = new ResourceKeyStatusBarTextProvider(key => "text:" + key);
+
+        provider.GetReadyText().Should().Be("text:" + StatusBarTextResourceKeys.ReadyText);
+    }
+
     [Theory]
     [InlineData(StatusBarReadoutKind.Average, StatusBarTextResourceKeys.Average, StatusBarTextResourceKeys.AverageFormat)]
     [InlineData(StatusBarReadoutKind.Count, StatusBarTextResourceKeys.Count, StatusBarTextResourceKeys.CountFormat)]

@@ -590,7 +590,9 @@ public sealed partial class MainWindowSourceHygieneTests
         gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusCountText, plan.CountText");
         gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusNumericalCountText, plan.NumericalCountText");
         gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusSumText, plan.SumText");
-        gridStatusSource.Should().Contain("UiText.Get(\"MainWindow_Text_Ready\")");
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarViewModelCache.cs")
+            .Should()
+            .Contain("_textProvider.GetReadyText()");
         // Readout formatting now lives in the platform-neutral shared builder, keyed by readout kind
         // (ResourceKeyStatusBarTextProvider maps each kind to its StatusBar_*Format resource).
         WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarDisplayModelBuilder.cs")

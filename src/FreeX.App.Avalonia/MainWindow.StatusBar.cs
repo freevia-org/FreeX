@@ -35,7 +35,7 @@ public sealed partial class MainWindow
         AvaloniaStatusBarSource.BuildModel(
             _session.SelectionStats,
             StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent),
-            StatusBarReadyTextPlanner.NormalizeTransientReadyText(readyText, "Ready"),
+            AvaloniaStatusBarSource.NormalizeReadyText(readyText),
             _session.ActiveSheet.ViewMode);
 
     /// <summary>
@@ -112,6 +112,6 @@ public sealed partial class MainWindow
     private void OnStatusBarCustomizeToggled(string optionTag, bool isChecked)
     {
         _statusBarOptionVisibility[optionTag] = isChecked;
-        ApplyStatusBarModel(_statusText.Text ?? "Ready");
+        ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());
     }
 }

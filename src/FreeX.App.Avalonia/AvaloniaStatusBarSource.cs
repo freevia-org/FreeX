@@ -44,8 +44,14 @@ internal static class AvaloniaStatusBarSource
                 TextProvider);
     }
 
-    public static string BuildReadyText(Sheet sheet, CellAddress activeCell, string fallbackReadyText) =>
-        StatusBarReadyTextPlanner.BuildReadyText(sheet, activeCell, fallbackReadyText);
+    public static string BuildReadyText(Sheet sheet, CellAddress activeCell) =>
+        StatusBarReadyTextPlanner.BuildReadyText(sheet, activeCell, TextProvider);
+
+    public static string NormalizeReadyText(string? status) =>
+        StatusBarReadyTextPlanner.NormalizeTransientReadyText(status, TextProvider);
+
+    public static string ReadyText() =>
+        TextProvider.GetReadyText();
 
     /// <summary>
     /// Joins the model's visible aggregate readouts (filtered by <paramref name="optionVisibility"/>)

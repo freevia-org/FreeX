@@ -7,6 +7,8 @@ public sealed class StatusBarVisibilityPlannerTests
 {
     private sealed class TestTextProvider : IStatusBarTextProvider
     {
+        public string GetReadyText() => "Ready";
+
         public string GetReadoutFormat(StatusBarReadoutKind kind) => GetReadoutLabel(kind) + ": {0}";
 
         public string GetReadoutLabel(StatusBarReadoutKind kind) => kind switch

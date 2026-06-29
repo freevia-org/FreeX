@@ -27,6 +27,12 @@ public sealed class AvaloniaStatusBarSourceTests
         new(Sum: 60, Count: 4, NumericalCount: 3, Average: 20, Min: 10, Max: 30);
 
     [Fact]
+    public void ReadyText_ResolvesSharedResourceKey()
+    {
+        Assert.Equal(UiText.Get(StatusBarTextResourceKeys.ReadyText), AvaloniaStatusBarSource.ReadyText());
+    }
+
+    [Fact]
     public void BuildModel_ProducesSharedStatsModel_ForRepresentativeSelection()
     {
         var model = AvaloniaStatusBarSource.BuildModel(
@@ -79,7 +85,7 @@ public sealed class AvaloniaStatusBarSourceTests
             PromptMessage = "Use a number"
         });
 
-        var text = AvaloniaStatusBarSource.BuildReadyText(sheet, address, "Ready");
+        var text = AvaloniaStatusBarSource.BuildReadyText(sheet, address);
 
         Assert.Equal("Input: Use a number", text);
     }
