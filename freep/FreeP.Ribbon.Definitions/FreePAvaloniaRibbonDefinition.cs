@@ -45,8 +45,22 @@ internal static class FreePAvaloniaRibbonDefinition
                 {
                     g.Large("freep.text-box", "Text Box", RibbonCommandIconKind.TextBox, "X");
                 });
+                tab.Group("tables", "Tables", "A", 95, g =>
+                {
+                    g.Large("freep.insert-table-3x3", "Table", RibbonCommandIconKind.Table, "T");
+                    g.Medium("freep.insert-table-2x2", "2x2", RibbonCommandIconKind.Table, "2");
+                    g.Medium("freep.insert-table-4x4", "4x4", RibbonCommandIconKind.Table, "4");
+                });
+                tab.Group("charts", "Charts", "H", 93, g =>
+                {
+                    g.Medium("freep.insert-chart-column", "Column", RibbonCommandIconKind.ChartColumn, "C");
+                    g.Medium("freep.insert-chart-bar", "Bar", RibbonCommandIconKind.ChartColumn, "B");
+                    g.Medium("freep.insert-chart-line", "Line", RibbonCommandIconKind.ChartLine, "L");
+                    g.Medium("freep.insert-chart-pie", "Pie", RibbonCommandIconKind.ChartPie, "P");
+                });
                 tab.Group("illustrations", "Illustrations", "I", 90, g =>
                 {
+                    g.Large("freep.picture", "Picture", RibbonCommandIconKind.Picture, "P");
                     g.Medium("freep.shape-rectangle", "Rectangle", RibbonCommandIconKind.Rectangle, "R");
                     g.Medium("freep.shape-ellipse", "Ellipse", RibbonCommandIconKind.Ellipse, "E");
                 });

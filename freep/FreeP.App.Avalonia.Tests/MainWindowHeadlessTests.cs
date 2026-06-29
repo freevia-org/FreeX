@@ -205,19 +205,33 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public void RibbonDefinition_insert_tab_has_text_and_shape_commands()
+    public void RibbonDefinition_insert_tab_has_object_insertion_commands()
     {
         var definition = FreePRibbonAvalonia.Build();
         var insert = definition.Tabs.Single(t => t.Id == "insert");
         insert.Groups.Should().Contain(g => g.Id == "text", "Text group required");
+        insert.Groups.Should().Contain(g => g.Id == "tables", "Tables group required");
+        insert.Groups.Should().Contain(g => g.Id == "charts", "Charts group required");
         insert.Groups.Should().Contain(g => g.Id == "illustrations", "Illustrations group required");
 
         var textIds = insert.Groups.Single(g => g.Id == "text")
+            .Controls.Select(i => i.CommandId.Value).ToList();
+        var tableIds = insert.Groups.Single(g => g.Id == "tables")
+            .Controls.Select(i => i.CommandId.Value).ToList();
+        var chartIds = insert.Groups.Single(g => g.Id == "charts")
             .Controls.Select(i => i.CommandId.Value).ToList();
         var illustrationIds = insert.Groups.Single(g => g.Id == "illustrations")
             .Controls.Select(i => i.CommandId.Value).ToList();
 
         textIds.Should().Contain("freep.text-box", "Text Box command required");
+        tableIds.Should().Contain("freep.insert-table-3x3", "default Table command required");
+        tableIds.Should().Contain("freep.insert-table-2x2", "2x2 Table command required");
+        tableIds.Should().Contain("freep.insert-table-4x4", "4x4 Table command required");
+        chartIds.Should().Contain("freep.insert-chart-column", "Column chart command required");
+        chartIds.Should().Contain("freep.insert-chart-bar", "Bar chart command required");
+        chartIds.Should().Contain("freep.insert-chart-line", "Line chart command required");
+        chartIds.Should().Contain("freep.insert-chart-pie", "Pie chart command required");
+        illustrationIds.Should().Contain("freep.picture", "Picture command required");
         illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
         illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
     }
@@ -350,6 +364,95 @@ public sealed class MainWindowHeadlessTests
         added.AutoShapeKind.Should().Be(expectedShape);
         (added.TextBody is not null).Should().Be(expectsTextBody,
             $"{commandId} must create the expected text-editing surface");
+    }
+
+    [Theory]
+    [InlineData("freep.insert-table-3x3", 3, 3)]
+    [InlineData("freep.insert-table-2x2", 2, 2)]
+    [InlineData("freep.insert-table-4x4", 4, 4)]
+    public async Task Ribbon_insert_table_commands_add_expected_table(
+        string commandId,
+        int expectedRows,
+        int expectedColumns)
+    {
+        var found = false;
+        var before = -1;
+        var after = -1;
+        SlideShape? added = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue($"{commandId} must be registered");
+
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            command!.Execute(RibbonCommandContext.Empty);
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+            added = window.Editor.CurrentSlide!.Shapes.Last();
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+        after.Should().Be(before + 1, $"{commandId} must insert one table");
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Table);
+        added.Table.Should().NotBeNull();
+        added.Table!.Rows.Should().HaveCount(expectedRows);
+        added.Table.ColumnWidthsEmu.Should().HaveCount(expectedColumns);
+    }
+
+    [Theory]
+    [InlineData("freep.insert-chart-column", ChartType.ColumnClustered)]
+    [InlineData("freep.insert-chart-bar", ChartType.BarClustered)]
+    [InlineData("freep.insert-chart-line", ChartType.Line)]
+    [InlineData("freep.insert-chart-pie", ChartType.Pie)]
+    public async Task Ribbon_insert_chart_commands_add_expected_chart(
+        string commandId,
+        ChartType expectedChartType)
+    {
+        var found = false;
+        var before = -1;
+        var after = -1;
+        SlideShape? added = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out var command);
+            found.Should().BeTrue($"{commandId} must be registered");
+
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            command!.Execute(RibbonCommandContext.Empty);
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+            added = window.Editor.CurrentSlide!.Shapes.Last();
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+        after.Should().Be(before + 1, $"{commandId} must insert one chart");
+        added.Should().NotBeNull();
+        added!.Kind.Should().Be(SlideShapeKind.Chart);
+        added.Chart.Should().NotBeNull();
+        added.Chart!.ChartType.Should().Be(expectedChartType);
+    }
+
+    [Fact]
+    public async Task Ribbon_insert_picture_command_is_registered()
+    {
+        var found = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.picture", out _);
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the visible Picture command must route to the Avalonia picker adapter");
     }
 
     // ── Packaging smoke ─────────────────────────────────────────────────────────
