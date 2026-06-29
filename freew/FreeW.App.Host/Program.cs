@@ -38,6 +38,10 @@ public static class Program
                 return new MainWindow(options, optionsStore);
             })
         {
-            InstallSharedSeams = () => ShellStrings.Current = new DefaultShellStrings()
+            InstallSharedSeams = () =>
+            {
+                ShellStrings.Current = DefaultShellStrings.Instance;
+                BackstageStrings.Current = DefaultBackstageStrings.Instance;
+            }
         });
 }

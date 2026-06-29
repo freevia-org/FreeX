@@ -12,5 +12,5 @@ internal static class BackstageStringsTestDefaults
 {
     [ModuleInitializer]
     public static void Initialize() =>
-        BackstageStrings.Current = new FreeXBackstageStrings();
+        BackstageStrings.Current = new ResourceBackstageStrings(UiText.Get, UiText.Format);
 }

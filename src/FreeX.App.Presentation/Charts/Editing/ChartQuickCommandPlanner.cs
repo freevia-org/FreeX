@@ -50,7 +50,7 @@ public enum ChartQuickCommand
 /// <summary>
 /// Portable planner for chart contextual-tab quick commands that immediately emit a chart-layout delta
 /// rather than opening a dialog. Shells own selection, localization, and command-bus execution; this class
-/// owns the support gates and repeat-click option composition so WPF, Avalonia, and future shells walk the
+/// owns the support gates and repeat-click option composition so every renderer and future shell walks the
 /// same command policy.
 /// </summary>
 public static class ChartQuickCommandPlanner
