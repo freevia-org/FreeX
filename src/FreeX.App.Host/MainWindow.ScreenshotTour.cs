@@ -24,6 +24,7 @@ using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;

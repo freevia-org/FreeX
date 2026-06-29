@@ -15,10 +15,9 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     /// <summary>
-    /// Opens the Quick Analysis popup for the current multi-cell selection. The selection is described by
-    /// the UI-free <see cref="QuickAnalysisSelectionReader"/>, then turned into grouped display items by the
-    /// portable <see cref="QuickAnalysisModelBuilder"/>. Each item is materialized by the shared
-    /// <see cref="QuickAnalysisShellPlanner"/> and rendered as a native button; the few items
+    /// Opens the Quick Analysis popup for the current multi-cell selection. The UI-free
+    /// <see cref="QuickAnalysisShellRequestPlanner"/> plans selection support, grouped display items,
+    /// shell actions, and hover metadata. Each item is rendered as a native button; the few items
     /// without a shell command (PivotTable, running/percent totals) stay visible but report that they are
     /// not yet available.
     /// </summary>
@@ -28,25 +27,24 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        if (range.CellCount <= 1)
+        var request = QuickAnalysisShellRequestPlanner.Build(
+            _session.ActiveSheet,
+            range,
+            QuickAnalysisShellCapabilities.DirectApplyLimited);
+        if (request.Status is QuickAnalysisShellRequestStatus.MissingSelection or
+            QuickAnalysisShellRequestStatus.UnsupportedSelection)
         {
             ShowEditIssue(UiText.Get("TableLoc_QaSelectMoreThanOne"));
             return;
         }
 
-        var description = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range);
-        var model = QuickAnalysisModelBuilder.Build(description);
-        var displayModel = model.ToDisplayModel();
-        if (displayModel.IsEmpty)
+        if (!request.CanOpen)
         {
             ShowEditIssue(UiText.Format("TableLoc_QaNoSuggestions", FormatRangeReference(range)));
             return;
         }
 
-        var shellPlan = QuickAnalysisShellPlanner.BuildMenuPlan(
-            displayModel,
-            QuickAnalysisShellCapabilities.DirectApplyLimited,
-            range);
+        var shellPlan = request.ShellPlan;
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_QaDialogTitle"),

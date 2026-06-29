@@ -31,6 +31,7 @@ public sealed record QuickAnalysisHostOperation(
     string? ConditionalFormatDialogTitle = null,
     ChartType? ChartType = null,
     string? TotalFunction = null,
+    QuickAnalysisTotalFormulaKind? TotalFormulaKind = null,
     string? TotalCommandTitle = null,
     SparklineKind? SparklineKind = null,
     string? SparklineDialogKind = null,
@@ -78,18 +79,21 @@ public static class QuickAnalysisHostOperationPlanner
                     QuickAnalysisHostOperationKind.InsertAggregateTotalFormula,
                     action.Route,
                     TotalFunction: action.TotalFunction,
+                    TotalFormulaKind: QuickAnalysisTotalFormulaKind.Aggregate,
                     TotalCommandTitle: $"Quick Analysis {item.Label}"),
 
             QuickAnalysisShellActionKind.InsertPercentTotalFormula =>
                 new QuickAnalysisHostOperation(
                     QuickAnalysisHostOperationKind.InsertPercentTotalFormula,
                     action.Route,
+                    TotalFormulaKind: QuickAnalysisTotalFormulaKind.PercentTotal,
                     TotalCommandTitle: "Quick Analysis % Total"),
 
             QuickAnalysisShellActionKind.InsertRunningTotalFormula =>
                 new QuickAnalysisHostOperation(
                     QuickAnalysisHostOperationKind.InsertRunningTotalFormula,
                     action.Route,
+                    TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal,
                     TotalCommandTitle: "Quick Analysis Running Total"),
 
             QuickAnalysisShellActionKind.CreateTable =>
@@ -115,5 +119,26 @@ public static class QuickAnalysisHostOperationPlanner
                     action.Route,
                     DeferredNote: action.DeferredNote)
         };
+    }
+
+    public static bool TryBuildTotalFormulaEdits(
+        QuickAnalysisHostOperation operation,
+        GridRange range,
+        out IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        edits = operation.TotalFormulaKind switch
+        {
+            QuickAnalysisTotalFormulaKind.Aggregate when !string.IsNullOrWhiteSpace(operation.TotalFunction) =>
+                QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, operation.TotalFunction),
+            QuickAnalysisTotalFormulaKind.PercentTotal =>
+                QuickAnalysisTotalsPlanner.BuildPercentTotalEdits(range),
+            QuickAnalysisTotalFormulaKind.RunningTotal =>
+                QuickAnalysisTotalsPlanner.BuildRunningTotalEdits(range),
+            _ => []
+        };
+
+        return edits.Count > 0;
     }
 }

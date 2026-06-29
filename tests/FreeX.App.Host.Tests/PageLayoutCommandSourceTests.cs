@@ -15,6 +15,7 @@ public sealed class PageLayoutCommandSourceTests
             "MainWindow.PageLayout.cs",
             "MainWindow.Startup.cs",
             "MainWindow.Viewport.cs");
+        var policySource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutRibbonPolicyPlanner.cs");
 
         source.Should().Contain("WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme()");
         source.Should().Contain("WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme()");
@@ -30,13 +31,21 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Colors)");
         source.Should().Contain("ShowWorkbookThemeDialog(WorkbookThemeDialogMode.Effects)");
         source.Should().Contain("new SetWorkbookThemeCommand(theme)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Normal)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, WorksheetPageOrientation.Portrait)");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.Letter)");
+        source.Should().Contain("ApplyPageMarginsPreset(PageLayoutMarginPreset.Normal)");
+        source.Should().Contain("ApplyPageOrientationPreset(PageLayoutOrientationPreset.Portrait)");
+        source.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Letter)");
+        source.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolveMargins(preset)");
+        source.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolveOrientation(preset)");
+        source.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolvePaperSize(preset)");
+        policySource.Should().Contain("PageLayoutMarginPreset.Wide => WorksheetPageMargins.Wide");
+        policySource.Should().Contain("PageLayoutOrientationPreset.Landscape");
+        policySource.Should().Contain("PageLayoutPaperSizePreset.Letter => WorksheetPaperSize.Letter");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheetId)");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PageSetupDialogBtn_Click(")
-            .Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);");
+            .Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.DialogButton);");
+        policySource.Should().Contain("PageLayoutPageSetupOpenSource.PrintTitles => PageSetupInitialFocusTarget.RepeatRows");
+        policySource.Should().Contain("PageLayoutPageSetupOpenSource.ScaleToFit => PageSetupInitialFocusTarget.ScaleToFit");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PrintAreaBtn_Click(")
             .Should().Contain("OpenRibbonContextMenu(btn, cm);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PageBreaksBtn_Click(")
@@ -45,11 +54,14 @@ public sealed class PageLayoutCommandSourceTests
             .Should().Contain("BackgroundChooseMenuItem_Click(sender, e);");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(sheetId, range)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(sheetId)");
-        source.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit)");
+        source.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ScaleToFit)");
         source.Should().Contain("InitializePageLayoutScaleToFitControls()");
-        source.Should().Contain("PageLayoutInputParser.TryParseScalePages(text, out var wide)");
+        source.Should().Contain("PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(current, text)");
+        source.Should().Contain("PageLayoutRibbonPolicyPlanner.PlanScaleHeightCommit(current, text)");
+        source.Should().Contain("PageLayoutRibbonPolicyPlanner.PlanScalePercentCommit(current, text)");
         source.Should().Contain("SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId))");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall)");
+        policySource.Should().Contain("PageLayoutInputParser.TryParseScalePages(text, out var pagesWide)");
+        policySource.Should().Contain("PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(");
         source.Should().Contain("PageBreakDialogPlanner.BuildDefaultInput(SheetGrid.SelectedRange)");

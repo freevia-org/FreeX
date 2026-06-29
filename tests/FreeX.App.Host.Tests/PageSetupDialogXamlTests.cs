@@ -87,8 +87,9 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
         source.Should().Contain("DialogFocus.FocusAndSelect(RowsRepeatBox);");
         handlerSource.Should().Contain("PrintTitlesBtn_Click");
-        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.RepeatRows);");
-        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);");
+        handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.PrintTitles);");
+        handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.DialogButton);");
+        handlerSource.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolvePageSetupInitialFocus(source)");
         handlerSource.Should().Contain("initialFocusTarget) { Owner = this }");
     }
 
@@ -105,7 +106,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain(": FitPagesWideBox");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
         handlerSource.Should().Contain("ScaleToFitBtn_Click");
-        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);");
+        handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ScaleToFit);");
     }
 
     [Fact]

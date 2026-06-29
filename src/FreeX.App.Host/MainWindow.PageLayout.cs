@@ -199,28 +199,30 @@ public partial class MainWindow
     }
     private void MarginNormalMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand(
-            "Page Margins",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Normal));
+        ApplyPageMarginsPreset(PageLayoutMarginPreset.Normal);
     }
 
     private void MarginWideMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand(
-            "Page Margins",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Wide));
+        ApplyPageMarginsPreset(PageLayoutMarginPreset.Wide);
     }
 
     private void MarginNarrowMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        ApplyPageMarginsPreset(PageLayoutMarginPreset.Narrow);
+    }
+
+    private void ApplyPageMarginsPreset(PageLayoutMarginPreset preset)
+    {
+        var margins = PageLayoutRibbonPolicyPlanner.ResolveMargins(preset);
         TryExecuteGroupedSheetCommand(
             "Page Margins",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, WorksheetPageMargins.Narrow));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, margins));
     }
 
     private void MarginCustomMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        PageSetupDialogBtn_Click(sender, e);
+        OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.CustomMargins);
     }
 
     private void PageOrientBtn_Click(object sender, RoutedEventArgs e)
@@ -230,16 +232,20 @@ public partial class MainWindow
     }
     private void OrientPortraitMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand(
-            "Orientation",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, WorksheetPageOrientation.Portrait));
+        ApplyPageOrientationPreset(PageLayoutOrientationPreset.Portrait);
     }
 
     private void OrientLandscapeMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        ApplyPageOrientationPreset(PageLayoutOrientationPreset.Landscape);
+    }
+
+    private void ApplyPageOrientationPreset(PageLayoutOrientationPreset preset)
+    {
+        var orientation = PageLayoutRibbonPolicyPlanner.ResolveOrientation(preset);
         TryExecuteGroupedSheetCommand(
             "Orientation",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, WorksheetPageOrientation.Landscape));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, orientation));
     }
 
     private void PageSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -249,32 +255,34 @@ public partial class MainWindow
     }
     private void SizeLetter_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand(
-            "Paper Size",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.Letter));
+        ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Letter);
     }
 
     private void SizeA4_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand(
-            "Paper Size",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.A4));
+        ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.A4);
     }
 
     private void SizeLegal_Click(object sender, RoutedEventArgs e)
     {
-        TryExecuteGroupedSheetCommand(
-            "Paper Size",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, WorksheetPaperSize.Legal));
+        ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Legal);
     }
 
-    private void SizeExecutive_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
-    private void SizeStatement_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
-    private void SizeTabloid_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
-    private void SizeA3_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
-    private void SizeA5_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
-    private void SizeB4_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
-    private void SizeB5_Click(object sender, RoutedEventArgs e) => ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+    private void ApplyPagePaperSizePreset(PageLayoutPaperSizePreset preset)
+    {
+        var paperSize = PageLayoutRibbonPolicyPlanner.ResolvePaperSize(preset);
+        TryExecuteGroupedSheetCommand(
+            "Paper Size",
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, paperSize));
+    }
+
+    private void SizeExecutive_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
+    private void SizeStatement_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
+    private void SizeTabloid_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
+    private void SizeA3_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
+    private void SizeA5_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
+    private void SizeB4_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
+    private void SizeB5_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
 
     private void PrintAreaBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -302,7 +310,7 @@ public partial class MainWindow
 
     private void ScaleToFitBtn_Click(object sender, RoutedEventArgs e)
     {
-        ShowPageSetupDialog(PageSetupInitialFocusTarget.ScaleToFit);
+        OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ScaleToFit);
     }
 
     private void InitializePageLayoutScaleToFitControls()
@@ -395,14 +403,7 @@ public partial class MainWindow
         if (combo is null) return;
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
         var text = GetComboBoxText(combo);
-        if (!PageLayoutInputParser.TryParseScalePages(text, out var wide))
-        {
-            SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
-            return;
-        }
-
-        ApplyPageLayoutScaleToFit(
-            PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(current, wide, current.FitToPagesTall));
+        ApplyPageLayoutScaleCommit(PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(current, text));
     }
 
     private void CommitPageLayoutScaleHeightBoxText(ComboBox? combo)
@@ -410,27 +411,26 @@ public partial class MainWindow
         if (combo is null) return;
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
         var text = GetComboBoxText(combo);
-        if (!PageLayoutInputParser.TryParseScalePages(text, out var tall))
-        {
-            SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
-            return;
-        }
-
-        ApplyPageLayoutScaleToFit(
-            PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(current, current.FitToPagesWide, tall));
+        ApplyPageLayoutScaleCommit(PageLayoutRibbonPolicyPlanner.PlanScaleHeightCommit(current, text));
     }
 
     private void CommitPageLayoutScalePercentBoxText(ComboBox? combo)
     {
         if (combo is null) return;
         var text = GetComboBoxText(combo);
-        if (!PageLayoutInputParser.TryParseScalePercent(text, out var percent))
+        var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
+        ApplyPageLayoutScaleCommit(PageLayoutRibbonPolicyPlanner.PlanScalePercentCommit(current, text));
+    }
+
+    private void ApplyPageLayoutScaleCommit(PageLayoutScaleCommitPlan plan)
+    {
+        if (!plan.ShouldApply)
         {
             SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId));
             return;
         }
 
-        ApplyPageLayoutScaleToFit(PageLayoutRibbonCommandPlanner.ResolveScalePercent(percent));
+        ApplyPageLayoutScaleToFit(plan.ScaleToFit);
     }
 
     private void ApplyPageLayoutScaleToFit(WorksheetScaleToFit scaleToFit)
@@ -544,11 +544,14 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        ShowPageSetupDialog(PageSetupInitialFocusTarget.RepeatRows);
+        OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.PrintTitles);
     }
 
     private void PageSetupDialogBtn_Click(object sender, RoutedEventArgs e) =>
-        ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+        OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.DialogButton);
+
+    private void OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource source) =>
+        ShowPageSetupDialog(PageLayoutRibbonPolicyPlanner.ResolvePageSetupInitialFocus(source));
 
     private void ShowPageSetupDialog(PageSetupInitialFocusTarget initialFocusTarget)
     {
