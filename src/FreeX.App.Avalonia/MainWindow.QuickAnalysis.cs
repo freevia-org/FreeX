@@ -4,11 +4,12 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -42,9 +43,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_QaDialogTitle"),
-            Width = 420,
+            Width = 500,
             Height = 460,
-            MinWidth = 360,
+            MinWidth = 420,
             MinHeight = 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -64,20 +65,7 @@ public sealed partial class MainWindow
             var buttonRow = new WrapPanel { Orientation = Orientation.Horizontal };
             foreach (var item in group.Items)
             {
-                var captured = item;
-                var button = new Button
-                {
-                    Content = item.Label,
-                    MinWidth = 116,
-                    Margin = new Thickness(0, 0, 8, 8),
-                };
-                AutomationProperties.SetAutomationId(button, item.AutomationId);
-                button.Click += (_, _) =>
-                {
-                    dialog.Close();
-                    ApplyQuickAnalysisItem(captured);
-                };
-                buttonRow.Children.Add(button);
+                buttonRow.Children.Add(CreateQuickAnalysisItemButton(dialog, item));
             }
 
             groupsPanel.Children.Add(buttonRow);
@@ -88,14 +76,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(closeButton, "QuickAnalysisCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
-        var buttonBar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { closeButton },
-        };
+        var buttonBar = AvaloniaCompactDialogChrome.CreateActionRow([closeButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonBar, Dock.Bottom);
 
         dialog.Content = new DockPanel
@@ -123,6 +104,42 @@ public sealed partial class MainWindow
 
         await dialog.ShowDialog(this);
     }
+
+    private Button CreateQuickAnalysisItemButton(Window dialog, QuickAnalysisShellItemPlan item)
+    {
+        var button = new Button
+        {
+            Content = CreateQuickAnalysisItemButtonContent(item),
+            MinWidth = 150,
+            Margin = new Thickness(0, 0, 8, 8),
+            Padding = new Thickness(8, 5),
+        };
+        AutomationProperties.SetAutomationId(button, item.AutomationId);
+        ToolTip.SetTip(button, item.ToolTip);
+        button.Click += (_, _) =>
+        {
+            dialog.Close();
+            ApplyQuickAnalysisItem(item);
+        };
+        return button;
+    }
+
+    private static Control CreateQuickAnalysisItemButtonContent(QuickAnalysisShellItemPlan item) =>
+        new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Children =
+            {
+                QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual),
+                new TextBlock
+                {
+                    Text = item.Label,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                },
+            },
+        };
 
     private void ShowQuickAnalysisOpenIssue(QuickAnalysisShellOpenPlan openPlan)
     {
