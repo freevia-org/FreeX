@@ -1,5 +1,6 @@
 using System.Globalization;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
 using Free.Shared.Ribbon;
@@ -569,47 +570,80 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterFloatingFormatCommands(RibbonCommandRegistry r, DocumentView editor)
     {
-        // Wrap modes (shared menu items, distinct ids per tab prefix).
-        foreach (var prefix in new[] { "image", "shape" })
+        foreach (var target in ObjectFormatCommandPlanner.Targets)
         {
-            r.Register($"freew.{prefix}-wrap",   new ActionRibbonCommand(() => { /* dropdown opener */ }));
-            r.Register($"freew.{prefix}-wrap-inline",     new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.Inline)));
-            r.Register($"freew.{prefix}-wrap-square",     new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.Square)));
-            r.Register($"freew.{prefix}-wrap-tight",      new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.Tight)));
-            r.Register($"freew.{prefix}-wrap-top-bottom", new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.TopAndBottom)));
-            r.Register($"freew.{prefix}-wrap-behind",     new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.Behind)));
-            r.Register($"freew.{prefix}-wrap-front",      new ActionRibbonCommand(() => editor.SetFloatingWrap(ImageWrapping.InFront)));
-
-            // Rotate / flip.
-            r.Register($"freew.{prefix}-rotate", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-            r.Register($"freew.{prefix}-rotate-right90", new ActionRibbonCommand(() => editor.RotateSelectedFloating(+90)));
-            r.Register($"freew.{prefix}-rotate-left90",  new ActionRibbonCommand(() => editor.RotateSelectedFloating(-90)));
-            r.Register($"freew.{prefix}-flip-vertical",   new ActionRibbonCommand(() => editor.FlipSelectedFloating(horizontal: false)));
-            r.Register($"freew.{prefix}-flip-horizontal", new ActionRibbonCommand(() => editor.FlipSelectedFloating(horizontal: true)));
-
-            // Z-order.
-            r.Register($"freew.{prefix}-bring-to-front", new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringToFront)));
-            r.Register($"freew.{prefix}-send-to-back",   new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendToBack)));
-            r.Register($"freew.{prefix}-bring-forward",  new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringForward)));
-            r.Register($"freew.{prefix}-send-backward",  new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendBackward)));
-
-            // Size — width/height combos (value = points as an invariant-culture decimal).
-            r.Register($"freew.{prefix}-width", new ValueRibbonCommand(value =>
+            r.Register(
+                ObjectFormatCommandPlanner.WrapDropdownCommandId(target),
+                new ActionRibbonCommand(() => { /* dropdown opener */ }));
+            foreach (var command in ObjectFormatCommandPlanner.WrapCommands(target))
             {
-                if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0)
-                    editor.SetFloatingWidth(pt);
-            }));
-            r.Register($"freew.{prefix}-height", new ValueRibbonCommand(value =>
+                var wrapping = command.Wrapping;
+                r.Register(command.CommandId, new ActionRibbonCommand(() => editor.SetFloatingWrap(wrapping)));
+            }
+
+            r.Register(
+                ObjectFormatCommandPlanner.TransformDropdownCommandId(target),
+                new ActionRibbonCommand(() => { /* dropdown opener */ }));
+            foreach (var command in ObjectFormatCommandPlanner.TransformCommands(target))
+                r.Register(command.CommandId, new ActionRibbonCommand(() => ExecuteFloatingTransform(editor, command)));
+
+            foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(target))
             {
-                if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0)
-                    editor.SetFloatingHeight(pt);
-            }));
+                var operation = command.Operation;
+                r.Register(command.CommandId, new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(operation)));
+            }
+
+            foreach (var command in ObjectFormatCommandPlanner.SizeCommands(target))
+            {
+                var dimension = command.Dimension;
+                r.Register(command.CommandId, new ValueRibbonCommand(value =>
+                {
+                    if (ObjectFormatCommandPlanner.TryParseSizePoints(value, out var pt))
+                        SetFloatingSize(editor, dimension, pt);
+                }));
+            }
         }
 
         // Shape Styles fill/outline — DEFERRED: no DocumentView setter for shape fill/outline yet.
         // Registered as safe no-op openers so the ribbon's registry-completeness guard passes.
         r.Register("freew.shape-fill",    new ActionRibbonCommand(() => { /* deferred: shape fill edit */ }));
         r.Register("freew.shape-outline", new ActionRibbonCommand(() => { /* deferred: shape outline edit */ }));
+    }
+
+    private static void ExecuteFloatingTransform(DocumentView editor, ObjectFormatTransformCommand command)
+    {
+        switch (command.Kind)
+        {
+            case ObjectFormatTransformKind.Rotate:
+                editor.RotateSelectedFloating(command.RotationDeltaDegrees);
+                break;
+            case ObjectFormatTransformKind.FlipHorizontal:
+                editor.FlipSelectedFloating(horizontal: true);
+                break;
+            case ObjectFormatTransformKind.FlipVertical:
+                editor.FlipSelectedFloating(horizontal: false);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(command), command, null);
+        }
+    }
+
+    private static void SetFloatingSize(
+        DocumentView editor,
+        ObjectFormatSizeDimension dimension,
+        double points)
+    {
+        switch (dimension)
+        {
+            case ObjectFormatSizeDimension.Width:
+                editor.SetFloatingWidth(points);
+                break;
+            case ObjectFormatSizeDimension.Height:
+                editor.SetFloatingHeight(points);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(dimension), dimension, null);
+        }
     }
 
     /// <summary>

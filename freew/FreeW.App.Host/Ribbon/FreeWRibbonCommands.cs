@@ -24,6 +24,28 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class FreeWRibbonCommands
 {
+    private static IRibbonCommand BuildImageTransformCommand(
+        DocumentView editor,
+        ObjectFormatTransformCommand command) =>
+        command.Kind switch
+        {
+            ObjectFormatTransformKind.Rotate => new ImageRotateStepCommand(editor, command.RotationDeltaDegrees),
+            ObjectFormatTransformKind.FlipHorizontal => new ImageFlipCommand(editor, vertical: false),
+            ObjectFormatTransformKind.FlipVertical => new ImageFlipCommand(editor, vertical: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
+        };
+
+    private static IRibbonCommand BuildShapeTransformCommand(
+        DocumentView editor,
+        ObjectFormatTransformCommand command) =>
+        command.Kind switch
+        {
+            ObjectFormatTransformKind.Rotate => new ShapeRotateStepCommand(editor, command.RotationDeltaDegrees),
+            ObjectFormatTransformKind.FlipHorizontal => new ShapeFlipCommand(editor, vertical: false),
+            ObjectFormatTransformKind.FlipVertical => new ShapeFlipCommand(editor, vertical: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
+        };
+
     public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore) =>
         Build(editor, stateStore, onPrintPreview: null);
 
@@ -361,17 +383,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-align-to-margin", new FloatingAlignCommand(editor, FloatingAlignTarget.Margin));
         registry.Register("freew.image-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
         registry.Register("freew.image-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
-        registry.Register("freew.image-wrap-inline", new ImageWrapCommand(editor, ImageWrapping.Inline));
-        registry.Register("freew.image-wrap-square", new ImageWrapCommand(editor, ImageWrapping.Square));
-        registry.Register("freew.image-wrap-tight", new ImageWrapCommand(editor, ImageWrapping.Tight));
-        registry.Register("freew.image-wrap-top-bottom", new ImageWrapCommand(editor, ImageWrapping.TopAndBottom));
-        registry.Register("freew.image-wrap-behind", new ImageWrapCommand(editor, ImageWrapping.Behind));
-        registry.Register("freew.image-wrap-front", new ImageWrapCommand(editor, ImageWrapping.InFront));
+        foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Picture))
+            registry.Register(command.CommandId, new ImageWrapCommand(editor, command.Wrapping));
         // Picture Format tab — Arrange > Rotate / Flip.
-        registry.Register("freew.image-rotate-right90", new ImageRotateStepCommand(editor, +90));
-        registry.Register("freew.image-rotate-left90",  new ImageRotateStepCommand(editor, -90));
-        registry.Register("freew.image-flip-vertical",  new ImageFlipCommand(editor, vertical: true));
-        registry.Register("freew.image-flip-horizontal",new ImageFlipCommand(editor, vertical: false));
+        foreach (var command in ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Picture))
+            registry.Register(command.CommandId, BuildImageTransformCommand(editor, command));
         // Picture Format tab — Arrange > Position.
         registry.Register("freew.image-position", new ImagePositionCommand(editor));
         // Picture Format tab — Adjust > Corrections (brightness/contrast presets + dialog).
@@ -467,10 +483,8 @@ internal static class FreeWRibbonCommands
             registry.Register($"freew.image-style-{p.Id}", new ImageStylePresetCommand(editor, p));
         }
         // Picture Format tab — Arrange > Z-order (floating images only).
-        registry.Register("freew.image-bring-to-front",  new ImageZOrderCommand(editor, ZOrderOperation.BringToFront));
-        registry.Register("freew.image-send-to-back",    new ImageZOrderCommand(editor, ZOrderOperation.SendToBack));
-        registry.Register("freew.image-bring-forward",   new ImageZOrderCommand(editor, ZOrderOperation.BringForward));
-        registry.Register("freew.image-send-backward",   new ImageZOrderCommand(editor, ZOrderOperation.SendBackward));
+        foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Picture))
+            registry.Register(command.CommandId, new ImageZOrderCommand(editor, command.Operation));
         // Picture Format / Drawing Format — Arrange > Group / Ungroup (Phase 4).
         registry.Register("freew.object-group",   new ObjectGroupCommand(editor));
         registry.Register("freew.object-ungroup", new ObjectUngroupCommand(editor));
@@ -811,17 +825,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.shape-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
         registry.Register("freew.shape-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
         // Drawing Tools > Arrange — Wrap Text (6 modes for shapes, mirrors image-wrap-* pattern).
-        registry.Register("freew.shape-wrap-inline",     new ShapeWrapCommand(editor, ImageWrapping.Inline));
-        registry.Register("freew.shape-wrap-square",     new ShapeWrapCommand(editor, ImageWrapping.Square));
-        registry.Register("freew.shape-wrap-tight",      new ShapeWrapCommand(editor, ImageWrapping.Tight));
-        registry.Register("freew.shape-wrap-top-bottom", new ShapeWrapCommand(editor, ImageWrapping.TopAndBottom));
-        registry.Register("freew.shape-wrap-behind",     new ShapeWrapCommand(editor, ImageWrapping.Behind));
-        registry.Register("freew.shape-wrap-front",      new ShapeWrapCommand(editor, ImageWrapping.InFront));
+        foreach (var command in ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Shape))
+            registry.Register(command.CommandId, new ShapeWrapCommand(editor, command.Wrapping));
         // Drawing Tools > Arrange — Rotate / Flip (mirrors image-rotate-* / image-flip-* pattern).
-        registry.Register("freew.shape-rotate-right90",  new ShapeRotateStepCommand(editor, +90));
-        registry.Register("freew.shape-rotate-left90",   new ShapeRotateStepCommand(editor, -90));
-        registry.Register("freew.shape-flip-vertical",   new ShapeFlipCommand(editor, vertical: true));
-        registry.Register("freew.shape-flip-horizontal", new ShapeFlipCommand(editor, vertical: false));
+        foreach (var command in ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Shape))
+            registry.Register(command.CommandId, BuildShapeTransformCommand(editor, command));
         // Drawing Tools > Arrange — Position (opens the same dialog as image-position, applied to shape).
         registry.Register("freew.shape-position", new ShapePositionCommand(editor));
 
