@@ -17,54 +17,50 @@ public static class QuickAnalysisPreviewIconFactory
             Margin = new Thickness(0, 0, 6, 0)
         };
 
-        switch (visual.Kind)
+        var plan = QuickAnalysisPreviewIconPlanner.Plan(visual);
+        switch (plan.Glyph)
         {
-            case QuickAnalysisPreviewVisualKind.DataBars:
+            case QuickAnalysisPreviewIconGlyph.HorizontalBars:
                 AddBars(canvas, vertical: false, stacked: false);
                 break;
-            case QuickAnalysisPreviewVisualKind.ColorScale:
+            case QuickAnalysisPreviewIconGlyph.ColorScale:
                 AddColorScale(canvas);
                 break;
-            case QuickAnalysisPreviewVisualKind.IconSet:
+            case QuickAnalysisPreviewIconGlyph.IconSet:
                 AddIconSet(canvas);
                 break;
-            case QuickAnalysisPreviewVisualKind.Highlight:
+            case QuickAnalysisPreviewIconGlyph.HighlightGrid:
                 AddGrid(canvas, Brushes.LightGoldenrodYellow, Brushes.Goldenrod);
                 break;
-            case QuickAnalysisPreviewVisualKind.ClearFormat:
+            case QuickAnalysisPreviewIconGlyph.ClearFormat:
                 AddGrid(canvas, Brushes.White, Brushes.LightGray);
                 AddLine(canvas, 6, 17, 28, 5, Brushes.Firebrick, 1.5);
                 break;
-            case QuickAnalysisPreviewVisualKind.ColumnChart:
-            case QuickAnalysisPreviewVisualKind.ColumnSparkline:
+            case QuickAnalysisPreviewIconGlyph.VerticalBars:
                 AddBars(canvas, vertical: true, stacked: false);
                 break;
-            case QuickAnalysisPreviewVisualKind.StackedColumnChart:
+            case QuickAnalysisPreviewIconGlyph.StackedVerticalBars:
                 AddBars(canvas, vertical: true, stacked: true);
                 break;
-            case QuickAnalysisPreviewVisualKind.LineChart:
-            case QuickAnalysisPreviewVisualKind.LineSparkline:
+            case QuickAnalysisPreviewIconGlyph.LineChart:
                 AddLineChart(canvas);
                 break;
-            case QuickAnalysisPreviewVisualKind.PieChart:
+            case QuickAnalysisPreviewIconGlyph.Pie:
                 AddPie(canvas);
                 break;
-            case QuickAnalysisPreviewVisualKind.BarChart:
-                AddBars(canvas, vertical: false, stacked: false);
-                break;
-            case QuickAnalysisPreviewVisualKind.AreaChart:
+            case QuickAnalysisPreviewIconGlyph.Area:
                 AddArea(canvas);
                 break;
-            case QuickAnalysisPreviewVisualKind.ScatterChart:
+            case QuickAnalysisPreviewIconGlyph.Scatter:
                 AddScatter(canvas);
                 break;
-            case QuickAnalysisPreviewVisualKind.TotalFormula:
+            case QuickAnalysisPreviewIconGlyph.Formula:
                 AddFormula(canvas);
                 break;
-            case QuickAnalysisPreviewVisualKind.Table:
+            case QuickAnalysisPreviewIconGlyph.Table:
                 AddGrid(canvas, new SolidColorBrush(Color.FromRgb(229, 244, 239)), new SolidColorBrush(Color.FromRgb(38, 120, 95)));
                 break;
-            case QuickAnalysisPreviewVisualKind.WinLossSparkline:
+            case QuickAnalysisPreviewIconGlyph.WinLoss:
                 AddWinLoss(canvas);
                 break;
             default:

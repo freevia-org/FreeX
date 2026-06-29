@@ -87,6 +87,17 @@ public sealed class QuickAnalysisShellActionPlannerTests
 
         action.Kind.Should().Be(QuickAnalysisShellActionKind.InsertAggregateTotalFormula);
         action.TotalFunction.Should().Be("SUM");
+        action.TotalCommandTitle.Should().Be("Quick Analysis Sum");
+    }
+
+    [Theory]
+    [InlineData("total.percenttotal", "Quick Analysis % Total")]
+    [InlineData("total.runningtotal", "Quick Analysis Running Total")]
+    public void Plan_ExpandedTotalsCarryStableCommandTitles(string itemId, string expectedTitle)
+    {
+        var action = Plan(itemId, QuickAnalysisShellCapabilities.DialogBacked);
+
+        action.TotalCommandTitle.Should().Be(expectedTitle);
     }
 
     [Theory]

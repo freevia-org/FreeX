@@ -24,6 +24,7 @@ public sealed class QuickAnalysisShellOpenPlannerTests
         plan.CanOpen.Should().BeTrue();
         plan.Selection.Should().Be(selection);
         plan.ShellPlan.Should().Be(request.ShellPlan);
+        plan.Issue.Should().BeNull();
     }
 
     [Theory]
@@ -41,6 +42,10 @@ public sealed class QuickAnalysisShellOpenPlannerTests
         plan.CanOpen.Should().BeFalse();
         plan.Selection.Should().Be(selection);
         plan.ShellPlan.IsEmpty.Should().BeTrue();
+        plan.Issue.Should().Be(new QuickAnalysisShellOpenIssuePlan(
+            "QuickAnalysis_SelectRangeStatus",
+            "TableLoc_QaSelectMoreThanOne",
+            RequiresSelectionReference: false));
     }
 
     [Fact]
@@ -54,6 +59,10 @@ public sealed class QuickAnalysisShellOpenPlannerTests
         plan.CanOpen.Should().BeFalse();
         plan.Selection.Should().BeNull();
         plan.ShellPlan.IsEmpty.Should().BeTrue();
+        plan.Issue.Should().Be(new QuickAnalysisShellOpenIssuePlan(
+            "QuickAnalysis_SelectRangeStatus",
+            "TableLoc_QaSelectMoreThanOne",
+            RequiresSelectionReference: false));
     }
 
     [Fact]
@@ -74,6 +83,10 @@ public sealed class QuickAnalysisShellOpenPlannerTests
         plan.CanOpen.Should().BeFalse();
         plan.Selection.Should().Be(selection);
         plan.ShellPlan.IsEmpty.Should().BeTrue();
+        plan.Issue.Should().Be(new QuickAnalysisShellOpenIssuePlan(
+            "TableLoc_QaNoSuggestions",
+            "TableLoc_QaNoSuggestions",
+            RequiresSelectionReference: true));
     }
 
     private static Sheet CreateSheet() => new Workbook("Book").AddSheet("Sheet1");

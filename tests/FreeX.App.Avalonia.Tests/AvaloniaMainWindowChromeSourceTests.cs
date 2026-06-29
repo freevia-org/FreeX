@@ -30,12 +30,15 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
         source.Should().NotContain("request.Status is QuickAnalysisShellRequestStatus");
         source.Should().NotContain("if (!request.CanOpen)");
+        source.Should().Contain("var issue = openPlan.Issue");
+        source.Should().NotContain("openPlan.Decision == QuickAnalysisShellOpenDecision");
         source.Should().Contain("Text = UiText.Get(group.TitleResourceKey)");
         source.Should().Contain("foreach (var group in shellPlan.Groups)");
         source.Should().NotContain("foreach (var group in displayModel.Groups)");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, item.AutomationId)");
         requestPlannerSource.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(displayModel, capabilities, range)");
-        openPlannerSource.Should().Contain("QuickAnalysisShellOpenDecision.ShowNoSuggestionsIssue");
+        openPlannerSource.Should().Contain("new QuickAnalysisShellOpenIssuePlan(");
+        openPlannerSource.Should().Contain("\"TableLoc_QaNoSuggestions\"");
         plannerSource.Should().Contain("GroupTitleResourceKey(group.Group)");
         plannerSource.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
         source.Should().NotContain("QuickAnalysisGroupTitle(");
