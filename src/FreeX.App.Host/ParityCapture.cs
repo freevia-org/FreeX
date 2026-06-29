@@ -8,6 +8,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
@@ -342,13 +343,14 @@ internal static class ParityCapture
 
     private static UIElement CreateBackstageAccountPane()
     {
+        var pane = BuildParityCapturedBackstageAccountPanePlan();
         var root = new StackPanel
         {
             Margin = new Thickness(40, 34, 46, 0),
         };
         root.Children.Add(new TextBlock
         {
-            Text = "Account",
+            Text = UiText.Get(pane.TitleKey),
             FontSize = 30,
             FontWeight = FontWeights.SemiBold,
             Foreground = Brushes.Black,
@@ -356,7 +358,7 @@ internal static class ParityCapture
         });
         root.Children.Add(new TextBlock
         {
-            Text = "Local account information",
+            Text = UiText.Get(pane.LocalInfoHeadingKey),
             FontSize = 16,
             FontWeight = FontWeights.SemiBold,
             Foreground = Brushes.Black,
@@ -366,25 +368,44 @@ internal static class ParityCapture
         var details = new Grid();
         details.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
         details.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var rows = new (string Label, string Value)[]
+        for (var i = 0; i < pane.Details.Count; i++)
         {
-            ("FreeX user name", "quinn"),
-            ("Local OS account", Environment.UserName),
-            ("Device", Environment.MachineName),
-            ("App version", AppInfo.ExactVersionText),
-            ("Options file", "Local profile settings"),
-            ("Current workbook", "Parity Demo (not saved yet)"),
-            ("Sharing", "Save As is required before Windows Share can send the workbook."),
-            ("Export", "Ready for local PDF/XPS export to a chosen local path."),
-        };
-        for (var i = 0; i < rows.Length; i++)
-        {
+            var detail = pane.Details[i];
             details.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            AddAccountDetail(details, i, rows[i].Label, rows[i].Value);
+            AddAccountDetail(
+                details,
+                i,
+                UiText.Get(detail.LabelKey),
+                ResolveBackstageAccountValue(detail.Value));
         }
         root.Children.Add(details);
         return root;
     }
+
+    private static FreeXBackstageAccountPanePlan BuildParityCapturedBackstageAccountPanePlan()
+    {
+        var accountInfo = LocalAccountInfoPlanner.Build(
+            typeof(MainWindow).Assembly,
+            deviceName: Environment.MachineName,
+            userName: Environment.UserName,
+            optionsAvailable: true);
+
+        return FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+            accountInfo.UserName,
+            accountInfo.DeviceName,
+            accountInfo.VersionText,
+            accountInfo.OptionsAvailable,
+            null,
+            "Parity Demo (not saved yet)",
+            accountInfo.TrademarkNotice,
+            accountInfo.LicenseNotice,
+            accountInfo.PrivacyNotice));
+    }
+
+    private static string ResolveBackstageAccountValue(FreeXBackstageTextValue value) =>
+        value.TextKey is { } key
+            ? UiText.Get(key)
+            : value.Text ?? string.Empty;
 
     private static void AddAccountDetail(Grid grid, int row, string label, string value)
     {

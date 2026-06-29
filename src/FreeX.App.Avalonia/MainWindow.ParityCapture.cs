@@ -2461,6 +2461,7 @@ public sealed partial class MainWindow
 
     private static Control CreateParityCapturedBackstageAccountPane()
     {
+        var pane = BuildParityCapturedBackstageAccountPanePlan();
         var root = new StackPanel
         {
             Margin = new Thickness(44, 34, 46, 0),
@@ -2468,7 +2469,7 @@ public sealed partial class MainWindow
         };
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get("Backstage_Account_Title"),
+            Text = UiText.Get(pane.TitleKey),
             FontSize = 30,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
@@ -2478,7 +2479,7 @@ public sealed partial class MainWindow
         // local workbook/sharing/export readiness — and no cloud-account note. Mirror that here.
         root.Children.Add(new TextBlock
         {
-            Text = BackstageAccountText("Backstage_Account_LocalInfoHeading"),
+            Text = BackstageAccountText(pane.LocalInfoHeadingKey),
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
@@ -2492,7 +2493,7 @@ public sealed partial class MainWindow
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
-        var rows = BuildParityCapturedBackstageAccountRows();
+        var rows = BuildParityCapturedBackstageAccountRows(pane);
         for (var i = 0; i < rows.Length; i++)
         {
             details.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -2526,30 +2527,45 @@ public sealed partial class MainWindow
         };
     }
 
-    private static (string Label, string Value)[] BuildParityCapturedBackstageAccountRows()
+    private static FreeXBackstageAccountPanePlan BuildParityCapturedBackstageAccountPanePlan()
     {
-        var osAccount = Environment.UserName;
-        // Personalized FreeX user name falls back to the OS account when no override is configured —
-        // matching the Windows page, which shows the configured user name for both rows by default.
-        var freeXUser = string.IsNullOrWhiteSpace(osAccount) ? "Unknown" : osAccount;
+        var accountInfo = LocalAccountInfoPlanner.Build(
+            typeof(MainWindow).Assembly,
+            deviceName: Environment.MachineName,
+            userName: Environment.UserName,
+            optionsAvailable: true);
 
-        return new[]
-        {
-            (BackstageAccountText("Backstage_Account_FreeXUserNameLabel"), freeXUser),
-            (BackstageAccountText("Backstage_Account_LocalOSAccountLabel"), osAccount),
-            (BackstageAccountText("Backstage_Account_DeviceRowLabel"), Environment.MachineName),
-            (BackstageAccountText("Backstage_Account_AppVersionLabel"),
-                AppHelpInfo.GetBuildVersionText(typeof(MainWindow).Assembly)),
-            (BackstageAccountText("Backstage_Account_OptionsFileLabel"),
-                BackstageAccountText("Backstage_Account_OptionsFileLocalProfile")),
-            (BackstageAccountText("Backstage_Account_CurrentWorkbookLabel"),
-                BackstageAccountText("Backstage_Account_CurrentWorkbookNotSaved")),
-            (BackstageAccountText("Backstage_Account_SharingLabel"),
-                BackstageAccountText("Backstage_Account_SharingSaveAsRequired")),
-            (BackstageAccountText("Backstage_Account_ExportLabel"),
-                BackstageAccountText("Backstage_Account_ExportReadyLocal")),
-        };
+        return FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+            accountInfo.UserName,
+            accountInfo.DeviceName,
+            accountInfo.VersionText,
+            accountInfo.OptionsAvailable,
+            null,
+            "Parity Demo (not saved yet)",
+            accountInfo.TrademarkNotice,
+            accountInfo.LicenseNotice,
+            accountInfo.PrivacyNotice));
     }
+
+    private static (string Label, string Value)[] BuildParityCapturedBackstageAccountRows(
+        FreeXBackstageAccountPanePlan pane)
+    {
+        var rows = new (string Label, string Value)[pane.Details.Count];
+        for (var i = 0; i < pane.Details.Count; i++)
+        {
+            var detail = pane.Details[i];
+            rows[i] = (
+                BackstageAccountText(detail.LabelKey),
+                ResolveParityCapturedBackstageAccountValue(detail.Value));
+        }
+
+        return rows;
+    }
+
+    private static string ResolveParityCapturedBackstageAccountValue(FreeXBackstageTextValue value) =>
+        value.TextKey is { } key
+            ? BackstageAccountText(key)
+            : value.Text ?? string.Empty;
 
     /// <summary>
     /// Resolves a backstage Account string, falling back to the canonical English text when the
@@ -2577,7 +2593,6 @@ public sealed partial class MainWindow
             "Backstage_Account_OptionsFileLabel" => "Options file",
             "Backstage_Account_OptionsFileLocalProfile" => "Local profile settings",
             "Backstage_Account_CurrentWorkbookLabel" => "Current workbook",
-            "Backstage_Account_CurrentWorkbookNotSaved" => "Parity Demo (not saved yet)",
             "Backstage_Account_SharingLabel" => "Sharing",
             "Backstage_Account_SharingSaveAsRequired" => "Save As is required before local share can send the workbook.",
             "Backstage_Account_ExportLabel" => "Export",
