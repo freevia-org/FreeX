@@ -1,3 +1,5 @@
+using Free.Shared.Opc;
+
 namespace FreeW.Core.Model;
 
 /// <summary>
@@ -111,23 +113,13 @@ public static class DocumentInspector
 
     /// <summary>
     /// Remove every core document property: resets every field of
-    /// <see cref="TextDocument.Properties"/> to null (title, author, subject, keywords, comments,
-    /// last-modified-by, and the created/modified timestamps). Mutates <paramref name="document"/> in
-    /// place.
+    /// <see cref="TextDocument.Properties"/> to null. Mutates <paramref name="document"/> in place.
     /// </summary>
     public static void RemoveProperties(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var properties = document.Properties;
-        properties.Title = null;
-        properties.Author = null;
-        properties.Subject = null;
-        properties.Keywords = null;
-        properties.Comments = null;
-        properties.LastModifiedBy = null;
-        properties.Created = null;
-        properties.Modified = null;
+        document.Properties.Clear();
     }
 
     /// <summary>
@@ -153,19 +145,8 @@ public static class DocumentInspector
     }
 
     // Count the populated (non-null, non-whitespace for strings) core document properties.
-    private static int CountNonEmptyProperties(DocumentProperties properties)
-    {
-        var count = 0;
-        if (!string.IsNullOrWhiteSpace(properties.Title)) count++;
-        if (!string.IsNullOrWhiteSpace(properties.Author)) count++;
-        if (!string.IsNullOrWhiteSpace(properties.Subject)) count++;
-        if (!string.IsNullOrWhiteSpace(properties.Keywords)) count++;
-        if (!string.IsNullOrWhiteSpace(properties.Comments)) count++;
-        if (!string.IsNullOrWhiteSpace(properties.LastModifiedBy)) count++;
-        if (properties.Created is not null) count++;
-        if (properties.Modified is not null) count++;
-        return count;
-    }
+    private static int CountNonEmptyProperties(DocumentProperties properties) =>
+        properties.CountNonEmptyCoreProperties();
 
     // Every paragraph reachable in the document body — top-level paragraphs and those nested in table
     // cells (the same walk TrackChanges uses), so inspection/removal cover all body runs and bookmarks.

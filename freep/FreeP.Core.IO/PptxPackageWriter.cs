@@ -1839,14 +1839,9 @@ public static class PptxPackageWriter
 
     // ── Core properties ───────────────────────────────────────────────────────────
 
-    private static XDocument BuildCorePropsXml(PresentationProperties props) =>
+    private static XDocument BuildCorePropsXml(DocumentProperties props) =>
         OpcDocumentProperties.BuildCorePropertiesDocument(
-            new CoreDocumentProperties(
-                Title: props.Title,
-                Author: props.Author,
-                Subject: props.Subject,
-                Keywords: props.Keywords,
-                Comments: props.Comments),
+            props.ToCoreProperties(),
             includeEmptyStrings: true,
             includeXmlDeclaration: true);
 

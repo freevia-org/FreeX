@@ -26,7 +26,16 @@ public sealed class FxpRoundTripTests : IDisposable
         var presentation = new Presentation();
         presentation.Properties.Title = "Quarterly Review";
         presentation.Properties.Author = "Ada Lovelace";
+        presentation.Properties.Subject = "Board update";
         presentation.Properties.Keywords = "q3, revenue";
+        presentation.Properties.Comments = "Prepared for leadership";
+        presentation.Properties.LastModifiedBy = "Grace Hopper";
+        presentation.Properties.Created = new DateTimeOffset(2026, 6, 29, 8, 0, 0, TimeSpan.Zero);
+        presentation.Properties.Modified = new DateTimeOffset(2026, 6, 29, 9, 15, 0, TimeSpan.Zero);
+        presentation.Properties.Category = "Business";
+        presentation.Properties.ContentStatus = "Draft";
+        presentation.Properties.Language = "en-US";
+        presentation.Properties.Version = "2026.06";
 
         var slide1 = new Slide { Id = "slide-1", Title = "Agenda" };
         // Non-placeholder content shapes (what FXP serializes in the Shapes array).
@@ -66,6 +75,16 @@ public sealed class FxpRoundTripTests : IDisposable
 
         reloaded.Properties.Title.Should().Be("Quarterly Review");
         reloaded.Properties.Author.Should().Be("Ada Lovelace");
+        reloaded.Properties.Subject.Should().Be("Board update");
+        reloaded.Properties.Keywords.Should().Be("q3, revenue");
+        reloaded.Properties.Comments.Should().Be("Prepared for leadership");
+        reloaded.Properties.LastModifiedBy.Should().Be("Grace Hopper");
+        reloaded.Properties.Created.Should().Be(new DateTimeOffset(2026, 6, 29, 8, 0, 0, TimeSpan.Zero));
+        reloaded.Properties.Modified.Should().Be(new DateTimeOffset(2026, 6, 29, 9, 15, 0, TimeSpan.Zero));
+        reloaded.Properties.Category.Should().Be("Business");
+        reloaded.Properties.ContentStatus.Should().Be("Draft");
+        reloaded.Properties.Language.Should().Be("en-US");
+        reloaded.Properties.Version.Should().Be("2026.06");
         reloaded.Slides.Should().HaveCount(2);
         reloaded.Slides[0].Id.Should().Be("slide-1");
         reloaded.Slides[0].Title.Should().Be("Agenda");

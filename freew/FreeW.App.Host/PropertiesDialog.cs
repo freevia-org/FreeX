@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.Opc;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;

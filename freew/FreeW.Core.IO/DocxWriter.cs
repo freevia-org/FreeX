@@ -922,15 +922,7 @@ public static class DocxWriter
     /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
     private static XDocument BuildCoreProperties(DocumentProperties properties) =>
         OpcDocumentProperties.BuildCorePropertiesDocument(
-            new CoreDocumentProperties(
-                Title: properties.Title,
-                Author: properties.Author,
-                Subject: properties.Subject,
-                Keywords: properties.Keywords,
-                Comments: properties.Comments,
-                LastModifiedBy: properties.LastModifiedBy,
-                Created: properties.Created,
-                Modified: properties.Modified),
+            properties.ToCoreProperties(),
             includeDcmiTypeNamespace: true);
 
     private static XDocument BuildDocumentRels(

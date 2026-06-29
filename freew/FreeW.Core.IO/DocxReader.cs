@@ -4377,18 +4377,9 @@ public static class DocxReader
     /// <summary>Parses docProps/core.xml into <see cref="TextDocument.Properties"/>; a missing part is fine.</summary>
     private static void ReadCoreProperties(ZipArchive archive, TextDocument document)
     {
-        var coreProperties = OpcDocumentProperties.ReadCoreProperties(archive);
-        var properties = document.Properties;
-        properties.Title = EmptyToNull(coreProperties.Title);
-        properties.Author = EmptyToNull(coreProperties.Author);
-        properties.Subject = EmptyToNull(coreProperties.Subject);
-        properties.Keywords = EmptyToNull(coreProperties.Keywords);
-        properties.Comments = EmptyToNull(coreProperties.Comments);
-        properties.LastModifiedBy = EmptyToNull(coreProperties.LastModifiedBy);
-        properties.Created = coreProperties.Created;
-        properties.Modified = coreProperties.Modified;
-
-        static string? EmptyToNull(string? value) => string.IsNullOrEmpty(value) ? null : value;
+        document.Properties.ApplyCoreProperties(
+            OpcDocumentProperties.ReadCoreProperties(archive),
+            emptyStringsAsNull: true);
     }
 
     /// <summary>
