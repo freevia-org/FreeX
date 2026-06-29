@@ -77,8 +77,7 @@ internal static class XlsxRichRunLoader
         if (entry is null) return null;
 
         XDocument doc;
-        using (var stream = entry.Open())
-            doc = XDocument.Load(stream);
+        doc = OpcXml.LoadXml(entry);
 
         var root = doc.Root;
         if (root is null) return null;
@@ -111,8 +110,8 @@ internal static class XlsxRichRunLoader
         if (workbookEntry is null || relsEntry is null) return map;
 
         XDocument workbookXml, relsXml;
-        using (var s = workbookEntry.Open()) workbookXml = XDocument.Load(s);
-        using (var s = relsEntry.Open())     relsXml     = XDocument.Load(s);
+        workbookXml = OpcXml.LoadXml(workbookEntry);
+        relsXml     = OpcXml.LoadXml(relsEntry);
 
         var relTargets = XlsxRelationshipReader.ReadTargets(
             relsXml,
@@ -150,7 +149,7 @@ internal static class XlsxRichRunLoader
         if (entry is null) return;
 
         XDocument doc;
-        using (var s = entry.Open()) doc = XDocument.Load(s);
+        doc = OpcXml.LoadXml(entry);
 
         var sheetData = doc.Root?.Element(WorkbookNs + "sheetData");
         if (sheetData is null) return;

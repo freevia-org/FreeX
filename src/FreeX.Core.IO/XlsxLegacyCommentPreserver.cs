@@ -429,8 +429,7 @@ internal static class XlsxLegacyCommentPreserver
         XDocument sourceVml;
         try
         {
-            using var sourceVmlStream = sourceVmlEntry.Open();
-            sourceVml = XDocument.Load(sourceVmlStream);
+            sourceVml = OpcXml.LoadXml(sourceVmlEntry);
         }
         catch
         {
@@ -568,8 +567,7 @@ internal static class XlsxLegacyCommentPreserver
             try
             {
                 XDocument vml;
-                using (var stream = entry.Open())
-                    vml = XDocument.Load(stream);
+                vml = OpcXml.LoadXml(entry);
 
                 foreach (var (key, shape) in IndexNoteShapesByCell(vml))
                 {

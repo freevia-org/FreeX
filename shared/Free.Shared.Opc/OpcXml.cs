@@ -15,11 +15,29 @@ public static class OpcXml
     }
 
     public static XDocument LoadXml(
+        ZipArchiveEntry entry,
+        LoadOptions loadOptions,
+        long maxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument)
+    {
+        using var stream = entry.Open();
+        return LoadXml(stream, loadOptions, maxCharactersInDocument);
+    }
+
+    public static XDocument LoadXml(
         Stream stream,
         long maxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument)
     {
         using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create(maxCharactersInDocument));
         return XDocument.Load(reader);
+    }
+
+    public static XDocument LoadXml(
+        Stream stream,
+        LoadOptions loadOptions,
+        long maxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument)
+    {
+        using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create(maxCharactersInDocument));
+        return XDocument.Load(reader, loadOptions);
     }
 
     public static XDocument? LoadXmlOrNull(
