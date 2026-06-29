@@ -315,6 +315,52 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void DocumentProperties_ConvertsToAndFromCoreProperties()
+    {
+        var created = new DateTimeOffset(2026, 6, 29, 8, 0, 0, TimeSpan.Zero);
+        var modified = created.AddHours(2);
+        var properties = new DocumentProperties
+        {
+            Title = "Shared title",
+            Author = "Shared author",
+            Subject = "Shared subject",
+            Keywords = "shared,opc",
+            Comments = "Shared comments",
+            LastModifiedBy = "Shared editor",
+            Created = created,
+            Modified = modified,
+            Category = "Shared category",
+            ContentStatus = "Draft",
+            Language = "en-US",
+            Version = "1.2.3"
+        };
+
+        var core = properties.ToCoreProperties();
+
+        core.Should().Be(new CoreDocumentProperties(
+            Title: "Shared title",
+            Author: "Shared author",
+            Subject: "Shared subject",
+            Keywords: "shared,opc",
+            Comments: "Shared comments",
+            LastModifiedBy: "Shared editor",
+            Created: created,
+            Modified: modified,
+            Category: "Shared category",
+            ContentStatus: "Draft",
+            Language: "en-US",
+            Version: "1.2.3"));
+
+        var copy = DocumentProperties.FromCoreProperties(core);
+        copy.Should().BeEquivalentTo(properties);
+        copy.CountNonEmptyCoreProperties().Should().Be(12);
+
+        copy.Clear();
+        copy.CountNonEmptyCoreProperties().Should().Be(0);
+        copy.ToCoreProperties().Should().Be(new CoreDocumentProperties());
+    }
+
+    [Fact]
     public void ExtendedDocumentProperties_BuildAndRead_RoundTripsSharedOpcFields()
     {
         var properties = new ExtendedDocumentProperties(

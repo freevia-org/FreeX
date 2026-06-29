@@ -1,3 +1,5 @@
+using Free.Shared.Opc;
+
 namespace FreeW.Core.Model;
 
 /// <summary>

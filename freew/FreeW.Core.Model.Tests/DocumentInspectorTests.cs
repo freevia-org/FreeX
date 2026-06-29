@@ -2,6 +2,16 @@ namespace FreeW.Core.Model.Tests;
 
 public class DocumentInspectorTests
 {
+    [Fact]
+    public void TextDocument_UsesSharedDocumentPropertiesModel()
+    {
+        typeof(TextDocument)
+            .GetProperty(nameof(TextDocument.Properties))!
+            .PropertyType
+            .Should()
+            .Be(typeof(Free.Shared.Opc.DocumentProperties));
+    }
+
     // A document carrying one of every inspected category: two comments, two tracked revisions
     // (one insertion + one deletion), several populated properties, and two bookmarks (one of them
     // in a table cell, with an internal-link anchor pointing at it).

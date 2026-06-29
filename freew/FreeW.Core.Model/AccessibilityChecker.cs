@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Opc;
 
 namespace FreeW.Core.Model;
 

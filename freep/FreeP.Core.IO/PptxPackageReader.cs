@@ -256,14 +256,9 @@ public static class PptxPackageReader
 
     // ── Core properties ──────────────────────────────────────────────────────────
 
-    private static void ReadCoreProperties(ZipArchive archive, string path, PresentationProperties props)
+    private static void ReadCoreProperties(ZipArchive archive, string path, DocumentProperties props)
     {
-        var properties = OpcDocumentProperties.ReadCoreProperties(archive, path);
-        props.Title = properties.Title;
-        props.Author = properties.Author;
-        props.Subject = properties.Subject;
-        props.Keywords = properties.Keywords;
-        props.Comments = properties.Comments;
+        props.ApplyCoreProperties(OpcDocumentProperties.ReadCoreProperties(archive, path));
     }
 
     // ── Sections ─────────────────────────────────────────────────────────────────

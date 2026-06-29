@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 
 namespace FreeP.App.Host.Tests;
 
@@ -24,11 +25,26 @@ public sealed class PptxPackageRetentionTests
     public void CoreProperties_RoundTripThroughPptxPackage()
     {
         var presentation = Presentation.CreateEmpty();
+        var created = new DateTimeOffset(2026, 6, 29, 9, 30, 0, TimeSpan.Zero);
+        var modified = created.AddMinutes(45);
+        typeof(Presentation)
+            .GetProperty(nameof(Presentation.Properties))!
+            .PropertyType
+            .Should()
+            .Be(typeof(DocumentProperties));
+
         presentation.Properties.Title = "FreeP title";
         presentation.Properties.Author = "FreeP author";
         presentation.Properties.Subject = "FreeP subject";
         presentation.Properties.Keywords = "freep,pptx,opc";
         presentation.Properties.Comments = "FreeP comments";
+        presentation.Properties.LastModifiedBy = "FreeP editor";
+        presentation.Properties.Created = created;
+        presentation.Properties.Modified = modified;
+        presentation.Properties.Category = "FreeP category";
+        presentation.Properties.ContentStatus = "Draft";
+        presentation.Properties.Language = "en-US";
+        presentation.Properties.Version = "2026.06";
 
         using var stream = new MemoryStream();
         PptxPackageWriter.Write(presentation, stream);
@@ -42,6 +58,13 @@ public sealed class PptxPackageRetentionTests
             coreXml.Root.Element(DcNs + "subject")!.Value.Should().Be("FreeP subject");
             coreXml.Root.Element(CpNs + "keywords")!.Value.Should().Be("freep,pptx,opc");
             coreXml.Root.Element(DcNs + "description")!.Value.Should().Be("FreeP comments");
+            coreXml.Root.Element(CpNs + "lastModifiedBy")!.Value.Should().Be("FreeP editor");
+            coreXml.Root.Element(DcTermsNs + "created")!.Value.Should().Be("2026-06-29T09:30:00Z");
+            coreXml.Root.Element(DcTermsNs + "modified")!.Value.Should().Be("2026-06-29T10:15:00Z");
+            coreXml.Root.Element(CpNs + "category")!.Value.Should().Be("FreeP category");
+            coreXml.Root.Element(CpNs + "contentStatus")!.Value.Should().Be("Draft");
+            coreXml.Root.Element(DcNs + "language")!.Value.Should().Be("en-US");
+            coreXml.Root.Element(CpNs + "version")!.Value.Should().Be("2026.06");
         }
 
         stream.Position = 0;
@@ -51,6 +74,13 @@ public sealed class PptxPackageRetentionTests
         reloaded.Properties.Subject.Should().Be("FreeP subject");
         reloaded.Properties.Keywords.Should().Be("freep,pptx,opc");
         reloaded.Properties.Comments.Should().Be("FreeP comments");
+        reloaded.Properties.LastModifiedBy.Should().Be("FreeP editor");
+        reloaded.Properties.Created.Should().Be(created);
+        reloaded.Properties.Modified.Should().Be(modified);
+        reloaded.Properties.Category.Should().Be("FreeP category");
+        reloaded.Properties.ContentStatus.Should().Be("Draft");
+        reloaded.Properties.Language.Should().Be("en-US");
+        reloaded.Properties.Version.Should().Be("2026.06");
     }
 
     [Fact]
@@ -194,6 +224,7 @@ public sealed class PptxPackageRetentionTests
     private static readonly XNamespace ContentTypesNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace DcNs = "http://purl.org/dc/elements/1.1/";
+    private static readonly XNamespace DcTermsNs = "http://purl.org/dc/terms/";
     private static readonly XNamespace CpNs =
         "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
 

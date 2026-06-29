@@ -1,3 +1,5 @@
+using Free.Shared.Opc;
+
 namespace FreeP.Core.Model;
 
 /// <summary>
@@ -34,7 +36,7 @@ public sealed class Presentation
     public PresentationTheme Theme { get; set; } = PresentationTheme.CreateDefault();
 
     /// <summary>Core document properties (title, author, subject, …).</summary>
-    public PresentationProperties Properties { get; } = new();
+    public DocumentProperties Properties { get; } = new();
 
     /// <summary>
     /// Original package entries captured by the PPTX reader so the writer can retain
