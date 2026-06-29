@@ -40,6 +40,14 @@ public sealed class DataToolDialogPlannerSourceGuardTests
         sort.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders, PlannerText)");
         sort.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
 
+        var subtotal = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
+        subtotal.Should().Contain("SharedSubtotalDialogPlanner.BuildColumnChoices(sheet, range, PlannerText)");
+        subtotal.Should().Contain("SharedSubtotalDialogPlanner.CreateFunctionChoices(PlannerText)");
+        subtotal.Should().Contain("SharedSubtotalDialogPlanner.TryCreateResult(");
+        subtotal.Should().Contain("SharedSubtotalDialogPlanner.CreateRemoveAllResult()");
+        subtotal.Should().NotContain("SubtotalFunctionService.TryParse");
+        subtotal.Should().NotContain("SpreadsheetDisplayFormatter.FormatCellValue");
+
         var selectDataSource = DialogSourceTestSupport.ReadHostSources("SelectDataSourceDialog.Planning.cs");
         selectDataSource.Should().Contain("SelectDataSourcePlanner.CreateResult(");
         selectDataSource.Should().Contain("SelectDataSourcePlanner.InferPreviewEntries(");

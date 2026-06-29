@@ -4,6 +4,7 @@ using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using SubtotalColumnChoice = FreeX.App.Presentation.DataTools.SubtotalDialogColumnChoice;
 
 namespace FreeX.App.Host.Tests;
 
@@ -196,9 +197,8 @@ public sealed partial class DataToolDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
 
         source.Should().Contain("ComboBox _functionBox = new()");
-        source.Should().Contain("CreateSubtotalFunctionChoices");
-        source.Should().Contain("ItemsSource = CreateSubtotalFunctionChoices()");
-        source.Should().Contain("SelectedValue = DefaultSubtotalFunction");
+        source.Should().Contain("SharedSubtotalDialogPlanner.CreateFunctionChoices(PlannerText)");
+        source.Should().Contain("SelectedValue = SharedSubtotalDialogPlanner.DefaultFunctionText");
         source.Should().Contain("SelectedValuePath = nameof(SubtotalFunctionChoice.FunctionText)");
         source.Should().NotContain("Header = \"Add subtotal to:\"");
         source.Should().Contain("_subtotalColumnList");
