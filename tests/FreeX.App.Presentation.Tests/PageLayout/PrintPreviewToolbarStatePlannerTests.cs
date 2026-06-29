@@ -110,6 +110,20 @@ public sealed class PrintPreviewToolbarStatePlannerTests
     }
 
     [Theory]
+    [InlineData(PrintPreviewPageRangeMode.AllPages, false)]
+    [InlineData(PrintPreviewPageRangeMode.CurrentPage, false)]
+    [InlineData(PrintPreviewPageRangeMode.Pages, true)]
+    public void CreatePageRangeSelectionPlan_EnablesPageBoxesOnlyForExplicitPages(
+        PrintPreviewPageRangeMode mode,
+        bool expectedPageBoxesEnabled)
+    {
+        var plan = PrintPreviewToolbarStatePlanner.CreatePageRangeSelectionPlan(mode);
+
+        plan.Mode.Should().Be(mode);
+        plan.PageBoxesEnabled.Should().Be(expectedPageBoxesEnabled);
+    }
+
+    [Theory]
     [InlineData(null, 1, 1, "Ready: Windows print dialog; 1 copy; 1 page")]
     [InlineData("", 2, 3, "Ready: Windows print dialog; 2 copies; 3 pages")]
     [InlineData("Office Printer", null, 4, "Ready: Office Printer; invalid copies; 4 pages")]

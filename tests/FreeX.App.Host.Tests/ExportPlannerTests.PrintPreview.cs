@@ -35,7 +35,8 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
+        source.Should().Contain("PrintPreviewToolbarCommand.Print");
+        source.Should().Contain("\"PrintPreview_PrintButton\"");
         source.Should().Contain("ShowNativePrintDialog");
         source.Should().Contain("NativePrintDialogService.ShowPrintDialogAndPrint");
         source.Should().Contain("Forms.PrintDialog");
@@ -217,19 +218,32 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("SetToolbarAutomation(firstButton, \"PrintPreviewFirstPageButton\", UiText.Get(\"PrintPreview_FirstPageAutomationName\")");
-        source.Should().Contain("SetToolbarAutomation(previousButton, \"PrintPreviewPreviousPageButton\", UiText.Get(\"PrintPreview_PreviousPageAutomationName\")");
-        source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", UiText.Get(\"PrintPreview_NextPageAutomationName\")");
-        source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", UiText.Get(\"PrintPreview_LastPageAutomationName\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(printButton, \"PrintPreviewPrintButton\")");
-        source.Should().Contain("SetToolbarAutomation(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId, UiText.Get(\"PrintPreview_CloseAutomationName\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(pageNumberBox, \"PrintPreviewPageNumberBox\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(pageStatusText, \"PrintPreviewPageStatusText\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(zoomBox, \"PrintPreviewZoomBox\")");
-        source.Should().Contain("SetToolbarAutomation(marginsButton, \"PrintPreviewMarginsButton\", UiText.Get(\"PrintPreview_MarginsAutomationName\")");
-        source.Should().Contain("SetToolbarAutomation(pageSetupButton, \"PrintPreviewPageSetupButton\", UiText.Get(\"PrintPreview_PageSetupAutomationName\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(settingsSummaryText, \"PrintPreviewSettingsSummaryText\")");
+        source.Should().Contain("PrintPreviewDialogPlanner.CreateToolbarCommandPlan(command)");
+        source.Should().Contain("PrintPreviewDialogPlanner.CreateNavigationCommandPlans()");
+        source.Should().Contain("PrintPreviewToolbarCommand.FirstPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.PreviousPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.NextPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.LastPage");
+        source.Should().Contain("PrintButtonAutomationId,");
+        source.Should().Contain("CloseButtonAutomationId,");
+        source.Should().Contain("PrintPreviewDialogPlanner.PageNumberBoxAutomationId");
+        source.Should().Contain("PrintPreviewDialogPlanner.PageStatusTextAutomationId");
+        source.Should().Contain("PrintPreviewDialogPlanner.ZoomBoxAutomationId");
+        source.Should().Contain("PrintPreviewDialogPlanner.SettingsSummaryTextAutomationId");
+        source.Should().Contain("SetToolbarAutomation(button, plan)");
+        source.Should().Contain("private static void SetToolbarAutomation(Control control, PrintPreviewToolbarCommandPlan plan)");
+        source.Should().Contain("plan.AutomationId");
         source.Should().Contain("private static void SetToolbarAutomation(Control control, string automationId, string name, string helpText)");
+    }
+
+    [Fact]
+    public void PrintPreviewDialogAndSettingsPanel_SharePrinterBoxPopulation()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("WpfPrintPreviewToolbarPlanner.PopulatePrinterBox(");
+        source.Should().Contain("public static void PopulatePrinterBox(");
+        source.Should().NotContain("private static void PopulatePrinterBox(ComboBox printerBox)");
     }
 
     [Fact]
@@ -302,6 +316,7 @@ public partial class ExportPlannerTests
         var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("PrintPreviewToolbarStatePlanner.CreatePageRangeToolbarPlan(");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreatePageRangeSelectionPlan(mode)");
         source.Should().Contain("Content = allPagesChoice.Text");
         source.Should().Contain("Content = currentPageChoice.Text");
         source.Should().Contain("Content = pagesChoice.Text");

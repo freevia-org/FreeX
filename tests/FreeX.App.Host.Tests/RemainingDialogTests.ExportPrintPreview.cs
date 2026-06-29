@@ -25,18 +25,22 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PreviousPageButton\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_NextPageButton\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_FirstPageButton\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_LastPageButton\")");
+        source.Should().Contain("\"PrintPreview_PreviousPageButton\"");
+        source.Should().Contain("\"PrintPreview_NextPageButton\"");
+        source.Should().Contain("\"PrintPreview_FirstPageButton\"");
+        source.Should().Contain("\"PrintPreview_LastPageButton\"");
+        source.Should().Contain("PrintPreviewToolbarCommand.PreviousPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.NextPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.FirstPage");
+        source.Should().Contain("PrintPreviewToolbarCommand.LastPage");
         source.Should().Contain("NavigationCommands.FirstPage");
         source.Should().Contain("NavigationCommands.LastPage");
         source.Should().Contain("Content = UiText.Get(\"PrintPreview_ZoomLabel\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_MarginsButton\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PageSetupButton\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CloseButton\")");
-        source.Should().Contain("IsCancel = true");
+        source.Should().Contain("\"PrintPreview_MarginsButton\"");
+        source.Should().Contain("\"PrintPreview_PageSetupButton\"");
+        source.Should().Contain("\"PrintPreview_PrintButton\"");
+        source.Should().Contain("\"PrintPreview_CloseButton\"");
+        source.Should().Contain("isCancel: true");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
     }
 }

@@ -100,6 +100,23 @@ public sealed class PrintPreviewSettingsPanelPlannerTests
         plan.ScalingOptions[4].Text.Should().Be("[PrintPreview_ScaleCustomOptions]");
     }
 
+    [Theory]
+    [InlineData("2", "5", 2, 5)]
+    [InlineData(" 3 ", "", 3, null)]
+    [InlineData("abc", "9", null, 9)]
+    [InlineData(null, "   ", null, null)]
+    public void CreatePageRangePlan_ParsesOptionalPageRangeFields(
+        string? fromText,
+        string? toText,
+        int? expectedFrom,
+        int? expectedTo)
+    {
+        var plan = PrintPreviewSettingsPanelPlanner.CreatePageRangePlan(fromText, toText);
+
+        plan.FromPage.Should().Be(expectedFrom);
+        plan.ToPage.Should().Be(expectedTo);
+    }
+
     private static Sheet CreateSheet() =>
         new Workbook("Book1").AddSheet("Sheet1");
 }

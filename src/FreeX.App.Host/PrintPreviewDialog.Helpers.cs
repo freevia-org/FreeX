@@ -74,48 +74,6 @@ public sealed partial class PrintPreviewDialog
         PrintPreviewSidesMode sidesMode) =>
         NativePrintDialogService.ShowPrintDialogAndPrint(paginator, printQueue, copies, collated, sidesMode, this);
 
-    private static void PopulatePrinterBox(ComboBox printerBox)
-    {
-        try
-        {
-            using var server = new LocalPrintServer();
-            foreach (var queue in server.GetPrintQueues())
-                printerBox.Items.Add(queue);
-
-            if (printerBox.Items.Count > 0)
-            {
-                printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
-                printerBox.SelectedItem = null;
-                foreach (var item in printerBox.Items)
-                {
-                    if (item is not PrintQueue queue)
-                        continue;
-
-                    if (string.Equals(
-                        queue.FullName,
-                        server.DefaultPrintQueue.FullName,
-                        StringComparison.OrdinalIgnoreCase))
-                    {
-                        printerBox.SelectedItem = queue;
-                        break;
-                    }
-                }
-
-                if (printerBox.SelectedItem is null)
-                    printerBox.SelectedIndex = 0;
-
-                return;
-            }
-        }
-        catch (PrintSystemException)
-        {
-        }
-
-        printerBox.IsEnabled = false;
-        printerBox.ToolTip = UiText.Get("PrintPreview_NoInstalledPrintersToolTip");
-        AutomationProperties.SetHelpText(printerBox, UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
-    }
-
     private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
     {
         var validCopies = TryParseCopyCount(copiesBox.Text, out var copies);
