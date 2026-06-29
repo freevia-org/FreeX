@@ -39,8 +39,13 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private const string PrintPreviewDefaultPrinterName = "HP30138B4D655D(HP Color Laser MFP 178 179)";
+
     private static readonly ITextMeasurer PrintPreviewTextMeasurer = new AvaloniaTextMeasurer();
     private static readonly IBrush PrintPreviewSurfaceBackground = Brush(82, 86, 92);
+    private static readonly PrintSettingsTextResolver PrintPreviewSettingsTextResolver = new(
+        UiText.Get,
+        (key, args) => UiText.Format(key, args));
 
     private async Task ShowPrintPreviewDialogAsync()
     {
@@ -303,7 +308,7 @@ public sealed partial class MainWindow
             pageNumberBox,
             pageStatusText);
         var previewPane = CreatePrintPreviewPane(documentToolbar, pageHost);
-        var settingsRail = CreatePrintPreviewSettingsRail(context.PageCount);
+        var settingsRail = CreatePrintPreviewSettingsRail(_session.ActiveSheet, context.PageCount);
         var topToolbar = CreatePrintPreviewTopToolbar(context.PageCount, exportButton, closeButton);
 
         var layout = new Grid
@@ -333,6 +338,10 @@ public sealed partial class MainWindow
 
     private static Border CreatePrintPreviewTopToolbar(int totalPages, Button printButton, Button closeButton)
     {
+        var rangePlan = PrintPreviewToolbarStatePlanner.CreatePageRangeToolbarPlan(
+            totalPages,
+            PrintPreviewSettingsTextResolver);
+
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -343,7 +352,7 @@ public sealed partial class MainWindow
             {
                 printButton,
                 new TextBlock { Text = PrintPreviewText("PrintPreview_PrinterLabel", "Printer:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                CreatePreviewComboBox(190, "HP30138B4D655D(HP Color Laser MFP 178 179)"),
+                CreatePreviewComboBox(190, PrintPreviewDefaultPrinterName),
                 new TextBlock { Text = PrintPreviewText("PrintPreview_CopiesLabel", "Copies:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 new TextBox
                 {
@@ -361,7 +370,7 @@ public sealed partial class MainWindow
                 },
                 new CheckBox
                 {
-                    Content = PrintPreviewText("PrintPreview_CollatedLabel", "Collated"),
+                    Content = PrintPreviewToolbarStatePlanner.CreateToolbarCollatedText(PrintPreviewSettingsTextResolver),
                     IsChecked = true,
                     MinHeight = 20,
                     MaxHeight = 20,
@@ -370,18 +379,21 @@ public sealed partial class MainWindow
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
                 new TextBlock { Text = PrintPreviewText("PrintPreview_SidesLabel", "Sides:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                CreatePreviewComboBox(178, PrintPreviewText("PrintPreview_SidesOneSided", "Print One Sided")),
+                CreatePreviewChoiceComboBox(
+                    178,
+                    PrintPreviewToolbarStatePlanner.CreateSidesOptions(PrintPreviewSettingsTextResolver),
+                    PrintPreviewToolbarStatePlanner.SidesModeToIndex(PrintPreviewSidesMode.OneSided)),
                 new TextBlock
                 {
                     Text = PrintPreviewToolbarStatePlanner.CreateStatusText(
-                        "HP30138B4D655D(HP Color Laser MFP 178 179)",
+                        PrintPreviewDefaultPrinterName,
                         1,
                         totalPages),
                     MaxWidth = 280,
                     TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 },
-                CreatePreviewComboBox(96, PrintPreviewText("PrintPreview_AllPagesLabel", "All pages")),
+                CreatePreviewComboBox(96, rangePlan.Choices[0].Text),
                 closeButton,
             },
         };
@@ -395,8 +407,15 @@ public sealed partial class MainWindow
         };
     }
 
-    private static ScrollViewer CreatePrintPreviewSettingsRail(int totalPages)
+    private static ScrollViewer CreatePrintPreviewSettingsRail(Sheet? sheet, int totalPages)
     {
+        var panelPlan = PrintPreviewSettingsPanelPlanner.Build(
+            sheet,
+            new PrintPreviewSettings(),
+            hasSelection: false,
+            canUpdatePrintPreviewSettings: false,
+            PrintPreviewSettingsTextResolver);
+
         var panel = new StackPanel
         {
             Spacing = 8,
@@ -420,7 +439,7 @@ public sealed partial class MainWindow
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                 },
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PrinterSectionLabel", "Printer:")),
-                CreatePreviewComboBox(183, "HP30138B4D655D(HP Color Laser MFP 178 179)"),
+                CreatePreviewComboBox(183, PrintPreviewDefaultPrinterName),
                 new Button
                 {
                     Content = PrintPreviewText("PrintPreview_PrinterPropertiesButton", "Printer Properties"),
@@ -436,24 +455,24 @@ public sealed partial class MainWindow
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                 },
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PrintWhatLabel", "Print What:")),
-                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_PrintWhatActiveSheets", "Print Active Sheets")),
+                CreatePreviewChoiceComboBox(183, panelPlan.PrintWhatOptions, panelPlan.PrintWhatSelectedIndex),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PagesLabel", "Pages:")),
                 CreatePageRangeRow(totalPages),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_SidesSectionLabel", "Print Sides:")),
-                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_SidesOneSided", "Print One Sided")),
+                CreatePreviewChoiceComboBox(183, panelPlan.SidesOptions, panelPlan.SidesSelectedIndex),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_CollatedSectionLabel", "Collation:")),
-                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_CollatedOption", "Collated")),
+                CreatePreviewChoiceComboBox(183, panelPlan.CollationOptions, panelPlan.CollationSelectedIndex),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_OrientationLabel", "Orientation:")),
-                CreatePreviewComboBox(183, "Portrait"),
+                CreatePreviewChoiceComboBox(183, panelPlan.OrientationOptions, panelPlan.OrientationSelectedIndex),
                 CreateSettingsSection(PrintPreviewText("PageSetup_PaperSize", "Paper size:")),
-                CreatePreviewComboBox(183, "A4"),
+                CreatePreviewChoiceComboBox(183, panelPlan.PaperSizeOptions, panelPlan.PaperSizeSelectedIndex),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_MarginsButton", "Margins")),
-                CreatePreviewComboBox(183, "Narrow"),
+                CreatePreviewChoiceComboBox(183, panelPlan.MarginOptions, panelPlan.MarginsSelectedIndex),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_ScalingLabel", "Scaling:")),
-                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_ScaleNoScaling", "No Scaling")),
-                new CheckBox { Content = StripDisplayMnemonic(PrintPreviewText("PrintPreview_IgnorePrintArea", "Ignore print area")), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                CreatePreviewChoiceComboBox(183, panelPlan.ScalingOptions, panelPlan.ScalingSelectedIndex),
+                new CheckBox { Content = StripDisplayMnemonic(PrintPreviewText("PrintPreview_IgnorePrintArea", "Ignore print area")), IsChecked = panelPlan.IgnorePrintAreaChecked, IsEnabled = panelPlan.IgnorePrintAreaEnabled, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PrintOptionsSection", "Print Options")),
-                new CheckBox { Content = StripDisplayMnemonic(PrintPreviewText("PageSetup_PrintGridlines", "Print gridlines")), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new CheckBox { Content = StripDisplayMnemonic(PrintPreviewText("PageSetup_PrintGridlines", "Print gridlines")), IsChecked = panelPlan.PrintGridlines, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
 
@@ -589,7 +608,7 @@ public sealed partial class MainWindow
                 pageStatusText,
                 CreatePreviewToolbarSeparator(),
                 new TextBlock { Text = PrintPreviewText("PrintPreview_ZoomLabel", "Zoom:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                CreatePreviewComboBox(82, "100%"),
+                CreatePreviewZoomComboBox(82),
                 CreatePreviewToolbarSeparator(),
                 CreatePreviewToolbarButton(PrintPreviewText("PrintPreview_MarginsButton", "Margins")),
                 CreatePreviewToolbarButton(PrintPreviewText("PrintPreview_PageSetupButton", "Page Setup")),
@@ -644,6 +663,50 @@ public sealed partial class MainWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             ItemsSource = new[] { selectedText },
             SelectedIndex = 0,
+        };
+
+    private static ComboBox CreatePreviewChoiceComboBox<TValue>(
+        double width,
+        IReadOnlyList<PrintPreviewChoice<TValue>> choices,
+        int selectedIndex)
+    {
+        var selected = choices.Count == 0
+            ? -1
+            : Math.Clamp(selectedIndex, 0, choices.Count - 1);
+
+        return CreatePreviewComboBox(
+            width,
+            choices.Select(choice => new ComboBoxItem
+            {
+                Content = choice.Text,
+                IsEnabled = choice.IsEnabled,
+            }).ToArray(),
+            selected);
+    }
+
+    private static ComboBox CreatePreviewZoomComboBox(double width)
+    {
+        var zoomOptions = PrintPreviewToolbarStatePlanner.CreateZoomOptions(PrintPreviewSettingsTextResolver);
+
+        return CreatePreviewComboBox(
+            width,
+            zoomOptions.Select(option => option.Text).ToArray(),
+            PrintPreviewToolbarStatePlanner.DefaultZoomOptionIndex);
+    }
+
+    private static ComboBox CreatePreviewComboBox(double width, IReadOnlyList<object> items, int selectedIndex) =>
+        new()
+        {
+            Width = width,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(5, 0, 4, 0),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            ItemsSource = items,
+            SelectedIndex = selectedIndex,
         };
 
     private static string PrintPreviewText(string key, string fallback)
