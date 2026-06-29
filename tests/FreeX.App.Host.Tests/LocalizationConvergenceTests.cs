@@ -100,6 +100,24 @@ public sealed class LocalizationConvergenceTests
             because: "no neutral key in the Loc catalog should resolve to a [[key]] sentinel — those indicate missing translations");
     }
 
+    [Fact]
+    public void PlatformUiTextFacades_InheritSharedLocalizedUiTextPolicy()
+    {
+        var host = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "UiText.cs");
+        var avalonia = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "UiText.cs");
+        var shared = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Localization", "LocalizedUiText.cs");
+
+        host.Should().Contain("class UiText : LocalizedUiText");
+        avalonia.Should().Contain("class UiText : LocalizedUiText");
+        host.Should().NotContain("Loc.");
+        avalonia.Should().NotContain("Loc.");
+
+        shared.Should().Contain("Loc.Get(");
+        shared.Should().Contain("Loc.Format(");
+        shared.Should().Contain("Loc.GetNeutral(");
+        shared.Should().Contain("Loc.GetNeutralResourceKeys(");
+    }
+
     [Theory]
     [MemberData(nameof(AllSatelliteLocales))]
     public void LocCatalog_SatelliteLocale_LoadsAndContainsTranslatedKeys(string locale)

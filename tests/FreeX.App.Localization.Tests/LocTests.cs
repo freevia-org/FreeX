@@ -121,6 +121,27 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void LocalizedUiText_ExposesCommonFacadeSurface()
+    {
+        WithUiCulture("en-US", () => LocalizedUiText.Ok).Should().Be("_OK");
+        WithUiCulture("en-US", () => LocalizedUiText.Cancel).Should().Be("_Cancel");
+        WithUiCulture("en-US", () => LocalizedUiText.ErrorTitle).Should().Be("Error");
+        WithUiCulture("en-US", () => LocalizedUiText.WarningTitle).Should().Be("Warning");
+        WithUiCulture("en-US", () => LocalizedUiText.InformationTitle).Should().Be("Information");
+        WithUiCulture("en-US", () => LocalizedUiText.ConfirmTitle).Should().Be("Confirm");
+
+        WithUiCulture("fr-FR", () => LocalizedUiText.GetNeutral("Common_Cancel")).Should().Be("_Cancel");
+        WithUiCulture("fr-FR", () => LocalizedUiText.Get("Common_Cancel")).Should().Be("_Annuler");
+        WithUiCulture("en-US", () => LocalizedUiText.Format("PivotOptions_Title", "Sales"))
+            .Should()
+            .Be("PivotTable Options (Sales)");
+
+        LocalizedUiText.GetNeutralResourceKeys().Should().Contain("Common_Cancel");
+        LocalizedUiText.CreateAutomationName("_Open _File").Should().Be("Open File");
+        LocalizedUiText.CreateMissingText("Missing_Key").Should().Be("[[Missing_Key]]");
+    }
+
+    [Fact]
     public void GetNeutralResourceKeys_ContainsExpectedKeys()
     {
         var keys = Loc.GetNeutralResourceKeys();

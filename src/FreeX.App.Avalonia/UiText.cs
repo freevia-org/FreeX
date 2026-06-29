@@ -7,17 +7,9 @@ namespace FreeX.App.Avalonia;
 /// Keeps call sites short (<c>UiText.Get("Key")</c>) and gives the shell a single seam to route
 /// UI text through, so macOS inherits culture-aware strings from the shared catalog.
 /// </summary>
-internal static class UiText
+internal sealed class UiText : LocalizedUiText
 {
-    public static string Get(string key) => Loc.Get(key);
-
-    public static string Format(string key, params object?[] args) => Loc.Format(key, args);
-
-    public static string GetNeutral(string key) => Loc.GetNeutral(key);
-
-    public static IReadOnlySet<string> GetNeutralResourceKeys() => Loc.GetNeutralResourceKeys();
-
-    public static string CreateAutomationName(string textWithAccessKey) => Loc.CreateAutomationName(textWithAccessKey);
-
-    public static string CreateMissingText(string key) => Loc.CreateMissingText(key);
+    private UiText()
+    {
+    }
 }
