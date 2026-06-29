@@ -1,6 +1,6 @@
 using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
+using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 using SharedFileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
-using SharedFileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 
 namespace FreeX.Core.IO;
 
@@ -14,35 +14,33 @@ public static class FileDialogFilterBuilder
         SharedFileDialogFilterBuilder.BuildSaveFilter(
             FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(GetFormats(adapters)));
 
-    public static IReadOnlyList<FilePickerTypeDescriptor> BuildOpenPickerTypes(
+    public static IReadOnlyList<FileDialogPickerTypeDescriptor> BuildOpenPickerTypes(
         IEnumerable<IFileAdapter> adapters,
         string allSupportedName = "All supported files") =>
         BuildOpenPickerTypes(
             GetFormats(adapters).Where(static format => format.CanOpen),
             allSupportedName);
 
-    public static IReadOnlyList<FilePickerTypeDescriptor> BuildOpenPickerTypes(
+    public static IReadOnlyList<FileDialogPickerTypeDescriptor> BuildOpenPickerTypes(
         IEnumerable<FileFormatDescriptor> formats,
         string allSupportedName = "All supported files") =>
-        MapPickerTypes(
-            SharedFileDialogFilterBuilder.BuildOpenPickerTypes(
-                FileFormatDialogDescriptorAdapter.ToDialogDescriptors(formats),
-                allSupportedName));
+        SharedFileDialogFilterBuilder.BuildOpenPickerTypes(
+            FileFormatDialogDescriptorAdapter.ToDialogDescriptors(formats),
+            allSupportedName);
 
-    public static IReadOnlyList<FilePickerTypeDescriptor> BuildSavePickerTypes(
+    public static IReadOnlyList<FileDialogPickerTypeDescriptor> BuildSavePickerTypes(
         IEnumerable<IFileAdapter> adapters,
         string? preferredFirstExtension = null) =>
         BuildSavePickerTypes(
             GetFormats(adapters).Where(static format => format.CanSave),
             preferredFirstExtension);
 
-    public static IReadOnlyList<FilePickerTypeDescriptor> BuildSavePickerTypes(
+    public static IReadOnlyList<FileDialogPickerTypeDescriptor> BuildSavePickerTypes(
         IEnumerable<FileFormatDescriptor> formats,
         string? preferredFirstExtension = null) =>
-        MapPickerTypes(
-            SharedFileDialogFilterBuilder.BuildSavePickerTypes(
-                FileFormatDialogDescriptorAdapter.ToDialogDescriptors(formats),
-                preferredFirstExtension));
+        SharedFileDialogFilterBuilder.BuildSavePickerTypes(
+            FileFormatDialogDescriptorAdapter.ToDialogDescriptors(formats),
+            preferredFirstExtension);
 
     public static int FindSaveFilterIndex(IEnumerable<IFileAdapter> adapters, string extension) =>
         SharedFileDialogFilterBuilder.FindSaveFilterIndex(
@@ -70,10 +68,4 @@ public static class FileDialogFilterBuilder
 
     private static List<FileFormatDescriptor> GetFormats(IEnumerable<IFileAdapter> adapters) =>
         adapters.SelectMany(adapter => adapter.Formats).ToList();
-
-    private static IReadOnlyList<FilePickerTypeDescriptor> MapPickerTypes(
-        IEnumerable<SharedFileDialogPickerTypeDescriptor> descriptors) =>
-        descriptors
-            .Select(descriptor => new FilePickerTypeDescriptor(descriptor.DisplayName, descriptor.Patterns))
-            .ToList();
 }
