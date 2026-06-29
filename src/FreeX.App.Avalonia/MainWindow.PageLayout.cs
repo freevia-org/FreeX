@@ -9,6 +9,7 @@ using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Shell.Avalonia;
 
 using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaDock = Avalonia.Controls.Dock;
@@ -39,6 +40,7 @@ public sealed partial class MainWindow
     private static readonly IBrush PageBreakBorderBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakLineBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakWatermarkBrush = Brush(60, 11, 112, 116);
+    private static AvaloniaCompactDialogChromeStyle PageLayoutDialogChromeStyle => new(FormulaBarFontFamily);
 
     private async Task ShowPageSetupDialogAsync(
         PageLayoutPageSetupOpenSource source = PageLayoutPageSetupOpenSource.DialogButton)
@@ -255,44 +257,17 @@ public sealed partial class MainWindow
 
     private static void ApplyPageLayoutButtonChrome(Button button, double minWidth, bool isDefault = false)
     {
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.MinWidth = minWidth;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChromeStyle, minWidth, isDefault);
     }
 
     private static void ApplyPageLayoutTextBoxChrome(TextBox textBox)
     {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PageLayoutDialogChromeStyle);
     }
 
     private static void ApplyPageLayoutComboBoxChrome(ComboBox comboBox)
     {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PageLayoutDialogChromeStyle);
     }
 
     private static void ApplyPageLayoutCheckBoxChrome(CheckBox checkBox)
@@ -300,16 +275,14 @@ public sealed partial class MainWindow
         StripContentMnemonic(checkBox);
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, PageLayoutDialogChromeStyle);
     }
 
     private static void ApplyPageLayoutRadioButtonChrome(RadioButton radioButton)
     {
         StripContentMnemonic(radioButton);
         radioButton.MinHeight = 20;
-        radioButton.FontSize = 12;
-        radioButton.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, PageLayoutDialogChromeStyle);
     }
 
     private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(

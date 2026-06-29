@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.PageLayout;
+using Free.Shared.Shell.Avalonia;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -20,18 +21,7 @@ public sealed partial class MainWindow
 
     private static void ApplyPageBreakButtonChrome(Button button, double minWidth = 84, bool isDefault = false)
     {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = VerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChromeStyle, minWidth, isDefault);
     }
 
     // Page Layout ▸ Breaks (parity gap: the ribbon button previously opened Page Setup as a stub).

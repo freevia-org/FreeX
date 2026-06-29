@@ -82,6 +82,30 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("public static StackPanel CreateActionRow(");
     }
 
+    [Fact]
+    public void PageLayoutAndPageBreakDialogs_DelegateCompactControlChromeToSharedHelper()
+    {
+        var pageLayoutSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+        var pageBreakSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageBreakActions.cs"));
+
+        pageLayoutSource.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        pageLayoutSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle PageLayoutDialogChromeStyle => new(FormulaBarFontFamily);");
+        pageLayoutSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChromeStyle, minWidth, isDefault);");
+        pageLayoutSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PageLayoutDialogChromeStyle);");
+        pageLayoutSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PageLayoutDialogChromeStyle);");
+        pageLayoutSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, PageLayoutDialogChromeStyle);");
+        pageLayoutSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, PageLayoutDialogChromeStyle);");
+
+        pageBreakSource.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        pageBreakSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChromeStyle, minWidth, isDefault);");
+
+        pageLayoutSource.Should().NotContain("button.Height = 24;");
+        pageLayoutSource.Should().NotContain("textBox.Height = 24;");
+        pageLayoutSource.Should().NotContain("comboBox.Height = 24;");
+        pageBreakSource.Should().NotContain("button.Height = 24;");
+        pageBreakSource.Should().NotContain("button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
