@@ -21,6 +21,7 @@ using Avalonia.Threading;
 using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.DataTools;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.GridInteraction;
@@ -98,12 +99,6 @@ public sealed partial class MainWindow : Window
     {
         Apply,
         Clear
-    }
-
-    private enum SubtotalDialogAction
-    {
-        Apply,
-        RemoveAll
     }
 
     private enum GoalSeekStatusDialogChoice
@@ -229,16 +224,8 @@ public sealed partial class MainWindow : Window
         Button ClearButton,
         Button CancelButton);
     private sealed record SubtotalDialogResult(
-        SubtotalDialogAction Action,
+        SubtotalDialogPlanAction Action,
         SubtotalInputOptions? Options);
-    private sealed record SubtotalColumnChoice(uint Offset, string Header, bool IsSelected)
-    {
-        public override string ToString() => Header;
-    }
-    private sealed record SubtotalFunctionChoice(string Label, string FunctionText)
-    {
-        public override string ToString() => Label;
-    }
     private sealed record SortDialogResult(
         IReadOnlyList<SortDialogLevel> Levels,
         bool HasHeaders,
@@ -15222,7 +15209,7 @@ public sealed partial class MainWindow : Window
             return;
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = selection.Action == SubtotalDialogAction.RemoveAll
+        var result = selection.Action == SubtotalDialogPlanAction.RemoveAll
             ? _session.RemoveSelectedRangeSubtotals()
             : _session.ExecuteSubtotalOptions(selection.Options!);
         if (!result.Success)
@@ -15231,7 +15218,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell(selection.Action == SubtotalDialogAction.RemoveAll
+        RefreshShell(selection.Action == SubtotalDialogPlanAction.RemoveAll
             ? UiText.Format("MainLoc_RemovedSubtotalsFrom", rangeReference)
             : UiText.Format("MainLoc_AddedSubtotalsTo", rangeReference));
     }
@@ -15240,7 +15227,9 @@ public sealed partial class MainWindow : Window
     {
         SubtotalDialogResult? result = null;
         var range = _session.SelectedRange;
-        var columns = BuildSubtotalColumnChoices(_session.ActiveSheet, range);
+        var columns = SubtotalDialogPlanner.BuildColumnChoices(
+            range,
+            absoluteColumn => FormatScalarValue(_session.ActiveSheet.GetValue(range.Start.Row, absoluteColumn)));
 
         var dialog = new Window
         {
@@ -15276,7 +15265,7 @@ public sealed partial class MainWindow : Window
 
         var functionBox = new ComboBox
         {
-            ItemsSource = CreateSubtotalFunctionChoices(),
+            ItemsSource = SubtotalDialogPlanner.CreateFunctionChoices(),
             SelectedIndex = 0,
             MinWidth = 240,
         };
@@ -15381,9 +15370,8 @@ public sealed partial class MainWindow : Window
 
         void Accept()
         {
-            if (groupColumnBox.SelectedItem is not SubtotalColumnChoice groupColumn ||
-                functionBox.SelectedItem is not SubtotalFunctionChoice functionChoice ||
-                !SubtotalFunctionService.TryParse(functionChoice.FunctionText, out var functionNumber))
+            if (groupColumnBox.SelectedItem is not SubtotalDialogColumnChoice groupColumn ||
+                functionBox.SelectedItem is not SubtotalDialogFunctionChoice functionChoice)
             {
                 errorText.Text = "Choose a group column and subtotal function.";
                 groupColumnBox.Focus();
@@ -15408,22 +15396,30 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            result = new SubtotalDialogResult(
-                SubtotalDialogAction.Apply,
-                new SubtotalInputOptions(
+            if (!SubtotalDialogPlanner.TryCreateResult(
                     groupColumn.Offset,
                     selectedOffsets,
-                    functionNumber,
+                    functionChoice.FunctionText,
                     replaceBox.IsChecked == true,
                     pageBreakBox.IsChecked == true,
-                    summaryBelowBox.IsChecked != false));
+                    summaryBelowBox.IsChecked != false,
+                    out var plan,
+                    out _))
+            {
+                errorText.Text = "Choose a group column and subtotal function.";
+                functionBox.Focus();
+                return;
+            }
+
+            result = new SubtotalDialogResult(plan.Action, plan.ToInputOptions());
             dialog.Close();
         }
 
         okButton.Click += (_, _) => Accept();
         removeAllButton.Click += (_, _) =>
         {
-            result = new SubtotalDialogResult(SubtotalDialogAction.RemoveAll, Options: null);
+            var plan = SubtotalDialogPlanner.CreateRemoveAllResult();
+            result = new SubtotalDialogResult(plan.Action, Options: null);
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -15493,39 +15489,6 @@ public sealed partial class MainWindow : Window
         await dialog.ShowDialog(this);
         return result;
     }
-
-    private static IReadOnlyList<SubtotalColumnChoice> BuildSubtotalColumnChoices(Sheet sheet, GridRange range)
-    {
-        var choices = new List<SubtotalColumnChoice>();
-        for (uint offset = 0; offset < range.ColCount; offset++)
-        {
-            var absoluteColumn = range.Start.Col + offset;
-            var header = FormatScalarValue(sheet.GetValue(range.Start.Row, absoluteColumn));
-            if (string.IsNullOrWhiteSpace(header))
-                header = $"Column {CellAddress.NumberToColumnName(absoluteColumn)}";
-
-            choices.Add(new SubtotalColumnChoice(offset, header, IsSelected: offset != 0));
-        }
-
-        return choices.Count == 0
-            ? [new SubtotalColumnChoice(0, "Column A", IsSelected: false)]
-            : choices;
-    }
-
-    private static IReadOnlyList<SubtotalFunctionChoice> CreateSubtotalFunctionChoices() =>
-    [
-        new("Sum", "Sum"),
-        new("Count", "Count"),
-        new("Average", "Average"),
-        new("Max", "Max"),
-        new("Min", "Min"),
-        new("Product", "Product"),
-        new("Count Numbers", "CountA"),
-        new("StdDev", "StdDev"),
-        new("StdDevp", "StdDevp"),
-        new("Var", "Var"),
-        new("Varp", "Varp"),
-    ];
 
     private static StackPanel CreateSubtotalField(string label, Control control) =>
         new()

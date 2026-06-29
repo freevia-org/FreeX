@@ -3097,9 +3097,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"SubtotalOkButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(removeAllButton, \"SubtotalRemoveAllButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"SubtotalCancelButton\");");
-        source.Should().Contain("BuildSubtotalColumnChoices(_session.ActiveSheet, range)");
-        source.Should().Contain("CreateSubtotalFunctionChoices()");
-        source.Should().Contain("new SubtotalInputOptions(");
+        source.Should().Contain("SubtotalDialogPlanner.BuildColumnChoices(");
+        source.Should().Contain("SubtotalDialogPlanner.CreateFunctionChoices()");
+        source.Should().Contain("SubtotalDialogPlanner.TryCreateResult(");
+        source.Should().Contain("plan.ToInputOptions()");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteSubtotalOptions(SubtotalInputOptions options)");
         sessionSource.Should().Contain("public WorkbookCellEditResult RemoveSelectedRangeSubtotals()");
@@ -3122,6 +3123,8 @@ public sealed class AvaloniaShellSourceTests
         routeSource.Should().NotContain("new SubtotalCommand");
         routeSource.Should().NotContain("new RemoveSubtotalRowsCommand");
         routeSource.Should().NotContain("new SubtotalDialog(");
+        routeSource.Should().NotContain("SubtotalFunctionService.TryParse");
+        routeSource.Should().NotContain("new SubtotalInputOptions(");
         routeSource.Should().NotContain("FreeX.App.Host");
         routeSource.Should().NotContain("DataTransferManager");
         routeSource.Should().NotContain("WindowInteropHelper");

@@ -384,7 +384,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()");
         script.Should().Contain("_session.ExecuteSubtotalOptions(selection.Options!)");
         script.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
-        script.Should().Contain("new SubtotalInputOptions(");
+        script.Should().Contain("SubtotalDialogPlanner.TryCreateResult(");
+        script.Should().Contain("plan.ToInputOptions()");
         script.Should().Contain("AutomationProperties.SetAutomationId(dialog, `\"SubtotalCompactDialog`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(groupColumnBox, `\"SubtotalGroupColumnBox`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(functionBox, `\"SubtotalFunctionBox`\");");
@@ -2494,7 +2495,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()
                     _session.ExecuteSubtotalOptions(selection.Options!)
                     _session.RemoveSelectedRangeSubtotals()
-                    new SubtotalInputOptions(
+                    SubtotalDialogPlanner.TryCreateResult(
+                    plan.ToInputOptions()
                     AutomationProperties.SetAutomationId(dialog, "SubtotalCompactDialog");
                     AutomationProperties.SetAutomationId(groupColumnBox, "SubtotalGroupColumnBox");
                     AutomationProperties.SetAutomationId(functionBox, "SubtotalFunctionBox");
