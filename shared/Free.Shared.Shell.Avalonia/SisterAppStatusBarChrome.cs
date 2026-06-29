@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.AppServices;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -9,7 +10,7 @@ public sealed record SisterAppStatusBarSpec(
     IBrush Background,
     Control LeftContent,
     IReadOnlyList<Control>? RightItems = null,
-    double Height = 26,
+    double Height = SisterAppStatusBarChromeDefaults.Height,
     IBrush? BorderBrush = null,
     Thickness BorderThickness = default,
     Control? CenterContent = null,
@@ -24,7 +25,11 @@ public sealed record SisterAppStatusBarBuildResult(
 /// </summary>
 public static class SisterAppStatusBarChrome
 {
-    private static readonly Thickness DefaultSeparatorMargin = new(8, 3, 8, 3);
+    private static readonly Thickness DefaultSeparatorMargin = new(
+        SisterAppStatusBarChromeDefaults.SeparatorHorizontalMargin,
+        SisterAppStatusBarChromeDefaults.SeparatorVerticalMargin,
+        SisterAppStatusBarChromeDefaults.SeparatorHorizontalMargin,
+        SisterAppStatusBarChromeDefaults.SeparatorVerticalMargin);
 
     public static SisterAppStatusBarBuildResult Build(SisterAppStatusBarSpec spec)
     {
@@ -74,7 +79,7 @@ public static class SisterAppStatusBarChrome
         string text = "",
         IBrush? foreground = null,
         Thickness margin = default,
-        double fontSize = 12) =>
+        double fontSize = SisterAppStatusBarChromeDefaults.TextFontSize) =>
         new()
         {
             Text = text,
@@ -88,9 +93,13 @@ public static class SisterAppStatusBarChrome
     public static Border CreateSeparator(IBrush? brush = null, Thickness margin = default) =>
         new()
         {
-            Width = 1,
+            Width = SisterAppStatusBarChromeDefaults.SeparatorWidth,
             Margin = margin.Equals(default(Thickness)) ? DefaultSeparatorMargin : margin,
-            Background = brush ?? new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            Background = brush ?? new SolidColorBrush(Color.FromArgb(
+                SisterAppStatusBarChromeDefaults.SeparatorAlpha,
+                SisterAppStatusBarChromeDefaults.SeparatorRgb,
+                SisterAppStatusBarChromeDefaults.SeparatorRgb,
+                SisterAppStatusBarChromeDefaults.SeparatorRgb)),
             VerticalAlignment = VerticalAlignment.Stretch,
         };
 }

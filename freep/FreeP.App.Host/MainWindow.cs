@@ -675,7 +675,10 @@ public sealed class MainWindow : Window
     }
 
     private void UpdateSlideCount() =>
-        _slideCountText.Text = $"Slide {Editor.CurrentSlideIndex + 1} / {_presentation.Slides.Count}   {ResolveDataFolderLabel()}";
+        _slideCountText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(
+            Editor.CurrentSlideIndex,
+            _presentation.Slides.Count,
+            ResolveDataFolderLabel());
 
     // ── Quick-access + title ──────────────────────────────────────────────────────
 

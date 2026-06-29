@@ -1141,10 +1141,14 @@ public sealed class MainWindow : Window
         var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
         var chars = text.Length;
         var pageInfo = _editor.ViewMode == DocumentViewMode.PrintLayout
-            ? $"Page {_editor.CaretPageIndex + 1} of {_editor.PageCount}   "
+            ? SisterAppStatusBarTextPlanner.FormatDocumentPageStatus(_editor.CaretPageIndex + 1, _editor.PageCount)
             : string.Empty; // Web/Draft: no discrete pages — hide page indicator.
-        _status.Text = $"{pageInfo}{words} words   {chars} characters   {_editor.ParagraphCount} paragraphs"
-            + (_editor.CanUndo ? "   • edited" : "");
+        _status.Text = SisterAppStatusBarTextPlanner.FormatDocumentSummaryStatus(
+            words,
+            chars,
+            _editor.ParagraphCount,
+            pageInfo,
+            _editor.CanUndo);
     }
 
     // ── Backstage (File screen) ───────────────────────────────────────────────

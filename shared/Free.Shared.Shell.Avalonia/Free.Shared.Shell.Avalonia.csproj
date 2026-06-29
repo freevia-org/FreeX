@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <PackageReference Include="Avalonia" />
   </ItemGroup>
 
