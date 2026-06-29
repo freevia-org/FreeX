@@ -190,12 +190,13 @@ public static class PrintPreviewInstructionBuilder
             instructions.Add(PrintPreviewPaintInstruction.TextRun(
                 heading.TextOrigin, heading.Bounds.Width, heading.Label, BandFont, PageTextAlignment.Center));
 
-        // 7. Cell text.
+        // 7. Cell text. The WPF print renderer draws printed cell text from the left inset,
+        // so preview instructions normalize cell runs to that renderer-compatible alignment.
         foreach (var cell in layout.Cells)
         {
             if (!string.IsNullOrEmpty(cell.Text))
                 instructions.Add(PrintPreviewPaintInstruction.TextRun(
-                    cell.TextOrigin, cell.Bounds.Width, cell.Text, cell.Font, cell.Alignment));
+                    cell.TextOrigin, cell.Bounds.Width, cell.Text, cell.Font, PageTextAlignment.Left));
         }
 
         // 8. Text boxes over the grid/cell text.

@@ -24,6 +24,7 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("PrintPreviewToolbarStatePlanner.CreateSidesOptions(PrintPreviewSettingsTextResolver)");
         source.Should().Contain("PrintPreviewToolbarStatePlanner.CreateZoomOptions(PrintPreviewSettingsTextResolver)");
         source.Should().Contain("PrintPreviewToolbarStatePlanner.CreatePageRangeToolbarPlan(");
+        source.Should().Contain("RenderPreviewInstructions(canvas, painting.Instructions)");
         source.Should().Contain("IsChecked = panelPlan.PrintGridlines");
         source.Should().Contain("IsEnabled = panelPlan.IgnorePrintAreaEnabled");
 
@@ -34,6 +35,7 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().NotContain("CreatePreviewComboBox(183, \"A4\")");
         source.Should().NotContain("CreatePreviewComboBox(183, \"Narrow\")");
         source.Should().NotContain("CreatePreviewComboBox(82, \"100%\")");
+        source.Should().NotContain("AlignCellTextLeft");
     }
 
     private static string RepoFile(params string[] parts)
