@@ -1474,7 +1474,7 @@ public sealed class AvaloniaInteractionTests
         var adorner = new SelectionAdornerLayer();
         var rect    = new Rect(0, 0, 200, 100);
         var kind    = adorner.HitTestHandle(rect, new Point(100, 50));
-        kind.Should().Be(SelectionAdornerLayer.HandleKind.Body);
+        kind.Should().Be(CanvasGestureHandleKind.Body);
     }
 
     [Fact]
@@ -1484,7 +1484,7 @@ public sealed class AvaloniaInteractionTests
         var rect    = new Rect(0, 100, 200, 100);
         // Rotate handle is above top-middle: (100, 100 - 18) = (100, 82)
         var kind = adorner.HitTestHandle(rect, new Point(100, 82));
-        kind.Should().Be(SelectionAdornerLayer.HandleKind.Rotate);
+        kind.Should().Be(CanvasGestureHandleKind.Rotate);
     }
 
     [Fact]
@@ -1493,13 +1493,13 @@ public sealed class AvaloniaInteractionTests
         var adorner = new SelectionAdornerLayer();
         var rect    = new Rect(0, 0, 200, 100);
         adorner.HitTestHandle(rect, new Point(0,    0))
-               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeNW);
+               .Should().Be(CanvasGestureHandleKind.ResizeNW);
         adorner.HitTestHandle(rect, new Point(200,  0))
-               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeNE);
+               .Should().Be(CanvasGestureHandleKind.ResizeNE);
         adorner.HitTestHandle(rect, new Point(200, 100))
-               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeSE);
+               .Should().Be(CanvasGestureHandleKind.ResizeSE);
         adorner.HitTestHandle(rect, new Point(0,  100))
-               .Should().Be(SelectionAdornerLayer.HandleKind.ResizeSW);
+               .Should().Be(CanvasGestureHandleKind.ResizeSW);
     }
 
     [Fact]
@@ -1508,7 +1508,7 @@ public sealed class AvaloniaInteractionTests
         var adorner = new SelectionAdornerLayer();
         var rect    = new Rect(100, 100, 100, 50);
         var kind    = adorner.HitTestHandle(rect, new Point(0, 0));
-        kind.Should().Be(SelectionAdornerLayer.HandleKind.None);
+        kind.Should().Be(CanvasGestureHandleKind.None);
     }
 
     [Fact]
@@ -1723,7 +1723,7 @@ internal static class GestureHandlerTestExtensions
         KeyModifiers modifiers,
         SlideShape shape)
     {
-        handler.SeedResizeState(startScreen, shape, SelectionAdornerLayer.HandleKind.ResizeSE);
+        handler.SeedResizeState(startScreen, shape, CanvasGestureHandleKind.ResizeSE);
         return handler.ComputeResizeBounds(endScreen, xf, modifiers);
     }
 }
