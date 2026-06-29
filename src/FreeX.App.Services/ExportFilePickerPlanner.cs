@@ -13,6 +13,8 @@ public sealed record ExportSavePickerPlan(
     string SuggestedFileName,
     string DefaultExtensionWithoutDot);
 
+public sealed record PortablePdfSaveTargetPlan(string Path, bool ShouldConfirmNormalizedOverwrite);
+
 /// <summary>
 /// UI-free file picker metadata for PDF/XPS export. Renderers still own native dialog construction and
 /// localized titles; this planner owns stable extensions, suggested names, picker types, and format mapping.
@@ -47,6 +49,19 @@ public static class ExportFilePickerPlanner
         filterIndex == PdfXpsDialogXpsFilterIndex
             ? ExportFileFormat.Xps
             : ExportFileFormat.Pdf;
+
+    public static PortablePdfSaveTargetPlan BuildPortablePdfSaveTargetPlan(
+        string requestedPath,
+        Func<string, bool> pathExists)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestedPath);
+        ArgumentNullException.ThrowIfNull(pathExists);
+
+        var pathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
+        return new PortablePdfSaveTargetPlan(
+            pathPlan.Path,
+            ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, pathPlan, pathExists));
+    }
 
     public static string BuildSuggestedExportFileName(
         string? sourceName,

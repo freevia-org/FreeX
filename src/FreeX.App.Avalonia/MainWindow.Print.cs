@@ -509,16 +509,15 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                var requestedPath = path;
-                var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-                if (ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists) &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path))
+                var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
+                if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
                 {
                     ShowExportIssue(UiText.Get("Print_SaveCanceled"));
                     return;
                 }
 
-                path = exportPathPlan.Path;
+                path = exportTargetPlan.Path;
 
                 try
                 {

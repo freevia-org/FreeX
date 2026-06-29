@@ -160,7 +160,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("EncodeWinAnsiHexText(normalized)");
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
         script.Should().Contain("built-in Helvetica/WinAnsi set");
-        script.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
+        script.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists)");
         script.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
         script.Should().Contain("IsCancel = true,");
         script.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
@@ -2276,10 +2276,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     NativeFileMenuItemId.ExportPdf => _exportPdfMenuItem,
                     HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)
                     private async Task ExportActiveSheetPdfAsync()
-                    var exportPathPlan = ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf);
-                    ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportPathPlan.Path)
-                    path = exportPathPlan.Path;
+                    var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
+                    exportTargetPlan.ShouldConfirmNormalizedOverwrite
+                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)
+                    path = exportTargetPlan.Path;
                     private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
                     IsCancel = true,
                     dialog.Opened += (_, _) => cancelButton.Focus();
@@ -2608,7 +2608,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     Header = entry.Header
                     if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)
                     await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
-                    _recentFiles.AddOrUpdate(target.Path, fileAccessIdentity ?? target.FileAccessIdentity);
+                    RecentFileRegistrationService.RegisterIfNeeded(
+                    new RecentFileRegistrationRequest(
+                    FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity
                     RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
                     RecordRecentWorkbook(target.Path, fileAccessIdentity);
                     _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);

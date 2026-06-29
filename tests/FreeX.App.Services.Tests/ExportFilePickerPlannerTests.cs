@@ -30,6 +30,28 @@ public sealed class ExportFilePickerPlannerTests
     }
 
     [Fact]
+    public void BuildPortablePdfSaveTargetPlan_NormalizesExtensionAndRequestsOverwritePrompt()
+    {
+        var plan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(
+            @"C:\temp\report.txt",
+            path => path == @"C:\temp\report.pdf");
+
+        plan.Path.Should().Be(@"C:\temp\report.pdf");
+        plan.ShouldConfirmNormalizedOverwrite.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildPortablePdfSaveTargetPlan_SkipsPromptWhenNormalizedTargetDoesNotExist()
+    {
+        var plan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(
+            @"C:\temp\report",
+            _ => false);
+
+        plan.Path.Should().Be(@"C:\temp\report.pdf");
+        plan.ShouldConfirmNormalizedOverwrite.Should().BeFalse();
+    }
+
+    [Fact]
     public void BuildPdfXpsDialogPlan_UsesPdfDefaultFilterAndBaseName()
     {
         var plan = ExportFilePickerPlanner.BuildPdfXpsDialogPlan(

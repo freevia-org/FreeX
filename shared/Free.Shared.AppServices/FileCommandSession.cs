@@ -97,12 +97,11 @@ public sealed class FileCommandSession
     {
         _state.MarkSavedWithPath(path);
 
-        if (FileLifecyclePlanner.PlanRecentRegistration(path, suppressRecentFiles) == RecentFileRegistration.Skip)
-            return;
-
         try
         {
-            _loadRecentFilesStore().AddOrUpdate(path, maxRecentEntries);
+            RecentFileRegistrationService.RegisterIfNeeded(
+                _loadRecentFilesStore,
+                new RecentFileRegistrationRequest(path, suppressRecentFiles, maxRecentEntries));
         }
         catch
         {
