@@ -13,6 +13,8 @@ public sealed class PptxPackageRetentionTests
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
     private const string CustomXmlRelType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
+    private const string ExternalReviewRelType =
+        "http://example.com/freep/relationships/reviewLink";
     private const string UnknownViewRelType =
         "http://example.com/freep/relationships/viewState";
 
@@ -86,6 +88,9 @@ public sealed class PptxPackageRetentionTests
             Relationship(rootRels, ExtendedPropsRelType, "docProps/app.xml").Should().NotBeNull();
             Relationship(rootRels, CustomPropsRelType, "docProps/custom.xml").Should().NotBeNull();
             Relationship(rootRels, CustomXmlRelType, "customXml/item1.xml").Should().NotBeNull();
+            var externalReviewRel = Relationship(rootRels, ExternalReviewRelType, "https://example.com/freep-review");
+            externalReviewRel.Should().NotBeNull();
+            externalReviewRel!.Attribute("TargetMode")?.Value.Should().Be("External");
 
             var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");
             Relationship(presRels, UnknownViewRelType, "customData/viewState.bin").Should().NotBeNull();
@@ -147,6 +152,7 @@ public sealed class PptxPackageRetentionTests
             AddRelationship(rootRels, "rIdAppProps", ExtendedPropsRelType, "docProps/app.xml");
             AddRelationship(rootRels, "rIdCustomProps", CustomPropsRelType, "docProps/custom.xml");
             AddRelationship(rootRels, "rIdCustomXml", CustomXmlRelType, "customXml/item1.xml");
+            AddRelationship(rootRels, "rIdExternalReview", ExternalReviewRelType, "https://example.com/freep-review", external: true);
             WriteXml(archive, "_rels/.rels", rootRels);
 
             var itemRels = new XDocument(
@@ -202,12 +208,16 @@ public sealed class PptxPackageRetentionTests
             o.Attribute("Extension")?.Value == extension &&
             o.Attribute("ContentType")?.Value == contentType);
 
-    private static void AddRelationship(XDocument doc, string id, string type, string target)
+    private static void AddRelationship(XDocument doc, string id, string type, string target, bool external = false)
     {
-        doc.Root!.Add(new XElement(RelsNs + "Relationship",
+        var relationship = new XElement(RelsNs + "Relationship",
             new XAttribute("Id", id),
             new XAttribute("Type", type),
-            new XAttribute("Target", target)));
+            new XAttribute("Target", target));
+        if (external)
+            relationship.Add(new XAttribute("TargetMode", "External"));
+
+        doc.Root!.Add(relationship);
     }
 
     private static void AddOverride(XDocument doc, string partName, string contentType)
