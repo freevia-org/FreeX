@@ -988,11 +988,16 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_BuildsAvaloniaFilePickerTypesFromSharedIoDescriptors()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var commandPlanner = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookFileCommandPlanner.cs"));
         var pickerPlanner = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookFilePickerPlanner.cs"));
         var adapter = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaFilePickerTypeAdapter.cs"));
 
-        source.Should().Contain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats)");
-        source.Should().Contain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
+        source.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats)");
+        source.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
+        source.Should().NotContain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats)");
+        source.Should().NotContain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
+        commandPlanner.Should().Contain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(openFormats)");
+        commandPlanner.Should().Contain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildOpenPickerPlan(");
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildSavePickerPlan(");
         pickerPlanner.Should().Contain("IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes");
