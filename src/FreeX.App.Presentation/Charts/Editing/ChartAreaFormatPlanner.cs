@@ -26,6 +26,42 @@ public readonly record struct ChartAreaFormatInput(
     double LegendBorderThickness = 0,
     double LegendFontSize = 12);
 
+public enum ChartAreaFormatDialogControlKind
+{
+    CheckBox,
+    ComboBox,
+    Color,
+    Number,
+}
+
+public enum ChartAreaFormatDialogFieldId
+{
+    ChartAreaFillColor,
+    PlotAreaFillColor,
+    PlotAreaBorderColor,
+    PlotAreaBorderThickness,
+    ShowLegend,
+    LegendPosition,
+    LegendOverlay,
+    LegendTextColor,
+    LegendFillColor,
+    LegendBorderColor,
+    LegendBorderThickness,
+    LegendFontSize,
+}
+
+public sealed record ChartAreaFormatDialogFieldDescriptor(
+    ChartAreaFormatDialogFieldId Id,
+    ChartAreaFormatDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartAreaFormatDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartAreaFormatDialogFieldDescriptor> Fields,
+    string? HelpResourceKey = null);
+
 public enum ChartAreaFormatParseIssue
 {
     None,
@@ -66,9 +102,61 @@ public static class ChartAreaFormatPlanner
     public const double MinLegendFontSize = 6;
     public const double MaxLegendFontSize = 72;
 
-    private static readonly ChartLegendPosition[] LegendPositionCatalog = Enum.GetValues<ChartLegendPosition>();
+    private static readonly ChartLegendPosition[] LegendPositionCatalog =
+    [
+        ChartLegendPosition.Right,
+        ChartLegendPosition.Top,
+        ChartLegendPosition.Left,
+        ChartLegendPosition.Bottom,
+    ];
+
+    private static readonly ChartAreaFormatDialogFieldDescriptor[] FillLineFields =
+    [
+        new(ChartAreaFormatDialogFieldId.ChartAreaFillColor, ChartAreaFormatDialogControlKind.Color, "ChartAreaLegend_ChartAreaFillColorLabel", "ChartAreaFillButton"),
+        new(ChartAreaFormatDialogFieldId.PlotAreaFillColor, ChartAreaFormatDialogControlKind.Color, "ChartAreaLegend_PlotAreaFillColorLabel", "ChartAreaPlotFillButton"),
+        new(ChartAreaFormatDialogFieldId.PlotAreaBorderColor, ChartAreaFormatDialogControlKind.Color, "ChartAreaLegend_PlotAreaBorderColorLabel", "ChartAreaPlotBorderButton"),
+        new(ChartAreaFormatDialogFieldId.PlotAreaBorderThickness, ChartAreaFormatDialogControlKind.Number, "ChartAreaLegend_PlotAreaBorderWidthLabel", "ChartAreaPlotBorderWidthBox", "ChartDialog_LineWidthHelpText"),
+    ];
+
+    private static readonly ChartAreaFormatDialogFieldDescriptor[] LegendFields =
+    [
+        new(ChartAreaFormatDialogFieldId.ShowLegend, ChartAreaFormatDialogControlKind.CheckBox, "ChartAreaLegend_ShowLegend", "ChartAreaShowLegendCheck"),
+        new(ChartAreaFormatDialogFieldId.LegendPosition, ChartAreaFormatDialogControlKind.ComboBox, "ChartAreaLegend_LegendPositionLabel", "ChartAreaLegendPositionCombo"),
+        new(ChartAreaFormatDialogFieldId.LegendOverlay, ChartAreaFormatDialogControlKind.CheckBox, "ChartAreaLegend_OverlayLegend", "ChartAreaLegendOverlayCheck"),
+        new(ChartAreaFormatDialogFieldId.LegendTextColor, ChartAreaFormatDialogControlKind.Color, "ChartAreaLegend_LegendTextColorLabel", "ChartAreaLegendTextColorButton"),
+        new(ChartAreaFormatDialogFieldId.LegendFillColor, ChartAreaFormatDialogControlKind.Color, "ChartAreaLegend_LegendFillColorLabel", "ChartAreaLegendFillColorButton"),
+        new(ChartAreaFormatDialogFieldId.LegendBorderColor, ChartAreaFormatDialogControlKind.Color, "ChartAreaLegend_LegendBorderColorLabel", "ChartAreaLegendBorderColorButton"),
+        new(ChartAreaFormatDialogFieldId.LegendBorderThickness, ChartAreaFormatDialogControlKind.Number, "ChartAreaLegend_LegendBorderWidthLabel", "ChartAreaLegendBorderWidthBox", "ChartDialog_LineWidthHelpText"),
+        new(ChartAreaFormatDialogFieldId.LegendFontSize, ChartAreaFormatDialogControlKind.Number, "ChartAreaLegend_LegendFontSizeLabel", "ChartAreaLegendFontSizeBox", "ChartAreaLegend_LegendFontSizeHelpText"),
+    ];
+
+    private static readonly ChartAreaFormatDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartDialog_FillLineGroup", FillLineFields, "ChartAreaLegend_FillLineHelpText"),
+        new("ChartAreaLegend_LegendGroup", LegendFields),
+    ];
 
     public static IReadOnlyList<ChartLegendPosition> GetLegendPositionChoices() => LegendPositionCatalog;
+
+    public static IReadOnlyList<ChartAreaFormatDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartAreaFormatDialogSectionDescriptor GetFillLineSection() => DialogSections[0];
+
+    public static ChartAreaFormatDialogSectionDescriptor GetLegendSection() => DialogSections[1];
+
+    public static ChartAreaFormatDialogFieldDescriptor GetDialogField(ChartAreaFormatDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
 
     /// <summary>
     /// Reads the chart's current chart-area / plot-area fill-and-border state plus the legend state into
@@ -101,7 +189,7 @@ public static class ChartAreaFormatPlanner
                 fallback: 1,
                 MinBorderThickness,
                 MaxBorderThickness),
-            LegendPosition = Enum.IsDefined(input.LegendPosition)
+            LegendPosition = IsSelectableLegendPosition(input.LegendPosition)
                 ? input.LegendPosition
                 : ChartLegendPosition.Right,
             LegendBorderThickness = ClampFiniteOrDefault(
@@ -240,7 +328,7 @@ public static class ChartAreaFormatPlanner
             plotAreaBorderColor,
             plotAreaBorderThickness,
             showLegend,
-            selectedLegendPosition is { } position && Enum.IsDefined(position)
+            selectedLegendPosition is { } position && IsSelectableLegendPosition(position)
                 ? position
                 : ChartLegendPosition.Right,
             legendOverlay,
@@ -251,6 +339,17 @@ public static class ChartAreaFormatPlanner
             legendFontSize));
         issue = ChartAreaFormatParseIssue.None;
         return true;
+    }
+
+    private static bool IsSelectableLegendPosition(ChartLegendPosition position)
+    {
+        foreach (var candidate in LegendPositionCatalog)
+        {
+            if (candidate == position)
+                return true;
+        }
+
+        return false;
     }
 
     private static bool IsInBorderRange(double value) =>

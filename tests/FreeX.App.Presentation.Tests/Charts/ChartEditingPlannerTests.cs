@@ -1912,6 +1912,42 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void ChartArea_DialogDescriptor_CoversSharedFillLineAndLegendFields()
+    {
+        var sections = ChartAreaFormatPlanner.GetDialogSections();
+        var fields = sections.SelectMany(section => section.Fields).ToList();
+
+        sections.Select(section => section.HeaderResourceKey)
+            .Should().Equal("ChartDialog_FillLineGroup", "ChartAreaLegend_LegendGroup");
+        ChartAreaFormatPlanner.GetFillLineSection().HelpResourceKey.Should().Be("ChartAreaLegend_FillLineHelpText");
+        ChartAreaFormatPlanner.GetLegendPositionChoices().Should().Equal(
+            ChartLegendPosition.Right,
+            ChartLegendPosition.Top,
+            ChartLegendPosition.Left,
+            ChartLegendPosition.Bottom);
+        ChartAreaFormatPlanner.GetLegendPositionChoices().Should().NotContain(ChartLegendPosition.None);
+        fields.Select(field => field.Id).Should().Equal(
+            ChartAreaFormatDialogFieldId.ChartAreaFillColor,
+            ChartAreaFormatDialogFieldId.PlotAreaFillColor,
+            ChartAreaFormatDialogFieldId.PlotAreaBorderColor,
+            ChartAreaFormatDialogFieldId.PlotAreaBorderThickness,
+            ChartAreaFormatDialogFieldId.ShowLegend,
+            ChartAreaFormatDialogFieldId.LegendPosition,
+            ChartAreaFormatDialogFieldId.LegendOverlay,
+            ChartAreaFormatDialogFieldId.LegendTextColor,
+            ChartAreaFormatDialogFieldId.LegendFillColor,
+            ChartAreaFormatDialogFieldId.LegendBorderColor,
+            ChartAreaFormatDialogFieldId.LegendBorderThickness,
+            ChartAreaFormatDialogFieldId.LegendFontSize);
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.LabelResourceKey));
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        ChartAreaFormatPlanner.GetDialogField(ChartAreaFormatDialogFieldId.PlotAreaBorderThickness)
+            .HelpResourceKey.Should().Be("ChartDialog_LineWidthHelpText");
+        ChartAreaFormatPlanner.GetDialogField(ChartAreaFormatDialogFieldId.LegendFontSize)
+            .HelpResourceKey.Should().Be("ChartAreaLegend_LegendFontSizeHelpText");
+    }
+
+    [Fact]
     public void ChartArea_Validate_RejectsOutOfRangeOrNonFiniteWidth()
     {
         ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, -1)).Should().NotBeNull();
