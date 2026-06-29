@@ -1,4 +1,4 @@
-using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -42,17 +42,21 @@ public sealed record ZoomDialogSelectionRequest(
 public static class ZoomDialogPlanner
 {
     private static readonly int[] PresetValues = [200, 100, 75];
+    private static readonly ZoomPercentPolicy PercentPolicy = new(
+        ZoomLevels.Min * 100d,
+        ZoomLevels.Default * 100d,
+        ZoomLevels.Max * 100d);
 
     public static IReadOnlyList<int> Presets => PresetValues;
 
     public static ZoomDialogPlan Build(double currentFactor)
     {
-        var currentPercent = ZoomLevels.ToPercent(currentFactor);
+        var currentPercent = PercentPolicy.NormalizeWholePercent(ZoomLevels.ToPercent(currentFactor));
         var matchedPreset = IsPreset(currentPercent);
 
         return new ZoomDialogPlan(
             currentPercent,
-            currentPercent.ToString(CultureInfo.CurrentCulture),
+            PercentPolicy.FormatPercentText(currentPercent),
             matchedPreset ? ZoomDialogInitialChoice.Preset : ZoomDialogInitialChoice.Custom,
             PresetValues
                 .Select(percent => new ZoomDialogPresetPlan(percent, percent == currentPercent))
@@ -60,7 +64,7 @@ public static class ZoomDialogPlanner
     }
 
     public static bool IsPreset(int percent) =>
-        PresetValues.Contains(percent);
+        PercentPolicy.IsPresetPercent(percent, PresetValues);
 
     public static bool TryCreateResult(
         ZoomDialogSelectionRequest request,
@@ -96,13 +100,13 @@ public static class ZoomDialogPlanner
         result = ZoomLevels.Default;
         error = null;
 
-        if (!int.TryParse(input, NumberStyles.Integer, CultureInfo.CurrentCulture, out var percent))
+        if (!PercentPolicy.TryParseWholePercent(input, out var percent))
         {
             error = ZoomDialogValidationError.WholePercentRequired;
             return false;
         }
 
-        result = ZoomLevels.FromPercent(percent);
+        result = ZoomLevels.FromPercent(PercentPolicy.ClampPercent(percent));
         return true;
     }
 

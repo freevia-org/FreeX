@@ -64,6 +64,7 @@ public sealed class ZoomDialogPlannerTests
 
     [Theory]
     [InlineData("125", 1.25)]
+    [InlineData("125%", 1.25)]
     [InlineData("25", ZoomLevels.Min)]
     [InlineData("250", ZoomLevels.Max)]
     public void TryCreateResult_ParsesWholeCustomPercentAndClampsThroughZoomLevels(string input, double expected)

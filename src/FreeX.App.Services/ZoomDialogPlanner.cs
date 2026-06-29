@@ -11,7 +11,7 @@ public static class ZoomDialogPlanner
     public static IReadOnlyList<int> Presets => PresetValues;
 
     public static bool IsPreset(int zoomPercent) =>
-        PresetValues.Contains(zoomPercent);
+        ZoomLevelMapper.IsPresetZoomPercent(zoomPercent, PresetValues);
 
     public static ZoomDialogSelection CreateFitSelectionResult(int currentZoomPercent) =>
         new(currentZoomPercent, FitSelection: true);
@@ -32,8 +32,7 @@ public static class ZoomDialogPlanner
             return false;
         }
 
-        var roundedPercent = Math.Round(zoomPercent);
-        if (Math.Abs(zoomPercent - roundedPercent) > 0.000001)
+        if (!ZoomLevelMapper.TryNormalizeWholeZoomPercent(zoomPercent, out var roundedPercent))
         {
             error = new ZoomDialogValidationError(
                 "Zoom_MustBeWholePercentBetween10And400",
@@ -41,7 +40,7 @@ public static class ZoomDialogPlanner
             return false;
         }
 
-        result = new ZoomDialogSelection((int)roundedPercent);
+        result = new ZoomDialogSelection(roundedPercent);
         return true;
     }
 }
