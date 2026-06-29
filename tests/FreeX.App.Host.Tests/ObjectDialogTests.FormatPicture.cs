@@ -46,16 +46,17 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("Header = UiText.Get(\"FormatPicture_AltTextTab\")");
         source.Should().Contain("Content = UiText.Get(\"FormatPicture_LockAspectRatio\")");
         source.Should().Contain("LockAspectRatio");
-        source.Should().Contain("_lockAspectRatioBox.IsChecked = values.LockAspectRatio");
+        source.Should().Contain("_lockAspectRatioBox.IsChecked = state.LockAspectRatio");
         source.Should().Contain("SyncAspectFromWidth");
         source.Should().Contain("SyncAspectFromHeight");
         source.Should().Contain("UiText.Get(\"FormatPicture_CropUnavailableMessage\")");
         drawingSource.Should().Contain("new FormatPictureDialog(picture)");
         drawingSource.Should().Contain("CreateFormatPictureCommand");
-        drawingSource.Should().Contain("new SetPictureLockAspectRatioCommand");
-        drawingSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, DrawingObjectTargetKind.Picture");
-        drawingSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, DrawingObjectTargetKind.Picture");
-        drawingSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(sheetId, DrawingObjectTargetKind.Picture");
+        drawingSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(sheetId, picture, pictureResult)");
+        drawingSource.Should().NotContain("new SetPictureLockAspectRatioCommand");
+        drawingSource.Should().NotContain("DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, DrawingObjectTargetKind.Picture");
+        drawingSource.Should().NotContain("DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, DrawingObjectTargetKind.Picture");
+        drawingSource.Should().NotContain("DrawingObjectCommandPlanner.BuildAltTextCommand(sheetId, DrawingObjectTargetKind.Picture");
         drawingSource.Should().Contain("new CompositeWorkbookCommand(\"Format Picture\", commands)");
     }
 
@@ -98,8 +99,8 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
         source.Should().Contain("DialogFocus.FocusAndSelect(ResolveInvalidSizeInput());");
         source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
-        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
-        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
+        source.Should().Contain("FormatPicturePlanner.ResolveInvalidField(");
+        source.Should().Contain("FormatPicturePlanner.FormatObjectDialogField.Width");
         source.Should().Contain("DialogFocus.FocusAndSelect(ResolveInvalidCropInput(error));");
         source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
         source.Should().Contain("return _cropLeftBox;");
@@ -129,13 +130,13 @@ public sealed partial class ObjectDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("FormatPictureDialog.cs");
 
-        source.Should().Contain("FormatPicturePlanner.Capture(picture)");
-        source.Should().Contain("PictureCropDialogPlanner.Capture(picture)");
-        source.Should().Contain("FormatPicturePlanner.TryCreateSizeResult(sizeInput");
-        source.Should().Contain("FormatPicturePlanner.TryCreateRotationResult(rotationInput");
-        source.Should().Contain("PictureCropDialogPlanner.TryCreateResult(cropInput");
+        source.Should().Contain("FormatPicturePlanner.CreatePictureDialogState(picture)");
+        source.Should().Contain("FormatPicturePlanner.TryCreatePictureResult(");
         source.Should().Contain("FormatPicturePlanner.SyncHeightFromWidth(");
         source.Should().Contain("FormatPicturePlanner.SyncWidthFromHeight(");
+        source.Should().NotContain("FormatPicturePlanner.TryCreateSizeResult(sizeInput");
+        source.Should().NotContain("FormatPicturePlanner.TryCreateRotationResult(rotationInput");
+        source.Should().NotContain("PictureCropDialogPlanner.TryCreateResult(cropInput");
         source.Should().NotContain("ObjectSizeDialog.TryParseSize(sizeInput");
         source.Should().NotContain("RotationDialog.TryParseRotation(rotationInput");
         source.Should().NotContain("PictureCropDialog.TryCreateResult(cropInput");

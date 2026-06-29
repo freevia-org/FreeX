@@ -60,6 +60,19 @@ public sealed class ObjectSizeDialogPlannerTests
     }
 
     [Fact]
+    public void TryCreateSize_AcceptsStructuredSubmission()
+    {
+        var submission = new ObjectSizeDialogSubmission("320", "180", ObjectSizeDialogField.Height);
+
+        ObjectSizeDialogPlanner.TryCreateSize(submission, out var result, out var invalidField)
+            .Should()
+            .BeTrue();
+
+        result.Should().Be(new ObjectSizeDialogSize(320, 180));
+        invalidField.Should().Be(ObjectSizeDialogField.Height);
+    }
+
+    [Fact]
     public void SyncSize_PreservesOriginalAspectRatio()
     {
         var originalSize = new ObjectSizeDialogSize(120, 60);

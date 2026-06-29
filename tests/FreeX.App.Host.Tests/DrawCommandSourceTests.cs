@@ -16,7 +16,7 @@ public sealed class DrawCommandSourceTests
         insertSource.Should().Contain("private void ShapesBtn_Click(object sender, RoutedEventArgs e) => DrawRectBtn_Click(sender, e);");
         source.Should().Contain("private async void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
-        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildFormatCommands(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(");
         source.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
         source.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
@@ -50,6 +50,8 @@ public sealed class DrawCommandSourceTests
         contextualSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualSource.Should().NotContain("foreach (var picture in sheet.Pictures)");
         source.Should().NotContain("new SetPictureLockAspectRatioCommand(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildResizeCommand(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildRotationCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildMoveCommand(");

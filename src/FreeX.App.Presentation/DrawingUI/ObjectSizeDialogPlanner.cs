@@ -10,6 +10,11 @@ public enum ObjectSizeDialogField
 
 public readonly record struct ObjectSizeDialogSize(double Width, double Height);
 
+public readonly record struct ObjectSizeDialogSubmission(
+    string? WidthText,
+    string? HeightText,
+    ObjectSizeDialogField FirstInvalidField);
+
 public readonly record struct ObjectSizeDialogState(
     string WidthText,
     string HeightText,
@@ -47,6 +52,17 @@ public static class ObjectSizeDialogPlanner
 
     public static string FormatSize(double value, CultureInfo? culture = null) =>
         Math.Round(NormalizeSizeComponent(value), 2).ToString("0.##", culture ?? CultureInfo.CurrentCulture);
+
+    public static bool TryCreateSize(
+        ObjectSizeDialogSubmission submission,
+        out ObjectSizeDialogSize result,
+        out ObjectSizeDialogField invalidField) =>
+        TryCreateSize(
+            submission.WidthText,
+            submission.HeightText,
+            submission.FirstInvalidField,
+            out result,
+            out invalidField);
 
     public static bool TryCreateSize(
         string? widthText,

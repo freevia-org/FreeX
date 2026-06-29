@@ -91,12 +91,12 @@ public sealed partial class ObjectDialogTests
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("UiText.Get(\"ObjectSizing_EnterPositiveWidthAndHeightValues\")");
-        source.Should().Contain("FocusInvalidSizeInput(ResolveInvalidSizeInput());");
-        source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
-        source.Should().Contain("ObjectSizeDialogPlanner.ResolveInvalidSizeField(");
+        source.Should().Contain("FocusInvalidSizeInput(invalidField == ObjectSizeDialogField.Height ? _heightBox : _widthBox);");
+        source.Should().Contain("ObjectSizeDialogPlanner.TryCreateSize(");
+        source.Should().Contain("new ObjectSizeDialogSubmission(_widthBox.Text, _heightBox.Text, _sizeState.FirstInvalidField)");
         source.Should().Contain("_sizeState.FirstInvalidField");
-        source.Should().Contain("private static bool TryParsePositiveSize(string text)");
-        source.Should().Contain("ObjectSizeDialogPlanner.TryParsePositiveSize(text, out _)");
+        source.Should().NotContain("private TextBox ResolveInvalidSizeInput()");
+        source.Should().NotContain("private static bool TryParsePositiveSize(string text)");
         source.Should().Contain("private static void FocusInvalidSizeInput(TextBox textBox)");
         source.Should().Contain("DialogFocus.FocusAndSelect(textBox);");
     }
@@ -108,6 +108,8 @@ public sealed partial class ObjectDialogTests
 
         source.Should().Contain("ObjectSizeDialogPlanner.CreateState(");
         source.Should().Contain("ObjectSizeDialogPlanner.TryCreateDelimitedSize(input");
+        source.Should().Contain("ObjectSizeDialogPlanner.TryCreateSize(");
+        source.Should().Contain("new ObjectSizeDialogSubmission(");
         source.Should().Contain("ObjectSizeDialogPlanner.SyncHeightFromWidth(");
         source.Should().Contain("ObjectSizeDialogPlanner.SyncWidthFromHeight(");
         source.Should().Contain("ObjectSizeDialogPlanner.FormatSize(value");

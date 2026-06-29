@@ -110,6 +110,86 @@ public sealed class DrawingObjectFormatCommandPolicyTests
     }
 
     [Fact]
+    public void BuildPictureFormatCommands_AddsCropForInsertedImages()
+    {
+        var workbook = new Workbook("drawing");
+        var sheet = workbook.AddSheet("Sheet1");
+        var picture = new PictureModel
+        {
+            Kind = PictureKind.Image,
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Width = 120,
+            Height = 80,
+            LockAspectRatio = false
+        };
+        sheet.Pictures.Add(picture);
+
+        var commands = DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(
+            sheet.Id,
+            picture,
+            new FormatPicturePlanner.PictureFormatResult(
+                new FormatPicturePlanner.FormatObjectResult(220, 110, 25, true, "Picture alt"),
+                new PictureCropDialogPlanner.CropResult(0.10, 0.05, 0.20, 0)));
+
+        commands.Should().HaveCount(5);
+        commands.Should().Contain(command => command is SetPictureLockAspectRatioCommand);
+        commands.Should().Contain(command => command is SetPictureCropCommand);
+        foreach (var command in commands)
+            command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+
+        picture.Width.Should().Be(220);
+        picture.Height.Should().Be(110);
+        picture.RotationDegrees.Should().Be(25);
+        picture.LockAspectRatio.Should().BeTrue();
+        picture.AltText.Should().Be("Picture alt");
+        picture.CropLeft.Should().Be(0.10);
+        picture.CropTop.Should().Be(0.05);
+        picture.CropRight.Should().Be(0.20);
+        picture.CropBottom.Should().Be(0);
+    }
+
+    [Fact]
+    public void StandaloneBuilders_NormalizeDialogResultsForResizeRotationAndAltText()
+    {
+        var workbook = new Workbook("drawing");
+        var sheet = workbook.AddSheet("Sheet1");
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Width = 120,
+            Height = 80,
+            RotationDegrees = 10,
+            AltText = "old"
+        };
+        sheet.TextBoxes.Add(textBox);
+        var target = new DrawingObjectFormatTarget(DrawingObjectTarget.FromTextBox(textBox), FormatPicturePlanner.Capture(textBox));
+
+        var commands = new[]
+        {
+            DrawingObjectFormatCommandPolicy.BuildResizeCommand(
+                sheet.Id,
+                target,
+                new ObjectSizeDialogSize(300, 150)),
+            DrawingObjectFormatCommandPolicy.BuildRotationCommand(
+                sheet.Id,
+                target,
+                new FormatPicturePlanner.RotationResult(45)),
+            DrawingObjectFormatCommandPolicy.BuildAltTextCommand(
+                sheet.Id,
+                target,
+                "  Updated alt  "),
+        };
+
+        foreach (var command in commands)
+            command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+
+        textBox.Width.Should().Be(300);
+        textBox.Height.Should().Be(150);
+        textBox.RotationDegrees.Should().Be(45);
+        textBox.AltText.Should().Be("Updated alt");
+    }
+
+    [Fact]
     public void ResolveFillAndOutlineColor_UsesTextBoxDefaultsAndThemeOverrides()
     {
         var theme = WorkbookTheme.Office

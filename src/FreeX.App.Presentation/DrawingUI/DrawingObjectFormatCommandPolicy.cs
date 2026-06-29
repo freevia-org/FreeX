@@ -74,6 +74,111 @@ public static class DrawingObjectFormatCommandPolicy
         return commands;
     }
 
+    public static IReadOnlyList<IWorkbookCommand> BuildPictureFormatCommands(
+        SheetId sheetId,
+        PictureModel picture,
+        FormatPicturePlanner.PictureFormatResult result)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+        ArgumentNullException.ThrowIfNull(result);
+
+        var target = new DrawingObjectFormatTarget(
+            DrawingObjectTarget.FromPicture(picture),
+            FormatPicturePlanner.Capture(picture));
+        var commands = new List<IWorkbookCommand>(BuildFormatCommands(sheetId, target, result.Format));
+        if (picture.Kind == PictureKind.Image)
+        {
+            commands.Add(new SetPictureCropCommand(
+                sheetId,
+                picture.Id,
+                result.Crop.Left,
+                result.Crop.Top,
+                result.Crop.Right,
+                result.Crop.Bottom));
+        }
+
+        return commands;
+    }
+
+    public static IWorkbookCommand BuildResizeCommand(
+        SheetId sheetId,
+        DrawingObjectFormatTarget target,
+        ObjectSizeDialogSize size)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return BuildResizeCommand(sheetId, target.Kind, target.Id, size);
+    }
+
+    public static IWorkbookCommand BuildResizeCommand(
+        SheetId sheetId,
+        DrawingObjectTarget target,
+        ObjectSizeDialogSize size)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return BuildResizeCommand(sheetId, target.Kind, target.Id, size);
+    }
+
+    public static IWorkbookCommand BuildResizeCommand(
+        SheetId sheetId,
+        DrawingObjectTargetKind kind,
+        Guid objectId,
+        ObjectSizeDialogSize size) =>
+        DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, kind, objectId, size.Width, size.Height);
+
+    public static IWorkbookCommand BuildRotationCommand(
+        SheetId sheetId,
+        DrawingObjectFormatTarget target,
+        FormatPicturePlanner.RotationResult rotation)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, target.Kind, target.Id, rotation.Degrees);
+    }
+
+    public static IWorkbookCommand BuildRotationCommand(
+        SheetId sheetId,
+        DrawingObjectTarget target,
+        FormatPicturePlanner.RotationResult rotation)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, target.Kind, target.Id, rotation.Degrees);
+    }
+
+    public static IWorkbookCommand BuildRotationCommand(
+        SheetId sheetId,
+        DrawingObjectTargetKind kind,
+        Guid objectId,
+        FormatPicturePlanner.RotationResult rotation) =>
+        DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, kind, objectId, rotation.Degrees);
+
+    public static IWorkbookCommand BuildAltTextCommand(
+        SheetId sheetId,
+        DrawingObjectFormatTarget target,
+        string? altText)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return BuildAltTextCommand(sheetId, target.Kind, target.Id, altText);
+    }
+
+    public static IWorkbookCommand BuildAltTextCommand(
+        SheetId sheetId,
+        DrawingObjectAltTextTarget target,
+        string? altText)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return BuildAltTextCommand(sheetId, target.Kind, target.Id, altText);
+    }
+
+    public static IWorkbookCommand BuildAltTextCommand(
+        SheetId sheetId,
+        DrawingObjectTargetKind kind,
+        Guid objectId,
+        string? altText) =>
+        DrawingObjectCommandPlanner.BuildAltTextCommand(
+            sheetId,
+            kind,
+            objectId,
+            FormatPicturePlanner.NormalizeAltText(altText));
+
     public static CellColor? ResolveFillColor(DrawingObjectTarget target, WorkbookTheme theme)
     {
         ArgumentNullException.ThrowIfNull(target);
