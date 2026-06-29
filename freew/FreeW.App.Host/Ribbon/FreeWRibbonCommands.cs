@@ -4460,9 +4460,9 @@ internal static class FreeWRibbonCommands
             var entry = NewSourceDialog.Ask(owner);
             if (entry is null)
                 return null;
-            if (entry.Author.Length == 0 && entry.Title.Length == 0 && entry.Year.Length == 0)
+            if (!SourceManagementDialogPlanner.TryBuildCitationSource(entry, out var source, out _))
                 return null;
-            return editor.AddSource(entry.Tag, entry.Author, entry.Title, entry.Year, entry.Publisher);
+            return editor.AddSource(source!.Tag, source.Author, source.Title, source.Year, source.Publisher);
         }
     }
 
@@ -4475,14 +4475,20 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var masterStore = MasterSourceStore.Load();
-            var result = ManageSourcesDialog.Ask(Window.GetWindow(editor), editor.Sources, masterStore);
+            var result = ManageSourcesDialog.Ask(Window.GetWindow(editor), editor.Sources, masterStore.ToSources());
             if (result is null)
                 return;
 
             editor.Focus();
             editor.ReplaceSources(result.CurrentSources);
-            MasterSourceStore.Save(result.UpdatedMaster);
+            MasterSourceStore.Save(CreateMasterStore(result.MasterSources));
         }
+
+        private static MasterSourceStore CreateMasterStore(IReadOnlyList<Source> sources) =>
+            new()
+            {
+                Sources = sources.Select(SourceRecord.FromSource).ToList()
+            };
     }
 
     // Insert > References > Caption: pick a label (Figure/Table — defaulting to Table when the caret is
@@ -5516,13 +5522,11 @@ internal static class FreeWRibbonCommands
     }
 
     // The outcome of the SourcePicker: either an existing source was chosen, or "Add New Source…" was.
-    private sealed record SourcePick(Source? Source, bool AddNew);
-
     // A tiny modal dialog to pick one of the document's existing sources, or to choose "Add New Source…".
     // Returns the pick, or null if cancelled.
     private static class SourcePicker
     {
-        public static SourcePick? Ask(Window? owner, IReadOnlyList<Source> sources)
+        public static SourceManagementPick? Ask(Window? owner, IReadOnlyList<Source> sources)
         {
             var list = new System.Windows.Controls.ListBox
             {
@@ -5530,14 +5534,14 @@ internal static class FreeWRibbonCommands
                 MinHeight = 140,
                 Margin = new Thickness(0, 0, 0, 12)
             };
-            foreach (var source in sources)
-                list.Items.Add(DescribeSource(source));
+            foreach (var item in SourceManagementDialogPlanner.BuildPickerItems(sources))
+                list.Items.Add(item);
             list.SelectedIndex = 0;
 
-            SourcePick? result = null;
+            SourceManagementPick? result = null;
             var dialog = new Window
             {
-                Title = "Insert Citation",
+                Title = SourceManagementDialogPlanner.SourcePickerTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -5546,21 +5550,21 @@ internal static class FreeWRibbonCommands
             };
 
             var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
-            var addNew = new System.Windows.Controls.Button { Content = "Add New Source…", MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
+            var addNew = new System.Windows.Controls.Button { Content = SourceManagementDialogPlanner.AddNewSourceButtonLabel, MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
 
             void Choose()
             {
-                if (list.SelectedIndex >= 0 && list.SelectedIndex < sources.Count)
+                if (SourceManagementDialogPlanner.TryCreatePick(sources, list.SelectedIndex, out var pick))
                 {
-                    result = new SourcePick(sources[list.SelectedIndex], AddNew: false);
+                    result = pick;
                     dialog.DialogResult = true;
                 }
             }
 
             ok.Click += (_, _) => Choose();
             list.MouseDoubleClick += (_, _) => Choose();
-            addNew.Click += (_, _) => { result = new SourcePick(null, AddNew: true); dialog.DialogResult = true; };
+            addNew.Click += (_, _) => { result = SourceManagementDialogPlanner.CreateAddNewPick(); dialog.DialogResult = true; };
 
             var buttons = new System.Windows.Controls.StackPanel
             {
@@ -5572,7 +5576,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Source:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.SourcePickerLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;
@@ -5580,43 +5584,26 @@ internal static class FreeWRibbonCommands
             return dialog.ShowDialog() == true ? result : null;
         }
 
-        // A short human-readable label for the picker list: "Author (Year) — Title", degrading gracefully.
-        private static string DescribeSource(Source source)
-        {
-            var parts = new List<string>(3);
-            if (!string.IsNullOrWhiteSpace(source.Author))
-                parts.Add(source.Author.Trim());
-            if (!string.IsNullOrWhiteSpace(source.Year))
-                parts.Add($"({source.Year.Trim()})");
-            var head = string.Join(" ", parts);
-            if (!string.IsNullOrWhiteSpace(source.Title))
-                head = head.Length > 0 ? $"{head} — {source.Title.Trim()}" : source.Title.Trim();
-            if (head.Length == 0)
-                head = string.IsNullOrWhiteSpace(source.Tag) ? "(untitled source)" : source.Tag.Trim();
-            return head;
-        }
     }
-
-    // The fields captured by the NewSourceDialog (all trimmed; publisher may be empty).
-    private sealed record SourceEntry(string Tag, string Author, string Title, string Year, string Publisher);
 
     // A small modal form capturing a source's tag/author/title/year/publisher. Returns the entry, or
     // null if cancelled. When editing an existing source, type-specific fields not shown here are
     // preserved by the caller.
     private static class NewSourceDialog
     {
-        public static SourceEntry? Ask(Window? owner, Source? source = null)
+        public static SourceManagementSourceEntry? Ask(Window? owner, Source? source = null)
         {
-            var tag = NewField(source?.Tag);
-            var author = NewField(source?.Author);
-            var title = NewField(source?.Title);
-            var year = NewField(source?.Year);
-            var publisher = NewField(source?.Publisher);
+            var fieldPlans = SourceManagementDialogPlanner.BuildEntryFieldPlans(source);
+            var fields = fieldPlans.ToDictionary(
+                plan => plan.Field,
+                plan => NewField(plan.Text));
 
-            SourceEntry? result = null;
+            SourceManagementSourceEntry? result = null;
             var dialog = new Window
             {
-                Title = source is null ? "Add New Source" : "Edit Source",
+                Title = source is null
+                    ? SourceManagementDialogPlanner.AddNewSourceTitle
+                    : SourceManagementDialogPlanner.EditSourceTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -5628,8 +5615,8 @@ internal static class FreeWRibbonCommands
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                result = new SourceEntry(
-                    tag.Text.Trim(), author.Text.Trim(), title.Text.Trim(), year.Text.Trim(), publisher.Text.Trim());
+                result = SourceManagementDialogPlanner.CreateEntry(
+                    fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text));
                 dialog.DialogResult = true;
             };
 
@@ -5643,15 +5630,12 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            AddRow(panel, "Tag (short id):", tag);
-            AddRow(panel, "Author:", author);
-            AddRow(panel, "Title:", title);
-            AddRow(panel, "Year:", year);
-            AddRow(panel, "Publisher (optional):", publisher);
+            foreach (var plan in fieldPlans)
+                AddRow(panel, plan.Label, fields[plan.Field]);
             panel.Children.Add(buttons);
             dialog.Content = panel;
 
-            author.Focus();
+            fields[SourceManagementSourceField.Author].Focus();
             return dialog.ShowDialog() == true ? result : null;
         }
 
@@ -5668,37 +5652,17 @@ internal static class FreeWRibbonCommands
     /// <summary>Return type for <see cref="ManageSourcesDialog.Ask"/>.</summary>
     private sealed record ManageSourcesResult(
         IReadOnlyList<Source> CurrentSources,
-        MasterSourceStore UpdatedMaster);
+        IReadOnlyList<Source> MasterSources);
 
     private static class ManageSourcesDialog
     {
         public static ManageSourcesResult? Ask(
             Window? owner,
             IReadOnlyList<Source> sources,
-            MasterSourceStore masterStore)
+            IReadOnlyList<Source> masterSources)
         {
-            // Working copies — mutations stay in the dialog until OK.
-            var workingDoc    = sources.Select(CloneSource).ToList();
-            var workingMaster = new MasterSourceStore
-            {
-                Sources = masterStore.Sources
-                    .Select(r => new SourceRecord
-                    {
-                        Tag       = r.Tag,
-                        Type      = r.Type,
-                        Author    = r.Author,
-                        Title     = r.Title,
-                        Year      = r.Year,
-                        Publisher = r.Publisher,
-                        Journal   = r.Journal,
-                        Volume    = r.Volume,
-                        Issue     = r.Issue,
-                        Pages     = r.Pages,
-                        Url       = r.Url,
-                        Accessed  = r.Accessed
-                    })
-                    .ToList()
-            };
+            // The planner owns the working copies; mutations stay in dialog state until OK.
+            var state = SourceManagementDialogPlanner.BuildInitialState(sources, masterSources);
 
             // ── left pane: Master List ────────────────────────────────────────────────────────
             var masterList = new System.Windows.Controls.ListBox
@@ -5727,92 +5691,111 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            void RefreshMasterList()
+            void RefreshMasterList(int? selectedIndex = null)
             {
-                var sel = masterList.SelectedIndex;
+                var selection = selectedIndex ?? masterList.SelectedIndex;
                 masterList.Items.Clear();
-                foreach (var s in workingMaster.ToSources())
-                    masterList.Items.Add(DescribeSource(s));
-                if (workingMaster.Sources.Count > 0)
-                    masterList.SelectedIndex = Math.Clamp(sel, 0, workingMaster.Sources.Count - 1);
+                foreach (var item in SourceManagementDialogPlanner.BuildPickerItems(state.MasterSources))
+                    masterList.Items.Add(item);
+                SelectIndex(masterList, selection, state.MasterSources.Count);
             }
 
-            void RefreshDocList()
+            void RefreshDocList(int? selectedIndex = null)
             {
-                var sel = docList.SelectedIndex;
+                var selection = selectedIndex ?? docList.SelectedIndex;
                 docList.Items.Clear();
-                foreach (var s in workingDoc)
-                    docList.Items.Add(DescribeSource(s));
-                if (workingDoc.Count > 0)
-                    docList.SelectedIndex = Math.Clamp(sel, 0, workingDoc.Count - 1);
+                foreach (var item in SourceManagementDialogPlanner.BuildPickerItems(state.CurrentSources))
+                    docList.Items.Add(item);
+                SelectIndex(docList, selection, state.CurrentSources.Count);
+            }
+
+            void ShowValidation(SourceManagementValidation validation) =>
+                DialogMessageHelper.ShowWarning(dialog, validation.Message, dialog.Title);
+
+            void SelectIndex(System.Windows.Controls.ListBox list, int selectedIndex, int count)
+            {
+                list.SelectedIndex = count == 0 ? -1 : Math.Clamp(selectedIndex, 0, count - 1);
             }
 
             // ── master-list actions ───────────────────────────────────────────────────────────
             void AddToMaster()
             {
                 var entry = NewSourceDialog.Ask(dialog);
-                if (entry is null || !HasSourceData(entry))
+                if (entry is null)
                     return;
-                workingMaster.AddOrUpdate(BuildSource(entry));
-                RefreshMasterList();
-                masterList.SelectedIndex = workingMaster.Sources.Count - 1;
+
+                var plan = SourceManagementDialogPlanner.AddMasterSource(state, entry);
+                if (plan.Validation is not null)
+                {
+                    ShowValidation(plan.Validation);
+                    return;
+                }
+
+                state = plan.State;
+                RefreshMasterList(plan.SelectedIndex);
             }
 
             void DeleteFromMaster()
             {
-                var idx = masterList.SelectedIndex;
-                if (idx < 0 || idx >= workingMaster.Sources.Count)
-                    return;
-                workingMaster.Sources.RemoveAt(idx);
-                RefreshMasterList();
+                var plan = SourceManagementDialogPlanner.DeleteMasterSource(state, masterList.SelectedIndex);
+                state = plan.State;
+                RefreshMasterList(plan.SelectedIndex);
             }
 
             // ── copy master → current doc ─────────────────────────────────────────────────────
             void CopyToDoc()
             {
-                var idx = masterList.SelectedIndex;
-                if (idx < 0 || idx >= workingMaster.Sources.Count)
-                    return;
-                var src = workingMaster.Sources[idx].ToSource();
-                if (!workingDoc.Any(s => s.Tag == src.Tag))
-                {
-                    workingDoc.Add(src);
-                    RefreshDocList();
-                    docList.SelectedIndex = workingDoc.Count - 1;
-                }
+                var plan = SourceManagementDialogPlanner.CopyMasterToCurrent(
+                    state,
+                    masterList.SelectedIndex,
+                    docList.SelectedIndex);
+                state = plan.State;
+                RefreshDocList(plan.SelectedIndex);
             }
 
             // ── current-doc actions ───────────────────────────────────────────────────────────
             void AddToDoc()
             {
                 var entry = NewSourceDialog.Ask(dialog);
-                if (entry is null || !HasSourceData(entry))
+                if (entry is null)
                     return;
-                workingDoc.Add(BuildSource(entry));
-                RefreshDocList();
-                docList.SelectedIndex = workingDoc.Count - 1;
+
+                var plan = SourceManagementDialogPlanner.AddCurrentSource(state, entry);
+                if (plan.Validation is not null)
+                {
+                    ShowValidation(plan.Validation);
+                    return;
+                }
+
+                state = plan.State;
+                RefreshDocList(plan.SelectedIndex);
             }
 
             void EditDocSource()
             {
                 var idx = docList.SelectedIndex;
-                if (idx < 0 || idx >= workingDoc.Count)
+                if (idx < 0 || idx >= state.CurrentSources.Count)
                     return;
-                var entry = NewSourceDialog.Ask(dialog, workingDoc[idx]);
-                if (entry is null || !HasSourceData(entry))
+                var entry = NewSourceDialog.Ask(dialog, state.CurrentSources[idx]);
+                if (entry is null)
                     return;
-                workingDoc[idx] = BuildSource(entry, workingDoc[idx]);
-                RefreshDocList();
-                docList.SelectedIndex = idx;
+
+                var plan = SourceManagementDialogPlanner.EditCurrentSource(state, idx, entry);
+                if (plan.Validation is not null)
+                {
+                    ShowValidation(plan.Validation);
+                    return;
+                }
+
+                state = plan.State;
+                RefreshDocList(plan.SelectedIndex);
             }
 
             void DeleteFromDoc()
             {
-                var idx = docList.SelectedIndex;
-                if (idx < 0 || idx >= workingDoc.Count)
-                    return;
-                workingDoc.RemoveAt(idx);
-                RefreshDocList();
+                var plan = SourceManagementDialogPlanner.DeleteCurrentSource(state, docList.SelectedIndex);
+                state = plan.State;
+                RefreshDocList(plan.SelectedIndex);
             }
 
             // ── buttons ───────────────────────────────────────────────────────────────────────
@@ -5835,7 +5818,8 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                result = new ManageSourcesResult(workingDoc.ToArray(), workingMaster);
+                var plannedResult = SourceManagementDialogPlanner.BuildResult(state);
+                result = new ManageSourcesResult(plannedResult.CurrentSources, plannedResult.MasterSources);
                 dialog.DialogResult = true;
             };
 
@@ -5849,7 +5833,7 @@ internal static class FreeWRibbonCommands
             masterButtons.Children.Add(masterDelete);
 
             var masterPane = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 8, 0) };
-            masterPane.Children.Add(new System.Windows.Controls.TextBlock { Text = "Master List:", Margin = new Thickness(0, 0, 0, 4) });
+            masterPane.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.MasterListLabel, Margin = new Thickness(0, 0, 0, 4) });
             masterPane.Children.Add(masterList);
             masterPane.Children.Add(masterButtons);
 
@@ -5870,7 +5854,7 @@ internal static class FreeWRibbonCommands
             docButtons.Children.Add(docDelete);
 
             var docPane = new System.Windows.Controls.StackPanel();
-            docPane.Children.Add(new System.Windows.Controls.TextBlock { Text = "Current Document:", Margin = new Thickness(0, 0, 0, 4) });
+            docPane.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.CurrentDocumentListLabel, Margin = new Thickness(0, 0, 0, 4) });
             docPane.Children.Add(docList);
             docPane.Children.Add(docButtons);
 
@@ -5897,61 +5881,6 @@ internal static class FreeWRibbonCommands
             return dialog.ShowDialog() == true ? result : null;
         }
 
-        private static bool HasSourceData(SourceEntry entry) =>
-            entry.Tag.Length > 0
-            || entry.Author.Length > 0
-            || entry.Title.Length > 0
-            || entry.Year.Length > 0
-            || entry.Publisher.Length > 0;
-
-        private static Source BuildSource(SourceEntry entry, Source? existing = null) =>
-            new()
-            {
-                Tag = entry.Tag,
-                Type = existing?.Type ?? SourceType.Book,
-                Author = entry.Author,
-                Title = entry.Title,
-                Year = entry.Year,
-                Publisher = string.IsNullOrWhiteSpace(entry.Publisher) ? null : entry.Publisher,
-                Journal = existing?.Journal,
-                Volume = existing?.Volume,
-                Issue = existing?.Issue,
-                Pages = existing?.Pages,
-                Url = existing?.Url,
-                Accessed = existing?.Accessed
-            };
-
-        private static Source CloneSource(Source source) =>
-            new()
-            {
-                Tag = source.Tag,
-                Type = source.Type,
-                Author = source.Author,
-                Title = source.Title,
-                Year = source.Year,
-                Publisher = source.Publisher,
-                Journal = source.Journal,
-                Volume = source.Volume,
-                Issue = source.Issue,
-                Pages = source.Pages,
-                Url = source.Url,
-                Accessed = source.Accessed
-            };
-
-        private static string DescribeSource(Source source)
-        {
-            var parts = new List<string>(3);
-            if (!string.IsNullOrWhiteSpace(source.Author))
-                parts.Add(source.Author.Trim());
-            if (!string.IsNullOrWhiteSpace(source.Year))
-                parts.Add($"({source.Year.Trim()})");
-            var head = string.Join(" ", parts);
-            if (!string.IsNullOrWhiteSpace(source.Title))
-                head = head.Length > 0 ? $"{head} - {source.Title.Trim()}" : source.Title.Trim();
-            if (head.Length == 0)
-                head = string.IsNullOrWhiteSpace(source.Tag) ? "(untitled source)" : source.Tag.Trim();
-            return head;
-        }
     }
 
     // Mailings: the shared mail-merge state across the four Mailings commands. Holds the data source
