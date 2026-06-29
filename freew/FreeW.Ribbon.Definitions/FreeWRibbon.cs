@@ -53,6 +53,14 @@ public static class FreeWRibbon
         var pasteCommand = FreeWRibbonText.PasteCommand;
         var cutCommand = FreeWRibbonText.CutCommand;
         var copyCommand = FreeWRibbonText.CopyCommand;
+        var fontGroup = FreeWRibbonText.FontGroup;
+        var fontFamilyCommand = FreeWRibbonText.FontFamilyCommand;
+        var fontSizeCommand = FreeWRibbonText.FontSizeCommand;
+        var boldCommand = FreeWRibbonText.BoldCommand;
+        var italicCommand = FreeWRibbonText.ItalicCommand;
+        var underlineCommand = FreeWRibbonText.UnderlineCommand;
+        var strikethroughCommand = FreeWRibbonText.StrikethroughCommand;
+        var fontDialogCommand = FreeWRibbonText.FontDialogCommand;
 
         var definition = new RibbonDefinitionBuilder()
             .Tab("home", homeTab.Label, homeTab.KeyTip, tab =>
@@ -69,16 +77,16 @@ public static class FreeWRibbon
                     // Paste Special: dialog offering Keep Source Formatting / Merge Formatting / Keep Text Only.
                     g.Icon("freew.paste-special", "Paste Special…", RibbonCommandIconKind.Paste);
                 });
-                tab.Group("font", "Font", "F", 90, g =>
+                tab.Group("font", fontGroup.Label, fontGroup.KeyTip, 90, g =>
                 {
                     // Row 1: the font name + size combos. Row 2+: compact icon-only buttons, exactly like Word.
-                    g.ComboBox("freew.font-family", "Font", c => c with
+                    g.ComboBox("freew.font-family", fontFamilyCommand.Label, c => c with
                     {
                         Items = new[] { "Calibri", "Arial", "Times New Roman", "Georgia", "Consolas", "Verdana", "Cambria" },
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
                         Width = 140
                     });
-                    g.ComboBox("freew.font-size", "Size", c => c with
+                    g.ComboBox("freew.font-size", fontSizeCommand.Label, c => c with
                     {
                         Items = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "24", "28", "36", "48", "72" },
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
@@ -87,10 +95,10 @@ public static class FreeWRibbon
                     g.Icon("freew.grow-font", "Grow Font", RibbonCommandIconKind.ArrowUp);
                     g.Icon("freew.shrink-font", "Shrink Font", RibbonCommandIconKind.ArrowDown);
                     g.RowBreak();
-                    g.IconToggle("freew.bold", "Bold", RibbonCommandIconKind.Bold, "1");
-                    g.IconToggle("freew.italic", "Italic", RibbonCommandIconKind.Italic, "2");
-                    g.IconToggle("freew.underline", "Underline", RibbonCommandIconKind.Underline, "3");
-                    g.Icon("freew.strikethrough", "Strikethrough", RibbonCommandIconKind.Strikethrough);
+                    g.IconToggle("freew.bold", boldCommand.Label, RibbonCommandIconKind.Bold, boldCommand.KeyTip);
+                    g.IconToggle("freew.italic", italicCommand.Label, RibbonCommandIconKind.Italic, italicCommand.KeyTip);
+                    g.IconToggle("freew.underline", underlineCommand.Label, RibbonCommandIconKind.Underline, underlineCommand.KeyTip);
+                    g.Icon("freew.strikethrough", strikethroughCommand.Label, RibbonCommandIconKind.Strikethrough);
                     g.Icon("freew.subscript", "Subscript", RibbonCommandIconKind.Subscript);
                     g.Icon("freew.superscript", "Superscript", RibbonCommandIconKind.Superscript);
                     g.Icon("freew.change-case", "Change Case", RibbonCommandIconKind.ChangeCase);
@@ -103,7 +111,7 @@ public static class FreeWRibbon
                     g.Icon("freew.clear-formatting", "Clear All Formatting", RibbonCommandIconKind.Clear);
                     // Font dialog-launcher: opens the two-tab Font dialog (Font + Advanced tab with
                     // character spacing, kerning, position, ligatures, stylistic sets, number form/spacing).
-                    g.Icon("freew.font-dialog", "Font…", RibbonCommandIconKind.Font);
+                    g.Icon("freew.font-dialog", fontDialogCommand.Label, RibbonCommandIconKind.Font);
                 });
                 tab.Group("paragraph", "Paragraph", "P", 80, g =>
                 {

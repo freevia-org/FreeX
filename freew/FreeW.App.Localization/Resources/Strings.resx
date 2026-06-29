@@ -112,6 +112,42 @@
   <data name="Ribbon_Command_Copy_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Group_Font_Label" xml:space="preserve">
+    <value>Font</value>
+  </data>
+  <data name="Ribbon_Group_Font_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
+  <data name="Ribbon_Command_FontFamily_Label" xml:space="preserve">
+    <value>Font</value>
+  </data>
+  <data name="Ribbon_Command_FontSize_Label" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Ribbon_Command_Bold_Label" xml:space="preserve">
+    <value>Bold</value>
+  </data>
+  <data name="Ribbon_Command_Bold_KeyTip" xml:space="preserve">
+    <value>1</value>
+  </data>
+  <data name="Ribbon_Command_Italic_Label" xml:space="preserve">
+    <value>Italic</value>
+  </data>
+  <data name="Ribbon_Command_Italic_KeyTip" xml:space="preserve">
+    <value>2</value>
+  </data>
+  <data name="Ribbon_Command_Underline_Label" xml:space="preserve">
+    <value>Underline</value>
+  </data>
+  <data name="Ribbon_Command_Underline_KeyTip" xml:space="preserve">
+    <value>3</value>
+  </data>
+  <data name="Ribbon_Command_Strikethrough_Label" xml:space="preserve">
+    <value>Strikethrough</value>
+  </data>
+  <data name="Ribbon_Command_FontDialog_Label" xml:space="preserve">
+    <value>Font&#x2026;</value>
+  </data>
   <data name="Backstage_GreetingMorning" xml:space="preserve">
     <value>Good morning</value>
   </data>

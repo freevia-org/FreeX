@@ -303,14 +303,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                         KeyTip = FreeWRibbonText.PasteCommand.KeyTip
                     });
                 });
-                tab.Group("font", "Font", null, 90, g =>
+                tab.Group("font", FreeWRibbonText.FontGroup.Label, FreeWRibbonText.FontGroup.KeyTip, 90, g =>
                 {
-                    g.ComboBox("freew.font-family", "Font", c => c with { Items = FontFamilies, Width = 128 });
-                    g.ComboBox("freew.font-size",   "Size", c => c with { Items = FontSizes,    Width = 64 });
-                    g.Toggle("freew.bold",           "Bold");
-                    g.Toggle("freew.italic",          "Italic");
-                    g.Toggle("freew.underline",       "Underline");
-                    g.Toggle("freew.strikethrough",   "Strikethrough");
+                    g.ComboBox("freew.font-family", FreeWRibbonText.FontFamilyCommand.Label, c => c with { Items = FontFamilies, Width = 128 });
+                    g.ComboBox("freew.font-size",   FreeWRibbonText.FontSizeCommand.Label, c => c with { Items = FontSizes,    Width = 64 });
+                    g.Toggle("freew.bold",           FreeWRibbonText.BoldCommand.Label, b => b with { KeyTip = FreeWRibbonText.BoldCommand.KeyTip });
+                    g.Toggle("freew.italic",          FreeWRibbonText.ItalicCommand.Label, b => b with { KeyTip = FreeWRibbonText.ItalicCommand.KeyTip });
+                    g.Toggle("freew.underline",       FreeWRibbonText.UnderlineCommand.Label, b => b with { KeyTip = FreeWRibbonText.UnderlineCommand.KeyTip });
+                    g.Toggle("freew.strikethrough",   FreeWRibbonText.StrikethroughCommand.Label);
                     g.Toggle("freew.superscript",     "X²");
                     g.Toggle("freew.subscript",       "X₂");
                     g.Button("freew.highlight",       "Highlight");
@@ -319,7 +319,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.clear-formatting", "Clear");
                     g.Dropdown("freew.font-color", "Font Color", BuildFontColorMenu());
                     g.Button("freew.change-case",     "Aa");
-                    g.Button("freew.font-dialog",     "Font…");
+                    g.Button("freew.font-dialog",     FreeWRibbonText.FontDialogCommand.Label);
                 });
                 tab.Group("paragraph", "Paragraph", null, 80, g =>
                 {
