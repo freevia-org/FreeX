@@ -1311,7 +1311,9 @@ public sealed partial class MainWindow : Window
                     ["view.headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
                     ["view.formulaBar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
-                    ["pictureFormat.crop"] = () => new RibbonCommandState(IsEnabled: HasSelectedPictureForRibbonCommand()),
+                    ["pictureFormat.crop"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
+                    ["shapeFormat.shapeGradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
+                    ["shapeFormat.shapeEffects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
                     ["View Side by Side"] = GetSideBySideRibbonState,
                     ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,
