@@ -87,6 +87,27 @@ public sealed record ChartDataDialogCategoryEdit(
     int CategoryIndex,
     string? Category);
 
+public sealed record ChartDataDialogSeriesNameEdit(
+    int SeriesIndex,
+    string? Name);
+
+public sealed record ChartDataDialogValueEdit(
+    int SeriesIndex,
+    int CategoryIndex,
+    object? Value);
+
+public sealed record ChartDataDialogSurfacePlan(
+    string CommandId,
+    string Title,
+    double Width,
+    double Height,
+    string AddSeriesLabel,
+    string RemoveSeriesLabel,
+    string AddCategoryLabel,
+    string RemoveCategoryLabel,
+    string OkLabel,
+    string CancelLabel);
+
 public sealed record ChartDataDialogCommitPlan(
     IReadOnlyList<string> Categories,
     IReadOnlyList<string> SeriesNames,
@@ -100,7 +121,19 @@ public sealed record ChartDataDialogCommitPlan(
 
 public sealed class ChartDataDialogPlanner
 {
+    public const string EditDataCommandId = "freep.chart.edit-data";
+    public const string EditDataCommandLabel = "Edit Data";
+    public const string DialogTitle = "Edit Chart Data";
     public const string CategoryColumnHeader = "Category";
+    public const string AddSeriesLabel = "+ Series";
+    public const string RemoveSeriesLabel = "- Series";
+    public const string AddCategoryLabel = "+ Category";
+    public const string RemoveCategoryLabel = "- Category";
+    public const string OkLabel = "OK";
+    public const string CancelLabel = "Cancel";
+
+    public const double DefaultDialogWidth = 640;
+    public const double DefaultDialogHeight = 440;
 
     private readonly List<string> _categories;
     private readonly List<string> _seriesNames;
@@ -120,6 +153,21 @@ public sealed class ChartDataDialogPlanner
     public int CategoryCount => _categories.Count;
 
     public int SeriesCount => _seriesNames.Count;
+
+    public static ChartDataDialogSurfacePlan BuildSurfacePlan()
+    {
+        return new ChartDataDialogSurfacePlan(
+            EditDataCommandId,
+            DialogTitle,
+            DefaultDialogWidth,
+            DefaultDialogHeight,
+            AddSeriesLabel,
+            RemoveSeriesLabel,
+            AddCategoryLabel,
+            RemoveCategoryLabel,
+            OkLabel,
+            CancelLabel);
+    }
 
     public static ChartDataDialogPlanner FromChart(ChartShape chart)
     {
@@ -265,6 +313,29 @@ public sealed class ChartDataDialogPlanner
         }
     }
 
+    public void ApplySeriesNameEdits(IEnumerable<ChartDataDialogSeriesNameEdit> seriesNameEdits)
+    {
+        ArgumentNullException.ThrowIfNull(seriesNameEdits);
+
+        foreach (var edit in seriesNameEdits)
+        {
+            SetSeriesName(edit.SeriesIndex, edit.Name);
+        }
+    }
+
+    public void ApplyValueEdits(
+        IEnumerable<ChartDataDialogValueEdit> valueEdits,
+        CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(valueEdits);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        foreach (var edit in valueEdits)
+        {
+            SetValue(edit.SeriesIndex, edit.CategoryIndex, ParseCellValue(edit.Value, culture));
+        }
+    }
+
     public ChartDataDialogCommitPlan BuildCommitPlan(
         IEnumerable<ChartDataDialogCategoryEdit>? categoryEdits = null)
     {
@@ -303,6 +374,11 @@ public sealed class ChartDataDialogPlanner
 
     public static double? ParseCellValue(object? value, CultureInfo culture)
     {
+        if (value is double numericValue)
+        {
+            return numericValue;
+        }
+
         if (value is not string text)
         {
             return null;

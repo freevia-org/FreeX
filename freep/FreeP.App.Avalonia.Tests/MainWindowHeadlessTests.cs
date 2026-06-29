@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using FreeP.App.Avalonia;
+using FreeP.App.Compositor;
 using FreeP.App.Avalonia.Smoke;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -298,6 +300,7 @@ public sealed class MainWindowHeadlessTests
         chartIds.Should().Contain("freep.insert-chart-bar", "Bar chart command required");
         chartIds.Should().Contain("freep.insert-chart-line", "Line chart command required");
         chartIds.Should().Contain("freep.insert-chart-pie", "Pie chart command required");
+        chartIds.Should().Contain(ChartDataDialogPlanner.EditDataCommandId, "Edit Data command required");
         illustrationIds.Should().Contain("freep.picture", "Picture command required");
         illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
         illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
@@ -504,6 +507,66 @@ public sealed class MainWindowHeadlessTests
         added!.Kind.Should().Be(SlideShapeKind.Chart);
         added.Chart.Should().NotBeNull();
         added.Chart!.ChartType.Should().Be(expectedChartType);
+    }
+
+    [Fact]
+    public async Task Ribbon_chart_edit_data_command_is_registered_and_noops_without_selected_chart()
+    {
+        var found = false;
+        var before = -1;
+        var after = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(ChartDataDialogPlanner.EditDataCommandId, out var command);
+            found.Should().BeTrue("the Avalonia chart-data command must be registered");
+
+            before = window.Editor.CurrentSlide!.Shapes.Count;
+            command!.Execute(RibbonCommandContext.Empty);
+            after = window.Editor.CurrentSlide!.Shapes.Count;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the Avalonia chart-data command must be registered");
+        after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
+    }
+
+    [Fact]
+    public async Task ChartDataDialog_constructs_from_selected_chart_with_planner_projection()
+    {
+        string? title = null;
+        var seriesColumns = -1;
+        var categoryRows = -1;
+        var valueCells = -1;
+        ChartDataDialogCommitPlan? commit = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartDataDialog(window.Editor, CultureInfo.InvariantCulture);
+            title = dialog.Title;
+            seriesColumns = dialog.RenderedSeriesColumnCount;
+            categoryRows = dialog.RenderedCategoryRowCount;
+            valueCells = dialog.RenderedValueCellCount;
+            commit = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        title.Should().Be(ChartDataDialogPlanner.DialogTitle);
+        seriesColumns.Should().Be(2);
+        categoryRows.Should().Be(3);
+        valueCells.Should().Be(6);
+        commit.Should().NotBeNull();
+        commit!.Categories.Should().Equal("Q1", "Q2", "Q3");
+        commit.SeriesNames.Should().Equal("Series 1", "Series 2");
+        commit.Values[0].Should().Equal(new double?[] { 4.3, 2.5, 3.5 });
+        commit.Values[1].Should().Equal(new double?[] { 2.4, 4.4, 1.8 });
     }
 
     [Fact]
