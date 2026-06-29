@@ -72,4 +72,40 @@ public sealed class FreeXBackstageFlowPlannerTests
         FreeXBackstageFlowPlanner.BuildCommandWorkflow(FreeXBackstageCommandId.Options)
             .Workflow.Should().Be(FreeXBackstageCommandWorkflowKind.Options);
     }
+
+    [Fact]
+    public async Task CommandWorkflowExecutor_RoutesEveryCommandThroughSharedHandlers()
+    {
+        var invoked = new List<string>();
+        var handlers = new FreeXBackstageCommandHandlers(
+            NewWorkbookAsync: () => RecordAsync("new"),
+            OpenWorkbookAsync: () => RecordAsync("open"),
+            ShareWorkbookAsync: () => RecordAsync("share"),
+            SaveWorkbookAsync: () => RecordAsync("save"),
+            SaveWorkbookAsAsync: () => RecordAsync("save-as"),
+            ExportWorkbookAsync: () => RecordAsync("export"),
+            CloseWorkbookAsync: () => RecordAsync("close"),
+            AccountAsync: () => RecordAsync("account"),
+            OptionsAsync: () => RecordAsync("options"));
+
+        foreach (var command in Enum.GetValues<FreeXBackstageCommandId>())
+            await FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(command, handlers);
+
+        invoked.Should().Equal(
+            "new",
+            "open",
+            "share",
+            "save",
+            "save-as",
+            "export",
+            "close",
+            "account",
+            "options");
+
+        Task RecordAsync(string value)
+        {
+            invoked.Add(value);
+            return Task.CompletedTask;
+        }
+    }
 }
