@@ -59,6 +59,51 @@ public sealed class InCanvasTextEditPlannerTests
     }
 
     [Fact]
+    public void CommitTableCellRichText_ChangedText_BuildsUndoableCellTextCommand()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var original = MakeBody("Original");
+        var shape = MakeTableShape(1, original);
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+
+        var planner = InCanvasTableCellTextEditPlanner.BeginRichText(0, shape.Id, 0, 0, original);
+        var replacement = MakeBody("Replacement");
+
+        var decision = planner.CommitRichText(replacement);
+
+        decision.Outcome.Should().Be(InCanvasTextEditOutcome.Commit);
+        decision.Command.Should().NotBeNull();
+        decision.Command!.Label.Should().Be("Edit Cell Text");
+
+        replacement.Paragraphs[0].Runs[0].Text = "Mutated before apply";
+
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(decision.Command);
+
+        shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Replacement");
+
+        bus.Undo();
+
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Original");
+    }
+
+    [Fact]
+    public void CommitTableCellRichText_ParagraphAlignOnlyChange_ReturnsNoCommand()
+    {
+        var original = MakeBody("Hello");
+        original.Paragraphs[0].Align = TextAlign.Left;
+        var edited = MakeBody("Hello");
+        edited.Paragraphs[0].Align = TextAlign.Right;
+        var planner = InCanvasTableCellTextEditPlanner.BeginRichText(0, 1, 0, 0, original);
+
+        var decision = planner.CommitRichText(edited);
+
+        decision.Outcome.Should().Be(InCanvasTextEditOutcome.Unchanged);
+        decision.Command.Should().BeNull();
+    }
+
+    [Fact]
     public void SetShapeTextBodyCommand_ClonesInputAndUndoSnapshots()
     {
         var presentation = Presentation.CreateEmpty();
@@ -99,5 +144,23 @@ public sealed class InCanvasTextEditPlannerTests
         });
         body.Paragraphs.Add(paragraph);
         return body;
+    }
+
+    private static SlideShape MakeTableShape(uint id, TextBody? cellBody)
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L);
+        var row = new TableRow { HeightEmu = 457200L };
+        row.Cells.Add(new TableCell { TextBody = cellBody });
+        table.Rows.Add(row);
+
+        return new SlideShape
+        {
+            Id = id,
+            Kind = SlideShapeKind.Table,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 457200L,
+            Table = table,
+        };
     }
 }

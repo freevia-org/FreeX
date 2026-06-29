@@ -35,7 +35,7 @@ public sealed class InCanvasTableCellEditor
     // ── Cell-edit state ───────────────────────────────────────────────────────
 
     private RichTextBox? _cellTextBox;
-    private TextBody?    _cellOriginalBody;  // snapshot for change detection
+    private InCanvasTableCellTextEditPlanner? _cellEditPlan;
     private bool         _cellEditActive;
     private int          _editRow;
     private int          _editCol;
@@ -102,8 +102,12 @@ public sealed class InCanvasTableCellEditor
         double w = cellRect.Value.Width  * xf.Scale;
         double h = cellRect.Value.Height * xf.Scale;
 
-        // Keep a snapshot for change detection.
-        _cellOriginalBody = SetShapeTextBodyCommand.CloneTextBody(cell.TextBody);
+        _cellEditPlan = InCanvasTableCellTextEditPlanner.BeginRichText(
+            _editor.CurrentSlideIndex,
+            shapeId,
+            row,
+            col,
+            cell.TextBody);
 
         // Determine a fallback font size from the cell's first run.
         double fallbackPt = cell.TextBody?.Paragraphs
@@ -152,6 +156,8 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox    = null;
         _cellEditActive = false;
+        var editPlan = _cellEditPlan;
+        _cellEditPlan = null;
 
         var slide = _editor.CurrentSlide;
         if (slide is null) return;
@@ -166,13 +172,11 @@ public sealed class InCanvasTableCellEditor
 
         // Rebuild the full rich TextBody from the FlowDocument.
         var newBody = TextBodyFlowDocumentConverter.FromFlowDocument(doc, cell.TextBody);
+        var decision = editPlan?.CommitRichText(newBody)
+            ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Unchanged, null);
 
-        // Only issue a command if content actually changed.
-        if (CellBodiesEqual(_cellOriginalBody, newBody)) return;
-
-        // Use the bus directly (the EditingSession API requires the shape to be selected).
-        _editor.Bus.Execute(new SetTableCellTextCommand(
-            _editor.CurrentSlideIndex, _editShapeId, row, col, newBody));
+        if (decision.Command is not null)
+            _editor.Bus.Execute(decision.Command);
     }
 
     /// <summary>Cancels the current cell edit without writing back.</summary>
@@ -182,6 +186,8 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Remove(_cellTextBox);
         _cellTextBox = null;
         _cellEditActive = false;
+        _ = _cellEditPlan?.Cancel();
+        _cellEditPlan = null;
     }
 
     // ── Mouse handling ────────────────────────────────────────────────────────
@@ -416,46 +422,4 @@ public sealed class InCanvasTableCellEditor
         _overlay.Children.Add(_cellHighlight);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private static bool CellBodiesEqual(TextBody? a, TextBody? b)
-    {
-        if (a is null && b is null) return true;
-        if (a is null || b is null) return false;
-        if (a.Paragraphs.Count != b.Paragraphs.Count) return false;
-        for (int pi = 0; pi < a.Paragraphs.Count; pi++)
-        {
-            var pa = a.Paragraphs[pi];
-            var pb = b.Paragraphs[pi];
-            if (pa.Runs.Count != pb.Runs.Count) return false;
-            for (int ri = 0; ri < pa.Runs.Count; ri++)
-            {
-                var ra = pa.Runs[ri];
-                var rb = pb.Runs[ri];
-                if (ra.Text != rb.Text || ra.Bold != rb.Bold || ra.Italic != rb.Italic
-                    || ra.Underline != rb.Underline || ra.Strikethrough != rb.Strikethrough
-                    || ra.FontFamily != rb.FontFamily || ra.FontSizePt != rb.FontSizePt
-                    || !ColorsEqual(ra.Color, rb.Color))   // Y3: include Color in change detection
-                    return false;
-            }
-        }
-        return true;
-    }
-
-    /// <summary>
-    /// Compares two <see cref="ThemeAwareColor"/> values, including resolved sRGB and SchemeColor ref.
-    /// </summary>
-    private static bool ColorsEqual(ThemeAwareColor? a, ThemeAwareColor? b)
-    {
-        if (a is null && b is null) return true;
-        if (a is null || b is null) return false;
-        if (a.Resolved != b.Resolved) return false;
-        if (a.SchemeColor is null && b.SchemeColor is null) return true;
-        if (a.SchemeColor is null || b.SchemeColor is null) return false;
-        return a.SchemeColor.Slot    == b.SchemeColor.Slot
-            && a.SchemeColor.LumMod  == b.SchemeColor.LumMod
-            && a.SchemeColor.LumOff  == b.SchemeColor.LumOff
-            && a.SchemeColor.Tint    == b.SchemeColor.Tint
-            && a.SchemeColor.Shade   == b.SchemeColor.Shade;
-    }
 }
