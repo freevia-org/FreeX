@@ -139,4 +139,106 @@
   <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
     <value>MMM d, yyyy</value>
   </data>
+  <data name="Ribbon_Tab_Home_Label" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="Ribbon_Tab_Home_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
+  <data name="Ribbon_Group_File_Label" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="Ribbon_Group_File_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
+  <data name="Ribbon_Command_FileNew_Label" xml:space="preserve">
+    <value>New</value>
+  </data>
+  <data name="Ribbon_Command_FileNew_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_FileOpen_Label" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="Ribbon_Command_FileOpen_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
+  <data name="Ribbon_Command_FileSave_Label" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Ribbon_Command_FileSave_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_FileSaveAs_Label" xml:space="preserve">
+    <value>Save As</value>
+  </data>
+  <data name="Ribbon_Command_FileSaveAs_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Group_Slides_Label" xml:space="preserve">
+    <value>Slides</value>
+  </data>
+  <data name="Ribbon_Group_Slides_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_NewSlide_Label" xml:space="preserve">
+    <value>New Slide</value>
+  </data>
+  <data name="Ribbon_Command_NewSlide_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_NewSlide_AvaloniaKeyTip" xml:space="preserve">
+    <value>I</value>
+  </data>
+  <data name="Ribbon_Command_DuplicateSlide_Label" xml:space="preserve">
+    <value>Duplicate Slide</value>
+  </data>
+  <data name="Ribbon_Command_DuplicateSlide_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_DeleteSlide_Label" xml:space="preserve">
+    <value>Delete Slide</value>
+  </data>
+  <data name="Ribbon_Command_DeleteSlide_KeyTip" xml:space="preserve">
+    <value>X</value>
+  </data>
+  <data name="Ribbon_Group_Edit_Label" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Ribbon_Group_Edit_KeyTip" xml:space="preserve">
+    <value>E</value>
+  </data>
+  <data name="Ribbon_Command_Undo_Label" xml:space="preserve">
+    <value>Undo</value>
+  </data>
+  <data name="Ribbon_Command_Undo_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Command_Redo_Label" xml:space="preserve">
+    <value>Redo</value>
+  </data>
+  <data name="Ribbon_Command_Redo_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Group_SlideShow_Label" xml:space="preserve">
+    <value>Slide Show</value>
+  </data>
+  <data name="Ribbon_Group_SlideShow_WpfKeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Group_SlideShow_AvaloniaKeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowFromBeginning_Label" xml:space="preserve">
+    <value>From Beginning</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowFromBeginning_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowFromCurrentSlide_Label" xml:space="preserve">
+    <value>From Current Slide</value>
+  </data>
+  <data name="Ribbon_Command_SlideShowFromCurrentSlide_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
 </root>

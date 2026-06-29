@@ -1,4 +1,6 @@
+using System.Globalization;
 using Free.Shared.Ribbon;
+using FreeP.App.Localization;
 
 namespace FreeP.Ribbon.Definitions.Tests;
 
@@ -36,6 +38,50 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Home_shell_ribbon_text_resolves_from_freep_localization_resources()
+    {
+        var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+            var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+
+            return new[]
+            {
+                wpf.FindTab("home")!.Header,
+                wpf.FindTab("home")!.KeyTip!,
+                RequiredGroup(wpf, "home", "slides").Header,
+                RequiredGroup(wpf, "home", "slides").KeyTip!,
+                RequiredControl(wpf, "freep.new-slide").Label,
+                RequiredControl(wpf, "freep.new-slide").KeyTip!,
+                RequiredControl(wpf, "freep.duplicate-slide").Label,
+                RequiredControl(wpf, "freep.delete-slide").Label,
+                RequiredGroup(wpf, "transitions", "slideshow-from-transitions").Header,
+                RequiredControl(wpf, "freep.slideshow.from-beginning").Label,
+                RequiredControl(wpf, "freep.slideshow.from-current-slide").Label,
+                RequiredGroup(avalonia, "home", "file").Header,
+                RequiredGroup(avalonia, "home", "file").KeyTip!,
+                RequiredControl(avalonia, "freep.file.new").Label,
+                RequiredControl(avalonia, "freep.file.open").Label,
+                RequiredControl(avalonia, "freep.file.save").Label,
+                RequiredControl(avalonia, "freep.file.save-as").Label,
+                RequiredGroup(avalonia, "home", "slides").Header,
+                RequiredControl(avalonia, "freep.new-slide").Label,
+                RequiredControl(avalonia, "freep.new-slide").KeyTip!,
+                RequiredGroup(avalonia, "home", "edit").Header,
+                RequiredControl(avalonia, "freep.undo").Label,
+                RequiredControl(avalonia, "freep.redo").Label,
+                RequiredGroup(avalonia, "home", "slideshow").Header,
+                RequiredControl(avalonia, "freep.slideshow.from-beginning").Label,
+                RequiredControl(avalonia, "freep.slideshow.from-current").Label,
+            };
+        });
+
+        text.Should().OnlyContain(value =>
+            value.StartsWith("[[", StringComparison.Ordinal) &&
+            value.EndsWith("]]", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreePRibbon.Build(FreePRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
@@ -67,6 +113,7 @@ public sealed class FreePRibbonDefinitionProfileTests
     public void Definition_project_stays_platform_neutral()
     {
         var project = File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreeP.Ribbon.Definitions.csproj"));
+        project.Should().Contain(@"..\FreeP.App.Localization\FreeP.App.Localization.csproj");
         project.Should().Contain(@"..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj");
         project.Should().NotContain("UseWPF");
         project.Should().NotContain("Free.Shared.Ribbon.Wpf");
@@ -83,6 +130,39 @@ public sealed class FreePRibbonDefinitionProfileTests
             source.Should().NotContain("using System.Windows");
             source.Should().NotContain("using Avalonia");
             source.Should().NotContain("PresentationFramework");
+        }
+    }
+
+    [Fact]
+    public void Home_shell_slice_keeps_raw_english_out_of_ribbon_definition_sources()
+    {
+        var source = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreePRibbon.cs")),
+            File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreePAvaloniaRibbonDefinition.cs")));
+
+        source.Should().Contain("FreePRibbonText");
+        foreach (var literal in new[]
+                 {
+                     "\"Home\"",
+                     "\"File\"",
+                     "\"New\"",
+                     "\"Open\"",
+                     "\"Save\"",
+                     "\"Save As\"",
+                     "\"Slides\"",
+                     "\"New Slide\"",
+                     "\"Duplicate Slide\"",
+                     "\"Delete Slide\"",
+                     "\"Edit\"",
+                     "\"Undo\"",
+                     "\"Redo\"",
+                     "\"Slide Show\"",
+                     "\"From Beginning\"",
+                     "\"From Current Slide\""
+                 })
+        {
+            source.Should().NotContain(literal);
         }
     }
 
@@ -155,6 +235,47 @@ public sealed class FreePRibbonDefinitionProfileTests
             foreach (var childCommandId in MenuCommandIds(item.Children))
                 yield return childCommandId;
         }
+    }
+
+    private static T WithUiCulture<T>(string cultureName, Func<T> action)
+    {
+        var originalUi = CultureInfo.CurrentUICulture;
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            CultureInfo.CurrentUICulture = culture;
+            CultureInfo.CurrentCulture = culture;
+            return action();
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalUi;
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    private static RibbonGroup RequiredGroup(RibbonDefinition definition, string tabId, string groupId) =>
+        definition.FindTab(tabId)?.FindGroup(groupId)
+        ?? throw new InvalidOperationException($"Could not find ribbon group '{tabId}/{groupId}'.");
+
+    private static RibbonControl RequiredControl(RibbonDefinition definition, string commandId)
+    {
+        foreach (var tab in definition.Tabs)
+        {
+            foreach (var group in tab.Groups)
+            {
+                foreach (var control in group.Controls)
+                {
+                    if (string.Equals(control.CommandId.Value, commandId, StringComparison.Ordinal))
+                    {
+                        return control;
+                    }
+                }
+            }
+        }
+
+        throw new InvalidOperationException($"Could not find ribbon control '{commandId}'.");
     }
 
     private static string RepoFile(params string[] parts) =>
