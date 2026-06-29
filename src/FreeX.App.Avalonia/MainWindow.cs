@@ -1364,9 +1364,9 @@ public sealed partial class MainWindow : Window
                     ["Scale to Fit"] = () => _ = ShowPageSetupDialogAsync(),
                     ["Print Gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
                     ["Print Headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
-                    ["Insert Page Break"] = () => ApplyPageBreakAction(PageBreakAction.Insert),
-                    ["Remove Page Break"] = () => ApplyPageBreakAction(PageBreakAction.Remove),
-                    ["Reset All Page Breaks"] = () => ApplyPageBreakAction(PageBreakAction.ResetAll),
+                    ["Insert Page Break"] = () => ApplyPageBreakAction(PageBreakMenuAction.Insert),
+                    ["Remove Page Break"] = () => ApplyPageBreakAction(PageBreakMenuAction.Remove),
+                    ["Reset All Page Breaks"] = () => ApplyPageBreakAction(PageBreakMenuAction.ResetAll),
                     ["Normal#MarginNormalMenuItem_Click"] = () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal"),
 
                     // Menu-item variants: AutoSum "More Functions", Remove-all-arrows, Data Clear-filter.

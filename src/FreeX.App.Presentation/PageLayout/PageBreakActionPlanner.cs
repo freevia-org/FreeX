@@ -2,6 +2,13 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
 
+public enum PageBreakMenuAction
+{
+    Insert,
+    Remove,
+    ResetAll,
+}
+
 /// <summary>
 /// The new manual page-break sets to write after an Insert / Remove / Reset action, plus a short
 /// human-readable status describing what changed. Row and column break collections are 1-based and
@@ -22,6 +29,18 @@ public sealed record PageBreakActionPlan(
 /// </summary>
 public static class PageBreakActionPlanner
 {
+    public static PageBreakActionPlan Plan(
+        PageBreakMenuAction action,
+        GridRange selection,
+        IEnumerable<uint> currentRowBreaks,
+        IEnumerable<uint> currentColumnBreaks) =>
+        action switch
+        {
+            PageBreakMenuAction.Insert => Insert(selection, currentRowBreaks, currentColumnBreaks),
+            PageBreakMenuAction.Remove => Remove(selection, currentRowBreaks, currentColumnBreaks),
+            _ => ResetAll(),
+        };
+
     /// <summary>
     /// Inserts a page break at the active cell: a horizontal break above its row (when the row is below
     /// the first) and a vertical break to the left of its column (when the column is past the first).
@@ -29,13 +48,20 @@ public static class PageBreakActionPlanner
     public static PageBreakActionPlan Insert(
         CellAddress active,
         IReadOnlyCollection<uint> currentRowBreaks,
-        IReadOnlyCollection<uint> currentColumnBreaks)
+        IReadOnlyCollection<uint> currentColumnBreaks) =>
+        Insert(new GridRange(active, active), currentRowBreaks, currentColumnBreaks);
+
+    public static PageBreakActionPlan Insert(
+        GridRange selection,
+        IEnumerable<uint> currentRowBreaks,
+        IEnumerable<uint> currentColumnBreaks)
     {
         var rows = new SortedSet<uint>(currentRowBreaks ?? []);
         var columns = new SortedSet<uint>(currentColumnBreaks ?? []);
+        var plan = PageBreakSelectionPlanner.Insert(selection, rows, columns);
 
-        var addedRow = active.Row > 1 && rows.Add(active.Row);
-        var addedColumn = active.Col > 1 && columns.Add(active.Col);
+        var addedRow = HasAddedBreak(rows, plan.RowBreaks);
+        var addedColumn = HasAddedBreak(columns, plan.ColumnBreaks);
 
         var status = (addedRow, addedColumn) switch
         {
@@ -45,7 +71,7 @@ public static class PageBreakActionPlanner
             _ => "No page break to insert at the top-left corner",
         };
 
-        return new PageBreakActionPlan([.. rows], [.. columns], status);
+        return new PageBreakActionPlan(plan.RowBreaks, plan.ColumnBreaks, status);
     }
 
     /// <summary>
@@ -55,22 +81,38 @@ public static class PageBreakActionPlanner
     public static PageBreakActionPlan Remove(
         CellAddress active,
         IReadOnlyCollection<uint> currentRowBreaks,
-        IReadOnlyCollection<uint> currentColumnBreaks)
+        IReadOnlyCollection<uint> currentColumnBreaks) =>
+        Remove(new GridRange(active, active), currentRowBreaks, currentColumnBreaks);
+
+    public static PageBreakActionPlan Remove(
+        GridRange selection,
+        IEnumerable<uint> currentRowBreaks,
+        IEnumerable<uint> currentColumnBreaks)
     {
         var rows = new SortedSet<uint>(currentRowBreaks ?? []);
         var columns = new SortedSet<uint>(currentColumnBreaks ?? []);
+        var plan = PageBreakSelectionPlanner.Remove(selection, rows, columns);
 
-        var removedRow = rows.Remove(active.Row);
-        var removedColumn = columns.Remove(active.Col);
+        var removedRow = HasRemovedBreak(rows, plan.RowBreaks);
+        var removedColumn = HasRemovedBreak(columns, plan.ColumnBreaks);
 
         var status = removedRow || removedColumn
             ? "Removed page break"
             : "No page break next to the selection";
 
-        return new PageBreakActionPlan([.. rows], [.. columns], status);
+        return new PageBreakActionPlan(plan.RowBreaks, plan.ColumnBreaks, status);
     }
 
     /// <summary>Clears every manual page break on the sheet.</summary>
     public static PageBreakActionPlan ResetAll() =>
         new([], [], "Reset all page breaks");
+
+    private static bool HasAddedBreak(SortedSet<uint> before, IReadOnlyList<uint> after) =>
+        after.Any(value => !before.Contains(value));
+
+    private static bool HasRemovedBreak(SortedSet<uint> before, IReadOnlyList<uint> after)
+    {
+        var afterSet = new HashSet<uint>(after);
+        return before.Any(value => !afterSet.Contains(value));
+    }
 }

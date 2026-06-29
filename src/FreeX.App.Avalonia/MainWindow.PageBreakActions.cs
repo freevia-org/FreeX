@@ -7,7 +7,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.PageLayout;
-using FreeX.Core.Commands;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -37,9 +36,8 @@ public sealed partial class MainWindow
 
     // Page Layout ▸ Breaks (parity gap: the ribbon button previously opened Page Setup as a stub).
     // Excel exposes a small dropdown with Insert Page Break / Remove Page Break / Reset All Page
-    // Breaks. We surface the same three actions in a compact popup. The break math lives in the
-    // portable PageBreakActionPlanner; each action writes the resulting break sets back through the
-    // shared SetPageBreaksCommand (undo/redo aware), so manual breaks render in Page Break Preview.
+    // Breaks. We surface the same three actions in a compact popup. The portable planner translates
+    // the selected range into final break sets, then the shell runs the shared command through undo/redo.
 
     /// <summary>Opens the compact Breaks popup (Insert / Remove / Reset All page breaks).</summary>
     private void ShowPageBreaksMenu() => _ = ShowPageBreaksMenuAsync();
@@ -102,17 +100,17 @@ public sealed partial class MainWindow
 
         insertButton.Click += (_, _) =>
         {
-            ApplyPageBreakAction(PageBreakAction.Insert);
+            ApplyPageBreakAction(PageBreakMenuAction.Insert);
             dialog.Close();
         };
         removeButton.Click += (_, _) =>
         {
-            ApplyPageBreakAction(PageBreakAction.Remove);
+            ApplyPageBreakAction(PageBreakMenuAction.Remove);
             dialog.Close();
         };
         resetButton.Click += (_, _) =>
         {
-            ApplyPageBreakAction(PageBreakAction.ResetAll);
+            ApplyPageBreakAction(PageBreakMenuAction.ResetAll);
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -134,27 +132,17 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private enum PageBreakAction
-    {
-        Insert,
-        Remove,
-        ResetAll,
-    }
-
-    private void ApplyPageBreakAction(PageBreakAction action)
+    private void ApplyPageBreakAction(PageBreakMenuAction action)
     {
         var sheet = _session.ActiveSheet;
-        var active = _session.SelectedRange.Start;
-
-        var plan = action switch
-        {
-            PageBreakAction.Insert => PageBreakActionPlanner.Insert(active, sheet.RowPageBreaks, sheet.ColumnPageBreaks),
-            PageBreakAction.Remove => PageBreakActionPlanner.Remove(active, sheet.RowPageBreaks, sheet.ColumnPageBreaks),
-            _ => PageBreakActionPlanner.ResetAll(),
-        };
+        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
+            action,
+            _session.SelectedRange,
+            sheet.RowPageBreaks,
+            sheet.ColumnPageBreaks);
 
         var result = _session.ExecuteReviewCommand(
-            new SetPageBreaksCommand(sheet.Id, plan.RowBreaks, plan.ColumnBreaks));
+            PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheet.Id, plan));
         RefreshShell(result.Success
             ? plan.Status
             : result.ErrorMessage ?? UiText.Get("PageBreak_Failed"));

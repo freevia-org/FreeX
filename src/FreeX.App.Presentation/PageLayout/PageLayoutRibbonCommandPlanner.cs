@@ -87,6 +87,16 @@ public static class PageLayoutRibbonCommandPlanner
     public static PageBreakSelectionPlan PlanResetPageBreaks() =>
         new([], []);
 
+    public static PageBreakActionPlan PlanPageBreakAction(
+        PageBreakMenuAction action,
+        GridRange selection,
+        IEnumerable<uint> existingRowBreaks,
+        IEnumerable<uint> existingColumnBreaks) =>
+        PageBreakActionPlanner.Plan(action, selection, existingRowBreaks, existingColumnBreaks);
+
+    public static IWorkbookCommand BuildPageBreaksCommand(SheetId sheetId, PageBreakActionPlan plan) =>
+        BuildPageBreaksCommand(sheetId, plan.RowBreaks, plan.ColumnBreaks);
+
     public static IWorkbookCommand BuildPageBreaksCommand(SheetId sheetId, PageBreakSelectionPlan plan) =>
         BuildPageBreaksCommand(sheetId, plan.RowBreaks, plan.ColumnBreaks);
 

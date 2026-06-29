@@ -681,6 +681,26 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void PageBreakActions_DelegateMenuPolicyToSharedPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageBreakActions.cs"));
+        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Insert)");
+        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
+        source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.ResetAll)");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanPageBreakAction(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheet.Id, plan)");
+        source.Should().NotContain("private enum PageBreakAction");
+        source.Should().NotContain("new SetPageBreaksCommand(");
+        source.Should().NotContain("PageBreakActionPlanner.Insert(");
+        source.Should().NotContain("PageBreakActionPlanner.Remove(");
+        mainSource.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Insert)");
+        mainSource.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
+        mainSource.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.ResetAll)");
+    }
+
+    [Fact]
     public void PrintPreview_DelegatesPaginationContextToSharedPresentationModel()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PrintPreview.cs"));

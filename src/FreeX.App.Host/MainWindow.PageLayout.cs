@@ -481,7 +481,8 @@ public partial class MainWindow
 
         if (SheetGrid.SelectedRange is not { } selectedRange) return;
 
-        var plan = PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(
+        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
+            PageBreakMenuAction.Insert,
             selectedRange,
             sheet.RowPageBreaks,
             sheet.ColumnPageBreaks);
@@ -497,7 +498,8 @@ public partial class MainWindow
 
         if (SheetGrid.SelectedRange is not { } selectedRange) return;
 
-        var plan = PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(
+        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
+            PageBreakMenuAction.Remove,
             selectedRange,
             sheet.RowPageBreaks,
             sheet.ColumnPageBreaks);
@@ -508,7 +510,7 @@ public partial class MainWindow
 
     private void ResetAllPageBreaksMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var plan = PageLayoutRibbonCommandPlanner.PlanResetPageBreaks();
+        var plan = PageBreakActionPlanner.ResetAll();
         TryExecuteGroupedSheetCommand(
             "Page Breaks",
             sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
