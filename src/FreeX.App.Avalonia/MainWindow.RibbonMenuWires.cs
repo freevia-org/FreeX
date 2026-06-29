@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -226,25 +227,58 @@ public sealed partial class MainWindow
     }
 
     // ── Page Layout ▸ Page Setup group quick presets ─────────────────────────────
-    private void ApplyPageMargins(WorksheetPageMargins margins, string statusKey)
+    private void RegisterPageLayoutRibbonActions(IDictionary<string, Action> commands)
     {
-        var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildMarginsCommand(_session.ActiveSheet.Id, margins));
-        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+        foreach (var descriptor in PageLayoutRibbonActionPlanner.RibbonActionDescriptors)
+            commands[descriptor.CommandId] = CreatePageLayoutRibbonAction(descriptor);
     }
 
-    private void ApplyPageOrientation(WorksheetPageOrientation orientation, string statusKey)
+    private Action CreatePageLayoutRibbonAction(PageLayoutRibbonActionDescriptor descriptor) =>
+        descriptor.Kind switch
+        {
+            PageLayoutRibbonActionKind.OpenPageSetupDialog => () => _ = ShowPageSetupDialogAsync(descriptor.PageSetupOpenSource),
+            PageLayoutRibbonActionKind.ShowPageBreaksMenu => ShowPageBreaksMenu,
+            PageLayoutRibbonActionKind.ShowGridlinesSheetOptions => () => _ = ShowGridlinesSheetOptionsAsync(),
+            PageLayoutRibbonActionKind.ShowHeadingsSheetOptions => () => _ = ShowHeadingsSheetOptionsAsync(),
+            PageLayoutRibbonActionKind.ChooseBackground => ChooseSheetBackground,
+            PageLayoutRibbonActionKind.DeleteBackground => DeleteSheetBackground,
+            PageLayoutRibbonActionKind.SetPrintArea => SetPrintAreaFromSelection,
+            PageLayoutRibbonActionKind.ClearPrintArea => ClearPrintArea,
+            PageLayoutRibbonActionKind.ApplyMarginsPreset => () => ApplyPageMarginsPreset(descriptor.MarginPreset!.Value),
+            PageLayoutRibbonActionKind.ApplyOrientationPreset => () => ApplyPageOrientationPreset(descriptor.OrientationPreset!.Value),
+            PageLayoutRibbonActionKind.ApplyPaperSizePreset => () => ApplyPaperSizePreset(descriptor.PaperSizePreset!.Value),
+            PageLayoutRibbonActionKind.ApplyPageBreakAction => () => ApplyPageBreakAction(descriptor.PageBreakAction!.Value),
+            _ => throw new InvalidOperationException($"Unsupported Page Layout ribbon action: {descriptor.Kind}"),
+        };
+
+    private void ApplyPageMarginsPreset(PageLayoutMarginPreset preset)
     {
+        var plan = PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset);
         var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildOrientationCommand(_session.ActiveSheet.Id, orientation));
-        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+            PageLayoutRibbonCommandPlanner.BuildMarginsCommand(_session.ActiveSheet.Id, plan.Value));
+        RefreshShell(result.Success
+            ? UiText.Get(plan.StatusResourceKey)
+            : result.ErrorMessage ?? UiText.Get(plan.StatusResourceKey));
     }
 
-    private void ApplyPaperSize(WorksheetPaperSize paperSize, string statusKey)
+    private void ApplyPageOrientationPreset(PageLayoutOrientationPreset preset)
     {
+        var plan = PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset);
         var result = _session.ExecuteReviewCommand(
-            PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(_session.ActiveSheet.Id, paperSize));
-        RefreshShell(result.Success ? UiText.Get(statusKey) : result.ErrorMessage ?? UiText.Get(statusKey));
+            PageLayoutRibbonCommandPlanner.BuildOrientationCommand(_session.ActiveSheet.Id, plan.Value));
+        RefreshShell(result.Success
+            ? UiText.Get(plan.StatusResourceKey)
+            : result.ErrorMessage ?? UiText.Get(plan.StatusResourceKey));
+    }
+
+    private void ApplyPaperSizePreset(PageLayoutPaperSizePreset preset)
+    {
+        var plan = PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset);
+        var result = _session.ExecuteReviewCommand(
+            PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(_session.ActiveSheet.Id, plan.Value));
+        RefreshShell(result.Success
+            ? UiText.Get(plan.StatusResourceKey)
+            : result.ErrorMessage ?? UiText.Get(plan.StatusResourceKey));
     }
 
     private void SetPrintAreaFromSelection()

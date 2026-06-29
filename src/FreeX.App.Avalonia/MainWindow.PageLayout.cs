@@ -838,6 +838,7 @@ public sealed partial class MainWindow
                 PageSetupInitialFocusTarget.ScaleToFit => fitRadio.IsChecked == true
                     ? fitWideBox
                     : scalePercentBox,
+                PageSetupInitialFocusTarget.PrintArea => printAreaBox,
                 PageSetupInitialFocusTarget.RepeatRows => repeatRowsBox,
                 _ => orientationBox,
             };

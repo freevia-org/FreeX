@@ -119,6 +119,10 @@ public partial class PageSetupDialog
                 PageSetupTabs.SelectedItem = SheetTab;
                 DialogFocus.FocusAndSelect(RowsRepeatBox);
                 return;
+            case PageSetupInitialFocusTarget.PrintArea:
+                PageSetupTabs.SelectedItem = SheetTab;
+                DialogFocus.FocusAndSelect(PrintAreaBox);
+                return;
             case PageSetupInitialFocusTarget.ScaleToFit:
                 PageSetupTabs.SelectedItem = PageTab;
                 var target = AdjustToRadioButton.IsChecked == true

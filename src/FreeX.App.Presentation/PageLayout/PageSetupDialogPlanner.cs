@@ -75,6 +75,7 @@ public static class PageSetupDialogPlanner
             PageLayoutPageSetupOpenSource.CustomMargins => PageSetupInitialFocusTarget.Margins,
             PageLayoutPageSetupOpenSource.ExtendedPaperSize => PageSetupInitialFocusTarget.PaperSize,
             PageLayoutPageSetupOpenSource.ScaleToFit => PageSetupInitialFocusTarget.ScaleToFit,
+            PageLayoutPageSetupOpenSource.PrintArea => PageSetupInitialFocusTarget.PrintArea,
             PageLayoutPageSetupOpenSource.PrintTitles => PageSetupInitialFocusTarget.RepeatRows,
             _ => PageSetupInitialFocusTarget.PageOrientation
         };
@@ -88,6 +89,8 @@ public static class PageSetupDialogPlanner
                 new(PageSetupDialogTab.Page, PageSetupDialogField.PaperSize),
             PageSetupInitialFocusTarget.ScaleToFit =>
                 new(PageSetupDialogTab.Page, PageSetupDialogField.Scaling),
+            PageSetupInitialFocusTarget.PrintArea =>
+                new(PageSetupDialogTab.Sheet, PageSetupDialogField.PrintArea),
             PageSetupInitialFocusTarget.RepeatRows =>
                 new(PageSetupDialogTab.Sheet, PageSetupDialogField.RepeatRows),
             _ => new(PageSetupDialogTab.Page, PageSetupDialogField.Orientation)

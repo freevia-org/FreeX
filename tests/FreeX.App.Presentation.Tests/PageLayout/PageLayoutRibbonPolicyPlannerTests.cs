@@ -47,6 +47,7 @@ public sealed class PageLayoutRibbonPolicyPlannerTests
     [InlineData(PageLayoutPageSetupOpenSource.CustomMargins, PageSetupInitialFocusTarget.Margins)]
     [InlineData(PageLayoutPageSetupOpenSource.ExtendedPaperSize, PageSetupInitialFocusTarget.PaperSize)]
     [InlineData(PageLayoutPageSetupOpenSource.ScaleToFit, PageSetupInitialFocusTarget.ScaleToFit)]
+    [InlineData(PageLayoutPageSetupOpenSource.PrintArea, PageSetupInitialFocusTarget.PrintArea)]
     [InlineData(PageLayoutPageSetupOpenSource.PrintTitles, PageSetupInitialFocusTarget.RepeatRows)]
     public void ResolvePageSetupInitialFocus_MapsRibbonSourceToDialogFocus(
         PageLayoutPageSetupOpenSource source,
