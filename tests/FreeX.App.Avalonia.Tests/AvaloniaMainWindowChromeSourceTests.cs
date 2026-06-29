@@ -205,6 +205,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         mainSource.Should().Contain("_cellAddressText.TextAlignment = TextAlignment.Left;");
         mainSource.Should().Contain("_formulaBox.FontFamily = FormulaBarFontFamily;");
         mainSource.Should().Contain("_formulaBox.FontSize = 15;");
+        mainSource.Should().Contain("FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey");
+        mainSource.Should().Contain("CreateFormulaBarPathButton(");
+        mainSource.Should().Contain("FormulaBarChromePlanner.CancelEditButton");
+        mainSource.Should().Contain("FormulaBarChromePlanner.EnterEditButton");
+        mainSource.Should().Contain("FormulaBarChromePlanner.InsertFunctionButton");
+        mainSource.Should().Contain("FormulaBarChromePlanner.ExpansionButton(_formulaBarExpanded)");
         mainSource.Should().Contain("AutomationProperties.SetAutomationId(_formulaBarHost, \"FormulaBarRow\");");
         toggleSource.Should().Contain("_formulaBarHost.IsVisible = visible;");
     }
