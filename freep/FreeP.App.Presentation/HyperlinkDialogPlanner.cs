@@ -21,6 +21,18 @@ public sealed record HyperlinkDialogInitialState(
     string? TargetSlideId,
     string TooltipText);
 
+public sealed record HyperlinkDialogSlideOption(
+    string Id,
+    string DisplayText)
+{
+    public override string ToString() => DisplayText;
+}
+
+public sealed record HyperlinkDialogRequest(
+    IReadOnlyList<HyperlinkDialogSlideOption> SlideOptions,
+    HyperlinkDialogInitialState InitialState,
+    int SelectedSlideIndex);
+
 public sealed record HyperlinkDialogValidationMessage(
     string Caption,
     string Message,
@@ -31,6 +43,12 @@ public sealed record HyperlinkDialogResultPlan(
     Hyperlink? Result,
     HyperlinkDialogValidationMessage? Validation);
 
+public sealed record HyperlinkDialogApplyPlan(
+    bool ShouldApply,
+    string? Url,
+    string? TargetSlideId,
+    string? Tooltip);
+
 public static class HyperlinkDialogPlanner
 {
     public const string Caption = "Insert Hyperlink";
@@ -40,6 +58,36 @@ public static class HyperlinkDialogPlanner
         "Only http, https, and mailto URLs are supported.";
     public const string MissingSlideMessage =
         "Please select a target slide.";
+
+    public static HyperlinkDialogRequest BuildDialogRequest(
+        IReadOnlyList<Slide> slides,
+        Hyperlink? current)
+    {
+        var options = BuildSlideOptions(slides);
+        var initial = BuildInitialState(current);
+        return new HyperlinkDialogRequest(
+            options,
+            initial,
+            SelectedSlideIndex(options, initial.TargetSlideId));
+    }
+
+    public static IReadOnlyList<HyperlinkDialogSlideOption> BuildSlideOptions(
+        IReadOnlyList<Slide> slides)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+
+        var options = new List<HyperlinkDialogSlideOption>(slides.Count);
+        for (int i = 0; i < slides.Count; i++)
+        {
+            var slide = slides[i];
+            var title = NullIfWhiteSpace(slide.Title) ?? $"Slide {i + 1}";
+            options.Add(new HyperlinkDialogSlideOption(
+                slide.Id,
+                $"{i + 1}. {title}"));
+        }
+
+        return options;
+    }
 
     public static HyperlinkDialogInitialState BuildInitialState(Hyperlink? current)
     {
@@ -79,6 +127,17 @@ public static class HyperlinkDialogPlanner
         };
     }
 
+    public static HyperlinkDialogApplyPlan BuildApplyPlan(Hyperlink? result)
+    {
+        return result is null
+            ? new HyperlinkDialogApplyPlan(false, null, null, null)
+            : new HyperlinkDialogApplyPlan(
+                true,
+                result.Url,
+                result.TargetSlideId,
+                result.Tooltip);
+    }
+
     public static string? NullIfWhiteSpace(string? value)
     {
         var trimmed = value?.Trim();
@@ -89,6 +148,29 @@ public static class HyperlinkDialogPlanner
     {
         return Uri.TryCreate(url, UriKind.Absolute, out var uri)
             && uri.Scheme is "http" or "https" or "mailto";
+    }
+
+    public static int SelectedSlideIndex(
+        IReadOnlyList<HyperlinkDialogSlideOption> options,
+        string? targetSlideId)
+    {
+        if (options.Count == 0)
+        {
+            return -1;
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetSlideId))
+        {
+            for (int i = 0; i < options.Count; i++)
+            {
+                if (options[i].Id == targetSlideId)
+                {
+                    return i;
+                }
+            }
+        }
+
+        return 0;
     }
 
     private static HyperlinkDialogResultPlan BuildUrlResult(
