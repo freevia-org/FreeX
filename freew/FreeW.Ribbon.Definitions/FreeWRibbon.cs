@@ -48,15 +48,21 @@ public static class FreeWRibbon
                 menu.Item(commandId, effectSet.Name, effectSet.Name[0].ToString());
         }
 
+        var homeTab = FreeWRibbonText.HomeTab;
+        var clipboardGroup = FreeWRibbonText.ClipboardGroup;
+        var pasteCommand = FreeWRibbonText.PasteCommand;
+        var cutCommand = FreeWRibbonText.CutCommand;
+        var copyCommand = FreeWRibbonText.CopyCommand;
+
         var definition = new RibbonDefinitionBuilder()
-            .Tab("home", "Home", "H", tab =>
+            .Tab("home", homeTab.Label, homeTab.KeyTip, tab =>
             {
-                tab.Group("clipboard", "Clipboard", "C", 100, g =>
+                tab.Group("clipboard", clipboardGroup.Label, clipboardGroup.KeyTip, 100, g =>
                 {
                     // Paste is the hero (Large); the rest stack as labelled medium buttons, like Word.
-                    g.Large("freew.paste", "Paste", RibbonCommandIconKind.Paste, "V");
-                    g.Medium("freew.cut", "Cut", RibbonCommandIconKind.Cut, "X");
-                    g.Medium("freew.copy", "Copy", RibbonCommandIconKind.Copy, "C");
+                    g.Large("freew.paste", pasteCommand.Label, RibbonCommandIconKind.Paste, pasteCommand.KeyTip);
+                    g.Medium("freew.cut", cutCommand.Label, RibbonCommandIconKind.Cut, cutCommand.KeyTip);
+                    g.Medium("freew.copy", copyCommand.Label, RibbonCommandIconKind.Copy, copyCommand.KeyTip);
                     g.Medium("freew.format-painter", "Format Painter", RibbonCommandIconKind.FormatPainter, "FP");
                     g.Icon("freew.paste-plain", "Paste Text Only", RibbonCommandIconKind.Paste);
                     g.Icon("freew.paste-merge", "Merge Formatting", RibbonCommandIconKind.Paste);

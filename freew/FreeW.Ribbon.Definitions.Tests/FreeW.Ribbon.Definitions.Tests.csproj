@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
     <ProjectReference Include="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" />
   </ItemGroup>
 
