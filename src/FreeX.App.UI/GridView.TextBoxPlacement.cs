@@ -49,7 +49,7 @@ public partial class GridView
         _textBoxPlacementDragging = true;
         _textBoxPlacementStartAnchor = anchor;
         _textBoxPlacementStartPos = position;
-        _textBoxPlacementPreviewRect = GridShapePlacementPlanner.CalculatePreviewRect(position, position);
+        _textBoxPlacementPreviewRect = GridTextBoxPlacementPlanner.CalculatePreviewRect(position, position);
         Cursor = Cursors.Cross;
         CaptureMouse();
         InvalidateVisual();
@@ -58,17 +58,14 @@ public partial class GridView
 
     private void UpdateTextBoxPlacementPreview(Point position)
     {
-        _textBoxPlacementPreviewRect = GridShapePlacementPlanner.CalculatePreviewRect(_textBoxPlacementStartPos, position);
+        _textBoxPlacementPreviewRect = GridTextBoxPlacementPlanner.CalculatePreviewRect(_textBoxPlacementStartPos, position);
         Cursor = Cursors.Cross;
         InvalidateVisual();
     }
 
     private void CommitTextBoxPlacement(Point position)
     {
-        var previewRect = GridShapePlacementPlanner.CalculatePreviewRect(_textBoxPlacementStartPos, position);
-        var anchorPoint = GridShapePlacementPlanner.IsMeaningfulDrag(_textBoxPlacementStartPos, position)
-            ? previewRect.TopLeft
-            : _textBoxPlacementStartPos;
+        var anchorPoint = GridTextBoxPlacementPlanner.CalculateAnchorPoint(_textBoxPlacementStartPos, position);
         var anchor = HitTestAnchorCell(anchorPoint) ?? _textBoxPlacementStartAnchor;
         var request = GridTextBoxPlacementPlanner.CreateRequest(anchor, _textBoxPlacementStartPos, position);
 

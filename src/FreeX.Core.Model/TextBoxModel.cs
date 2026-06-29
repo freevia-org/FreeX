@@ -2,6 +2,9 @@ namespace FreeX.Core.Model;
 
 public sealed class TextBoxModel
 {
+    public const double DefaultWidth = 180d;
+    public const double DefaultHeight = 80d;
+
     public Guid Id { get; init; } = Guid.NewGuid();
     public string? Name { get; set; }
     public CellAddress Anchor { get; set; }
@@ -19,8 +22,8 @@ public sealed class TextBoxModel
     public string Text { get; set; } = "";
     public string? Title { get; set; }
     public string? AltText { get; set; }
-    public double Width { get; set; } = 180;
-    public double Height { get; set; } = 80;
+    public double Width { get; set; } = DefaultWidth;
+    public double Height { get; set; } = DefaultHeight;
     public double RotationDegrees { get; set; }
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
@@ -40,4 +43,17 @@ public sealed class TextBoxModel
 
     public CellColor GetEffectiveOutlineColor(WorkbookTheme theme, CellColor fallback) =>
         OutlineThemeColor?.Resolve(theme) ?? OutlineColor ?? fallback;
+
+    public static TextBoxModel? FindById(IEnumerable<TextBoxModel> textBoxes, Guid textBoxId)
+    {
+        ArgumentNullException.ThrowIfNull(textBoxes);
+
+        foreach (var textBox in textBoxes)
+        {
+            if (textBox.Id == textBoxId)
+                return textBox;
+        }
+
+        return null;
+    }
 }

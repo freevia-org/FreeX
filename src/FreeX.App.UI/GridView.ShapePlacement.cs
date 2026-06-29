@@ -71,10 +71,7 @@ public partial class GridView
     private void CommitShapePlacement(Point position)
     {
         var kind = _shapePlacementKind;
-        var previewRect = GridShapePlacementPlanner.CalculatePreviewRect(_shapePlacementStartPos, position);
-        var anchorPoint = GridShapePlacementPlanner.IsMeaningfulDrag(_shapePlacementStartPos, position)
-            ? previewRect.TopLeft
-            : _shapePlacementStartPos;
+        var anchorPoint = GridShapePlacementPlanner.CalculateAnchorPoint(_shapePlacementStartPos, position);
         var anchor = HitTestAnchorCell(anchorPoint) ?? _shapePlacementStartAnchor;
         var request = GridShapePlacementPlanner.CreateRequest(kind, anchor, _shapePlacementStartPos, position);
 

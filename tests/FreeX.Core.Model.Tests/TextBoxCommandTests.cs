@@ -30,6 +30,24 @@ public sealed class TextBoxCommandTests
     }
 
     [Fact]
+    public void AddTextBoxCommand_DefaultSizeUsesTextBoxModelDefaultsAndLookupFindsIt()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var anchor = new CellAddress(sheet.Id, 2, 3);
+
+        var command = new AddTextBoxCommand(sheet.Id, anchor, "Notes");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var textBox = TextBoxModel.FindById(sheet.TextBoxes, command.TextBoxId);
+        textBox.Should().NotBeNull();
+        textBox!.Width.Should().Be(TextBoxModel.DefaultWidth);
+        textBox.Height.Should().Be(TextBoxModel.DefaultHeight);
+    }
+
+    [Fact]
     public void AddTextBoxCommand_RejectsTextBoxOnDifferentSheet()
     {
         var wb = new Workbook("test");
