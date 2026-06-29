@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -15,19 +16,11 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    // The functions offered in the "Paste function" picker, matching Word's common table formulas.
-    private static readonly string[] Functions =
-        ["SUM", "AVERAGE", "COUNT", "PRODUCT", "MIN", "MAX"];
-
-    // A few common number-format pictures (Word's "Number format" dropdown), plus a blank "general" option.
-    private static readonly string[] NumberFormats =
-        ["", "0", "0.00", "#,##0", "#,##0.00", "0%", "$#,##0.00;($#,##0.00)"];
-
     private readonly TextBox _formula;
     private readonly ComboBox _format;
     private TableFormulaField? _result;
 
-    private TableFormulaDialog(Window? owner, string defaultFormula)
+    private TableFormulaDialog(Window? owner, TableFormulaDialogInitialState initialState)
     {
         Owner = owner;
         Title = "Formula";
@@ -40,30 +33,28 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var panel = new StackPanel { Margin = new Thickness(14) };
 
         panel.Children.Add(new TextBlock { Text = "Formula:", Margin = new Thickness(0, 0, 0, 4) });
-        _formula = new TextBox { Text = defaultFormula };
+        _formula = new TextBox { Text = initialState.FormulaText };
         panel.Children.Add(_formula);
 
         panel.Children.Add(new TextBlock { Text = "Number format:", Margin = new Thickness(0, 10, 0, 4) });
         _format = new ComboBox { IsEditable = true };
-        foreach (var format in NumberFormats)
+        foreach (var format in TableFormulaDialogPlanner.NumberFormats)
             _format.Items.Add(format);
-        _format.SelectedIndex = 0;
+        _format.SelectedIndex = Math.Clamp(initialState.NumberFormatIndex, 0, _format.Items.Count - 1);
         panel.Children.Add(_format);
 
         panel.Children.Add(new TextBlock { Text = "Paste function:", Margin = new Thickness(0, 10, 0, 4) });
         var function = new ComboBox();
-        foreach (var name in Functions)
+        foreach (var name in TableFormulaDialogPlanner.Functions)
             function.Items.Add(name);
-        // Selecting a function appends "NAME()" to the formula and parks the caret between the parentheses.
         function.SelectionChanged += (_, _) =>
         {
             if (function.SelectedItem is string name)
             {
-                if (!_formula.Text.TrimStart().StartsWith('='))
-                    _formula.Text = "=" + _formula.Text.Trim();
-                _formula.Text += name + "()";
+                var pasted = TableFormulaDialogPlanner.PasteFunction(_formula.Text, name);
+                _formula.Text = pasted.Text;
                 _formula.Focus();
-                _formula.CaretIndex = _formula.Text.Length - 1;
+                _formula.CaretIndex = pasted.CaretIndex;
                 function.SelectedIndex = -1;
             }
         };
@@ -79,25 +70,27 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        var expression = _formula.Text.Trim();
-        if (expression.Length == 0)
+        if (!TableFormulaDialogPlanner.TryBuildResult(
+                new TableFormulaDialogInput(_formula.Text, _format.Text),
+                out var result,
+                out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, "Please enter a formula.", "Formula");
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? TableFormulaDialogPlanner.ValidationMessage, "Formula");
             DialogFocus.FocusAndSelect(_formula);
             return;
         }
-        var format = (_format.Text ?? string.Empty).Trim();
-        _result = new TableFormulaField(expression, string.IsNullOrEmpty(format) ? null : format);
+
+        _result = result;
         DialogResult = true;
     }
 
     /// <summary>
-    /// Show the dialog seeded with <paramref name="defaultFormula"/> (e.g. <c>=SUM(ABOVE)</c>); returns the
+    /// Show the dialog seeded with <paramref name="initialState"/> (e.g. <c>=SUM(ABOVE)</c>); returns the
     /// chosen <see cref="TableFormulaField"/>, or null if cancelled.
     /// </summary>
-    public static TableFormulaField? Prompt(Window? owner, string defaultFormula)
+    public static TableFormulaField? Prompt(Window? owner, TableFormulaDialogInitialState initialState)
     {
-        var dialog = new TableFormulaDialog(owner, defaultFormula);
+        var dialog = new TableFormulaDialog(owner, initialState);
         return dialog.ShowDialog() == true ? dialog._result : null;
     }
 }
