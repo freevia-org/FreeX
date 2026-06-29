@@ -302,6 +302,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void BackstageInfo_DelegatesDisplayTextToSharedPlanner()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Backstage.cs"));
+        var accountPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "Backstage",
+            "FreeXBackstageAccountPanePlanner.cs"));
 
         source.Should().Contain("WorkbookInfoDisplayPlanner.Build(");
         source.Should().Contain("WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog");
@@ -313,8 +318,16 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("ToBackstageExportOutputKindId(outputKind)");
         source.Should().NotContain("GetExportScopeLabelKey(option.Scope");
         source.Should().NotContain("GetExportOutputKindLabelKey(outputKind");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountDetails()");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountActions(plan.OptionsAvailable)");
+        source.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
+        source.Should().Contain("foreach (var detail in plan.Details)");
+        source.Should().Contain("foreach (var action in plan.Actions)");
+        source.Should().Contain("foreach (var notice in pane.Notices)");
+        source.Should().NotContain("ResolveBackstageAccountDetailValue");
+        source.Should().NotContain("ResolveBackstageAccountNoticeValue");
+        source.Should().NotContain("ResolveBackstageAccountCurrentWorkbook");
+        accountPlannerSource.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountDetails()");
+        accountPlannerSource.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountActions(request.OptionsAvailable)");
+        accountPlannerSource.Should().Contain("Backstage_Account_CurrentWorkbookUnsaved");
         source.Should().NotContain("FormatBackstageFileSize");
         source.Should().NotContain("FormatBackstageLastModified");
         source.Should().NotContain("FormatBackstageProtection");

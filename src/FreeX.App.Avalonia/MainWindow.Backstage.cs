@@ -410,19 +410,30 @@ public sealed partial class MainWindow
         LocalAccountInfoPlan plan,
         Window dialog)
     {
+        var pane = FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+            plan.UserName,
+            plan.DeviceName,
+            plan.VersionText,
+            plan.OptionsAvailable,
+            _session.CurrentFilePath,
+            _session.Workbook.Name,
+            plan.TrademarkNotice,
+            plan.LicenseNotice,
+            plan.PrivacyNotice));
+
         var elements = new List<AvaloniaBackstagePaneElementSpec>
         {
-            new AvaloniaBackstageHeadingElementSpec(UiText.Get("Backstage_Account_Title")),
-            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get("Backstage_Account_LocalInfoHeading")),
-            new AvaloniaBackstageDetailRowsElementSpec(BuildBackstageAccountDetailRows(plan)),
-            new AvaloniaBackstageActionRowElementSpec(BuildBackstageAccountActionButtons(plan, dialog)),
-            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get("Backstage_Account_NoticesSectionHeader")),
+            new AvaloniaBackstageHeadingElementSpec(UiText.Get(pane.TitleKey)),
+            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.LocalInfoHeadingKey)),
+            new AvaloniaBackstageDetailRowsElementSpec(BuildBackstageAccountDetailRows(pane)),
+            new AvaloniaBackstageActionRowElementSpec(BuildBackstageAccountActionButtons(pane, dialog)),
+            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.NoticesHeadingKey)),
         };
 
-        foreach (var notice in FreeXBackstagePaneCatalog.BuildAccountNotices())
+        foreach (var notice in pane.Notices)
         {
             elements.Add(new AvaloniaBackstageNoteElementSpec(
-                ResolveBackstageAccountNoticeValue(notice.Id, plan),
+                notice.Text,
                 notice.AutomationId));
         }
 
@@ -430,14 +441,14 @@ public sealed partial class MainWindow
     }
 
     private IReadOnlyList<AvaloniaBackstageDetailRowSpec> BuildBackstageAccountDetailRows(
-        LocalAccountInfoPlan plan)
+        FreeXBackstageAccountPanePlan plan)
     {
         var rows = new List<AvaloniaBackstageDetailRowSpec>();
-        foreach (var detail in FreeXBackstagePaneCatalog.BuildAccountDetails())
+        foreach (var detail in plan.Details)
         {
             rows.Add(new AvaloniaBackstageDetailRowSpec(
                 UiText.Get(detail.LabelKey),
-                ResolveBackstageAccountDetailValue(detail.Id, plan),
+                ResolveBackstageTextValue(detail.Value),
                 detail.ValueAutomationId));
         }
 
@@ -445,11 +456,11 @@ public sealed partial class MainWindow
     }
 
     private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageAccountActionButtons(
-        LocalAccountInfoPlan plan,
+        FreeXBackstageAccountPanePlan plan,
         Window dialog)
     {
         var actions = new List<AvaloniaBackstageActionButtonSpec>();
-        foreach (var action in FreeXBackstagePaneCatalog.BuildAccountActions(plan.OptionsAvailable))
+        foreach (var action in plan.Actions)
         {
             actions.Add(CreateBackstageClosingActionButtonSpec(
                 UiText.Get(action.LabelKey),
@@ -461,57 +472,16 @@ public sealed partial class MainWindow
         return actions;
     }
 
-    private string ResolveBackstageAccountDetailValue(
-        FreeXBackstageAccountDetailId id,
-        LocalAccountInfoPlan plan) =>
-        id switch
-        {
-            // No personalized FreeX user name override is configured, so it falls back to the OS account
-            // — matching the Windows page, which shows the same identity for both rows by default.
-            FreeXBackstageAccountDetailId.FreeXUserName => ResolveBackstageAccountUserName(plan),
-            FreeXBackstageAccountDetailId.LocalOsAccount => ResolveBackstageAccountUserName(plan),
-            FreeXBackstageAccountDetailId.Device => plan.DeviceName,
-            FreeXBackstageAccountDetailId.AppVersion => plan.VersionText,
-            FreeXBackstageAccountDetailId.OptionsFile => UiText.Get("Backstage_Account_OptionsFileLocalProfile"),
-            FreeXBackstageAccountDetailId.CurrentWorkbook => ResolveBackstageAccountCurrentWorkbook(),
-            FreeXBackstageAccountDetailId.Sharing => UiText.Get("Backstage_Account_SharingSaveAsRequired"),
-            FreeXBackstageAccountDetailId.Export => UiText.Get("Backstage_Account_ExportReadyLocal"),
-            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
-        };
-
-    private static string ResolveBackstageAccountUserName(LocalAccountInfoPlan plan) =>
-        string.IsNullOrWhiteSpace(plan.UserName)
-            ? UiText.Get("Backstage_Account_UserLocalOnly")
-            : plan.UserName;
-
-    private string ResolveBackstageAccountCurrentWorkbook()
-    {
-        var path = _session.CurrentFilePath;
-        if (!string.IsNullOrWhiteSpace(path))
-            return Path.GetFileName(path);
-
-        var name = _session.Workbook.Name;
-        return string.IsNullOrWhiteSpace(name)
-            ? UiText.Get("Backstage_Account_CurrentWorkbookUnsaved")
-            : name;
-    }
+    private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
+        value.TextKey is { } key
+            ? UiText.Get(key)
+            : value.Text ?? string.Empty;
 
     private Action ResolveBackstageAccountAction(FreeXBackstageAccountActionId id) =>
         id switch
         {
             FreeXBackstageAccountActionId.Options => ShowOptions,
             FreeXBackstageAccountActionId.LegalNotices => () => _ = ShowLegalNoticesDialogAsync(),
-            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
-        };
-
-    private static string ResolveBackstageAccountNoticeValue(
-        FreeXBackstageAccountNoticeId id,
-        LocalAccountInfoPlan plan) =>
-        id switch
-        {
-            FreeXBackstageAccountNoticeId.Trademark => plan.TrademarkNotice,
-            FreeXBackstageAccountNoticeId.License => plan.LicenseNotice,
-            FreeXBackstageAccountNoticeId.Privacy => plan.PrivacyNotice,
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
 
