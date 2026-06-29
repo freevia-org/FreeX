@@ -31,6 +31,7 @@ public sealed record QuickAnalysisShellAction(
     string? ConditionalFormatDialogTitle = null,
     ChartType? ChartType = null,
     string? TotalFunction = null,
+    string? TotalCommandTitle = null,
     SparklineKind? SparklineKind = null,
     string? SparklineDialogKind = null,
     string? DeferredNote = null);
@@ -126,17 +127,24 @@ public static class QuickAnalysisShellActionPlanner
                 new QuickAnalysisShellAction(
                     QuickAnalysisShellActionKind.InsertAggregateTotalFormula,
                     route,
-                    TotalFunction: route.TotalFunction),
+                    TotalFunction: route.TotalFunction,
+                    TotalCommandTitle: AggregateTotalCommandTitle(route.TotalFunction)),
 
             QuickAnalysisCommandKind.InsertTotalFormula
                 when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.PercentTotal &&
                      capabilities.SupportsPercentTotalFormulas =>
-                new QuickAnalysisShellAction(QuickAnalysisShellActionKind.InsertPercentTotalFormula, route),
+                new QuickAnalysisShellAction(
+                    QuickAnalysisShellActionKind.InsertPercentTotalFormula,
+                    route,
+                    TotalCommandTitle: "Quick Analysis % Total"),
 
             QuickAnalysisCommandKind.InsertTotalFormula
                 when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.RunningTotal &&
                      capabilities.SupportsRunningTotalFormulas =>
-                new QuickAnalysisShellAction(QuickAnalysisShellActionKind.InsertRunningTotalFormula, route),
+                new QuickAnalysisShellAction(
+                    QuickAnalysisShellActionKind.InsertRunningTotalFormula,
+                    route,
+                    TotalCommandTitle: "Quick Analysis Running Total"),
 
             QuickAnalysisCommandKind.Table =>
                 new QuickAnalysisShellAction(QuickAnalysisShellActionKind.CreateTable, route),
@@ -193,6 +201,17 @@ public static class QuickAnalysisShellActionPlanner
         string.Equals(function, "COUNT", StringComparison.Ordinal) ||
         string.Equals(function, "MAX", StringComparison.Ordinal) ||
         string.Equals(function, "MIN", StringComparison.Ordinal);
+
+    private static string? AggregateTotalCommandTitle(string? function) =>
+        function switch
+        {
+            "SUM" => "Quick Analysis Sum",
+            "AVERAGE" => "Quick Analysis Average",
+            "COUNT" => "Quick Analysis Count",
+            "MAX" => "Quick Analysis Max",
+            "MIN" => "Quick Analysis Min",
+            _ => null
+        };
 
     private static QuickAnalysisShellAction Deferred(
         QuickAnalysisCommandRoute route,

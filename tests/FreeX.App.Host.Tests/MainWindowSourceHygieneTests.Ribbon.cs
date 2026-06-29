@@ -1047,6 +1047,8 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
         source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
         source.Should().NotContain("if (!request.CanOpen");
+        source.Should().Contain("var issue = openPlan.Issue");
+        source.Should().NotContain("openPlan.Decision == QuickAnalysisShellOpenDecision");
         source.Should().Contain("ToolTip = item.ToolTip");
         source.Should().NotContain("QuickAnalysisSelectionReader.Describe(sheet, range)");
         source.Should().NotContain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
@@ -1057,7 +1059,8 @@ public sealed partial class MainWindowSourceHygieneTests
         requestPlanner.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
         requestPlanner.Should().Contain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         requestPlanner.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(displayModel, capabilities, range)");
-        openPlanner.Should().Contain("QuickAnalysisShellOpenDecision.ShowNoSuggestionsIssue");
+        openPlanner.Should().Contain("new QuickAnalysisShellOpenIssuePlan(");
+        openPlanner.Should().Contain("\"TableLoc_QaNoSuggestions\"");
         planner.Should().Contain("QuickAnalysisPreviewKind");
         shellPlanner.Should().Contain("public static QuickAnalysisShellPlan BuildMenuPlan(");
         shellPlanner.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
@@ -1085,8 +1088,10 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
+        var iconPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPreviewIconPlanner.cs");
 
         planner.Should().Contain("QuickAnalysisPreviewVisual");
+        iconPlanner.Should().Contain("QuickAnalysisPreviewIconGlyph");
         source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(item.PreviewVisual)");
     }
 
@@ -1194,8 +1199,9 @@ public sealed partial class MainWindowSourceHygieneTests
         catalogSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal");
         actionPlannerSource.Should().Contain("QuickAnalysisShellActionKind.InsertPercentTotalFormula");
         actionPlannerSource.Should().Contain("QuickAnalysisShellActionKind.InsertRunningTotalFormula");
-        operationPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis % Total\"");
-        operationPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis Running Total\"");
+        actionPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis % Total\"");
+        actionPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis Running Total\"");
+        operationPlannerSource.Should().Contain("TotalCommandTitle: action.TotalCommandTitle");
         operationPlannerSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits(range)");
         operationPlannerSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits(range)");
     }

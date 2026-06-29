@@ -80,21 +80,21 @@ public static class QuickAnalysisHostOperationPlanner
                     action.Route,
                     TotalFunction: action.TotalFunction,
                     TotalFormulaKind: QuickAnalysisTotalFormulaKind.Aggregate,
-                    TotalCommandTitle: $"Quick Analysis {item.Label}"),
+                    TotalCommandTitle: action.TotalCommandTitle),
 
             QuickAnalysisShellActionKind.InsertPercentTotalFormula =>
                 new QuickAnalysisHostOperation(
                     QuickAnalysisHostOperationKind.InsertPercentTotalFormula,
                     action.Route,
                     TotalFormulaKind: QuickAnalysisTotalFormulaKind.PercentTotal,
-                    TotalCommandTitle: "Quick Analysis % Total"),
+                    TotalCommandTitle: action.TotalCommandTitle),
 
             QuickAnalysisShellActionKind.InsertRunningTotalFormula =>
                 new QuickAnalysisHostOperation(
                     QuickAnalysisHostOperationKind.InsertRunningTotalFormula,
                     action.Route,
                     TotalFormulaKind: QuickAnalysisTotalFormulaKind.RunningTotal,
-                    TotalCommandTitle: "Quick Analysis Running Total"),
+                    TotalCommandTitle: action.TotalCommandTitle),
 
             QuickAnalysisShellActionKind.CreateTable =>
                 new QuickAnalysisHostOperation(

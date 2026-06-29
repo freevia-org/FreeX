@@ -110,13 +110,15 @@ public partial class MainWindow
 
     private string QuickAnalysisUnavailableStatusText(QuickAnalysisShellOpenPlan openPlan)
     {
-        if (openPlan.Decision == QuickAnalysisShellOpenDecision.ShowNoSuggestionsIssue &&
-            openPlan.Selection is { } range)
+        var issue = openPlan.Issue
+            ?? throw new InvalidOperationException("Quick Analysis open issue was not planned.");
+
+        if (issue.RequiresSelectionReference && openPlan.Selection is { } range)
         {
-            return UiText.Format("TableLoc_QaNoSuggestions", FormatRangeReference(range.Start, range.End));
+            return UiText.Format(issue.StatusResourceKey, FormatRangeReference(range.Start, range.End));
         }
 
-        return UiText.Get("QuickAnalysis_SelectRangeStatus");
+        return UiText.Get(issue.StatusResourceKey);
     }
 
     private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)

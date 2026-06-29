@@ -126,14 +126,17 @@ public sealed partial class MainWindow
 
     private void ShowQuickAnalysisOpenIssue(QuickAnalysisShellOpenPlan openPlan)
     {
-        if (openPlan.Decision == QuickAnalysisShellOpenDecision.ShowNoSuggestionsIssue &&
+        var issue = openPlan.Issue
+            ?? throw new InvalidOperationException("Quick Analysis open issue was not planned.");
+
+        if (issue.RequiresSelectionReference &&
             openPlan.Selection is { } range)
         {
-            ShowEditIssue(UiText.Format("TableLoc_QaNoSuggestions", FormatRangeReference(range)));
+            ShowEditIssue(UiText.Format(issue.DialogResourceKey, FormatRangeReference(range)));
             return;
         }
 
-        ShowEditIssue(UiText.Get("TableLoc_QaSelectMoreThanOne"));
+        ShowEditIssue(UiText.Get(issue.DialogResourceKey));
     }
 
     /// <summary>
