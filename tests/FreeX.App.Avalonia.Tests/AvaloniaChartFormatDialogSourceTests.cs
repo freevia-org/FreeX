@@ -5,6 +5,26 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class AvaloniaChartFormatDialogSourceTests
 {
     [Fact]
+    public void ChartContextualTabs_UseSharedWorkflowCommandDescriptorsForCoreDialogs()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var chartRemainingDialogsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));
+        var combined = chartTabsSource + Environment.NewLine + chartRemainingDialogsSource;
+
+        combined.Should().Contain("private bool TryGetSelectedChart(ChartWorkflowCommandDescriptor command");
+        combined.Should().Contain("private void ApplyChartLayout(ChartWorkflowCommandDescriptor command");
+        combined.Should().Contain("ChartWorkflowCommandCatalog.ChangeChartType");
+        combined.Should().Contain("ChartWorkflowCommandCatalog.SelectDataSource");
+        combined.Should().Contain("ChartWorkflowCommandCatalog.MoveChart");
+        combined.Should().Contain("ChartWorkflowCommandCatalog.FormatChartArea");
+        combined.Should().NotContain("TryGetSelectedChart(\"Change Chart Type\"");
+        combined.Should().NotContain("TryGetSelectedChart(\"Select Data\"");
+        combined.Should().NotContain("TryGetSelectedChart(\"Move Chart\"");
+        combined.Should().NotContain("TryGetSelectedChart(\"Format Chart Area\"");
+        combined.Should().NotContain("ApplyChartLayout(\"Format Chart Area\"");
+    }
+
+    [Fact]
     public void DataLabelsDialog_UsesSharedDescriptorAndFullPlannerSurface()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs"));

@@ -44,6 +44,9 @@ public sealed partial class MainWindow
     /// Resolves the chart the contextual tabs target: the selected drawing object on the active sheet,
     /// when it is eligible for shared chart workflows. Reports an honest status and returns null otherwise.
     /// </summary>
+    private bool TryGetSelectedChart(ChartWorkflowCommandDescriptor command, out ChartModel chart) =>
+        TryGetSelectedChart(command.Label, out chart);
+
     private bool TryGetSelectedChart(string commandLabel, out ChartModel chart)
     {
         chart = null!;
@@ -68,6 +71,9 @@ public sealed partial class MainWindow
     /// <see cref="SetChartLayoutCommand"/>, surfacing the Core guard message on failure and refreshing
     /// the shell (which repaints the chart overlay) on success.
     /// </summary>
+    private void ApplyChartLayout(ChartWorkflowCommandDescriptor command, ChartModel chart, ChartLayoutOptions options) =>
+        ApplyChartLayout(command.Label, chart, options);
+
     private void ApplyChartLayout(string commandLabel, ChartModel chart, ChartLayoutOptions options)
     {
         var result = _session.ExecuteReviewCommand(new SetChartLayoutCommand(_session.ActiveSheet.Id, chart.Id, options));
@@ -82,7 +88,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Change Chart Type", out var chart))
+        var command = ChartWorkflowCommandCatalog.ChangeChartType;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
         var chosen = await ShowChartTypePickerAsync(chart.Type);
@@ -100,7 +107,7 @@ public sealed partial class MainWindow
 
         // Re-resolve after the dialog: the selection may have changed (or the chart been deleted)
         // while it was open, so act on what is selected now rather than the captured reference.
-        if (!TryGetSelectedChart("Change Chart Type", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
         var result = _session.ExecuteReviewCommand(new ChangeChartTypeCommand(_session.ActiveSheet.Id, chart.Id, plan.AppliedType!.Value));
@@ -333,7 +340,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Select Data", out var chart))
+        var command = ChartWorkflowCommandCatalog.SelectDataSource;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
         var result = await ShowSelectDataSourceDialogAsync(
@@ -349,7 +357,7 @@ public sealed partial class MainWindow
         }
 
         // Re-resolve after the dialog in case the selection changed while it was open.
-        if (!TryGetSelectedChart("Select Data", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
         var commandResult = _session.ExecuteReviewCommand(new ChangeChartSourceCommand(

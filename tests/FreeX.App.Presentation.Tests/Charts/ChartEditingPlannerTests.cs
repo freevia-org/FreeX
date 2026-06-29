@@ -55,6 +55,32 @@ public sealed class ChartEditingPlannerTests
         ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(null, selected.Id).Should().BeNull();
     }
 
+    [Fact]
+    public void WorkflowCommandCatalog_SharesCoreChartDialogLabelsAndHostSelectionMessages()
+    {
+        ChartWorkflowCommandCatalog.All.Select(command => command.Id).Should().Equal(
+            ChartWorkflowCommandId.ChangeChartType,
+            ChartWorkflowCommandId.SelectDataSource,
+            ChartWorkflowCommandId.MoveChart,
+            ChartWorkflowCommandId.FormatChartArea);
+
+        ChartWorkflowCommandCatalog.ChangeChartType.Label.Should().Be("Change Chart Type");
+        ChartWorkflowCommandCatalog.SelectDataSource.Label.Should().Be("Select Data Source");
+        ChartWorkflowCommandCatalog.MoveChart.Label.Should().Be("Move Chart");
+        ChartWorkflowCommandCatalog.FormatChartArea.Label.Should().Be("Format Chart Area");
+
+        ChartWorkflowCommandCatalog.ChangeChartType.HostMissingSelectionMessageResourceKey
+            .Should().Be(ChartWorkflowCommandCatalog.DefaultHostMissingSelectionMessageResourceKey);
+        ChartWorkflowCommandCatalog.SelectDataSource.HostMissingSelectionMessageResourceKey
+            .Should().Be(ChartWorkflowCommandCatalog.DefaultHostMissingSelectionMessageResourceKey);
+        ChartWorkflowCommandCatalog.MoveChart.HostMissingSelectionMessageResourceKey
+            .Should().Be(ChartWorkflowCommandCatalog.DefaultHostMissingSelectionMessageResourceKey);
+        ChartWorkflowCommandCatalog.FormatChartArea.HostMissingSelectionMessageResourceKey
+            .Should().Be("MainWindowMessage_ChartSelectForChartAreaFormatting");
+        ChartWorkflowCommandCatalog.Get(ChartWorkflowCommandId.FormatChartArea)
+            .Should().BeSameAs(ChartWorkflowCommandCatalog.FormatChartArea);
+    }
+
     // ---- ChartTypeChangePlanner ----------------------------------------------------------------------
 
     [Fact]
