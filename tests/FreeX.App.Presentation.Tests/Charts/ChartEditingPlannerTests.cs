@@ -1157,6 +1157,30 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void SeriesFormat_DialogDescriptor_CoversSeriesAndFillLineFields()
+    {
+        var sections = ChartSeriesFormatPlanner.GetDialogSections();
+        var fields = sections.SelectMany(section => section.Fields).ToList();
+
+        sections.Select(section => section.HeaderResourceKey)
+            .Should().Equal("ChartSeriesFormat_SeriesOptionsGroup", "ChartDialog_FillLineGroup");
+        fields.Select(field => field.Id).Should().Equal(
+            ChartSeriesFormatDialogFieldId.Series,
+            ChartSeriesFormatDialogFieldId.FillColor,
+            ChartSeriesFormatDialogFieldId.StrokeColor,
+            ChartSeriesFormatDialogFieldId.StrokeThickness,
+            ChartSeriesFormatDialogFieldId.DashStyle,
+            ChartSeriesFormatDialogFieldId.MarkerStyle,
+            ChartSeriesFormatDialogFieldId.MarkerSize);
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.LabelResourceKey));
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        ChartSeriesFormatPlanner.GetDialogField(ChartSeriesFormatDialogFieldId.StrokeThickness)
+            .HelpResourceKey.Should().Be("ChartSeriesFormat_LineWidthHelpText");
+        ChartSeriesFormatPlanner.GetDialogField(ChartSeriesFormatDialogFieldId.MarkerSize)
+            .HelpResourceKey.Should().Be("ChartSeriesFormat_MarkerSizeHelpText");
+    }
+
+    [Fact]
     public void SeriesFormat_Read_ClampsRequestedIndexIntoSeriesRange()
     {
         // An empty data range has at most one series, so an out-of-range request clamps to 0.
@@ -1352,6 +1376,32 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void Trendline_DialogDescriptor_CoversOptionsAndLineStyleFields()
+    {
+        var sections = ChartTrendlinePlanner.GetDialogSections();
+        var fields = sections.SelectMany(section => section.Fields).ToList();
+
+        sections.Select(section => section.HeaderResourceKey)
+            .Should().Equal("ChartTrendline_OptionsGroup", "ChartDialog_FillLineGroup");
+        fields.Select(field => field.Id).Should().Equal(
+            ChartTrendlineDialogFieldId.ShowTrendline,
+            ChartTrendlineDialogFieldId.Type,
+            ChartTrendlineDialogFieldId.Period,
+            ChartTrendlineDialogFieldId.Order,
+            ChartTrendlineDialogFieldId.ShowEquation,
+            ChartTrendlineDialogFieldId.ShowRSquared,
+            ChartTrendlineDialogFieldId.LineColor,
+            ChartTrendlineDialogFieldId.LineThickness,
+            ChartTrendlineDialogFieldId.DashStyle);
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.LabelResourceKey));
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        ChartTrendlinePlanner.GetDialogField(ChartTrendlineDialogFieldId.Period)
+            .HelpResourceKey.Should().Be("ChartTrendline_PeriodHelpText");
+        ChartTrendlinePlanner.GetDialogField(ChartTrendlineDialogFieldId.LineThickness)
+            .HelpResourceKey.Should().Be("ChartTrendline_LineWidthHelpText");
+    }
+
+    [Fact]
     public void Trendline_Supports_OnlyTrendlineCapableTypes()
     {
         ChartTrendlinePlanner.SupportsTrendlines(ChartType.Line).Should().BeTrue();
@@ -1524,6 +1574,28 @@ public sealed class ChartEditingPlannerTests
         {
             ChartErrorBarDirection.Both, ChartErrorBarDirection.Plus, ChartErrorBarDirection.Minus
         });
+    }
+
+    [Fact]
+    public void ErrorBars_DialogDescriptor_CoversErrorAmountFields()
+    {
+        var sections = ChartErrorBarsPlanner.GetDialogSections();
+        var fields = sections.SelectMany(section => section.Fields).ToList();
+
+        sections.Should().ContainSingle()
+            .Which.HeaderResourceKey.Should().Be("ChartErrorBars_ErrorAmountGroup");
+        fields.Select(field => field.Id).Should().Equal(
+            ChartErrorBarsDialogFieldId.ShowErrorBars,
+            ChartErrorBarsDialogFieldId.Kind,
+            ChartErrorBarsDialogFieldId.Direction,
+            ChartErrorBarsDialogFieldId.Value,
+            ChartErrorBarsDialogFieldId.EndCaps);
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.LabelResourceKey));
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        ChartErrorBarsPlanner.GetDialogField(ChartErrorBarsDialogFieldId.Value)
+            .HelpResourceKey.Should().Be("ChartErrorBars_ValueHelpText");
+        ChartErrorBarsPlanner.GetDialogField(ChartErrorBarsDialogFieldId.Value)
+            .AutomationNameResourceKey.Should().Be("ChartErrorBars_ValueAutomationName");
     }
 
     [Fact]

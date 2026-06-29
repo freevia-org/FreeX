@@ -22,6 +22,34 @@ public readonly record struct ChartErrorBarsInput(
     double Value,
     bool EndCaps);
 
+public enum ChartErrorBarsDialogControlKind
+{
+    CheckBox,
+    ComboBox,
+    Number,
+}
+
+public enum ChartErrorBarsDialogFieldId
+{
+    ShowErrorBars,
+    Kind,
+    Direction,
+    Value,
+    EndCaps,
+}
+
+public sealed record ChartErrorBarsDialogFieldDescriptor(
+    ChartErrorBarsDialogFieldId Id,
+    ChartErrorBarsDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null,
+    string? AutomationNameResourceKey = null);
+
+public sealed record ChartErrorBarsDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartErrorBarsDialogFieldDescriptor> Fields);
+
 public enum ChartErrorBarsParseIssue
 {
     None,
@@ -57,11 +85,43 @@ public static class ChartErrorBarsPlanner
         new(ChartErrorBarDirection.Minus, "Minus"),
     ];
 
+    private static readonly ChartErrorBarsDialogFieldDescriptor[] ErrorAmountFields =
+    [
+        new(ChartErrorBarsDialogFieldId.ShowErrorBars, ChartErrorBarsDialogControlKind.CheckBox, "ChartErrorBars_ShowErrorBars", "ChartErrorBarsShowCheck"),
+        new(ChartErrorBarsDialogFieldId.Kind, ChartErrorBarsDialogControlKind.ComboBox, "ChartErrorBars_TypeLabel", "ChartErrorBarsKindCombo"),
+        new(ChartErrorBarsDialogFieldId.Direction, ChartErrorBarsDialogControlKind.ComboBox, "ChartErrorBars_DirectionLabel", "ChartErrorBarsDirectionCombo"),
+        new(ChartErrorBarsDialogFieldId.Value, ChartErrorBarsDialogControlKind.Number, "ChartErrorBars_ValueLabel", "ChartErrorBarsValueBox", "ChartErrorBars_ValueHelpText", "ChartErrorBars_ValueAutomationName"),
+        new(ChartErrorBarsDialogFieldId.EndCaps, ChartErrorBarsDialogControlKind.CheckBox, "ChartErrorBars_EndCaps", "ChartErrorBarsEndCapsCheck"),
+    ];
+
+    private static readonly ChartErrorBarsDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartErrorBars_ErrorAmountGroup", ErrorAmountFields),
+    ];
+
     /// <summary>The selectable error-amount kinds, in display order.</summary>
     public static IReadOnlyList<ChartErrorBarKindChoice> GetKindChoices() => KindCatalog;
 
     /// <summary>The selectable directions, in display order.</summary>
     public static IReadOnlyList<ChartErrorBarDirectionChoice> GetDirectionChoices() => DirectionCatalog;
+
+    public static IReadOnlyList<ChartErrorBarsDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartErrorBarsDialogSectionDescriptor GetErrorAmountSection() => DialogSections[0];
+
+    public static ChartErrorBarsDialogFieldDescriptor GetDialogField(ChartErrorBarsDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
 
     /// <summary>The English display label for <paramref name="kind"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartErrorBarKind kind)

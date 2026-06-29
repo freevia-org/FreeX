@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
@@ -23,8 +24,8 @@ public sealed record ChartErrorBarsDialogResult(
 
 public sealed class ChartErrorBarsDialog : Window
 {
-    private readonly CheckBox _showBox = new() { Content = UiText.Get("ChartErrorBars_ShowErrorBars") };
-    private readonly CheckBox _endCapsBox = new() { Content = UiText.Get("ChartErrorBars_EndCaps") };
+    private readonly CheckBox _showBox = new() { Content = LabelText(ChartErrorBarsDialogFieldId.ShowErrorBars) };
+    private readonly CheckBox _endCapsBox = new() { Content = LabelText(ChartErrorBarsDialogFieldId.EndCaps) };
     private readonly ComboBox _kindBox = new();
     private readonly ComboBox _directionBox = new();
     private readonly TextBox _valueBox = new();
@@ -40,6 +41,7 @@ public sealed class ChartErrorBarsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ApplyAutomationIds();
         Content = CreateContent();
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -70,14 +72,15 @@ public sealed class ChartErrorBarsDialog : Window
     private StackPanel CreateContent()
     {
         var root = ChartDialogHelpers.DialogStack();
+        var section = ChartErrorBarsPlanner.GetErrorAmountSection();
         var stack = new StackPanel();
         ChartDialogHelpers.AddCheck(stack, _showBox);
-        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartErrorBars_TypeLabel"), _kindBox, ChartErrorBarsPlanner.GetKindChoices().Select(choice => choice.Kind));
-        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartErrorBars_DirectionLabel"), _directionBox, ChartErrorBarsPlanner.GetDirectionChoices().Select(choice => choice.Direction));
-        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartErrorBars_ValueLabel"), _valueBox, UiText.Get("ChartErrorBars_ValueHelpText"));
-        System.Windows.Automation.AutomationProperties.SetName(_valueBox, UiText.Get("ChartErrorBars_ValueAutomationName"));
+        ChartDialogHelpers.AddCombo(stack, LabelText(ChartErrorBarsDialogFieldId.Kind), _kindBox, ChartErrorBarsPlanner.GetKindChoices().Select(choice => choice.Kind));
+        ChartDialogHelpers.AddCombo(stack, LabelText(ChartErrorBarsDialogFieldId.Direction), _directionBox, ChartErrorBarsPlanner.GetDirectionChoices().Select(choice => choice.Direction));
+        ChartDialogHelpers.AddNumericText(stack, LabelText(ChartErrorBarsDialogFieldId.Value), _valueBox, HelpText(ChartErrorBarsDialogFieldId.Value));
+        AutomationProperties.SetName(_valueBox, AutomationNameText(ChartErrorBarsDialogFieldId.Value));
         ChartDialogHelpers.AddCheck(stack, _endCapsBox);
-        root.Children.Add(CreateGroupBox(UiText.Get("ChartErrorBars_ErrorAmountGroup"), stack));
+        root.Children.Add(CreateGroupBox(UiText.Get(section.HeaderResourceKey), stack));
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
     }
@@ -145,4 +148,25 @@ public sealed class ChartErrorBarsDialog : Window
         Keyboard.Focus(target);
         return true;
     }
+
+    private void ApplyAutomationIds()
+    {
+        AutomationProperties.SetAutomationId(_showBox, Field(ChartErrorBarsDialogFieldId.ShowErrorBars).AutomationId);
+        AutomationProperties.SetAutomationId(_kindBox, Field(ChartErrorBarsDialogFieldId.Kind).AutomationId);
+        AutomationProperties.SetAutomationId(_directionBox, Field(ChartErrorBarsDialogFieldId.Direction).AutomationId);
+        AutomationProperties.SetAutomationId(_valueBox, Field(ChartErrorBarsDialogFieldId.Value).AutomationId);
+        AutomationProperties.SetAutomationId(_endCapsBox, Field(ChartErrorBarsDialogFieldId.EndCaps).AutomationId);
+    }
+
+    private static string LabelText(ChartErrorBarsDialogFieldId id) =>
+        UiText.Get(Field(id).LabelResourceKey);
+
+    private static string HelpText(ChartErrorBarsDialogFieldId id) =>
+        UiText.Get(Field(id).HelpResourceKey ?? throw new InvalidOperationException($"Field {id} has no help resource key."));
+
+    private static string AutomationNameText(ChartErrorBarsDialogFieldId id) =>
+        UiText.Get(Field(id).AutomationNameResourceKey ?? Field(id).LabelResourceKey);
+
+    private static ChartErrorBarsDialogFieldDescriptor Field(ChartErrorBarsDialogFieldId id) =>
+        ChartErrorBarsPlanner.GetDialogField(id);
 }

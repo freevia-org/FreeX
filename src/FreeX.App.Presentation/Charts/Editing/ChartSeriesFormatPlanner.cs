@@ -15,6 +15,36 @@ public readonly record struct ChartSeriesFormatInput(
     double? MarkerSize,
     ChartLineDashStyle? DashStyle = null);
 
+public enum ChartSeriesFormatDialogControlKind
+{
+    ComboBox,
+    Color,
+    Number,
+}
+
+public enum ChartSeriesFormatDialogFieldId
+{
+    Series,
+    FillColor,
+    StrokeColor,
+    StrokeThickness,
+    DashStyle,
+    MarkerStyle,
+    MarkerSize,
+}
+
+public sealed record ChartSeriesFormatDialogFieldDescriptor(
+    ChartSeriesFormatDialogFieldId Id,
+    ChartSeriesFormatDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartSeriesFormatDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartSeriesFormatDialogFieldDescriptor> Fields,
+    string? HelpResourceKey = null);
+
 public enum ChartSeriesFormatParseIssue
 {
     None,
@@ -38,9 +68,50 @@ public static class ChartSeriesFormatPlanner
     private static readonly ChartLineDashStyle[] DashStyleCatalog = Enum.GetValues<ChartLineDashStyle>();
     private static readonly ChartMarkerStyle[] MarkerStyleCatalog = Enum.GetValues<ChartMarkerStyle>();
 
+    private static readonly ChartSeriesFormatDialogFieldDescriptor[] SeriesOptionFields =
+    [
+        new(ChartSeriesFormatDialogFieldId.Series, ChartSeriesFormatDialogControlKind.ComboBox, "ChartSeriesFormat_SeriesLabel", "ChartSeriesFormatSeriesCombo", "ChartSeriesFormat_SeriesHelpText"),
+    ];
+
+    private static readonly ChartSeriesFormatDialogFieldDescriptor[] FillLineFields =
+    [
+        new(ChartSeriesFormatDialogFieldId.FillColor, ChartSeriesFormatDialogControlKind.Color, "ChartSeriesFormat_FillColorLabel", "ChartSeriesFormatFillButton"),
+        new(ChartSeriesFormatDialogFieldId.StrokeColor, ChartSeriesFormatDialogControlKind.Color, "ChartSeriesFormat_LineColorLabel", "ChartSeriesFormatLineButton"),
+        new(ChartSeriesFormatDialogFieldId.StrokeThickness, ChartSeriesFormatDialogControlKind.Number, "ChartSeriesFormat_LineWidthLabel", "ChartSeriesFormatLineWidthBox", "ChartSeriesFormat_LineWidthHelpText"),
+        new(ChartSeriesFormatDialogFieldId.DashStyle, ChartSeriesFormatDialogControlKind.ComboBox, "ChartSeriesFormat_DashStyleLabel", "ChartSeriesFormatDashStyleCombo"),
+        new(ChartSeriesFormatDialogFieldId.MarkerStyle, ChartSeriesFormatDialogControlKind.ComboBox, "ChartSeriesFormat_MarkerLabel", "ChartSeriesFormatMarkerCombo"),
+        new(ChartSeriesFormatDialogFieldId.MarkerSize, ChartSeriesFormatDialogControlKind.Number, "ChartSeriesFormat_MarkerSizeLabel", "ChartSeriesFormatMarkerSizeBox", "ChartSeriesFormat_MarkerSizeHelpText"),
+    ];
+
+    private static readonly ChartSeriesFormatDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartSeriesFormat_SeriesOptionsGroup", SeriesOptionFields, "ChartSeriesFormat_SeriesHelpText"),
+        new("ChartDialog_FillLineGroup", FillLineFields),
+    ];
+
     public static IReadOnlyList<ChartLineDashStyle> GetDashStyleChoices() => DashStyleCatalog;
 
     public static IReadOnlyList<ChartMarkerStyle> GetMarkerStyleChoices() => MarkerStyleCatalog;
+
+    public static IReadOnlyList<ChartSeriesFormatDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartSeriesFormatDialogSectionDescriptor GetSeriesOptionsSection() => DialogSections[0];
+
+    public static ChartSeriesFormatDialogSectionDescriptor GetFillLineSection() => DialogSections[1];
+
+    public static ChartSeriesFormatDialogFieldDescriptor GetDialogField(ChartSeriesFormatDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
 
     /// <summary>The number of data series the series picker should offer (at least one).</summary>
     public static int GetSeriesCount(ChartModel chart) => Math.Max(1, ChartTypeSupport.GetDataSeriesCount(chart));

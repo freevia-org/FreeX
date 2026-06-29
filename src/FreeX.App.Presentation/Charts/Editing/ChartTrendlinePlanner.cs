@@ -25,6 +25,38 @@ public readonly record struct ChartTrendlineInput(
     double? Thickness = null,
     ChartLineDashStyle? DashStyle = null);
 
+public enum ChartTrendlineDialogControlKind
+{
+    CheckBox,
+    ComboBox,
+    Color,
+    Number,
+}
+
+public enum ChartTrendlineDialogFieldId
+{
+    ShowTrendline,
+    Type,
+    Period,
+    Order,
+    ShowEquation,
+    ShowRSquared,
+    LineColor,
+    LineThickness,
+    DashStyle,
+}
+
+public sealed record ChartTrendlineDialogFieldDescriptor(
+    ChartTrendlineDialogFieldId Id,
+    ChartTrendlineDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartTrendlineDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartTrendlineDialogFieldDescriptor> Fields);
+
 public enum ChartTrendlineDialogParseIssue
 {
     None,
@@ -68,10 +100,53 @@ public static class ChartTrendlinePlanner
 
     private static readonly ChartLineDashStyle[] DashStyleCatalog = Enum.GetValues<ChartLineDashStyle>();
 
+    private static readonly ChartTrendlineDialogFieldDescriptor[] TrendlineOptionFields =
+    [
+        new(ChartTrendlineDialogFieldId.ShowTrendline, ChartTrendlineDialogControlKind.CheckBox, "ChartTrendline_ShowTrendline", "ChartTrendlineShowCheck"),
+        new(ChartTrendlineDialogFieldId.Type, ChartTrendlineDialogControlKind.ComboBox, "ChartTrendline_TypeLabel", "ChartTrendlineTypeCombo"),
+        new(ChartTrendlineDialogFieldId.Period, ChartTrendlineDialogControlKind.Number, "ChartTrendline_PeriodLabel", "ChartTrendlinePeriodBox", "ChartTrendline_PeriodHelpText"),
+        new(ChartTrendlineDialogFieldId.Order, ChartTrendlineDialogControlKind.Number, "ChartTrendline_OrderLabel", "ChartTrendlineOrderBox", "ChartTrendline_OrderHelpText"),
+        new(ChartTrendlineDialogFieldId.ShowEquation, ChartTrendlineDialogControlKind.CheckBox, "ChartTrendline_DisplayEquation", "ChartTrendlineEquationCheck"),
+        new(ChartTrendlineDialogFieldId.ShowRSquared, ChartTrendlineDialogControlKind.CheckBox, "ChartTrendline_DisplayRSquared", "ChartTrendlineRSquaredCheck"),
+    ];
+
+    private static readonly ChartTrendlineDialogFieldDescriptor[] LineFields =
+    [
+        new(ChartTrendlineDialogFieldId.LineColor, ChartTrendlineDialogControlKind.Color, "ChartTrendline_LineColorLabel", "ChartTrendlineLineColorButton"),
+        new(ChartTrendlineDialogFieldId.LineThickness, ChartTrendlineDialogControlKind.Number, "ChartTrendline_LineWidthLabel", "ChartTrendlineLineWidthBox", "ChartTrendline_LineWidthHelpText"),
+        new(ChartTrendlineDialogFieldId.DashStyle, ChartTrendlineDialogControlKind.ComboBox, "ChartTrendline_DashStyleLabel", "ChartTrendlineDashStyleCombo"),
+    ];
+
+    private static readonly ChartTrendlineDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartTrendline_OptionsGroup", TrendlineOptionFields),
+        new("ChartDialog_FillLineGroup", LineFields),
+    ];
+
     /// <summary>The selectable trendline types, in display order.</summary>
     public static IReadOnlyList<ChartTrendlineTypeChoice> GetTypeChoices() => TypeCatalog;
 
     public static IReadOnlyList<ChartLineDashStyle> GetDashStyleChoices() => DashStyleCatalog;
+
+    public static IReadOnlyList<ChartTrendlineDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartTrendlineDialogSectionDescriptor GetOptionsSection() => DialogSections[0];
+
+    public static ChartTrendlineDialogSectionDescriptor GetLineSection() => DialogSections[1];
+
+    public static ChartTrendlineDialogFieldDescriptor GetDialogField(ChartTrendlineDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
 
     /// <summary>The English display label for <paramref name="type"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartTrendlineType type)

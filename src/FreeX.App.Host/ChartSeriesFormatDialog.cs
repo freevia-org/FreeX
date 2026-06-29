@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
@@ -45,6 +46,7 @@ public sealed class ChartSeriesFormatDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ApplyAutomationIds();
         Content = CreateContent(seriesCount);
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -87,20 +89,23 @@ public sealed class ChartSeriesFormatDialog : Window
     {
         var root = ChartDialogHelpers.DialogStack();
         {
+            var section = ChartSeriesFormatPlanner.GetSeriesOptionsSection();
             var stack = new StackPanel();
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_SeriesLabel"), _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => UiText.Format("SelectDataSource_SeriesNameFormat", index + 1)).ToArray());
-            stack.Children.Add(CreateInlineHelp(UiText.Get("ChartSeriesFormat_SeriesHelpText")));
-            root.Children.Add(CreateGroupBox(UiText.Get("ChartSeriesFormat_SeriesOptionsGroup"), stack));
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartSeriesFormatDialogFieldId.Series), _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => UiText.Format("SelectDataSource_SeriesNameFormat", index + 1)).ToArray());
+            if (section.HelpResourceKey is { } helpKey)
+                stack.Children.Add(CreateInlineHelp(UiText.Get(helpKey)));
+            root.Children.Add(CreateGroupBox(UiText.Get(section.HeaderResourceKey), stack));
         }
         {
+            var section = ChartSeriesFormatPlanner.GetFillLineSection();
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartSeriesFormat_FillColorLabel"), _fillBox);
-            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartSeriesFormat_LineColorLabel"), _strokeBox);
-            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartSeriesFormat_LineWidthLabel"), _strokeThicknessBox, UiText.Get("ChartSeriesFormat_LineWidthHelpText"));
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_DashStyleLabel"), _dashBox, ChartSeriesFormatPlanner.GetDashStyleChoices().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_MarkerLabel"), _markerBox, ChartSeriesFormatPlanner.GetMarkerStyleChoices().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
-            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartSeriesFormat_MarkerSizeLabel"), _markerSizeBox, UiText.Get("ChartSeriesFormat_MarkerSizeHelpText"));
-            root.Children.Add(CreateGroupBox(UiText.Get("ChartDialog_FillLineGroup"), stack));
+            ChartDialogHelpers.AddColorText(stack, LabelText(ChartSeriesFormatDialogFieldId.FillColor), _fillBox);
+            ChartDialogHelpers.AddColorText(stack, LabelText(ChartSeriesFormatDialogFieldId.StrokeColor), _strokeBox);
+            ChartDialogHelpers.AddNumericText(stack, LabelText(ChartSeriesFormatDialogFieldId.StrokeThickness), _strokeThicknessBox, HelpText(ChartSeriesFormatDialogFieldId.StrokeThickness));
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartSeriesFormatDialogFieldId.DashStyle), _dashBox, ChartSeriesFormatPlanner.GetDashStyleChoices().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
+            ChartDialogHelpers.AddCombo(stack, LabelText(ChartSeriesFormatDialogFieldId.MarkerStyle), _markerBox, ChartSeriesFormatPlanner.GetMarkerStyleChoices().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
+            ChartDialogHelpers.AddNumericText(stack, LabelText(ChartSeriesFormatDialogFieldId.MarkerSize), _markerSizeBox, HelpText(ChartSeriesFormatDialogFieldId.MarkerSize));
+            root.Children.Add(CreateGroupBox(UiText.Get(section.HeaderResourceKey), stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
@@ -177,4 +182,24 @@ public sealed class ChartSeriesFormatDialog : Window
         Keyboard.Focus(target);
         return true;
     }
+
+    private void ApplyAutomationIds()
+    {
+        AutomationProperties.SetAutomationId(_seriesBox, Field(ChartSeriesFormatDialogFieldId.Series).AutomationId);
+        AutomationProperties.SetAutomationId(_fillBox, Field(ChartSeriesFormatDialogFieldId.FillColor).AutomationId);
+        AutomationProperties.SetAutomationId(_strokeBox, Field(ChartSeriesFormatDialogFieldId.StrokeColor).AutomationId);
+        AutomationProperties.SetAutomationId(_strokeThicknessBox, Field(ChartSeriesFormatDialogFieldId.StrokeThickness).AutomationId);
+        AutomationProperties.SetAutomationId(_dashBox, Field(ChartSeriesFormatDialogFieldId.DashStyle).AutomationId);
+        AutomationProperties.SetAutomationId(_markerBox, Field(ChartSeriesFormatDialogFieldId.MarkerStyle).AutomationId);
+        AutomationProperties.SetAutomationId(_markerSizeBox, Field(ChartSeriesFormatDialogFieldId.MarkerSize).AutomationId);
+    }
+
+    private static string LabelText(ChartSeriesFormatDialogFieldId id) =>
+        UiText.Get(Field(id).LabelResourceKey);
+
+    private static string HelpText(ChartSeriesFormatDialogFieldId id) =>
+        UiText.Get(Field(id).HelpResourceKey ?? throw new InvalidOperationException($"Field {id} has no help resource key."));
+
+    private static ChartSeriesFormatDialogFieldDescriptor Field(ChartSeriesFormatDialogFieldId id) =>
+        ChartSeriesFormatPlanner.GetDialogField(id);
 }
