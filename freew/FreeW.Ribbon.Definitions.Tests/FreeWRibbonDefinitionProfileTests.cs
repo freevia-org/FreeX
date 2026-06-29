@@ -230,6 +230,82 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().Contain("FreeWRibbonText.CopyCommand");
     }
 
+    [Fact]
+    public void Home_font_core_text_is_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            foreach (var surface in new[]
+            {
+                FontCoreSurface(FreeWRibbonCapabilities.Wpf),
+                FontCoreSurface(FreeWRibbonCapabilities.Avalonia),
+            })
+            {
+                AssertFontCoreSurfaceUsesResources(surface);
+            }
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            foreach (var surface in new[]
+            {
+                FontCoreSurface(FreeWRibbonCapabilities.Wpf),
+                FontCoreSurface(FreeWRibbonCapabilities.Avalonia),
+            })
+            {
+                AssertFontCoreSurfaceUsesResources(surface);
+                surface.FontGroupHeader.Should().Be("[[FFoonntt]]");
+                surface.BoldLabel.Should().Be("[[BBoolldd]]");
+                surface.BoldKeyTip.Should().Be("1");
+            }
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Home_font_core_profile_sources_use_resource_descriptors()
+    {
+        var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+
+        wpfSource.Should().NotContain("tab.Group(\"font\", \"Font\"");
+        wpfSource.Should().NotContain("g.ComboBox(\"freew.font-family\", \"Font\"");
+        wpfSource.Should().NotContain("g.ComboBox(\"freew.font-size\", \"Size\"");
+        wpfSource.Should().NotContain("g.IconToggle(\"freew.bold\", \"Bold\"");
+        wpfSource.Should().NotContain("g.IconToggle(\"freew.italic\", \"Italic\"");
+        wpfSource.Should().NotContain("g.IconToggle(\"freew.underline\", \"Underline\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.strikethrough\", \"Strikethrough\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.font-dialog\", \"Font");
+        wpfSource.Should().Contain("FreeWRibbonText.FontGroup");
+        wpfSource.Should().Contain("FreeWRibbonText.FontFamilyCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.FontSizeCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.BoldCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.ItalicCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.UnderlineCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.StrikethroughCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.FontDialogCommand");
+
+        avaloniaSource.Should().NotContain("tab.Group(\"font\", \"Font\"");
+        avaloniaSource.Should().NotContain("g.ComboBox(\"freew.font-family\", \"Font\"");
+        avaloniaSource.Should().NotContain("g.ComboBox(\"freew.font-size\",   \"Size\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.bold\",           \"Bold\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.italic\",          \"Italic\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.underline\",       \"Underline\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.strikethrough\",   \"Strikethrough\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.font-dialog\",     \"Font");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontGroup");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontFamilyCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontSizeCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.BoldCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ItalicCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.UnderlineCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.StrikethroughCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontDialogCommand");
+    }
+
     private static bool IsAllowed(CommandEntry entry, IReadOnlyList<DivergenceRule> rules) =>
         rules.Any(rule => rule.IsAllowed(entry));
 
@@ -278,6 +354,53 @@ public sealed class FreeWRibbonDefinitionProfileTests
 
     private static RibbonControl RequiredControl(RibbonGroup group, string commandId) =>
         group.Controls.Single(control => control.CommandId.Value == commandId);
+
+    private static FontCoreRibbonSurface FontCoreSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var definition = FreeWRibbon.Build(capabilities);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var font = home!.FindGroup("font");
+        font.Should().NotBeNull();
+
+        var fontFamily = RequiredControl(font!, "freew.font-family");
+        var fontSize = RequiredControl(font!, "freew.font-size");
+        var bold = RequiredControl(font!, "freew.bold");
+        var italic = RequiredControl(font!, "freew.italic");
+        var underline = RequiredControl(font!, "freew.underline");
+        var strikethrough = RequiredControl(font!, "freew.strikethrough");
+        var fontDialog = RequiredControl(font!, "freew.font-dialog");
+
+        return new FontCoreRibbonSurface(
+            font.Header,
+            font.KeyTip,
+            fontFamily.Label,
+            fontSize.Label,
+            bold.Label,
+            bold.KeyTip,
+            italic.Label,
+            italic.KeyTip,
+            underline.Label,
+            underline.KeyTip,
+            strikethrough.Label,
+            fontDialog.Label);
+    }
+
+    private static void AssertFontCoreSurfaceUsesResources(FontCoreRibbonSurface surface)
+    {
+        surface.FontGroupHeader.Should().Be(Loc.Get("Ribbon_Group_Font_Label"));
+        surface.FontGroupKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_Font_KeyTip"));
+        surface.FontFamilyLabel.Should().Be(Loc.Get("Ribbon_Command_FontFamily_Label"));
+        surface.FontSizeLabel.Should().Be(Loc.Get("Ribbon_Command_FontSize_Label"));
+        surface.BoldLabel.Should().Be(Loc.Get("Ribbon_Command_Bold_Label"));
+        surface.BoldKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_Bold_KeyTip"));
+        surface.ItalicLabel.Should().Be(Loc.Get("Ribbon_Command_Italic_Label"));
+        surface.ItalicKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_Italic_KeyTip"));
+        surface.UnderlineLabel.Should().Be(Loc.Get("Ribbon_Command_Underline_Label"));
+        surface.UnderlineKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_Underline_KeyTip"));
+        surface.StrikethroughLabel.Should().Be(Loc.Get("Ribbon_Command_Strikethrough_Label"));
+        surface.FontDialogLabel.Should().Be(Loc.Get("Ribbon_Command_FontDialog_Label"));
+    }
 
     private static string ReadRepositoryFile(params string[] relativeParts)
     {
@@ -365,6 +488,20 @@ public sealed class FreeWRibbonDefinitionProfileTests
         string? CutKeyTip,
         string CopyLabel,
         string? CopyKeyTip);
+
+    private sealed record FontCoreRibbonSurface(
+        string FontGroupHeader,
+        string? FontGroupKeyTip,
+        string FontFamilyLabel,
+        string FontSizeLabel,
+        string BoldLabel,
+        string? BoldKeyTip,
+        string ItalicLabel,
+        string? ItalicKeyTip,
+        string UnderlineLabel,
+        string? UnderlineKeyTip,
+        string StrikethroughLabel,
+        string FontDialogLabel);
 
     private sealed record CommandEntry(string TabId, string GroupId, string CommandId)
     {
