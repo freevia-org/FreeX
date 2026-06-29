@@ -3521,9 +3521,8 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> contentTypeDefaults)
     {
         var relsPartName = RelsPartNameFor(partName);
-        var relsXml = LoadPart(archive, relsPartName.TrimStart('/'));
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
+        var relationships = OpcRelationships.Load(archive, relsPartName.TrimStart('/'));
+        if (relationships.Count == 0)
             return;
 
         // The part's own _rels is itself preserved (covered by the rels Default content type, so no Override).
@@ -3533,12 +3532,11 @@ public static class DocxReader
         foreach (var rel in relationships)
         {
             // External targets (TargetMode="External") have no package part to capture.
-            if (rel.Attribute("TargetMode")?.Value == "External")
+            if (rel.IsExternal)
                 continue;
-            var target = rel.Attribute("Target")?.Value;
-            if (string.IsNullOrEmpty(target))
+            if (string.IsNullOrEmpty(rel.Target))
                 continue;
-            var targetPartName = ResolveRelativePartName(baseFolder, target);
+            var targetPartName = ResolveRelativePartName(baseFolder, rel.Target);
             if (targetPartName is null || document.Preserved.Parts.Any(p => p.PartName == targetPartName))
                 continue;
             if (CapturePreservedPart(archive, document, targetPartName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
@@ -3568,23 +3566,12 @@ public static class DocxReader
     }
 
     /// <summary>Reads document.xml.rels as id → (Type, Target). Empty when the rels part is absent.</summary>
-    private static Dictionary<string, (string Type, string Target)> ReadDocumentRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-        foreach (var rel in relationships)
-        {
-            var id = rel.Attribute("Id")?.Value;
-            var type = rel.Attribute("Type")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(type) && !string.IsNullOrEmpty(target))
-                map[id] = (type, target);
-        }
-        return map;
-    }
+    private static Dictionary<string, (string Type, string Target)> ReadDocumentRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadById(archive, "word/_rels/document.xml.rels")
+            .ToDictionary(
+                relationship => relationship.Key,
+                relationship => (Type: relationship.Value.Type, Target: relationship.Value.Target),
+                StringComparer.Ordinal);
 
     /// <summary>
     /// Resolves a document-relationship Target (relative to <c>word/</c>) to an absolute part name. A bare
@@ -3880,25 +3867,11 @@ public static class DocxReader
     }
 
     /// <summary>Maps relationship id -> media part path from word/_rels/document.xml.rels.</summary>
-    private static Dictionary<string, string> ReadImageRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>();
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
-                continue;
-            // Targets in document rels are relative to the word/ folder.
-            map[id] = "word/" + target.TrimStart('/');
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadImageRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => "word/" + relationship.Target.TrimStart('/'));
 
     /// <summary>
     /// Maps relationship id → archive entry path for a satellite part's own <c>_rels</c> (e.g.
@@ -3907,50 +3880,20 @@ public static class DocxReader
     /// an empty map when the rels part is absent — so a comments part with no image relationships behaves exactly
     /// as before. Mirrors <see cref="ReadImageRelationships"/> for non-document parts.
     /// </summary>
-    private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string relsPath, string baseFolder)
-    {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var relsXml = LoadPart(archive, relsPath);
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            if (rel.Attribute("TargetMode")?.Value == "External")
-                continue;
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
-                continue;
-            // Targets are relative to baseFolder; a "../" steps out of it. Collapse to the archive entry path.
-            var resolved = ResolveRelativePartName("/" + baseFolder.Trim('/'), target);
-            if (resolved is not null)
-                map[id] = resolved.TrimStart('/');
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string relsPath, string baseFolder) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            relsPath,
+            relationship => ResolveRelativePartName("/" + baseFolder.Trim('/'), relationship.Target)?.TrimStart('/'),
+            relationship => !relationship.IsExternal);
 
     /// <summary>Maps relationship id -> external hyperlink target (URL) from document.xml.rels.</summary>
-    private static Dictionary<string, string> ReadHyperlinkRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>();
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            if (!rel.Attribute("Type")?.Value.EndsWith("/hyperlink", StringComparison.Ordinal) ?? true)
-                continue;
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
-                map[id] = target; // external targets are stored verbatim (TargetMode="External")
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadHyperlinkRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => relationship.Target,
+            relationship => relationship.Type.EndsWith("/hyperlink", StringComparison.Ordinal));
 
     private static byte[]? LoadMedia(ZipArchive archive, string entryPath)
     {

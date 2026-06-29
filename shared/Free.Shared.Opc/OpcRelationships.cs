@@ -9,6 +9,10 @@ public readonly record struct OpcRelationship(
     string Target,
     bool IsExternal = false);
 
+public readonly record struct OpcCanonicalRelationship(
+    string PartName,
+    string RelationshipType);
+
 public static class OpcRelationships
 {
     public static readonly XNamespace Namespace =
@@ -57,6 +61,52 @@ public static class OpcRelationships
             .Where(relationship => !string.IsNullOrEmpty(relationship.Id))
             .ToList()
             ?? [];
+    }
+
+    public static Dictionary<string, OpcRelationship> LoadById(
+        ZipArchive archive,
+        string relsPath,
+        bool ignoreMalformed = false,
+        IEqualityComparer<string>? idComparer = null)
+    {
+        var map = new Dictionary<string, OpcRelationship>(idComparer ?? StringComparer.Ordinal);
+        foreach (var relationship in Load(archive, relsPath, ignoreMalformed))
+        {
+            if (string.IsNullOrEmpty(relationship.Type) ||
+                string.IsNullOrEmpty(relationship.Target))
+            {
+                continue;
+            }
+
+            map[relationship.Id] = relationship;
+        }
+
+        return map;
+    }
+
+    public static Dictionary<string, string> LoadTargetMap(
+        ZipArchive archive,
+        string relsPath,
+        Func<OpcRelationship, string?> resolveTarget,
+        Func<OpcRelationship, bool>? predicate = null,
+        bool ignoreMalformed = false,
+        IEqualityComparer<string>? idComparer = null)
+    {
+        var map = new Dictionary<string, string>(idComparer ?? StringComparer.Ordinal);
+        foreach (var relationship in Load(archive, relsPath, ignoreMalformed))
+        {
+            if (string.IsNullOrEmpty(relationship.Target) ||
+                predicate?.Invoke(relationship) == false)
+            {
+                continue;
+            }
+
+            var target = resolveTarget(relationship);
+            if (!string.IsNullOrEmpty(target))
+                map[relationship.Id] = target;
+        }
+
+        return map;
     }
 
     public static string NextRelationshipId(XDocument relsXml, XNamespace? relationshipsNamespace = null)
@@ -115,6 +165,124 @@ public static class OpcRelationships
             new XAttribute("Type", relationshipType),
             new XAttribute("Target", createRelationshipTarget(sourcePart, targetPart))));
         return id;
+    }
+
+    public static bool NeedsCanonicalPackageRelationshipNormalization(
+        XDocument relationshipsXml,
+        OpcCanonicalRelationship canonicalRelationship,
+        bool partExists,
+        Func<string, string?> resolveRelationshipTarget,
+        XNamespace? relationshipsNamespace = null)
+    {
+        var clone = new XDocument(relationshipsXml);
+        return NormalizeCanonicalPackageRelationship(
+            clone,
+            canonicalRelationship,
+            partExists,
+            resolveRelationshipTarget,
+            relationshipsNamespace);
+    }
+
+    public static bool NormalizeCanonicalPackageRelationship(
+        XDocument relationshipsXml,
+        OpcCanonicalRelationship canonicalRelationship,
+        bool partExists,
+        Func<string, string?> resolveRelationshipTarget,
+        XNamespace? relationshipsNamespace = null)
+    {
+        var ns = relationshipsNamespace ?? Namespace;
+        var root = relationshipsXml.Root;
+        if (root is null || root.Name != ns + "Relationships")
+            return false;
+
+        var changed = false;
+        var relatedRelationships = root
+            .Elements(ns + "Relationship")
+            .Where(relationship =>
+                RelationshipTypeMatches(relationship, canonicalRelationship.RelationshipType) ||
+                RelationshipTargetsPart(
+                    relationship,
+                    canonicalRelationship.PartName,
+                    resolveRelationshipTarget))
+            .ToList();
+
+        XElement? keptRelationship = null;
+        foreach (var relationship in relatedRelationships)
+        {
+            if (!partExists)
+            {
+                relationship.Remove();
+                changed = true;
+                continue;
+            }
+
+            var target = relationship.Attribute("Target")?.Value?.Trim();
+            var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+            var targetsPart = RelationshipTargetsPart(
+                relationship,
+                canonicalRelationship.PartName,
+                resolveRelationshipTarget);
+
+            if (targetsPart &&
+                keptRelationship is null &&
+                RelationshipTypeMatches(relationship, canonicalRelationship.RelationshipType))
+            {
+                keptRelationship = relationship;
+                if (!string.Equals(target, canonicalRelationship.PartName, StringComparison.Ordinal))
+                {
+                    relationship.SetAttributeValue("Target", canonicalRelationship.PartName);
+                    changed = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(targetMode))
+                {
+                    relationship.SetAttributeValue("TargetMode", null);
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            relationship.Remove();
+            changed = true;
+        }
+
+        if (!partExists || keptRelationship is not null)
+            return changed;
+
+        root.Add(CreateRelationship(
+            NextRelationshipId(relationshipsXml, ns),
+            canonicalRelationship.RelationshipType,
+            canonicalRelationship.PartName));
+        return true;
+    }
+
+    public static bool RelationshipTypeMatches(XElement relationship, string relationshipType) =>
+        string.Equals(
+            relationship.Attribute("Type")?.Value?.Trim(),
+            relationshipType,
+            StringComparison.OrdinalIgnoreCase);
+
+    public static bool RelationshipTargetsPart(
+        XElement relationship,
+        string partName,
+        Func<string, string?> resolveRelationshipTarget)
+    {
+        var target = relationship.Attribute("Target")?.Value?.Trim();
+        if (string.IsNullOrWhiteSpace(target))
+            return false;
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
+        if (!string.IsNullOrWhiteSpace(targetMode) &&
+            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            resolveRelationshipTarget(target),
+            partName,
+            StringComparison.OrdinalIgnoreCase);
     }
 }
 

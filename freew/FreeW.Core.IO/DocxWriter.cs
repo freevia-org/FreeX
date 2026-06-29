@@ -949,110 +949,55 @@ public static class DocxWriter
         bool hasEmbeddedFonts,
         IReadOnlyList<PreservedPart> preservedParts)
     {
-        var relationships = new XElement(Rel + "Relationships",
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", "rId1"),
-                new XAttribute("Type", StylesRel),
-                new XAttribute("Target", "styles.xml")));
+        static XElement Relationship(string id, string type, string target, bool external = false) =>
+            OpcRelationships.CreateRelationship(id, type, target, external);
+
+        var relationships = OpcRelationships.CreateRoot(
+            Relationship("rId1", StylesRel, "styles.xml"));
         if (hasSettings)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", SettingsRelationshipId),
-                new XAttribute("Type", SettingsRelType),
-                new XAttribute("Target", "settings.xml")));
+            relationships.Add(Relationship(SettingsRelationshipId, SettingsRelType, "settings.xml"));
         // The document→bibliography relationship (word/bibliography/sources.xml, target relative to word/).
         if (hasBibliography)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", BibliographyRelationshipId),
-                new XAttribute("Type", BibliographyRelType),
-                new XAttribute("Target", "bibliography/sources.xml")));
+            relationships.Add(Relationship(BibliographyRelationshipId, BibliographyRelType, "bibliography/sources.xml"));
         // The document→fontTable relationship (the fontTable's own rels reference the .odttf font parts).
         if (hasEmbeddedFonts)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", FontTableRelationshipId),
-                new XAttribute("Type", FontTableRelType),
-                new XAttribute("Target", "fontTable.xml")));
+            relationships.Add(Relationship(FontTableRelationshipId, FontTableRelType, "fontTable.xml"));
         // The theme part is always present, so its relationship is unconditional.
-        relationships.Add(new XElement(Rel + "Relationship",
-            new XAttribute("Id", ThemeRelationshipId),
-            new XAttribute("Type", ThemeRelType),
-            new XAttribute("Target", "theme/theme1.xml")));
+        relationships.Add(Relationship(ThemeRelationshipId, ThemeRelType, "theme/theme1.xml"));
         if (includeNumbering)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", "rIdNumbering"),
-                new XAttribute("Type", NumberingRelType),
-                new XAttribute("Target", "numbering.xml")));
+            relationships.Add(Relationship("rIdNumbering", NumberingRelType, "numbering.xml"));
         // One document relationship per emitted header/footer part (in collection order — which reproduces
         // the legacy header1, footer1, header2, footer2 ordering and rel ids for single-section documents).
         // The owning section's w:sectPr references the part by this relationship id.
         foreach (var part in headerFooterParts)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", part.RelationshipId),
-                new XAttribute("Type", part.IsHeader ? HeaderRel : FooterRel),
-                new XAttribute("Target", part.FileName)));
+            relationships.Add(Relationship(part.RelationshipId, part.IsHeader ? HeaderRel : FooterRel, part.FileName));
         if (hasFootnotes)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", FootnotesRelationshipId),
-                new XAttribute("Type", FootnotesRelType),
-                new XAttribute("Target", "footnotes.xml")));
+            relationships.Add(Relationship(FootnotesRelationshipId, FootnotesRelType, "footnotes.xml"));
         if (hasEndnotes)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", EndnotesRelationshipId),
-                new XAttribute("Type", EndnotesRelType),
-                new XAttribute("Target", "endnotes.xml")));
+            relationships.Add(Relationship(EndnotesRelationshipId, EndnotesRelType, "endnotes.xml"));
         if (hasComments)
         {
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", CommentsRelationshipId),
-                new XAttribute("Type", CommentsRelType),
-                new XAttribute("Target", "comments.xml")));
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", CommentsExtendedRelationshipId),
-                new XAttribute("Type", CommentsExtendedRelType),
-                new XAttribute("Target", "commentsExtended.xml")));
+            relationships.Add(Relationship(CommentsRelationshipId, CommentsRelType, "comments.xml"));
+            relationships.Add(Relationship(CommentsExtendedRelationshipId, CommentsExtendedRelType, "commentsExtended.xml"));
         }
         foreach (var image in images)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", image.RelationshipId),
-                new XAttribute("Type", ImageRel),
-                new XAttribute("Target", "media/" + image.FileName)));
+            relationships.Add(Relationship(image.RelationshipId, ImageRel, "media/" + image.FileName));
         foreach (var chart in charts)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", chart.RelationshipId),
-                new XAttribute("Type", ChartRelType),
-                new XAttribute("Target", "charts/" + chart.FileName)));
+            relationships.Add(Relationship(chart.RelationshipId, ChartRelType, "charts/" + chart.FileName));
         // The embedded OLE payload relationship (the icon's image relationship is emitted in the images loop).
         foreach (var embedded in embeddedObjects)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", embedded.RelationshipId),
-                new XAttribute("Type", OleObjectRelType),
-                new XAttribute("Target", "embeddings/" + embedded.FileName)));
+            relationships.Add(Relationship(embedded.RelationshipId, OleObjectRelType, "embeddings/" + embedded.FileName));
         // Each SmartArt diagram contributes four relationships (data / layout / quickStyle / colors), all
         // referenced together by the inline drawing's dgm:relIds.
         foreach (var s in smartArts)
         {
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", s.DataRelationshipId),
-                new XAttribute("Type", DiagramDataRelType),
-                new XAttribute("Target", "diagrams/" + s.DataFileName)));
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", s.LayoutRelationshipId),
-                new XAttribute("Type", DiagramLayoutRelType),
-                new XAttribute("Target", "diagrams/" + s.LayoutFileName)));
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", s.QuickStyleRelationshipId),
-                new XAttribute("Type", DiagramStyleRelType),
-                new XAttribute("Target", "diagrams/" + s.QuickStyleFileName)));
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", s.ColorsRelationshipId),
-                new XAttribute("Type", DiagramColorsRelType),
-                new XAttribute("Target", "diagrams/" + s.ColorsFileName)));
+            relationships.Add(Relationship(s.DataRelationshipId, DiagramDataRelType, "diagrams/" + s.DataFileName));
+            relationships.Add(Relationship(s.LayoutRelationshipId, DiagramLayoutRelType, "diagrams/" + s.LayoutFileName));
+            relationships.Add(Relationship(s.QuickStyleRelationshipId, DiagramStyleRelType, "diagrams/" + s.QuickStyleFileName));
+            relationships.Add(Relationship(s.ColorsRelationshipId, DiagramColorsRelType, "diagrams/" + s.ColorsFileName));
         }
         foreach (var (url, relationshipId) in hyperlinks)
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", relationshipId),
-                new XAttribute("Type", HyperlinkRel),
-                new XAttribute("Target", url),
-                new XAttribute("TargetMode", "External")));
+            relationships.Add(Relationship(relationshipId, HyperlinkRel, url, external: true));
         // One document relationship per preserved part that the document references directly (customXml items,
         // webSettings and unmodelled chart/chartex parts carry a RelationshipType; their props/_rels/media do
         // not, being referenced from the part's own _rels instead). The Target is reconstructed relative to
@@ -1060,10 +1005,7 @@ public static class DocxWriter
         // targets "../customXml/…". The id assigned here must match PreservedPartRelIds (consumed by the inline
         // drawing rewrite) — both replay the same order, so a shared helper keeps them in lock-step.
         foreach (var (part, relId) in PreservedPartRelIds(preservedParts))
-            relationships.Add(new XElement(Rel + "Relationship",
-                new XAttribute("Id", relId),
-                new XAttribute("Type", part.RelationshipType!),
-                new XAttribute("Target", DocumentRelativeTarget(part.PartName))));
+            relationships.Add(Relationship(relId, part.RelationshipType!, DocumentRelativeTarget(part.PartName)));
         return new XDocument(relationships);
     }
 
@@ -4002,11 +3944,11 @@ public static class DocxWriter
     /// which the data part's dgm:dataModelExt/@relId references. Targets are data-part-relative.
     /// </summary>
     private static XDocument BuildDiagramDataRels(SmartArtPart part) => new(
-        new XElement(Rel + "Relationships",
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", part.DrawingRelationshipId),
-                new XAttribute("Type", DiagramDrawingRelType),
-                new XAttribute("Target", part.DrawingFileName))));
+        OpcRelationships.CreateRoot(
+            OpcRelationships.CreateRelationship(
+                part.DrawingRelationshipId,
+                DiagramDrawingRelType,
+                part.DrawingFileName)));
 
     /// <summary>
     /// Builds the SmartArt rendered-geometry part (word/diagrams/drawingN.xml — dsp:drawing). F2: computes a
@@ -4277,11 +4219,11 @@ public static class DocxWriter
     /// "Edit Data" follows from the chart, and it is what c:externalData/@r:id resolves against. F1.
     /// </summary>
     private static XDocument BuildChartRels(ChartPart part) => new(
-        new XElement(Rel + "Relationships",
-            new XElement(Rel + "Relationship",
-                new XAttribute("Id", part.ExternalDataRelId),
-                new XAttribute("Type", ExternalDataRelType),
-                new XAttribute("Target", "../embeddings/" + part.EmbeddingFileName))));
+        OpcRelationships.CreateRoot(
+            OpcRelationships.CreateRelationship(
+                part.ExternalDataRelId,
+                ExternalDataRelType,
+                "../embeddings/" + part.EmbeddingFileName)));
 
     /// <summary>
     /// Builds a minimal, self-contained xlsx (OPC ZIP) holding the chart's data so Word's "Edit Data" has a
