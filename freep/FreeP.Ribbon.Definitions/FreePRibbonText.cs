@@ -43,5 +43,51 @@ internal static class FreePRibbonText
     public static string SlideShowFromCurrentSlideLabel => Get("Ribbon_Command_SlideShowFromCurrentSlide_Label");
     public static string SlideShowFromCurrentSlideKeyTip => Get("Ribbon_Command_SlideShowFromCurrentSlide_KeyTip");
 
+    public static string InsertTabLabel => Get("Ribbon_Tab_Insert_Label");
+    public static string InsertTabKeyTip => Get("Ribbon_Tab_Insert_KeyTip");
+
+    public static string TextGroupLabel => Get("Ribbon_Group_Text_Label");
+    public static string TextGroupKeyTip => Get("Ribbon_Group_Text_KeyTip");
+    public static string TextBoxLabel => Get("Ribbon_Command_TextBox_Label");
+    public static string TextBoxKeyTip => Get("Ribbon_Command_TextBox_KeyTip");
+
+    public static string TablesGroupLabel => Get("Ribbon_Group_Tables_Label");
+    public static string TablesGroupKeyTip => Get("Ribbon_Group_Tables_KeyTip");
+    public static string InsertTable3x3Label => Get("Ribbon_Command_InsertTable3x3_Label");
+    public static string InsertTable3x3KeyTip => Get("Ribbon_Command_InsertTable3x3_KeyTip");
+    public static string InsertTable2x2Label => Get("Ribbon_Command_InsertTable2x2_Label");
+    public static string InsertTable2x2KeyTip => Get("Ribbon_Command_InsertTable2x2_KeyTip");
+    public static string InsertTable4x4Label => Get("Ribbon_Command_InsertTable4x4_Label");
+    public static string InsertTable4x4KeyTip => Get("Ribbon_Command_InsertTable4x4_KeyTip");
+
+    public static string ChartsGroupLabel => Get("Ribbon_Group_Charts_Label");
+    public static string ChartsGroupKeyTip => Get("Ribbon_Group_Charts_KeyTip");
+    public static string InsertChartColumnLabel => Get("Ribbon_Command_InsertChartColumn_Label");
+    public static string InsertChartColumnKeyTip => Get("Ribbon_Command_InsertChartColumn_KeyTip");
+    public static string InsertChartBarLabel => Get("Ribbon_Command_InsertChartBar_Label");
+    public static string InsertChartBarKeyTip => Get("Ribbon_Command_InsertChartBar_KeyTip");
+    public static string InsertChartLineLabel => Get("Ribbon_Command_InsertChartLine_Label");
+    public static string InsertChartLineKeyTip => Get("Ribbon_Command_InsertChartLine_KeyTip");
+    public static string InsertChartPieLabel => Get("Ribbon_Command_InsertChartPie_Label");
+    public static string InsertChartPieKeyTip => Get("Ribbon_Command_InsertChartPie_KeyTip");
+    public static string ChartEditDataLabel => Get("Ribbon_Command_ChartEditData_Label");
+    public static string ChartEditDataKeyTip => Get("Ribbon_Command_ChartEditData_KeyTip");
+
+    public static string LinksGroupLabel => Get("Ribbon_Group_Links_Label");
+    public static string LinksGroupKeyTip => Get("Ribbon_Group_Links_KeyTip");
+    public static string InsertLinkLabel => Get("Ribbon_Command_InsertLink_Label");
+    public static string InsertLinkKeyTip => Get("Ribbon_Command_InsertLink_KeyTip");
+    public static string RemoveLinkLabel => Get("Ribbon_Command_RemoveLink_Label");
+    public static string RemoveLinkKeyTip => Get("Ribbon_Command_RemoveLink_KeyTip");
+
+    public static string IllustrationsGroupLabel => Get("Ribbon_Group_Illustrations_Label");
+    public static string IllustrationsGroupKeyTip => Get("Ribbon_Group_Illustrations_KeyTip");
+    public static string PictureLabel => Get("Ribbon_Command_Picture_Label");
+    public static string PictureKeyTip => Get("Ribbon_Command_Picture_KeyTip");
+    public static string ShapeRectangleLabel => Get("Ribbon_Command_ShapeRectangle_Label");
+    public static string ShapeRectangleKeyTip => Get("Ribbon_Command_ShapeRectangle_KeyTip");
+    public static string ShapeEllipseLabel => Get("Ribbon_Command_ShapeEllipse_Label");
+    public static string ShapeEllipseKeyTip => Get("Ribbon_Command_ShapeEllipse_KeyTip");
+
     private static string Get(string key) => Loc.Get(key);
 }

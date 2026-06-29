@@ -82,6 +82,59 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Insert_ribbon_text_resolves_from_freep_localization_resources()
+    {
+        var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+            var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+
+            return new[]
+            {
+                wpf.FindTab("insert")!.Header,
+                wpf.FindTab("insert")!.KeyTip!,
+                RequiredGroup(wpf, "insert", "text").Header,
+                RequiredGroup(wpf, "insert", "text").KeyTip!,
+                RequiredControl(wpf, "freep.text-box").Label,
+                RequiredControl(wpf, "freep.text-box").KeyTip!,
+                RequiredGroup(wpf, "insert", "tables").Header,
+                RequiredControl(wpf, "freep.insert-table-3x3").Label,
+                RequiredControl(wpf, "freep.insert-table-2x2").Label,
+                RequiredControl(wpf, "freep.insert-table-4x4").Label,
+                RequiredGroup(wpf, "insert", "charts").Header,
+                RequiredControl(wpf, "freep.insert-chart-column").Label,
+                RequiredControl(wpf, "freep.insert-chart-bar").Label,
+                RequiredControl(wpf, "freep.insert-chart-line").Label,
+                RequiredControl(wpf, "freep.insert-chart-pie").Label,
+                RequiredControl(wpf, "freep.chart.edit-data").Label,
+                RequiredControl(wpf, "freep.chart.edit-data").KeyTip!,
+                RequiredGroup(wpf, "insert", "links").Header,
+                RequiredControl(wpf, "freep.insert-link").Label,
+                RequiredControl(wpf, "freep.remove-link").Label,
+                RequiredGroup(wpf, "insert", "illustrations").Header,
+                RequiredControl(wpf, "freep.picture").Label,
+                RequiredControl(wpf, "freep.shape-rectangle").Label,
+                RequiredControl(wpf, "freep.shape-ellipse").Label,
+                avalonia.FindTab("insert")!.Header,
+                RequiredGroup(avalonia, "insert", "text").Header,
+                RequiredControl(avalonia, "freep.text-box").Label,
+                RequiredGroup(avalonia, "insert", "tables").Header,
+                RequiredControl(avalonia, "freep.insert-table-3x3").Label,
+                RequiredGroup(avalonia, "insert", "charts").Header,
+                RequiredControl(avalonia, "freep.insert-chart-column").Label,
+                RequiredControl(avalonia, "freep.chart.edit-data").Label,
+                RequiredControl(avalonia, "freep.chart.edit-data").KeyTip!,
+                RequiredGroup(avalonia, "insert", "illustrations").Header,
+                RequiredControl(avalonia, "freep.picture").Label,
+            };
+        });
+
+        text.Should().OnlyContain(value =>
+            value.StartsWith("[[", StringComparison.Ordinal) &&
+            value.EndsWith("]]", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreePRibbon.Build(FreePRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
@@ -134,7 +187,7 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
-    public void Home_shell_slice_keeps_raw_english_out_of_ribbon_definition_sources()
+    public void Localized_ribbon_slices_keep_raw_english_out_of_ribbon_definition_sources()
     {
         var source = string.Join(
             Environment.NewLine,
@@ -159,7 +212,29 @@ public sealed class FreePRibbonDefinitionProfileTests
                      "\"Redo\"",
                      "\"Slide Show\"",
                      "\"From Beginning\"",
-                     "\"From Current Slide\""
+                     "\"From Current Slide\"",
+                     "\"Insert\"",
+                     "\"Text\"",
+                     "\"Text Box\"",
+                     "\"Tables\"",
+                     "\"Table\"",
+                     "\"2x2\"",
+                     "\"2×2\"",
+                     "\"4x4\"",
+                     "\"4×4\"",
+                     "\"Charts\"",
+                     "\"Column\"",
+                     "\"Bar\"",
+                     "\"Line\"",
+                     "\"Pie\"",
+                     "\"Edit Data\"",
+                     "\"Links\"",
+                     "\"Hyperlink\"",
+                     "\"Remove Link\"",
+                     "\"Illustrations\"",
+                     "\"Picture\"",
+                     "\"Rectangle\"",
+                     "\"Ellipse\""
                  })
         {
             source.Should().NotContain(literal);

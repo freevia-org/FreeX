@@ -241,4 +241,124 @@
   <data name="Ribbon_Command_SlideShowFromCurrentSlide_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Tab_Insert_Label" xml:space="preserve">
+    <value>Insert</value>
+  </data>
+  <data name="Ribbon_Tab_Insert_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Group_Text_Label" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Ribbon_Group_Text_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_TextBox_Label" xml:space="preserve">
+    <value>Text Box</value>
+  </data>
+  <data name="Ribbon_Command_TextBox_KeyTip" xml:space="preserve">
+    <value>X</value>
+  </data>
+  <data name="Ribbon_Group_Tables_Label" xml:space="preserve">
+    <value>Tables</value>
+  </data>
+  <data name="Ribbon_Group_Tables_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Command_InsertTable3x3_Label" xml:space="preserve">
+    <value>Table</value>
+  </data>
+  <data name="Ribbon_Command_InsertTable3x3_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_InsertTable2x2_Label" xml:space="preserve">
+    <value>2x2</value>
+  </data>
+  <data name="Ribbon_Command_InsertTable2x2_KeyTip" xml:space="preserve">
+    <value>2</value>
+  </data>
+  <data name="Ribbon_Command_InsertTable4x4_Label" xml:space="preserve">
+    <value>4x4</value>
+  </data>
+  <data name="Ribbon_Command_InsertTable4x4_KeyTip" xml:space="preserve">
+    <value>4</value>
+  </data>
+  <data name="Ribbon_Group_Charts_Label" xml:space="preserve">
+    <value>Charts</value>
+  </data>
+  <data name="Ribbon_Group_Charts_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartColumn_Label" xml:space="preserve">
+    <value>Column</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartColumn_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartBar_Label" xml:space="preserve">
+    <value>Bar</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartBar_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartLine_Label" xml:space="preserve">
+    <value>Line</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartLine_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartPie_Label" xml:space="preserve">
+    <value>Pie</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartPie_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_ChartEditData_Label" xml:space="preserve">
+    <value>Edit Data</value>
+  </data>
+  <data name="Ribbon_Command_ChartEditData_KeyTip" xml:space="preserve">
+    <value>E</value>
+  </data>
+  <data name="Ribbon_Group_Links_Label" xml:space="preserve">
+    <value>Links</value>
+  </data>
+  <data name="Ribbon_Group_Links_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_InsertLink_Label" xml:space="preserve">
+    <value>Hyperlink</value>
+  </data>
+  <data name="Ribbon_Command_InsertLink_KeyTip" xml:space="preserve">
+    <value>K</value>
+  </data>
+  <data name="Ribbon_Command_RemoveLink_Label" xml:space="preserve">
+    <value>Remove Link</value>
+  </data>
+  <data name="Ribbon_Command_RemoveLink_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Group_Illustrations_Label" xml:space="preserve">
+    <value>Illustrations</value>
+  </data>
+  <data name="Ribbon_Group_Illustrations_KeyTip" xml:space="preserve">
+    <value>I</value>
+  </data>
+  <data name="Ribbon_Command_Picture_Label" xml:space="preserve">
+    <value>Picture</value>
+  </data>
+  <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRectangle_Label" xml:space="preserve">
+    <value>Rectangle</value>
+  </data>
+  <data name="Ribbon_Command_ShapeRectangle_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_ShapeEllipse_Label" xml:space="preserve">
+    <value>Ellipse</value>
+  </data>
+  <data name="Ribbon_Command_ShapeEllipse_KeyTip" xml:space="preserve">
+    <value>E</value>
+  </data>
 </root>

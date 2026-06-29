@@ -123,6 +123,53 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void GetNeutralResourceKeys_CoversRibbonInsertFoundation()
+    {
+        Loc.GetNeutralResourceKeys().Should().Contain([
+            "Ribbon_Tab_Insert_Label",
+            "Ribbon_Tab_Insert_KeyTip",
+            "Ribbon_Group_Text_Label",
+            "Ribbon_Group_Text_KeyTip",
+            "Ribbon_Command_TextBox_Label",
+            "Ribbon_Command_TextBox_KeyTip",
+            "Ribbon_Group_Tables_Label",
+            "Ribbon_Group_Tables_KeyTip",
+            "Ribbon_Command_InsertTable3x3_Label",
+            "Ribbon_Command_InsertTable3x3_KeyTip",
+            "Ribbon_Command_InsertTable2x2_Label",
+            "Ribbon_Command_InsertTable2x2_KeyTip",
+            "Ribbon_Command_InsertTable4x4_Label",
+            "Ribbon_Command_InsertTable4x4_KeyTip",
+            "Ribbon_Group_Charts_Label",
+            "Ribbon_Group_Charts_KeyTip",
+            "Ribbon_Command_InsertChartColumn_Label",
+            "Ribbon_Command_InsertChartColumn_KeyTip",
+            "Ribbon_Command_InsertChartBar_Label",
+            "Ribbon_Command_InsertChartBar_KeyTip",
+            "Ribbon_Command_InsertChartLine_Label",
+            "Ribbon_Command_InsertChartLine_KeyTip",
+            "Ribbon_Command_InsertChartPie_Label",
+            "Ribbon_Command_InsertChartPie_KeyTip",
+            "Ribbon_Command_ChartEditData_Label",
+            "Ribbon_Command_ChartEditData_KeyTip",
+            "Ribbon_Group_Links_Label",
+            "Ribbon_Group_Links_KeyTip",
+            "Ribbon_Command_InsertLink_Label",
+            "Ribbon_Command_InsertLink_KeyTip",
+            "Ribbon_Command_RemoveLink_Label",
+            "Ribbon_Command_RemoveLink_KeyTip",
+            "Ribbon_Group_Illustrations_Label",
+            "Ribbon_Group_Illustrations_KeyTip",
+            "Ribbon_Command_Picture_Label",
+            "Ribbon_Command_Picture_KeyTip",
+            "Ribbon_Command_ShapeRectangle_Label",
+            "Ribbon_Command_ShapeRectangle_KeyTip",
+            "Ribbon_Command_ShapeEllipse_Label",
+            "Ribbon_Command_ShapeEllipse_KeyTip"
+        ]);
+    }
+
+    [Fact]
     public void SharedHelpers_ExposeCatalogContracts()
     {
         Loc.PseudoLocalizationCultureName.Should().Be(LocalizedTextCatalog.PseudoLocalizationCultureName);
