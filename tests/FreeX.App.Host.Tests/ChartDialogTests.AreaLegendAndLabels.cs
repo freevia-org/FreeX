@@ -54,7 +54,12 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartAreaFormatPlanner.Read(chart)");
         source.Should().Contain("ChartAreaFormatPlanner.Normalize(new ChartAreaFormatInput(");
         source.Should().Contain("ChartAreaFormatPlanner.GetLegendPositionChoices()");
+        source.Should().Contain("ChartAreaFormatPlanner.GetFillLineSection()");
+        source.Should().Contain("ChartAreaFormatPlanner.GetLegendSection()");
+        source.Should().Contain("ChartAreaFormatPlanner.GetDialogField(id)");
         source.Should().Contain("ChartAreaFormatPlanner.TryParseDialogInput(");
+        source.Should().Contain("ApplyAutomationIds();");
+        source.Should().Contain("LabelText(ChartAreaFormatDialogFieldId.ChartAreaFillColor)");
         source.Should().NotContain("TryReadOptionalColor(");
         source.Should().NotContain("TryReadClampedDouble(");
         source.Should().NotContain("FiniteOrDefault(");

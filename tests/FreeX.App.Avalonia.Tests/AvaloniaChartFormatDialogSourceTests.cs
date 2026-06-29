@@ -25,6 +25,24 @@ public sealed class AvaloniaChartFormatDialogSourceTests
     }
 
     [Fact]
+    public void FormatChartAreaDialog_UsesSharedDescriptorAndPlannerParser()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));
+
+        source.Should().Contain("ChartAreaFormatPlanner.GetDialogField(fieldId)");
+        source.Should().Contain("ChartAreaFormatPlanner.GetFillLineSection()");
+        source.Should().Contain("ChartAreaFormatPlanner.GetLegendSection()");
+        source.Should().Contain(".GetLegendPositionChoices()");
+        source.Should().Contain("ChartAreaFormatPlanner.TryParseDialogInput(");
+        source.Should().Contain("MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId.ShowLegend");
+        source.Should().Contain("MakeAreaDescriptorLabel(ChartAreaFormatDialogFieldId.LegendFontSize");
+        source.Should().Contain("MakeAreaColorButton(ChartAreaFormatDialogFieldId.ChartAreaFillColor");
+        source.Should().NotContain("double.TryParse((borderWidthBox.Text");
+        source.Should().NotContain("AutomationProperties.SetName(positionCombo, \"Legend position\")");
+        source.Should().NotContain("UiText.Get(\"ChartArea_ChartAreaFill\")");
+    }
+
+    [Fact]
     public void DataLabelsDialog_UsesSharedDescriptorAndFullPlannerSurface()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs"));
