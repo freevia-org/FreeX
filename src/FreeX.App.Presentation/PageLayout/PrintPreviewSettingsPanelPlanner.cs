@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
@@ -24,6 +25,8 @@ public sealed record PrintPreviewSettingsPanelPlan(
     bool IgnorePrintAreaEnabled,
     bool PrintGridlines,
     bool PrintHeadings);
+
+public readonly record struct PrintPreviewSettingsPageRangePlan(int? FromPage, int? ToPage);
 
 public static class PrintPreviewSettingsPanelPlanner
 {
@@ -127,10 +130,22 @@ public static class PrintPreviewSettingsPanelPlanner
                 ? 2
                 : 0;
 
+    public static PrintPreviewSettingsPageRangePlan CreatePageRangePlan(string? fromPageText, string? toPageText) =>
+        new(
+            ParseOptionalPageNumber(fromPageText),
+            ParseOptionalPageNumber(toPageText));
+
     private static int PrintWhatToIndex(PrintWhat printWhat, bool hasSelection) =>
         printWhat == PrintWhat.Selection && !hasSelection
             ? (int)PrintWhat.ActiveSheets
             : (int)printWhat;
+
+    private static int? ParseOptionalPageNumber(string? text) =>
+        string.IsNullOrWhiteSpace(text)
+            ? null
+            : int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : null;
 
     private static string Get(PrintSettingsTextResolver? textResolver, string key, string fallback) =>
         textResolver?.Get(key, fallback) ?? fallback;

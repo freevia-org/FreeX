@@ -1,4 +1,6 @@
 using System.Printing;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
@@ -33,4 +35,49 @@ internal static class WpfPrintPreviewToolbarPlanner
             PrintPreviewSidesMode.TwoSidedShortEdge => Duplexing.TwoSidedShortEdge,
             _ => Duplexing.OneSided
         };
+
+    public static void PopulatePrinterBox(
+        ComboBox printerBox,
+        string noInstalledPrintersToolTip,
+        string noInstalledPrintersHelpText)
+    {
+        try
+        {
+            using var server = new LocalPrintServer();
+            foreach (var queue in server.GetPrintQueues())
+                printerBox.Items.Add(queue);
+
+            if (printerBox.Items.Count > 0)
+            {
+                printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
+                printerBox.SelectedItem = null;
+                foreach (var item in printerBox.Items)
+                {
+                    if (item is not PrintQueue queue)
+                        continue;
+
+                    if (string.Equals(
+                        queue.FullName,
+                        server.DefaultPrintQueue.FullName,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        printerBox.SelectedItem = queue;
+                        break;
+                    }
+                }
+
+                if (printerBox.SelectedItem is null)
+                    printerBox.SelectedIndex = 0;
+
+                return;
+            }
+        }
+        catch (PrintSystemException)
+        {
+        }
+
+        printerBox.IsEnabled = false;
+        printerBox.ToolTip = noInstalledPrintersToolTip;
+        AutomationProperties.SetHelpText(printerBox, noInstalledPrintersHelpText);
+    }
 }

@@ -39,6 +39,10 @@ public sealed record PrintPreviewPageRangeToolbarPlan(
     string ToSeparatorText,
     bool PageBoxesEnabled);
 
+public sealed record PrintPreviewPageRangeSelectionPlan(
+    PrintPreviewPageRangeMode Mode,
+    bool PageBoxesEnabled);
+
 public readonly record struct PrintPreviewPageRangePlan(int FromPage, int ToPage);
 
 public static class PrintPreviewToolbarStatePlanner
@@ -130,6 +134,9 @@ public static class PrintPreviewToolbarStatePlanner
             PrintPreviewPageRangeMode.Pages when fromPage is { } from && toPage is { } to => new PrintPreviewPageRangePlan(from, to),
             _ => null
         };
+
+    public static PrintPreviewPageRangeSelectionPlan CreatePageRangeSelectionPlan(PrintPreviewPageRangeMode mode) =>
+        new(mode, PageBoxesEnabled: mode == PrintPreviewPageRangeMode.Pages);
 
     public static string CreateStatusText(string? printerName, int? copies, int totalPages)
     {

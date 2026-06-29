@@ -112,7 +112,10 @@ internal static class PrintPreviewSettingsPanelFactory
         };
         AutomationProperties.SetName(printerBox, UiText.Get("PrintPreview_PrinterAutomationName"));
         AutomationProperties.SetHelpText(printerBox, UiText.Get("PrintPreview_PrinterHelpText"));
-        PopulatePrinterBox(printerBox);
+        WpfPrintPreviewToolbarPlanner.PopulatePrinterBox(
+            printerBox,
+            UiText.Get("PrintPreview_NoInstalledPrintersToolTip"),
+            UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
         AddLabel(UiText.Get("PrintPreview_PrinterSectionLabel"), printerBox);
         printerBox.SelectionChanged += (_, _) =>
         {
@@ -196,13 +199,8 @@ internal static class PrintPreviewSettingsPanelFactory
         {
             if (setPrintPreviewSettings is null)
                 return;
-            var fromText = fromBox.Text?.Trim();
-            var toText = toBox.Text?.Trim();
-            int? from = string.IsNullOrEmpty(fromText) ? null :
-                int.TryParse(fromText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fv) ? fv : null;
-            int? to = string.IsNullOrEmpty(toText) ? null :
-                int.TryParse(toText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tv) ? tv : null;
-            ApplySettings(currentSettings with { PageFrom = from, PageTo = to });
+            var pageRange = PrintPreviewSettingsPanelPlanner.CreatePageRangePlan(fromBox.Text, toBox.Text);
+            ApplySettings(currentSettings with { PageFrom = pageRange.FromPage, PageTo = pageRange.ToPage });
         }
 
         fromBox.TextChanged += (_, _) => ApplyPageRange();
@@ -392,42 +390,4 @@ internal static class PrintPreviewSettingsPanelFactory
         return panel;
     }
 
-    private static void PopulatePrinterBox(ComboBox printerBox)
-    {
-        try
-        {
-            using var server = new LocalPrintServer();
-            foreach (var queue in server.GetPrintQueues())
-                printerBox.Items.Add(queue);
-
-            if (printerBox.Items.Count > 0)
-            {
-                printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
-                printerBox.SelectedItem = null;
-                foreach (var item in printerBox.Items)
-                {
-                    if (item is not PrintQueue queue)
-                        continue;
-                    if (string.Equals(
-                            queue.FullName,
-                            server.DefaultPrintQueue.FullName,
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        printerBox.SelectedItem = queue;
-                        break;
-                    }
-                }
-                if (printerBox.SelectedItem is null)
-                    printerBox.SelectedIndex = 0;
-                return;
-            }
-        }
-        catch (PrintSystemException)
-        {
-        }
-
-        printerBox.IsEnabled = false;
-        printerBox.ToolTip = UiText.Get("PrintPreview_NoInstalledPrintersToolTip");
-        AutomationProperties.SetHelpText(printerBox, UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
-    }
 }

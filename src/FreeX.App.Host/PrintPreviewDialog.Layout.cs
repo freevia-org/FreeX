@@ -158,6 +158,39 @@ public sealed partial class PrintPreviewDialog : Window
         };
     }
 
+    private static Button CreateToolbarButton(
+        PrintPreviewToolbarCommand command,
+        Thickness padding,
+        bool stripAccessKeyMarker = false,
+        bool isCancel = false) =>
+        CreateToolbarButton(
+            PrintPreviewDialogPlanner.CreateToolbarCommandPlan(command),
+            padding,
+            stripAccessKeyMarker,
+            isCancel);
+
+    private static Button CreateToolbarButton(
+        PrintPreviewToolbarCommandPlan plan,
+        Thickness padding,
+        bool stripAccessKeyMarker = false,
+        bool isCancel = false)
+    {
+        var content = UiText.Get(plan.ContentResourceKey);
+        var button = new Button
+        {
+            Content = stripAccessKeyMarker
+                ? content.Replace("_", string.Empty, StringComparison.Ordinal)
+                : content,
+            Padding = padding,
+            IsCancel = isCancel
+        };
+        if (plan.ToolTipResourceKey is not null)
+            button.ToolTip = UiText.Get(plan.ToolTipResourceKey);
+
+        SetToolbarAutomation(button, plan);
+        return button;
+    }
+
     private static PrintControls CreatePrintControls()
     {
         var printerBox = new ComboBox
@@ -169,7 +202,10 @@ public sealed partial class PrintPreviewDialog : Window
         };
         AutomationProperties.SetName(printerBox, UiText.Get("PrintPreview_PrinterAutomationName"));
         AutomationProperties.SetHelpText(printerBox, UiText.Get("PrintPreview_PrinterHelpText"));
-        PopulatePrinterBox(printerBox);
+        WpfPrintPreviewToolbarPlanner.PopulatePrinterBox(
+            printerBox,
+            UiText.Get("PrintPreview_NoInstalledPrintersToolTip"),
+            UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
 
         var copiesBox = new TextBox
         {
@@ -216,27 +252,28 @@ public sealed partial class PrintPreviewDialog : Window
         AutomationProperties.SetName(statusText, UiText.Get("PrintPreview_StatusAutomationName"));
         AutomationProperties.SetHelpText(statusText, UiText.Get("PrintPreview_StatusHelpText"));
 
+        var printButton = CreatePrintButton();
+        var closeButton = CreateToolbarButton(
+            PrintPreviewToolbarCommand.Close,
+            new Thickness(12, 4, 12, 4),
+            isCancel: true);
+
+        return new PrintControls(printerBox, copiesBox, collatedBox, sidesBox, statusText, printButton, closeButton);
+    }
+
+    private static Button CreatePrintButton()
+    {
+        var plan = PrintPreviewDialogPlanner.CreateToolbarCommandPlan(PrintPreviewToolbarCommand.Print);
         var printButton = new Button
         {
             // Strip the mnemonic marker so the toolbar shows "Print..." not "_Print...".
             Content = UiText.Get("PrintPreview_PrintButton").Replace("_", string.Empty, StringComparison.Ordinal),
             Padding = new Thickness(12, 4, 12, 4),
-            ToolTip = UiText.Get("PrintPreview_PrintToolTip")
+            ToolTip = UiText.Get(plan.ToolTipResourceKey!)
         };
-        AutomationProperties.SetAutomationId(printButton, "PrintPreviewPrintButton");
-        AutomationProperties.SetName(printButton, UiText.Get("PrintPreview_PrintAutomationName"));
-        AutomationProperties.SetHelpText(printButton, UiText.Get("PrintPreview_PrintHelpText"));
+        SetToolbarAutomation(printButton, plan);
 
-        var closeButton = new Button
-        {
-            Content = UiText.Get("PrintPreview_CloseButton"),
-            Padding = new Thickness(12, 4, 12, 4),
-            IsCancel = true,
-            ToolTip = UiText.Get("PrintPreview_CloseToolTip")
-        };
-        SetToolbarAutomation(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId, UiText.Get("PrintPreview_CloseAutomationName"), UiText.Get("PrintPreview_CloseHelpText"));
-
-        return new PrintControls(printerBox, copiesBox, collatedBox, sidesBox, statusText, printButton, closeButton);
+        return printButton;
     }
 
     private void WirePrintCommand(
@@ -389,16 +426,16 @@ public sealed partial class PrintPreviewDialog : Window
             toPageBox.IsEnabled = enabled;
         }
 
-        allPagesButton.Checked += (_, _) => selectPageRangeMode(PrintPreviewPageRangeMode.AllPages);
-        currentPageButton.Checked += (_, _) => selectPageRangeMode(PrintPreviewPageRangeMode.CurrentPage);
-        pagesButton.Checked += (_, _) =>
+        void ApplyPageRangeSelection(PrintPreviewPageRangeMode mode)
         {
-            selectPageRangeMode(PrintPreviewPageRangeMode.Pages);
-            SetPageRangeBoxesEnabled(true);
-        };
-        allPagesButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(pagesButton.IsChecked == true);
-        currentPageButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(pagesButton.IsChecked == true);
-        pagesButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(false);
+            var selectionPlan = PrintPreviewToolbarStatePlanner.CreatePageRangeSelectionPlan(mode);
+            selectPageRangeMode(selectionPlan.Mode);
+            SetPageRangeBoxesEnabled(selectionPlan.PageBoxesEnabled);
+        }
+
+        allPagesButton.Checked += (_, _) => ApplyPageRangeSelection(PrintPreviewPageRangeMode.AllPages);
+        currentPageButton.Checked += (_, _) => ApplyPageRangeSelection(PrintPreviewPageRangeMode.CurrentPage);
+        pagesButton.Checked += (_, _) => ApplyPageRangeSelection(PrintPreviewPageRangeMode.Pages);
         AutomationProperties.SetName(allPagesButton, UiText.Get("PrintPreview_AllPagesAutomationName"));
         AutomationProperties.SetName(currentPageButton, UiText.Get("PrintPreview_CurrentPageAutomationName"));
         AutomationProperties.SetName(pagesButton, UiText.Get("PrintPreview_PagesAutomationName"));
@@ -427,41 +464,11 @@ public sealed partial class PrintPreviewDialog : Window
 
     private NavigationControls CreateNavigationControls(DocumentViewer viewer, Func<int> totalPagesAccessor)
     {
-        var firstButton = new Button
-        {
-            Content = UiText.Get("PrintPreview_FirstPageButton"),
-            Padding = new Thickness(10, 4, 10, 4),
-            Command = NavigationCommands.FirstPage,
-            CommandTarget = viewer
-        };
-        SetToolbarAutomation(firstButton, "PrintPreviewFirstPageButton", UiText.Get("PrintPreview_FirstPageAutomationName"), UiText.Get("PrintPreview_FirstPageHelpText"));
-
-        var previousButton = new Button
-        {
-            Content = UiText.Get("PrintPreview_PreviousPageButton"),
-            Padding = new Thickness(10, 4, 10, 4),
-            Command = NavigationCommands.PreviousPage,
-            CommandTarget = viewer
-        };
-        SetToolbarAutomation(previousButton, "PrintPreviewPreviousPageButton", UiText.Get("PrintPreview_PreviousPageAutomationName"), UiText.Get("PrintPreview_PreviousPageHelpText"));
-
-        var nextButton = new Button
-        {
-            Content = UiText.Get("PrintPreview_NextPageButton"),
-            Padding = new Thickness(10, 4, 10, 4),
-            Command = NavigationCommands.NextPage,
-            CommandTarget = viewer
-        };
-        SetToolbarAutomation(nextButton, "PrintPreviewNextPageButton", UiText.Get("PrintPreview_NextPageAutomationName"), UiText.Get("PrintPreview_NextPageHelpText"));
-
-        var lastButton = new Button
-        {
-            Content = UiText.Get("PrintPreview_LastPageButton"),
-            Padding = new Thickness(10, 4, 10, 4),
-            Command = NavigationCommands.LastPage,
-            CommandTarget = viewer
-        };
-        SetToolbarAutomation(lastButton, "PrintPreviewLastPageButton", UiText.Get("PrintPreview_LastPageAutomationName"), UiText.Get("PrintPreview_LastPageHelpText"));
+        var navigationPlans = PrintPreviewDialogPlanner.CreateNavigationCommandPlans();
+        var firstButton = CreateNavigationButton(navigationPlans[0], NavigationCommands.FirstPage, viewer);
+        var previousButton = CreateNavigationButton(navigationPlans[1], NavigationCommands.PreviousPage, viewer);
+        var nextButton = CreateNavigationButton(navigationPlans[2], NavigationCommands.NextPage, viewer);
+        var lastButton = CreateNavigationButton(navigationPlans[3], NavigationCommands.LastPage, viewer);
 
         var pageNumberBox = new TextBox
         {
@@ -494,14 +501,26 @@ public sealed partial class PrintPreviewDialog : Window
                 e.Handled = true;
             }));
         pageNumberBox.InputBindings.Add(new KeyBinding(NavigationCommands.GoToPage, new KeyGesture(Key.Enter)));
-        AutomationProperties.SetAutomationId(pageNumberBox, "PrintPreviewPageNumberBox");
+        AutomationProperties.SetAutomationId(pageNumberBox, PrintPreviewDialogPlanner.PageNumberBoxAutomationId);
         AutomationProperties.SetName(pageNumberBox, UiText.Get("PrintPreview_PageNumberAutomationName"));
         AutomationProperties.SetHelpText(pageNumberBox, UiText.Get("PrintPreview_PageNumberHelpText"));
-        AutomationProperties.SetAutomationId(pageStatusText, "PrintPreviewPageStatusText");
+        AutomationProperties.SetAutomationId(pageStatusText, PrintPreviewDialogPlanner.PageStatusTextAutomationId);
         AutomationProperties.SetName(pageStatusText, UiText.Get("PrintPreview_PageStatusAutomationName"));
         AutomationProperties.SetHelpText(pageStatusText, UiText.Get("PrintPreview_PageStatusHelpText"));
 
         return new NavigationControls(firstButton, previousButton, nextButton, lastButton, pageNumberBox, pageStatusText);
+    }
+
+    private static Button CreateNavigationButton(
+        PrintPreviewToolbarCommandPlan plan,
+        ICommand routedCommand,
+        DocumentViewer viewer)
+    {
+        var button = CreateToolbarButton(plan, new Thickness(10, 4, 10, 4));
+        button.Command = routedCommand;
+        button.CommandTarget = viewer;
+
+        return button;
     }
 
     private static void AddNavigationControlsToToolbar(ToolBar toolbar, NavigationControls controls)
@@ -530,7 +549,7 @@ public sealed partial class PrintPreviewDialog : Window
             Width = 82,
             SelectedIndex = PrintPreviewToolbarStatePlanner.DefaultZoomOptionIndex
         };
-        AutomationProperties.SetAutomationId(zoomBox, "PrintPreviewZoomBox");
+        AutomationProperties.SetAutomationId(zoomBox, PrintPreviewDialogPlanner.ZoomBoxAutomationId);
         AutomationProperties.SetName(zoomBox, UiText.Get("PrintPreview_ZoomAutomationName"));
         AutomationProperties.SetHelpText(zoomBox, UiText.Get("PrintPreview_ZoomHelpText"));
         foreach (var option in zoomOptions)
@@ -564,28 +583,12 @@ public sealed partial class PrintPreviewDialog : Window
 
     private static Button CreateMarginsButton()
     {
-        var marginsButton = new Button
-        {
-            Content = UiText.Get("PrintPreview_MarginsButton"),
-            Padding = new Thickness(10, 4, 10, 4),
-            ToolTip = UiText.Get("PrintPreview_MarginsToolTip")
-        };
-        SetToolbarAutomation(marginsButton, "PrintPreviewMarginsButton", UiText.Get("PrintPreview_MarginsAutomationName"), UiText.Get("PrintPreview_MarginsHelpText"));
-
-        return marginsButton;
+        return CreateToolbarButton(PrintPreviewToolbarCommand.Margins, new Thickness(10, 4, 10, 4));
     }
 
     private static Button CreatePageSetupButton()
     {
-        var pageSetupButton = new Button
-        {
-            Content = UiText.Get("PrintPreview_PageSetupButton"),
-            Padding = new Thickness(10, 4, 10, 4),
-            ToolTip = UiText.Get("PrintPreview_PageSetupToolTip")
-        };
-        SetToolbarAutomation(pageSetupButton, "PrintPreviewPageSetupButton", UiText.Get("PrintPreview_PageSetupAutomationName"), UiText.Get("PrintPreview_PageSetupHelpText"));
-
-        return pageSetupButton;
+        return CreateToolbarButton(PrintPreviewToolbarCommand.PageSetup, new Thickness(10, 4, 10, 4));
     }
 
     private static TextBlock CreateSettingsSummaryText(PrintSettingsPlan settings)
@@ -598,7 +601,7 @@ public sealed partial class PrintPreviewDialog : Window
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 620
         };
-        AutomationProperties.SetAutomationId(settingsSummaryText, "PrintPreviewSettingsSummaryText");
+        AutomationProperties.SetAutomationId(settingsSummaryText, PrintPreviewDialogPlanner.SettingsSummaryTextAutomationId);
         AutomationProperties.SetName(settingsSummaryText, UiText.Get("PrintPreview_SettingsSummaryAutomationName"));
         AutomationProperties.SetHelpText(settingsSummaryText, UiText.Get("PrintPreview_SettingsSummaryHelpText"));
 
@@ -649,6 +652,13 @@ public sealed partial class PrintPreviewDialog : Window
         AutomationProperties.SetName(control, name);
         AutomationProperties.SetHelpText(control, helpText);
     }
+
+    private static void SetToolbarAutomation(Control control, PrintPreviewToolbarCommandPlan plan) =>
+        SetToolbarAutomation(
+            control,
+            plan.AutomationId,
+            UiText.Get(plan.AutomationNameResourceKey),
+            UiText.Get(plan.HelpTextResourceKey));
 
     private sealed class PrintControls(
         ComboBox printerBox,

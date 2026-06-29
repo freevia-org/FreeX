@@ -46,4 +46,36 @@ public sealed class PrintPreviewDialogPlannerTests
         PrintPreviewDialogPlanner.TryParsePageNumber(text, totalPages, out var pageNumber).Should().Be(expectedResult);
         pageNumber.Should().Be(expectedPage);
     }
+
+    [Fact]
+    public void CreateNavigationCommandPlans_ProvidesStableToolbarOrder()
+    {
+        var plans = PrintPreviewDialogPlanner.CreateNavigationCommandPlans();
+
+        plans.Select(plan => plan.Command).Should().Equal(
+            PrintPreviewToolbarCommand.FirstPage,
+            PrintPreviewToolbarCommand.PreviousPage,
+            PrintPreviewToolbarCommand.NextPage,
+            PrintPreviewToolbarCommand.LastPage);
+        plans.Select(plan => plan.AutomationId).Should().Equal(
+            PrintPreviewDialogPlanner.FirstPageButtonAutomationId,
+            PrintPreviewDialogPlanner.PreviousPageButtonAutomationId,
+            PrintPreviewDialogPlanner.NextPageButtonAutomationId,
+            PrintPreviewDialogPlanner.LastPageButtonAutomationId);
+    }
+
+    [Fact]
+    public void CreateToolbarCommandPlan_ProvidesSharedChromeMetadata()
+    {
+        var print = PrintPreviewDialogPlanner.CreateToolbarCommandPlan(PrintPreviewToolbarCommand.Print);
+        var margins = PrintPreviewDialogPlanner.CreateToolbarCommandPlan(PrintPreviewToolbarCommand.Margins);
+        var close = PrintPreviewDialogPlanner.CreateToolbarCommandPlan(PrintPreviewToolbarCommand.Close);
+
+        print.AutomationId.Should().Be(PrintPreviewDialogPlanner.PrintButtonAutomationId);
+        print.ContentResourceKey.Should().Be("PrintPreview_PrintButton");
+        print.ToolTipResourceKey.Should().Be("PrintPreview_PrintToolTip");
+        margins.AutomationNameResourceKey.Should().Be("PrintPreview_MarginsAutomationName");
+        close.AutomationId.Should().Be(PrintPreviewDialogPlanner.CloseButtonAutomationId);
+        close.HelpTextResourceKey.Should().Be("PrintPreview_CloseHelpText");
+    }
 }
