@@ -1,3 +1,5 @@
+using FreeW.App.Localization;
+
 namespace FreeW.Ribbon.Definitions;
 
 public static class FreeWRibbonDefinitionData
@@ -11,19 +13,19 @@ public static class FreeWRibbonDefinitionData
     public static readonly string[] FloatSizes =
         ["36", "54", "72", "90", "108", "144", "180", "216", "288", "360", "432"];
 
-    public static readonly (string CommandId, string Label)[] FontColors =
+    public static (string CommandId, string Label)[] FontColors =>
     [
-        ("freew.font-color.automatic", "Automatic"),
-        ("freew.font-color.black", "Black"),
-        ("freew.font-color.dark-red", "Dark Red"),
-        ("freew.font-color.red", "Red"),
-        ("freew.font-color.orange", "Orange"),
-        ("freew.font-color.yellow", "Yellow"),
-        ("freew.font-color.green", "Green"),
-        ("freew.font-color.blue", "Blue"),
-        ("freew.font-color.dark-blue", "Dark Blue"),
-        ("freew.font-color.purple", "Purple"),
-        ("freew.font-color.white", "White"),
+        ("freew.font-color.automatic", Loc.Get("Ribbon_Palette_FontColor_Automatic_Label")),
+        ("freew.font-color.black", Loc.Get("Ribbon_Palette_FontColor_Black_Label")),
+        ("freew.font-color.dark-red", Loc.Get("Ribbon_Palette_FontColor_DarkRed_Label")),
+        ("freew.font-color.red", Loc.Get("Ribbon_Palette_FontColor_Red_Label")),
+        ("freew.font-color.orange", Loc.Get("Ribbon_Palette_FontColor_Orange_Label")),
+        ("freew.font-color.yellow", Loc.Get("Ribbon_Palette_FontColor_Yellow_Label")),
+        ("freew.font-color.green", Loc.Get("Ribbon_Palette_FontColor_Green_Label")),
+        ("freew.font-color.blue", Loc.Get("Ribbon_Palette_FontColor_Blue_Label")),
+        ("freew.font-color.dark-blue", Loc.Get("Ribbon_Palette_FontColor_DarkBlue_Label")),
+        ("freew.font-color.purple", Loc.Get("Ribbon_Palette_FontColor_Purple_Label")),
+        ("freew.font-color.white", Loc.Get("Ribbon_Palette_FontColor_White_Label")),
     ];
 
     public static readonly (string CommandId, string Label)[] PageColors =

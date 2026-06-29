@@ -15,7 +15,7 @@ internal static class FreeWRibbon
 
     public static readonly string[] FloatSizes = FreeWRibbonDefinitionData.FloatSizes;
 
-    internal static readonly (string CommandId, string Label)[] FontColors = FreeWRibbonDefinitionData.FontColors;
+    internal static (string CommandId, string Label)[] FontColors => FreeWRibbonDefinitionData.FontColors;
 
     internal static readonly (string CommandId, string Label)[] PageColors = FreeWRibbonDefinitionData.PageColors;
 
