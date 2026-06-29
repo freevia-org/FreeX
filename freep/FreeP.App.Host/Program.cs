@@ -39,6 +39,8 @@ public static class Program
                     : BrandThemes.FreeP;
                 ActiveTheme = theme;
                 WpfThemeApplier.Apply(Application.Current, theme, "FreeP");
+                AppLocalization.ApplyAppLanguage(options.UiLanguage);
+                AppLocalization.ApplyCurrentCultureToWpf();
                 return new MainWindow(options, optionsStore);
             })
         {

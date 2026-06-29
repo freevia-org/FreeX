@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using FreeP.App.Localization;
 using FreeP.Core.IO;
 
 namespace FreeP.App.Host;
@@ -33,6 +34,6 @@ public sealed class FreePOptions : INormalizableApplicationOptions, IApplication
     {
         RecentFilesCap = ApplicationOptionsNormalizer.NormalizeRecentFilesCap(RecentFilesCap);
         DefaultSaveFormat = ApplicationOptionsNormalizer.NormalizeDefaultSaveFormat(DefaultSaveFormat, FxpDefaultFormat);
-        UiLanguage = ApplicationOptionsNormalizer.NormalizeUiLanguage(UiLanguage);
+        UiLanguage = AppLanguageCatalog.NormalizeCultureName(UiLanguage);
     }
 }
