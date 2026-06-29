@@ -20,8 +20,26 @@ public static class DrawingMlUnits
     /// <summary>EMU per inch (DrawingML/ECMA-376). 914 400 EMU = 1 in.</summary>
     public const long EmuPerInch = 914400;
 
+    /// <summary>EMU per DIP pixel at 96 DPI. 9 525 EMU = 1 px.</summary>
+    public const long EmuPerPixel = 9525;
+
     /// <summary>Converts a point value to the nearest integer number of EMU.</summary>
     public static long PointsToEmu(double points) => (long)Math.Round(points * EmuPerPoint);
+
+    /// <summary>Converts a DIP pixel value to the nearest integer number of EMU.</summary>
+    public static long PixelsToEmu(double pixels) => (long)Math.Round(Math.Max(0, pixels) * EmuPerPixel);
+
+    /// <summary>Converts an EMU value to DIP pixels at 96 DPI.</summary>
+    public static double EmuToPixels(double emus) => emus / EmuPerPixel;
+
+    /// <summary>
+    /// Parses an EMU string attribute and converts to DIP pixels at 96 DPI.
+    /// Returns 0 when the value is null, empty, or not a valid number.
+    /// </summary>
+    public static double EmuToPixels(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var emus)
+            ? EmuToPixels(emus)
+            : 0;
 
     /// <summary>
     /// Parses an EMU string attribute and converts to points.

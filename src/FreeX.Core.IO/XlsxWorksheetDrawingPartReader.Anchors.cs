@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -118,8 +117,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (!TryReadAnchorCoordinate(from, spreadsheetDrawingNs, out var fromRow, out var fromCol, out var fromRowOffset, out var fromColOffset))
             return null;
 
-        var width = EmusToPixels(ext.Attribute("cx")?.Value);
-        var height = EmusToPixels(ext.Attribute("cy")?.Value);
+        var width = DrawingMlUnits.EmuToPixels(ext.Attribute("cx")?.Value);
+        var height = DrawingMlUnits.EmuToPixels(ext.Attribute("cy")?.Value);
         if (width <= 0 || height <= 0)
             return null;
 
@@ -147,10 +146,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (pos is null || ext is null)
             return null;
 
-        var left = EmusToPixels(pos.Attribute("x")?.Value);
-        var top = EmusToPixels(pos.Attribute("y")?.Value);
-        var width = EmusToPixels(ext.Attribute("cx")?.Value);
-        var height = EmusToPixels(ext.Attribute("cy")?.Value);
+        var left = DrawingMlUnits.EmuToPixels(pos.Attribute("x")?.Value);
+        var top = DrawingMlUnits.EmuToPixels(pos.Attribute("y")?.Value);
+        var width = DrawingMlUnits.EmuToPixels(ext.Attribute("cx")?.Value);
+        var height = DrawingMlUnits.EmuToPixels(ext.Attribute("cy")?.Value);
         if (width <= 0 || height <= 0)
             return null;
 
@@ -180,14 +179,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
     {
         rowZeroBased = 0;
         columnZeroBased = 0;
-        rowOffset = EmusToPixels(marker.Element(spreadsheetDrawingNs + "rowOff")?.Value);
-        columnOffset = EmusToPixels(marker.Element(spreadsheetDrawingNs + "colOff")?.Value);
+        rowOffset = DrawingMlUnits.EmuToPixels(marker.Element(spreadsheetDrawingNs + "rowOff")?.Value);
+        columnOffset = DrawingMlUnits.EmuToPixels(marker.Element(spreadsheetDrawingNs + "colOff")?.Value);
         return uint.TryParse(marker.Element(spreadsheetDrawingNs + "row")?.Value, out rowZeroBased) &&
                uint.TryParse(marker.Element(spreadsheetDrawingNs + "col")?.Value, out columnZeroBased);
     }
-
-    private static double EmusToPixels(string? value) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var emus)
-            ? emus / 9525.0
-            : 0;
 }
