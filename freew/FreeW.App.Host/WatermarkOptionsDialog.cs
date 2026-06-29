@@ -1,8 +1,9 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Microsoft.Win32;
 
@@ -57,37 +58,34 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private WatermarkOptionsDialog(Window? owner, WatermarkOptions? current)
     {
         Owner = owner;
-        Title = "Printed Watermark";
+        Title = WatermarkOptionsDialogPlanner.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var isPicture = current?.IsPicture ?? false;
-        var seed = current ?? new WatermarkOptions("DRAFT");
+        var state = WatermarkOptionsDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
 
         // Mode radios.
-        _textRadio    = new RadioButton { Content = "Text watermark",    GroupName = "WmMode", IsChecked = !isPicture };
-        _pictureRadio = new RadioButton { Content = "Picture watermark", GroupName = "WmMode", IsChecked = isPicture };
+        _textRadio    = new RadioButton { Content = "Text watermark",    GroupName = "WmMode", IsChecked = !state.IsPicture };
+        _pictureRadio = new RadioButton { Content = "Picture watermark", GroupName = "WmMode", IsChecked = state.IsPicture };
 
         // Text controls.
-        _textBox            = new TextBox { Text = isPicture ? "DRAFT" : seed.Text, MinWidth = 200 };
-        _fontBox            = new TextBox { Text = seed.FontFamily, MinWidth = 150 };
-        _colorBox           = new TextBox { Text = seed.FontColorHex, MinWidth = 80 };
-        _diagonalRadio      = new RadioButton { Content = "Diagonal",   IsChecked = seed.Layout == WatermarkLayout.Diagonal, GroupName = "WmLayout" };
-        _horizontalRadio    = new RadioButton { Content = "Horizontal", IsChecked = seed.Layout == WatermarkLayout.Horizontal, GroupName = "WmLayout" };
-        _semitransparentCheck = new CheckBox { Content = "Semitransparent", IsChecked = seed.Opacity < 1.0 };
+        _textBox            = new TextBox { Text = state.Text, MinWidth = 200 };
+        _fontBox            = new TextBox { Text = state.FontFamily, MinWidth = 150 };
+        _colorBox           = new TextBox { Text = state.FontColorHex, MinWidth = 80 };
+        _diagonalRadio      = new RadioButton { Content = "Diagonal",   IsChecked = !state.TextIsHorizontal, GroupName = "WmLayout" };
+        _horizontalRadio    = new RadioButton { Content = "Horizontal", IsChecked = state.TextIsHorizontal, GroupName = "WmLayout" };
+        _semitransparentCheck = new CheckBox { Content = "Semitransparent", IsChecked = state.TextIsSemitransparent };
 
         // Picture controls.
         _pendingImageBytes   = current?.ImageBytes;
-        _pathBox             = new TextBox { Text = "(choose an image file…)", MinWidth = 200, IsReadOnly = true };
-        if (_pendingImageBytes is { Length: > 0 })
-            _pathBox.Text = $"(image loaded — {_pendingImageBytes.Length / 1024} KB)";
-        _scaleBox            = new TextBox { Text = (current?.ScalePct ?? 0).ToString(), MinWidth = 80 };
-        _washoutCheck        = new CheckBox { Content = "Washout (semitransparent)", IsChecked = isPicture ? seed.Opacity < 1.0 : true };
-        _picDiagonalRadio    = new RadioButton { Content = "Diagonal",   IsChecked = seed.Layout == WatermarkLayout.Diagonal, GroupName = "PicLayout" };
-        _picHorizontalRadio  = new RadioButton { Content = "Horizontal", IsChecked = seed.Layout == WatermarkLayout.Horizontal, GroupName = "PicLayout" };
+        _pathBox             = new TextBox { Text = state.PicturePathText, MinWidth = 200, IsReadOnly = true };
+        _scaleBox            = new TextBox { Text = state.ScaleText, MinWidth = 80 };
+        _washoutCheck        = new CheckBox { Content = "Washout (semitransparent)", IsChecked = state.PictureWashout };
+        _picDiagonalRadio    = new RadioButton { Content = "Diagonal",   IsChecked = !state.PictureIsHorizontal, GroupName = "PicLayout" };
+        _picHorizontalRadio  = new RadioButton { Content = "Horizontal", IsChecked = state.PictureIsHorizontal, GroupName = "PicLayout" };
 
         Content = BuildContent();
         SyncPanelVisibility();
@@ -212,7 +210,9 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         try
         {
             _pendingImageBytes = File.ReadAllBytes(dlg.FileName);
-            _pathBox.Text = $"{Path.GetFileName(dlg.FileName)} ({_pendingImageBytes.Length / 1024} KB)";
+            _pathBox.Text = WatermarkOptionsDialogPlanner.FormatPickedImageLabel(
+                Path.GetFileName(dlg.FileName),
+                _pendingImageBytes.Length);
         }
         catch (Exception ex)
         {
@@ -230,76 +230,62 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void AcceptText()
     {
-        var text = _textBox.Text.Trim();
-        if (string.IsNullOrEmpty(text))
+        if (!WatermarkOptionsDialogPlanner.TryBuildTextResult(
+                new WatermarkTextDialogInput(
+                    _textBox.Text,
+                    _fontBox.Text,
+                    _colorBox.Text,
+                    _horizontalRadio.IsChecked == true,
+                    _semitransparentCheck.IsChecked == true),
+                out var result,
+                out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter watermark text, or click 'Remove Watermark' to clear.", Title);
-            _textBox.Focus();
+            DialogMessageHelper.ShowWarning(this, validation?.Message ?? WatermarkOptionsDialogPlanner.TextValidationMessage, Title);
+            FocusValidationTarget(validation?.Target);
             return;
         }
 
-        var font = _fontBox.Text.Trim();
-        if (string.IsNullOrEmpty(font))
-            font = "Calibri";
-
-        var color = _colorBox.Text.Trim();
-        if (!color.StartsWith('#'))
-            color = "#" + color;
-        try { ColorConverter.ConvertFromString(color); }
-        catch
-        {
-            DialogMessageHelper.ShowWarning(this, "Enter a valid colour hex value (e.g. #808080).", Title);
-            _colorBox.Focus();
-            return;
-        }
-
-        var layout  = _horizontalRadio.IsChecked == true ? WatermarkLayout.Horizontal : WatermarkLayout.Diagonal;
-        var opacity = _semitransparentCheck.IsChecked == true ? 0.3 : 1.0;
-
-        _result = new WatermarkOptions(text)
-        {
-            FontFamily   = font,
-            FontColorHex = color,
-            Layout       = layout,
-            Opacity      = opacity,
-        };
+        _result = result;
         _accepted = true;
         Close();
     }
 
     private void AcceptPicture()
     {
-        if (_pendingImageBytes is not { Length: > 0 })
+        if (!WatermarkOptionsDialogPlanner.TryBuildPictureResult(
+                new WatermarkPictureDialogInput(
+                    _pendingImageBytes,
+                    _scaleBox.Text,
+                    _picHorizontalRadio.IsChecked == true,
+                    _washoutCheck.IsChecked == true),
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, "Select an image file for the picture watermark.", Title);
+            DialogMessageHelper.ShowWarning(this, validation?.Message ?? WatermarkOptionsDialogPlanner.ImageValidationMessage, Title);
+            FocusValidationTarget(validation?.Target);
             return;
         }
 
-        var scaleText = _scaleBox.Text.Trim();
-        if (!int.TryParse(scaleText, System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.CurrentCulture, out var scale)
-            || scale < 0 || scale > 500)
-        {
-            DialogMessageHelper.ShowWarning(this, "Scale must be 0 (Auto) or 1–500.", Title);
-            _scaleBox.Focus();
-            return;
-        }
-
-        var layout  = _picHorizontalRadio.IsChecked == true ? WatermarkLayout.Horizontal : WatermarkLayout.Diagonal;
-        var opacity = _washoutCheck.IsChecked == true ? 0.3 : 1.0;
-
-        // Use a placeholder text so the text fields round-trip without confusion.
-        _result = new WatermarkOptions(string.Empty)
-        {
-            FontFamily   = "Calibri",
-            FontColorHex = "#808080",
-            Layout       = layout,
-            Opacity      = opacity,
-            ImageBytes   = _pendingImageBytes,
-            ScalePct     = scale,
-        };
+        _result = result;
         _accepted = true;
         Close();
+    }
+
+    private void FocusValidationTarget(WatermarkDialogValidationTarget? target)
+    {
+        switch (target)
+        {
+            case WatermarkDialogValidationTarget.Text:
+                _textBox.Focus();
+                break;
+            case WatermarkDialogValidationTarget.Color:
+                _colorBox.Focus();
+                break;
+            case WatermarkDialogValidationTarget.Scale:
+                _scaleBox.Focus();
+                break;
+        }
     }
 
     /// <summary>
