@@ -45,6 +45,22 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
+    public void ChartAreaLegendDialogResult_DelegatesOptionsDefaultsAndParsingToSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ChartFormatDialogs.cs");
+
+        source.Should().Contain("public ChartAreaFormatInput ToInput()");
+        source.Should().Contain("ChartAreaFormatPlanner.Plan(ToInput())");
+        source.Should().Contain("ChartAreaFormatPlanner.Read(chart)");
+        source.Should().Contain("ChartAreaFormatPlanner.Normalize(new ChartAreaFormatInput(");
+        source.Should().Contain("ChartAreaFormatPlanner.GetLegendPositionChoices()");
+        source.Should().Contain("ChartAreaFormatPlanner.TryParseDialogInput(");
+        source.Should().NotContain("TryReadOptionalColor(");
+        source.Should().NotContain("TryReadClampedDouble(");
+        source.Should().NotContain("FiniteOrDefault(");
+    }
+
+    [Fact]
     public void ChartAreaLegendDialog_FromChart_UsesCurrentSettingsAndClampsNumbers()
     {
         var chart = new ChartModel
@@ -91,16 +107,17 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartFormatDialogs.cs");
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _chartAreaFillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaFillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaBorderBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAreaLegend_InvalidPlotAreaBorderWidthMessage\"), _plotAreaBorderThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendTextBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendFillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendBorderBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAreaLegend_InvalidLegendBorderWidthMessage\"), _legendBorderThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAreaLegend_InvalidLegendFontSizeMessage\"), _legendFontSizeBox);");
+        source.Should().Contain("_ => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _chartAreaFillBox)");
+        source.Should().Contain("ChartAreaFormatParseIssue.PlotAreaFillColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaFillBox)");
+        source.Should().Contain("ChartAreaFormatParseIssue.PlotAreaBorderColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaBorderBox)");
+        source.Should().Contain("ChartAreaFormatParseIssue.PlotAreaBorderThickness => (UiText.Get(\"ChartAreaLegend_InvalidPlotAreaBorderWidthMessage\"), _plotAreaBorderThicknessBox)");
+        source.Should().Contain("ChartAreaFormatParseIssue.LegendTextColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendTextBox)");
+        source.Should().Contain("ChartAreaFormatParseIssue.LegendFillColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendFillBox)");
+        source.Should().Contain("ChartAreaFormatParseIssue.LegendBorderColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendBorderBox)");
+        source.Should().Contain("ChartAreaFormatParseIssue.LegendBorderThickness => (UiText.Get(\"ChartAreaLegend_InvalidLegendBorderWidthMessage\"), _legendBorderThicknessBox)");
+        source.Should().Contain("ChartAreaFormatParseIssue.LegendFontSize => (UiText.Get(\"ChartAreaLegend_InvalidLegendFontSizeMessage\"), _legendFontSizeBox)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("private void ShowPlannerParseWarning(ChartAreaFormatParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");

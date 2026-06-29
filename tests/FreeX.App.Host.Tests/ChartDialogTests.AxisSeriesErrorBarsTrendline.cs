@@ -348,7 +348,13 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("public ChartSeriesFormatInput ToInput()");
         source.Should().Contain("ChartSeriesFormatPlanner.Plan(chart, ToInput())");
         source.Should().Contain("ChartSeriesFormatPlanner.ReadDefault(chart)");
+        source.Should().Contain("ChartSeriesFormatPlanner.Normalize(new ChartSeriesFormatInput(");
+        source.Should().Contain("ChartSeriesFormatPlanner.GetDashStyleChoices()");
+        source.Should().Contain("ChartSeriesFormatPlanner.GetMarkerStyleChoices()");
+        source.Should().Contain("ChartSeriesFormatPlanner.TryParseDialogInput(");
         source.Should().NotContain("IndexOfSeriesFormat");
+        source.Should().NotContain("TryReadOptionalColor(");
+        source.Should().NotContain("TryReadNullablePositiveDouble(");
     }
 
     [Fact]
@@ -367,11 +373,12 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartSeriesFormatDialog.cs");
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _strokeBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartSeriesFormat_InvalidLineWidthMessage\"), _strokeThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartSeriesFormat_InvalidMarkerSizeMessage\"), _markerSizeBox);");
+        source.Should().Contain("_ => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox)");
+        source.Should().Contain("ChartSeriesFormatParseIssue.StrokeColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _strokeBox)");
+        source.Should().Contain("ChartSeriesFormatParseIssue.StrokeThickness => (UiText.Get(\"ChartSeriesFormat_InvalidLineWidthMessage\"), _strokeThicknessBox)");
+        source.Should().Contain("ChartSeriesFormatParseIssue.MarkerSize => (UiText.Get(\"ChartSeriesFormat_InvalidMarkerSizeMessage\"), _markerSizeBox)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("private void ShowPlannerParseWarning(ChartSeriesFormatParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");

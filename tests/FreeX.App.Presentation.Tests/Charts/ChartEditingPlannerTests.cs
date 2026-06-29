@@ -896,6 +896,59 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void SeriesFormat_TryParseDialogInput_ParsesColorsOptionalStylesAndDefaultsSeriesIndex()
+    {
+        ChartSeriesFormatPlanner.TryParseDialogInput(
+                seriesIndex: -2,
+                fillColorText: "#0A141E",
+                strokeColorText: "none",
+                strokeThicknessText: "2.5",
+                selectedDashStyle: ChartLineDashStyle.Dash,
+                selectedMarkerStyle: ChartMarkerStyle.Diamond,
+                markerSizeText: "9",
+                out var input,
+                out var issue)
+            .Should().BeTrue();
+
+        issue.Should().Be(ChartSeriesFormatParseIssue.None);
+        input.Should().Be(new ChartSeriesFormatInput(
+            0,
+            new CellColor(10, 20, 30),
+            null,
+            2.5,
+            ChartMarkerStyle.Diamond,
+            9,
+            ChartLineDashStyle.Dash));
+    }
+
+    [Theory]
+    [InlineData("bad", "none", "", "", ChartSeriesFormatParseIssue.FillColor)]
+    [InlineData("none", "bad", "", "", ChartSeriesFormatParseIssue.StrokeColor)]
+    [InlineData("none", "none", "0", "", ChartSeriesFormatParseIssue.StrokeThickness)]
+    [InlineData("none", "none", "", "-1", ChartSeriesFormatParseIssue.MarkerSize)]
+    public void SeriesFormat_TryParseDialogInput_ReportsFirstInvalidField(
+        string fillColorText,
+        string strokeColorText,
+        string strokeThicknessText,
+        string markerSizeText,
+        ChartSeriesFormatParseIssue expectedIssue)
+    {
+        ChartSeriesFormatPlanner.TryParseDialogInput(
+                0,
+                fillColorText,
+                strokeColorText,
+                strokeThicknessText,
+                null,
+                null,
+                markerSizeText,
+                out _,
+                out var issue)
+            .Should().BeFalse();
+
+        issue.Should().Be(expectedIssue);
+    }
+
+    [Fact]
     public void SeriesFormat_Plan_ReplacesMatchingSeries_AndPreservesOthers()
     {
         var chart = new ChartModel { Type = ChartType.Line };
@@ -1399,7 +1452,105 @@ public sealed class ChartEditingPlannerTests
         ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, -1)).Should().NotBeNull();
         ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, 99)).Should().NotBeNull();
         ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, double.NaN)).Should().NotBeNull();
+        ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, 1.5, LegendBorderThickness: -1)).Should().NotBeNull();
+        ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, 1.5, LegendFontSize: 100)).Should().NotBeNull();
         ChartAreaFormatPlanner.Validate(new ChartAreaFormatInput(null, null, null, 1.5)).Should().BeNull();
+    }
+
+    [Fact]
+    public void ChartArea_Normalize_ClampsDialogDefaultsAndFallbacks()
+    {
+        var input = ChartAreaFormatPlanner.Normalize(new ChartAreaFormatInput(
+            null,
+            null,
+            null,
+            double.NaN,
+            LegendPosition: (ChartLegendPosition)999,
+            LegendBorderThickness: -4,
+            LegendFontSize: 100));
+
+        input.PlotAreaBorderThickness.Should().Be(1);
+        input.LegendPosition.Should().Be(ChartLegendPosition.Right);
+        input.LegendBorderThickness.Should().Be(0);
+        input.LegendFontSize.Should().Be(ChartAreaFormatPlanner.MaxLegendFontSize);
+    }
+
+    [Fact]
+    public void ChartArea_TryParseDialogInput_ParsesColorsAndLegendFields()
+    {
+        ChartAreaFormatPlanner.TryParseDialogInput(
+                chartAreaFillColorText: "#010203",
+                plotAreaFillColorText: "none",
+                plotAreaBorderColorText: "#040506",
+                plotAreaBorderThicknessText: "2.25",
+                showLegend: true,
+                selectedLegendPosition: ChartLegendPosition.Bottom,
+                legendOverlay: true,
+                legendTextColorText: "#070809",
+                legendFillColorText: "clear",
+                legendBorderColorText: "#0A0B0C",
+                legendBorderThicknessText: "1.25",
+                legendFontSizeText: "11",
+                out var input,
+                out var issue)
+            .Should().BeTrue();
+
+        issue.Should().Be(ChartAreaFormatParseIssue.None);
+        input.Should().Be(new ChartAreaFormatInput(
+            new CellColor(1, 2, 3),
+            null,
+            new CellColor(4, 5, 6),
+            2.25,
+            true,
+            ChartLegendPosition.Bottom,
+            true,
+            new CellColor(7, 8, 9),
+            null,
+            new CellColor(10, 11, 12),
+            1.25,
+            11));
+    }
+
+    [Theory]
+    [InlineData("bad", "none", "none", "1", "none", "none", "none", "0", "12", ChartAreaFormatParseIssue.ChartAreaFillColor)]
+    [InlineData("none", "bad", "none", "1", "none", "none", "none", "0", "12", ChartAreaFormatParseIssue.PlotAreaFillColor)]
+    [InlineData("none", "none", "bad", "1", "none", "none", "none", "0", "12", ChartAreaFormatParseIssue.PlotAreaBorderColor)]
+    [InlineData("none", "none", "none", "11", "none", "none", "none", "0", "12", ChartAreaFormatParseIssue.PlotAreaBorderThickness)]
+    [InlineData("none", "none", "none", "1", "bad", "none", "none", "0", "12", ChartAreaFormatParseIssue.LegendTextColor)]
+    [InlineData("none", "none", "none", "1", "none", "bad", "none", "0", "12", ChartAreaFormatParseIssue.LegendFillColor)]
+    [InlineData("none", "none", "none", "1", "none", "none", "bad", "0", "12", ChartAreaFormatParseIssue.LegendBorderColor)]
+    [InlineData("none", "none", "none", "1", "none", "none", "none", "11", "12", ChartAreaFormatParseIssue.LegendBorderThickness)]
+    [InlineData("none", "none", "none", "1", "none", "none", "none", "0", "100", ChartAreaFormatParseIssue.LegendFontSize)]
+    public void ChartArea_TryParseDialogInput_ReportsFirstInvalidField(
+        string chartAreaFillText,
+        string plotAreaFillText,
+        string plotAreaBorderText,
+        string plotAreaBorderThicknessText,
+        string legendTextColorText,
+        string legendFillColorText,
+        string legendBorderColorText,
+        string legendBorderThicknessText,
+        string legendFontSizeText,
+        ChartAreaFormatParseIssue expectedIssue)
+    {
+        ChartAreaFormatPlanner.TryParseDialogInput(
+                chartAreaFillText,
+                plotAreaFillText,
+                plotAreaBorderText,
+                plotAreaBorderThicknessText,
+                showLegend: true,
+                selectedLegendPosition: ChartLegendPosition.Right,
+                legendOverlay: false,
+                legendTextColorText,
+                legendFillColorText,
+                legendBorderColorText,
+                legendBorderThicknessText,
+                legendFontSizeText,
+                out _,
+                out var issue)
+            .Should().BeFalse();
+
+        issue.Should().Be(expectedIssue);
     }
 
     [Fact]
@@ -1415,6 +1566,33 @@ public sealed class ChartEditingPlannerTests
         chart.PlotAreaFillColor.Should().Be(new CellColor(4, 5, 6));
         chart.PlotAreaBorderColor.Should().Be(new CellColor(7, 8, 9));
         chart.PlotAreaBorderThickness.Should().Be(3);
+    }
+
+    [Fact]
+    public void ChartArea_Plan_AppliesLegendFields()
+    {
+        var options = ChartAreaFormatPlanner.Plan(new ChartAreaFormatInput(
+            ChartAreaFillColor: null,
+            PlotAreaFillColor: null,
+            PlotAreaBorderColor: null,
+            PlotAreaBorderThickness: 1,
+            ShowLegend: true,
+            LegendPosition: ChartLegendPosition.Top,
+            LegendOverlay: true,
+            LegendTextColor: new CellColor(40, 40, 40),
+            LegendFillColor: new CellColor(248, 248, 248),
+            LegendBorderColor: new CellColor(180, 180, 180),
+            LegendBorderThickness: 1.25,
+            LegendFontSize: 11));
+
+        options.ShowLegend.Should().BeTrue();
+        options.LegendPosition.Should().Be(ChartLegendPosition.Top);
+        options.LegendOverlay.Should().BeTrue();
+        options.LegendTextColor.Should().Be(new CellColor(40, 40, 40));
+        options.LegendFillColor.Should().Be(new CellColor(248, 248, 248));
+        options.LegendBorderColor.Should().Be(new CellColor(180, 180, 180));
+        options.LegendBorderThickness.Should().Be(1.25);
+        options.LegendFontSize.Should().Be(11);
     }
 
     // ---- ChartBarFormatPlanner -----------------------------------------------------------------------
