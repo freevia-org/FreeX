@@ -129,7 +129,9 @@ public sealed class MainWindowHeadlessTests
         mainWindow.Should().Contain("using Free.Shared.Shell.Avalonia;");
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
+        mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(foreground: Brushes.White, margin: new Thickness(8, 0))");
         mainWindow.Should().Contain("WorkArea: BuildBody()");
+        mainWindow.Should().NotContain("_statusText = new TextBlock");
     }
 
     [Fact]
