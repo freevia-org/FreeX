@@ -69,6 +69,120 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void LoadByIdAndTargetMap_ReadSharedRelationshipParts()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteText(archive, "word/_rels/document.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+                  <Relationship Id="rIdLink" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.test/" TargetMode="External"/>
+                </Relationships>
+                """);
+        }
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+
+        var byId = OpcRelationships.LoadById(readArchive, "word/_rels/document.xml.rels");
+        var internalTargets = OpcRelationships.LoadTargetMap(
+            readArchive,
+            "word/_rels/document.xml.rels",
+            relationship => "word/" + relationship.Target.TrimStart('/'),
+            relationship => !relationship.IsExternal);
+
+        byId["rIdLink"].IsExternal.Should().BeTrue();
+        internalTargets.Should().Contain("rIdImage", "word/media/image1.png");
+        internalTargets.Should().NotContainKey("rIdLink");
+    }
+
+    [Fact]
+    public void CanonicalPackageRelationshipNormalizer_RepairsDuplicateDocumentPropertyRelationships()
+    {
+        const string corePropertiesType =
+            "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+        var canonical = new OpcCanonicalRelationship("docProps/core.xml", corePropertiesType);
+        var relationships = OpcRelationships.CreateDocument(
+            OpcRelationships.CreateRelationship("rIdWorkbook", "type/workbook", "xl/workbook.xml"),
+            OpcRelationships.CreateRelationship("rIdWrongType", "type/wrong", "/docProps/core.xml"),
+            new XElement(
+                OpcRelationships.Namespace + "Relationship",
+                new XAttribute("Id", "rIdCore"),
+                new XAttribute("Type", corePropertiesType),
+                new XAttribute("Target", "/docProps/core.xml"),
+                new XAttribute("TargetMode", "Internal")),
+            OpcRelationships.CreateRelationship("rIdDuplicate", corePropertiesType, "docProps/core.xml"));
+
+        OpcRelationships.NeedsCanonicalPackageRelationshipNormalization(
+                relationships,
+                canonical,
+                partExists: true,
+                ResolveRootTarget)
+            .Should()
+            .BeTrue();
+
+        var changed = OpcRelationships.NormalizeCanonicalPackageRelationship(
+            relationships,
+            canonical,
+            partExists: true,
+            ResolveRootTarget);
+
+        changed.Should().BeTrue();
+        OpcRelationships.NeedsCanonicalPackageRelationshipNormalization(
+                relationships,
+                canonical,
+                partExists: true,
+                ResolveRootTarget)
+            .Should()
+            .BeFalse();
+        var coreRelationship = relationships.Root!
+            .Elements(OpcRelationships.Namespace + "Relationship")
+            .Where(element =>
+                element.Attribute("Type")?.Value == corePropertiesType ||
+                ResolveRootTarget(element.Attribute("Target")?.Value ?? "") == canonical.PartName)
+            .Should()
+            .ContainSingle()
+            .Subject;
+        coreRelationship.Attribute("Id")!.Value.Should().Be("rIdCore");
+        coreRelationship.Attribute("Target")!.Value.Should().Be("docProps/core.xml");
+        coreRelationship.Attribute("TargetMode").Should().BeNull();
+    }
+
+    [Fact]
+    public void CanonicalPackageRelationshipNormalizer_RemovesDanglingCanonicalRelationships()
+    {
+        const string customPropertiesType =
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+        var relationships = OpcRelationships.CreateDocument(
+            OpcRelationships.CreateRelationship("rIdCustom", customPropertiesType, "docProps/custom.xml"));
+
+        var changed = OpcRelationships.NormalizeCanonicalPackageRelationship(
+            relationships,
+            new OpcCanonicalRelationship("docProps/custom.xml", customPropertiesType),
+            partExists: false,
+            ResolveRootTarget);
+
+        changed.Should().BeTrue();
+        relationships.Root!.Elements(OpcRelationships.Namespace + "Relationship").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void OpcRelationshipDedupSourceGuard_UsesSharedHelpersAtFreeWAndFreeXCallSites()
+    {
+        var xlsxPropertiesSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDocumentPropertiesPreserver.cs");
+        var docxReaderSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxReader.cs");
+        var docxWriterSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxWriter.cs");
+
+        xlsxPropertiesSource.Should().Contain("OpcRelationships.NormalizeCanonicalPackageRelationship");
+        xlsxPropertiesSource.Should().Contain("OpcRelationships.NeedsCanonicalPackageRelationshipNormalization");
+        xlsxPropertiesSource.Should().NotContain("private static bool RelationshipTargetsPart(");
+        docxReaderSource.Should().Contain("OpcRelationships.LoadById");
+        docxReaderSource.Should().Contain("OpcRelationships.LoadTargetMap");
+        docxWriterSource.Should().Contain("OpcRelationships.CreateRelationship(id, type, target, external)");
+    }
+
+    [Fact]
     public void LoadXml_RejectsDtdsThroughSharedHardenedReader()
     {
         using var stream = ToStream("""
@@ -200,6 +314,9 @@ public sealed class OpcSharedHelperTests
 
     private static MemoryStream ToStream(string xml) =>
         new(Encoding.UTF8.GetBytes(xml), writable: false);
+
+    private static string ResolveRootTarget(string target) =>
+        OpcPathHelper.ResolveRelativeZipPath("", target);
 
     private static void WriteText(ZipArchive archive, string path, string text)
     {
