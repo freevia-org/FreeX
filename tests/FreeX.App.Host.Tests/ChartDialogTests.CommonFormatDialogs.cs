@@ -42,7 +42,9 @@ public sealed partial class ChartDialogTests
 
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartDialog_FillLineGroup\")");
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAreaLegend_LegendGroup\")");
-        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartDataLabels_LabelOptionsGroup\")");
+        source.Should().Contain("ChartDataLabelsPlanner.GetLabelOptionsSection()");
+        source.Should().Contain("ChartDataLabelsPlanner.GetStyleSection()");
+        source.Should().Contain("CreateGroupBox(UiText.Get(section.HeaderResourceKey)");
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAxisFormat_AxisOptionsGroup\")");
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAxisFormat_TickMarksGroup\")");
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartSeriesFormat_SeriesOptionsGroup\")");
@@ -63,13 +65,6 @@ public sealed partial class ChartDialogTests
             "InsertChart_UseRecommendedLayout",
             "ChartAreaLegend_ShowLegend",
             "ChartAreaLegend_OverlayLegend",
-            "ChartDataLabels_ShowDataLabels",
-            "ChartDataLabels_Value",
-            "ChartDataLabels_LegendKey",
-            "ChartDataLabels_CategoryName",
-            "ChartDataLabels_SeriesName",
-            "ChartDataLabels_Percentage",
-            "ChartDataLabels_Callouts",
             "ChartTrendline_ShowTrendline",
             "ChartTrendline_DisplayEquation",
             "ChartTrendline_DisplayRSquared",
@@ -92,10 +87,6 @@ public sealed partial class ChartDialogTests
             "ChartAreaLegend_LegendPositionLabel",
             "ChartAreaLegend_LegendTextColorLabel",
             "ChartAreaLegend_LegendFontSizeLabel",
-            "ChartDataLabels_PositionLabel",
-            "ChartDataLabels_SeparatorLabel",
-            "ChartDataLabels_NumberFormatLabel",
-            "ChartDataLabels_BorderThicknessLabel",
             "ChartAxisFormat_MinimumLabel",
             "ChartAxisFormat_MaximumLabel",
             "ChartAxisFormat_MajorTickMarksLabel",
@@ -113,6 +104,29 @@ public sealed partial class ChartDialogTests
         })
         {
             source.Should().Contain($"UiText.Get(\"{key}\")");
+        }
+
+        foreach (var fieldId in new[]
+        {
+            "ShowDataLabels",
+            "Position",
+            "Value",
+            "LegendKey",
+            "CategoryName",
+            "SeriesName",
+            "Percentage",
+            "Separator",
+            "NumberFormat",
+            "Callouts",
+            "FillColor",
+            "BorderColor",
+            "TextColor",
+            "BorderThickness",
+            "FontSize",
+            "TextAngle"
+        })
+        {
+            source.Should().Contain($"LabelText(ChartDataLabelsDialogFieldId.{fieldId})");
         }
     }
 
