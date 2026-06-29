@@ -13,14 +13,18 @@ public sealed class FileCommandsSourceTests
             "FreeP.App.Host",
             "FileCommands.cs"));
 
-        source.Should().Contain("FileDialogRequestPlanner.BuildPerFormatOpenDialogPlan(Formats)");
-        source.Should().Contain("FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(");
+        source.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
+        source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
+        source.Should().Contain("PresentationFileDialogPlanner.BuildPdfExportDialogPlan(");
+        source.Should().Contain("PresentationFileDialogPlanner.IsLegacyPresentationPath(path)");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         source.Should().Contain("IUserMessageService? messageService = null");
         source.Should().Contain("_messageService = messageService ?? new WpfUserMessageService();");
         source.Should().Contain("_messageService.PromptSaveChanges(DisplayName, action");
         source.Should().Contain("_messageService.ShowFileCommandError(summary, ex");
+        source.Should().NotContain("new FileDialogFormatDescriptor");
+        source.Should().NotContain("FileDialogRequestPlanner.");
         source.Should().NotContain("FileDialogFilterBuilder.BuildPerFormatFilter(Formats)");
         source.Should().NotContain("FileDialogFilterBuilder.GetDefaultExtension(Formats)");
         source.Should().NotContain("FileCommandMessageBox.PromptSaveChanges(");

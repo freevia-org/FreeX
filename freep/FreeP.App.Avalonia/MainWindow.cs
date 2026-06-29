@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Free.Shared.IO;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell.Avalonia;
@@ -46,12 +47,6 @@ namespace FreeP.App.Avalonia;
 public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
-
-    private static readonly FilePickerFileType PptxFileType = new("PowerPoint Presentation")
-    {
-        Patterns = ["*.pptx"],
-        MimeTypes = ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
-    };
 
     private static readonly FilePickerFileType PictureFileType = new("Images")
     {
@@ -166,12 +161,11 @@ public sealed class MainWindow : Window
 
         // ── Initial content ───────────────────────────────────────────────────
 
-        var startupPptx = startupArguments
-            .FirstOrDefault(a => a.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase)
-                               && File.Exists(a));
+        var startupPresentation = startupArguments
+            .FirstOrDefault(a => IsSupportedPresentationPath(a) && File.Exists(a));
 
-        if (startupPptx is not null)
-            TryLoadPptxFile(startupPptx);
+        if (startupPresentation is not null)
+            TryLoadPresentationFile(startupPresentation);
         else
             LoadPresentation(_presentation, path: null);
 
@@ -422,11 +416,12 @@ public sealed class MainWindow : Window
 
     private async Task FileOpenAsync()
     {
+        var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title         = "Open Presentation",
             AllowMultiple = false,
-            FileTypeFilter = [PptxFileType],
+            FileTypeFilter = ToAvaloniaFileTypes(plan.FileTypes),
         });
 
         if (files.Count == 0)
@@ -434,42 +429,41 @@ public sealed class MainWindow : Window
 
         var path = files[0].TryGetLocalPath();
         if (path is not null)
-            TryLoadPptxFile(path);
+            TryLoadPresentationFile(path);
     }
 
     private async Task FileSaveAsync()
     {
         if (_currentPath is not null)
-            TrySavePptxFile(_currentPath);
+            TrySavePresentationFile(_currentPath);
         else
             await FileSaveAsAsync();
     }
 
     private async Task FileSaveAsAsync()
     {
-        var suggested = _currentPath is not null
-            ? Path.GetFileName(_currentPath)
-            : "Presentation.pptx";
+        var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(SourceFileName(_currentPath));
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title             = "Save Presentation",
-            DefaultExtension  = "pptx",
-            SuggestedFileName = suggested,
-            FileTypeChoices   = [PptxFileType],
+            DefaultExtension  = plan.DefaultExtensionWithoutDot,
+            SuggestedFileName = plan.SuggestedFileName,
+            FileTypeChoices   = ToAvaloniaFileTypes(plan.FileTypes),
         });
 
         var path = file?.TryGetLocalPath();
         if (path is not null)
-            TrySavePptxFile(path);
+            TrySavePresentationFile(path);
     }
 
-    private void TryLoadPptxFile(string path)
+    private void TryLoadPresentationFile(string path)
     {
         try
         {
-            using var stream = File.OpenRead(path);
-            var presentation = PptxPackageReader.Read(stream);
+            var presentation = PresentationFileDialogPlanner.IsLegacyPresentationPath(path)
+                ? FxpFormat.Read(path)
+                : PptxPackageReader.Read(path);
             LoadPresentation(presentation, path);
         }
         catch (Exception ex)
@@ -478,12 +472,20 @@ public sealed class MainWindow : Window
         }
     }
 
-    private void TrySavePptxFile(string path)
+    private void TrySavePresentationFile(string path)
     {
         try
         {
-            using var stream = File.Create(path);
-            PptxPackageWriter.Write(_presentation, stream);
+            if (PresentationFileDialogPlanner.IsLegacyPresentationPath(path))
+            {
+                FxpFormat.Write(_presentation, path);
+            }
+            else
+            {
+                using var stream = File.Create(path);
+                PptxPackageWriter.Write(_presentation, stream);
+            }
+
             _currentPath = path;
             _isDirty     = false;
             UpdateTitle();
@@ -493,6 +495,28 @@ public sealed class MainWindow : Window
         {
             _statusText.Text = $"Save failed: {ex.Message}";
         }
+    }
+
+    private static IReadOnlyList<FilePickerFileType> ToAvaloniaFileTypes(
+        IReadOnlyList<FileDialogPickerTypeDescriptor> descriptors) =>
+        descriptors
+            .Select(descriptor => new FilePickerFileType(descriptor.DisplayName)
+            {
+                Patterns = descriptor.Patterns.ToArray(),
+            })
+            .ToArray();
+
+    private static string? SourceFileName(string? path) =>
+        path is null ? null : Path.GetFileName(path);
+
+    private static bool IsSupportedPresentationPath(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return string.Equals(
+                   extension,
+                   PresentationFileDialogPlanner.DefaultPresentationExtension,
+                   StringComparison.OrdinalIgnoreCase)
+               || PresentationFileDialogPlanner.IsLegacyPresentationPath(path);
     }
 
     // ── Presentation load ──────────────────────────────────────────────────────
