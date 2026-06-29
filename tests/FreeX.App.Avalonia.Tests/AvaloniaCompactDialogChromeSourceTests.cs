@@ -1,0 +1,69 @@
+using System.IO;
+
+namespace FreeX.App.Avalonia.Tests;
+
+public sealed class AvaloniaCompactDialogChromeSourceTests
+{
+    [Fact]
+    public void PivotOptions_DelegatesCompactControlChromeToSharedHelper()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("private static AvaloniaCompactDialogChromeStyle PivotDialogChromeStyle => new(FormulaBarFontFamily);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, PivotDialogChromeStyle, minWidth, isDefault);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PivotDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PivotDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
+
+        source.Should().NotContain("button.Height = 24;");
+        source.Should().NotContain("textBox.Height = 24;");
+        source.Should().NotContain("comboBox.Height = 24;");
+        source.Should().NotContain("button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);");
+        source.Should().NotContain("textBox.BorderBrush = Brush(130, 130, 130);");
+        source.Should().NotContain("comboBox.BorderBrush = Brush(130, 130, 130);");
+    }
+
+    [Fact]
+    public void SharedCompactChrome_CarriesTheExistingDialogMetrics()
+    {
+        var source = File.ReadAllText(RepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaCompactDialogChrome.cs"));
+
+        source.Should().Contain("public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)");
+        source.Should().Contain("public double ControlHeight { get; init; } = 24;");
+        source.Should().Contain("public double FontSize { get; init; } = 12;");
+        source.Should().Contain("public Thickness ButtonPadding { get; init; } = new(4, 1);");
+        source.Should().Contain("public Thickness TextBoxPadding { get; init; } = new(4, 1);");
+        source.Should().Contain("public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);");
+        source.Should().Contain("Color.FromRgb(0, 120, 215)");
+        source.Should().Contain("Color.FromRgb(112, 112, 112)");
+        source.Should().Contain("Color.FromRgb(130, 130, 130)");
+        source.Should().Contain("button.Height = style.ControlHeight;");
+        source.Should().Contain("button.MinHeight = style.ControlHeight;");
+        source.Should().Contain("button.MaxHeight = style.ControlHeight;");
+        source.Should().Contain("button.Background = Brushes.White;");
+        source.Should().Contain("button.BorderBrush = isDefault ? DefaultButtonBorderBrush : ButtonBorderBrush;");
+        source.Should().Contain("textBox.Padding = style.TextBoxPadding;");
+        source.Should().Contain("comboBox.Padding = style.ComboBoxPadding;");
+        source.Should().Contain("public static void ApplyCheckBox(");
+        source.Should().Contain("public static void ApplyRadioButton(");
+        source.Should().Contain("public static StackPanel CreateActionRow(");
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+}
