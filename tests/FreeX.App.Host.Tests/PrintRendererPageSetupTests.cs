@@ -20,7 +20,7 @@ public sealed partial class PrintRendererPageSetupTests
                 sheetName: "Summary",
                 now)
             .Should()
-            .Be($"{now:d} {now:t} Budget.xlsx Budget.xlsx Summary 2/5 {now:d} {now:t} Budget.xlsx Budget.xlsx Summary 2/5 ");
+            .Be($"{now:d} {now:t} Budget.xlsx  Summary 2/5 {now:d} {now:t} Budget.xlsx  Summary 2/5 ");
     }
 
     [Fact]
