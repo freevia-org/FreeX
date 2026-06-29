@@ -23,13 +23,14 @@ public partial class MainWindow
             sheet,
             SheetGrid.SelectedRange,
             QuickAnalysisShellCapabilities.DialogBacked);
-        if (!request.CanOpen || request.Selection is not { } range)
+        var openPlan = QuickAnalysisShellOpenPlanner.Plan(request);
+        if (!openPlan.CanOpen || openPlan.Selection is not { } range)
         {
-            ShowQuickAnalysisUnsupportedSelectionStatus();
+            ShowQuickAnalysisUnavailableStatus(openPlan);
             return;
         }
 
-        var shellPlan = request.ShellPlan;
+        var shellPlan = openPlan.ShellPlan;
         _preserveQuickAnalysisUnsupportedStatus = false;
         CloseQuickAnalysisMenu();
         var menu = new ContextMenu
@@ -98,13 +99,24 @@ public partial class MainWindow
         _quickAnalysisMenu = null;
     }
 
-    private void ShowQuickAnalysisUnsupportedSelectionStatus()
+    private void ShowQuickAnalysisUnavailableStatus(QuickAnalysisShellOpenPlan openPlan)
     {
         _preserveQuickAnalysisUnsupportedStatus = true;
         _suppressNextQuickAnalysisClosedStatusReset = true;
         CloseQuickAnalysisMenu();
         ClearQuickAnalysisPreview(resetStatus: false);
-        StatusReadyText.Text = UiText.Get("QuickAnalysis_SelectRangeStatus");
+        StatusReadyText.Text = QuickAnalysisUnavailableStatusText(openPlan);
+    }
+
+    private string QuickAnalysisUnavailableStatusText(QuickAnalysisShellOpenPlan openPlan)
+    {
+        if (openPlan.Decision == QuickAnalysisShellOpenDecision.ShowNoSuggestionsIssue &&
+            openPlan.Selection is { } range)
+        {
+            return UiText.Format("TableLoc_QaNoSuggestions", FormatRangeReference(range.Start, range.End));
+        }
+
+        return UiText.Get("QuickAnalysis_SelectRangeStatus");
     }
 
     private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)
