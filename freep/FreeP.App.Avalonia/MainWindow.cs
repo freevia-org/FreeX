@@ -498,7 +498,7 @@ public sealed class MainWindow : Window
         {
             Title         = "Open Presentation",
             AllowMultiple = false,
-            FileTypeFilter = ToAvaloniaFileTypes(plan.FileTypes),
+            FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes),
         });
 
         if (files.Count == 0)
@@ -531,7 +531,7 @@ public sealed class MainWindow : Window
             Title             = "Save Presentation",
             DefaultExtension  = plan.DefaultExtensionWithoutDot,
             SuggestedFileName = plan.SuggestedFileName,
-            FileTypeChoices   = ToAvaloniaFileTypes(plan.FileTypes),
+            FileTypeChoices   = AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes),
         });
 
         var path = file?.TryGetLocalPath();
@@ -588,15 +588,6 @@ public sealed class MainWindow : Window
             return false;
         }
     }
-
-    private static IReadOnlyList<FilePickerFileType> ToAvaloniaFileTypes(
-        IReadOnlyList<FileDialogPickerTypeDescriptor> descriptors) =>
-        descriptors
-            .Select(descriptor => new FilePickerFileType(descriptor.DisplayName)
-            {
-                Patterns = descriptor.Patterns.ToArray(),
-            })
-            .ToArray();
 
     private static bool IsSupportedPresentationPath(string path)
     {

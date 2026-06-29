@@ -1,5 +1,6 @@
 using Avalonia.Platform.Storage;
 using Free.Shared.IO;
+using Free.Shared.Shell.Avalonia;
 using FreeW.Core.IO;
 
 namespace FreeW.App.Avalonia;
@@ -18,21 +19,21 @@ internal static class DocumentFilePickerTypes
     /// </summary>
     public static IReadOnlyList<FilePickerFileType> BuildOpenTypes(IEnumerable<IDocumentFileAdapter> adapters)
     {
-        return DocumentFileDialogRequestPlanner
+        var plan = DocumentFileDialogRequestPlanner
             .BuildOpenPickerPlan(adapters)
-            .FileTypes
-            .Select(ToFileType)
-            .ToList();
+            .FileTypes;
+        return AvaloniaFilePickerTypeAdapter.ToFileTypes(plan);
     }
 
     /// <summary>One <see cref="FilePickerFileType"/> per <see cref="FileFormatDescriptor.CanSave"/> format.</summary>
-    public static IReadOnlyList<FilePickerFileType> BuildSaveTypes(IEnumerable<IDocumentFileAdapter> adapters) =>
-        DocumentFileDialogRequestPlanner
+    public static IReadOnlyList<FilePickerFileType> BuildSaveTypes(IEnumerable<IDocumentFileAdapter> adapters)
+    {
+        var plan = DocumentFileDialogRequestPlanner
             .BuildSavePickerPlan(adapters, sourceName: null, fallbackDisplayName: "Document", defaultExtensionWithDot: ".docx")
-            .FileTypes
-            .Select(ToFileType)
-            .ToList();
+            .FileTypes;
+        return AvaloniaFilePickerTypeAdapter.ToFileTypes(plan);
+    }
 
     internal static FilePickerFileType ToFileType(FileDialogPickerTypeDescriptor descriptor) =>
-        new(descriptor.DisplayName) { Patterns = descriptor.Patterns };
+        AvaloniaFilePickerTypeAdapter.ToFileType(descriptor);
 }

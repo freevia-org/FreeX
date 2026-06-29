@@ -103,7 +103,7 @@ public sealed class FileWorkflowDedupSourceTests
         wpfSource.Should().NotContain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
 
         avaloniaSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
-        avaloniaSource.Should().Contain("FileTypeFilter = CreateFilePickerFileTypes(pickerPlan.FileTypes)");
+        avaloniaSource.Should().Contain("FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes)");
         avaloniaSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
     }
 

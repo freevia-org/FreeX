@@ -254,7 +254,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var storageFile = await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
         source.Should().Contain("private async Task<IStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
         source.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle)");
-        source.Should().Contain("var fileTypes = CreateFilePickerFileTypes(pickerPlan.FileTypes);");
+        source.Should().Contain("var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes);");
         source.Should().Contain("Title = title");
         source.Should().Contain("SuggestedFileName = pickerPlan.SuggestedFileName");
         source.Should().Contain("DefaultExtension = pickerPlan.DefaultExtensionWithoutDot");
@@ -985,17 +985,20 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_BuildsAvaloniaFilePickerTypesFromCoreIoDescriptors()
+    public void MainWindow_BuildsAvaloniaFilePickerTypesFromSharedIoDescriptors()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var pickerPlanner = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookFilePickerPlanner.cs"));
+        var adapter = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaFilePickerTypeAdapter.cs"));
 
         source.Should().Contain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats)");
         source.Should().Contain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildOpenPickerPlan(");
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildSavePickerPlan(");
-        source.Should().Contain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
-        source.Should().Contain("Patterns = descriptor.Patterns.ToList()");
+        pickerPlanner.Should().Contain("IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes");
+        source.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(openPlan.FileTypes)");
+        source.Should().NotContain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
+        adapter.Should().Contain("Patterns = descriptor.Patterns.ToArray()");
     }
 
     [Fact]
@@ -5304,7 +5307,7 @@ public sealed class AvaloniaShellSourceTests
         // The dialog gathers options and previews via the portable ImportDataPlanner.
         getDataSource.Should().Contain("private void GetDataFromText() => _ = ShowGetDataDialogAsync();");
         getDataSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
-        getDataSource.Should().Contain("FileTypeFilter = CreateFilePickerFileTypes(pickerPlan.FileTypes)");
+        getDataSource.Should().Contain("FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes)");
         getDataSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
         getDataSource.Should().Contain("ImportDataPlanner.DecodeBytes(bytes, encodingKind)");
         getDataSource.Should().Contain("ImportDataPlanner.PreviewText(decodedText, options");

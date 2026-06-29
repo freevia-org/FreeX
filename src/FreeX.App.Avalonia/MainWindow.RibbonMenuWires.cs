@@ -9,6 +9,7 @@ using Avalonia.Platform.Storage;
 
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
+using Free.Shared.Shell.Avalonia;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -279,7 +280,7 @@ public sealed partial class MainWindow
             return;
 
         var pickerPlan = SheetBackgroundPickerPlanner.BuildOpenPickerPlan();
-        var fileTypes = CreateFilePickerFileTypes(pickerPlan.FileTypes);
+        var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes);
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = UiText.Get("RibbonWire_BackgroundPickerTitle"),

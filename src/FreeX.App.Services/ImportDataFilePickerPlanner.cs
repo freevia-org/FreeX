@@ -1,4 +1,5 @@
 using FreeX.Core.IO;
+using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 
 namespace FreeX.App.Services;
 
@@ -8,7 +9,7 @@ public sealed record ImportDataOpenDialogPlan(
     bool CheckFileExists,
     bool Multiselect);
 
-public sealed record ImportDataOpenPickerPlan(IReadOnlyList<FilePickerTypeDescriptor> FileTypes);
+public sealed record ImportDataOpenPickerPlan(IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes);
 
 /// <summary>
 /// UI-free picker policy for Data > Get Data local file imports. Hosts still own dialog titles,
@@ -50,7 +51,7 @@ public static class ImportDataFilePickerPlanner
 
     public static ImportDataOpenPickerPlan BuildTextOpenPickerPlan(
         string displayName = TextDataPickerDisplayName) =>
-        new([new FilePickerTypeDescriptor(displayName, TextImportPatterns)]);
+        new([new FileDialogPickerTypeDescriptor(displayName, TextImportPatterns)]);
 
     public static IReadOnlyList<IFileAdapter> SelectAdapterImportAdapters(IEnumerable<IFileAdapter> adapters)
     {
