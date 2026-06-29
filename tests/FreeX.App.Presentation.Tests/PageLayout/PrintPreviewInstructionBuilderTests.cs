@@ -52,7 +52,7 @@ public sealed class PrintPreviewInstructionBuilderTests
     }
 
     [Fact]
-    public void Build_CellFillBecomesRectangleAndTextBecomesTextRun()
+    public void Build_CellFillBecomesRectangleAndTextUsesPrintRendererAlignment()
     {
         var cellFill = new PresentationRgb(200, 100, 50);
         var cell = new PageCellBlock(
@@ -82,7 +82,7 @@ public sealed class PrintPreviewInstructionBuilderTests
         var text = painting.Instructions[2];
         text.Kind.Should().Be(PrintPreviewPaintKind.Text);
         text.Text.Should().Be("Hello");
-        text.Alignment.Should().Be(PageTextAlignment.Right);
+        text.Alignment.Should().Be(PageTextAlignment.Left);
         text.Left.Should().Be(50);
         text.Top.Should().Be(53);
         text.Width.Should().Be(60);

@@ -760,7 +760,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(canvas, PrintPreviewDialogPlanner.PageCanvasAutomationId);
 
-        RenderPreviewInstructions(canvas, AlignCellTextLeft(layout, painting.Instructions));
+        RenderPreviewInstructions(canvas, painting.Instructions);
 
         var pageBorder = new Border
         {
@@ -782,46 +782,6 @@ public sealed partial class MainWindow
         };
 
         return pageBorder;
-    }
-
-    /// <summary>
-    /// Forces every printed cell's text to be left-aligned at the cell's text origin, matching the
-    /// Windows WPF print renderer (<c>PrintRenderer.GridCells</c>), which draws all cell text from
-    /// <c>x + 2</c> with no horizontal alignment. The shared render model right-aligns numeric/currency
-    /// cells (Excel's general alignment), which made the Units/Revenue data values drift right of their
-    /// left-aligned column headers in the Avalonia preview. Heading and header/footer-band runs keep the
-    /// builder's alignment; only cell-text runs (identified by their cell's text + origin) are rewritten.
-    /// </summary>
-    private static IReadOnlyList<PrintPreviewPaintInstruction> AlignCellTextLeft(
-        PageContentLayout layout,
-        IReadOnlyList<PrintPreviewPaintInstruction> instructions)
-    {
-        var cellTextOrigins = new HashSet<(string Text, double Left, double Top)>();
-        foreach (var cell in layout.Cells)
-        {
-            if (!string.IsNullOrEmpty(cell.Text) && cell.Alignment != PageTextAlignment.Left)
-                cellTextOrigins.Add((cell.Text, cell.TextOrigin.X, cell.TextOrigin.Y));
-        }
-
-        if (cellTextOrigins.Count == 0)
-            return instructions;
-
-        var rewritten = new List<PrintPreviewPaintInstruction>(instructions.Count);
-        foreach (var instruction in instructions)
-        {
-            if (instruction.Kind == PrintPreviewPaintKind.Text
-                && instruction.Alignment != PageTextAlignment.Left
-                && cellTextOrigins.Contains((instruction.Text, instruction.Left, instruction.Top)))
-            {
-                rewritten.Add(instruction with { Alignment = PageTextAlignment.Left });
-            }
-            else
-            {
-                rewritten.Add(instruction);
-            }
-        }
-
-        return rewritten;
     }
 
     private static void RenderPreviewInstructions(
