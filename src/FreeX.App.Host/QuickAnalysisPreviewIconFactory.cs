@@ -10,212 +10,97 @@ public static class QuickAnalysisPreviewIconFactory
 {
     public static FrameworkElement Create(QuickAnalysisPreviewVisual visual)
     {
+        var plan = QuickAnalysisPreviewIconPlanner.Plan(visual);
         var canvas = new Canvas
         {
-            Width = 34,
-            Height = 22,
+            Width = plan.Width,
+            Height = plan.Height,
             Margin = new Thickness(0, 0, 6, 0)
         };
 
-        var plan = QuickAnalysisPreviewIconPlanner.Plan(visual);
-        switch (plan.Glyph)
-        {
-            case QuickAnalysisPreviewIconGlyph.HorizontalBars:
-                AddBars(canvas, vertical: false, stacked: false);
-                break;
-            case QuickAnalysisPreviewIconGlyph.ColorScale:
-                AddColorScale(canvas);
-                break;
-            case QuickAnalysisPreviewIconGlyph.IconSet:
-                AddIconSet(canvas);
-                break;
-            case QuickAnalysisPreviewIconGlyph.HighlightGrid:
-                AddGrid(canvas, Brushes.LightGoldenrodYellow, Brushes.Goldenrod);
-                break;
-            case QuickAnalysisPreviewIconGlyph.ClearFormat:
-                AddGrid(canvas, Brushes.White, Brushes.LightGray);
-                AddLine(canvas, 6, 17, 28, 5, Brushes.Firebrick, 1.5);
-                break;
-            case QuickAnalysisPreviewIconGlyph.VerticalBars:
-                AddBars(canvas, vertical: true, stacked: false);
-                break;
-            case QuickAnalysisPreviewIconGlyph.StackedVerticalBars:
-                AddBars(canvas, vertical: true, stacked: true);
-                break;
-            case QuickAnalysisPreviewIconGlyph.LineChart:
-                AddLineChart(canvas);
-                break;
-            case QuickAnalysisPreviewIconGlyph.Pie:
-                AddPie(canvas);
-                break;
-            case QuickAnalysisPreviewIconGlyph.Area:
-                AddArea(canvas);
-                break;
-            case QuickAnalysisPreviewIconGlyph.Scatter:
-                AddScatter(canvas);
-                break;
-            case QuickAnalysisPreviewIconGlyph.Formula:
-                AddFormula(canvas);
-                break;
-            case QuickAnalysisPreviewIconGlyph.Table:
-                AddGrid(canvas, new SolidColorBrush(Color.FromRgb(229, 244, 239)), new SolidColorBrush(Color.FromRgb(38, 120, 95)));
-                break;
-            case QuickAnalysisPreviewIconGlyph.WinLoss:
-                AddWinLoss(canvas);
-                break;
-            default:
-                AddGrid(canvas, Brushes.White, Brushes.LightGray);
-                break;
-        }
+        foreach (var element in plan.Elements)
+            AddElement(canvas, element);
 
         return canvas;
     }
 
-    private static void AddGrid(Canvas canvas, Brush fill, Brush stroke)
+    private static void AddElement(Canvas canvas, QuickAnalysisPreviewIconElement element)
     {
-        for (var row = 0; row < 2; row++)
+        switch (element)
         {
-            for (var col = 0; col < 3; col++)
-            {
+            case QuickAnalysisPreviewIconRectangle rectangle:
                 var rect = new Rectangle
                 {
-                    Width = 9,
-                    Height = 8,
-                    Fill = fill,
-                    Stroke = stroke,
-                    StrokeThickness = 0.6
+                    Width = rectangle.Width,
+                    Height = rectangle.Height,
+                    Fill = ToBrush(rectangle.Fill),
+                    Stroke = ToBrush(rectangle.Stroke),
+                    StrokeThickness = rectangle.StrokeThickness
                 };
-                Canvas.SetLeft(rect, 3 + col * 9);
-                Canvas.SetTop(rect, 3 + row * 8);
+                Canvas.SetLeft(rect, rectangle.Left);
+                Canvas.SetTop(rect, rectangle.Top);
                 canvas.Children.Add(rect);
-            }
+                break;
+
+            case QuickAnalysisPreviewIconEllipse ellipse:
+                var ellipseShape = new Ellipse
+                {
+                    Width = ellipse.Size,
+                    Height = ellipse.Size,
+                    Fill = ToBrush(ellipse.Fill)
+                };
+                Canvas.SetLeft(ellipseShape, ellipse.Left);
+                Canvas.SetTop(ellipseShape, ellipse.Top);
+                canvas.Children.Add(ellipseShape);
+                break;
+
+            case QuickAnalysisPreviewIconLine line:
+                canvas.Children.Add(new Line
+                {
+                    X1 = line.X1,
+                    Y1 = line.Y1,
+                    X2 = line.X2,
+                    Y2 = line.Y2,
+                    Stroke = ToBrush(line.Stroke),
+                    StrokeThickness = line.StrokeThickness
+                });
+                break;
+
+            case QuickAnalysisPreviewIconPolygon polygon:
+                var points = new PointCollection();
+                foreach (var point in polygon.Points)
+                    points.Add(new Point(point.X, point.Y));
+
+                canvas.Children.Add(new Polygon
+                {
+                    Points = points,
+                    Fill = ToBrush(polygon.Fill)
+                });
+                break;
+
+            case QuickAnalysisPreviewIconText text:
+                var textBlock = new TextBlock
+                {
+                    Text = text.Text,
+                    FontSize = text.FontSize,
+                    FontWeight = ToFontWeight(text.FontWeight),
+                    Foreground = ToBrush(text.Foreground)
+                };
+                Canvas.SetLeft(textBlock, text.Left);
+                Canvas.SetTop(textBlock, text.Top);
+                canvas.Children.Add(textBlock);
+                break;
         }
     }
 
-    private static void AddBars(Canvas canvas, bool vertical, bool stacked)
-    {
-        var brush = new SolidColorBrush(Color.FromRgb(70, 130, 180));
-        var accent = new SolidColorBrush(Color.FromRgb(132, 185, 95));
-        if (vertical)
-        {
-            var heights = new[] { 8.0, 15.0, 11.0 };
-            for (var i = 0; i < heights.Length; i++)
-            {
-                AddRect(canvas, 7 + i * 8, 18 - heights[i], 5, heights[i], brush);
-                if (stacked)
-                    AddRect(canvas, 7 + i * 8, 18 - heights[i] - 4, 5, 4, accent);
-            }
-        }
-        else
-        {
-            var widths = new[] { 14.0, 22.0, 18.0 };
-            for (var i = 0; i < widths.Length; i++)
-                AddRect(canvas, 5, 5 + i * 5, widths[i], 3, brush);
-        }
-    }
+    private static Brush ToBrush(QuickAnalysisPreviewIconColor color) =>
+        new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
 
-    private static void AddColorScale(Canvas canvas)
-    {
-        AddRect(canvas, 4, 5, 8, 12, new SolidColorBrush(Color.FromRgb(248, 105, 107)));
-        AddRect(canvas, 13, 5, 8, 12, new SolidColorBrush(Color.FromRgb(255, 235, 132)));
-        AddRect(canvas, 22, 5, 8, 12, new SolidColorBrush(Color.FromRgb(99, 190, 123)));
-    }
+    private static Brush? ToBrush(QuickAnalysisPreviewIconColor? color) =>
+        color is { } value ? ToBrush(value) : null;
 
-    private static void AddIconSet(Canvas canvas)
-    {
-        AddEllipse(canvas, 6, 7, Brushes.Firebrick);
-        AddEllipse(canvas, 15, 7, Brushes.Goldenrod);
-        AddEllipse(canvas, 24, 7, Brushes.SeaGreen);
-    }
-
-    private static void AddLineChart(Canvas canvas)
-    {
-        AddLine(canvas, 5, 16, 13, 10, Brushes.SteelBlue, 1.4);
-        AddLine(canvas, 13, 10, 21, 13, Brushes.SteelBlue, 1.4);
-        AddLine(canvas, 21, 13, 29, 6, Brushes.SteelBlue, 1.4);
-    }
-
-    private static void AddPie(Canvas canvas)
-    {
-        AddEllipse(canvas, 8, 4, Brushes.SteelBlue, 14);
-        AddRect(canvas, 21, 7, 7, 4, Brushes.Goldenrod);
-        AddRect(canvas, 21, 13, 7, 4, Brushes.SeaGreen);
-    }
-
-    private static void AddArea(Canvas canvas)
-    {
-        var polygon = new Polygon
-        {
-            Points = [new Point(5, 17), new Point(11, 9), new Point(18, 12), new Point(27, 5), new Point(29, 17)],
-            Fill = new SolidColorBrush(Color.FromArgb(150, 70, 130, 180))
-        };
-        canvas.Children.Add(polygon);
-    }
-
-    private static void AddScatter(Canvas canvas)
-    {
-        AddEllipse(canvas, 6, 13, Brushes.SteelBlue, 4);
-        AddEllipse(canvas, 14, 8, Brushes.SeaGreen, 4);
-        AddEllipse(canvas, 24, 5, Brushes.Goldenrod, 4);
-    }
-
-    private static void AddFormula(Canvas canvas)
-    {
-        var text = new TextBlock
-        {
-            Text = "fx",
-            FontSize = 15,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = Brushes.SteelBlue
-        };
-        Canvas.SetLeft(text, 10);
-        Canvas.SetTop(text, 1);
-        canvas.Children.Add(text);
-    }
-
-    private static void AddWinLoss(Canvas canvas)
-    {
-        AddRect(canvas, 7, 5, 4, 6, Brushes.SeaGreen);
-        AddRect(canvas, 15, 11, 4, 6, Brushes.Firebrick);
-        AddRect(canvas, 23, 5, 4, 6, Brushes.SeaGreen);
-    }
-
-    private static void AddRect(Canvas canvas, double left, double top, double width, double height, Brush fill)
-    {
-        var rect = new Rectangle
-        {
-            Width = width,
-            Height = height,
-            Fill = fill
-        };
-        Canvas.SetLeft(rect, left);
-        Canvas.SetTop(rect, top);
-        canvas.Children.Add(rect);
-    }
-
-    private static void AddEllipse(Canvas canvas, double left, double top, Brush fill, double size = 5)
-    {
-        var ellipse = new Ellipse
-        {
-            Width = size,
-            Height = size,
-            Fill = fill
-        };
-        Canvas.SetLeft(ellipse, left);
-        Canvas.SetTop(ellipse, top);
-        canvas.Children.Add(ellipse);
-    }
-
-    private static void AddLine(Canvas canvas, double x1, double y1, double x2, double y2, Brush stroke, double thickness)
-    {
-        canvas.Children.Add(new Line
-        {
-            X1 = x1,
-            Y1 = y1,
-            X2 = x2,
-            Y2 = y2,
-            Stroke = stroke,
-            StrokeThickness = thickness
-        });
-    }
+    private static FontWeight ToFontWeight(QuickAnalysisPreviewIconFontWeight fontWeight) =>
+        fontWeight == QuickAnalysisPreviewIconFontWeight.SemiBold
+            ? FontWeights.SemiBold
+            : FontWeights.Normal;
 }
