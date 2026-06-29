@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -39,7 +41,7 @@ public sealed record FindReplaceReplaceRequest(
 
 public static class FindReplaceDialogPlanner
 {
-    public const string SearchTermRequiredMessage = "Enter a search term.";
+    public const string SearchTermRequiredMessage = FindReplaceDialogPolicy.SearchTermRequiredMessage;
 
     private static readonly FindReplaceOptionChoice[] OptionChoiceValues =
     [
@@ -87,9 +89,8 @@ public static class FindReplaceDialogPlanner
         request = null;
         error = null;
 
-        if (string.IsNullOrEmpty(term))
+        if (!TryValidateSearchTerm(term, out error))
         {
-            error = FindReplaceValidationError.SearchTermRequired;
             return false;
         }
 
@@ -107,9 +108,8 @@ public static class FindReplaceDialogPlanner
         request = null;
         error = null;
 
-        if (string.IsNullOrEmpty(term))
+        if (!TryValidateSearchTerm(term, out error))
         {
-            error = FindReplaceValidationError.SearchTermRequired;
             return false;
         }
 
@@ -118,30 +118,24 @@ public static class FindReplaceDialogPlanner
     }
 
     public static string ValidationMessageFor(FindReplaceValidationError? error) =>
-        error switch
-        {
-            FindReplaceValidationError.SearchTermRequired => SearchTermRequiredMessage,
-            _ => SearchTermRequiredMessage
-        };
+        FindReplaceDialogPolicy.ValidationMessageFor(ToSharedValidationError(error));
 
     public static string BuildFindStatus(FindReplaceSearchRequest request, bool found)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return found ? string.Empty : BuildNotFoundStatus(request.Term);
+        return FindReplaceDialogPolicy.BuildFindStatus(request.Term, found);
     }
 
     public static string BuildReplaceStatus(FindReplaceReplaceRequest request, bool replaced)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return replaced ? string.Empty : BuildNotFoundStatus(request.Term);
+        return FindReplaceDialogPolicy.BuildReplaceStatus(request.Term, replaced);
     }
 
     public static string BuildReplaceAllStatus(FindReplaceReplaceRequest request, int replacementCount)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return replacementCount == 0
-            ? BuildNotFoundStatus(request.Term)
-            : $"Replaced {replacementCount} occurrence{(replacementCount == 1 ? "" : "s")}.";
+        return FindReplaceDialogPolicy.BuildReplaceAllOccurrenceStatus(request.Term, replacementCount);
     }
 
     public static bool DocumentContains(TextDocument document, FindReplaceSearchRequest request)
@@ -179,6 +173,31 @@ public static class FindReplaceDialogPlanner
         return count;
     }
 
-    private static string BuildNotFoundStatus(string term) =>
-        $"\"{term}\" not found.";
+    private static bool TryValidateSearchTerm(
+        [NotNullWhen(true)] string? term,
+        out FindReplaceValidationError? error)
+    {
+        if (FindReplaceDialogPolicy.TryValidateSearchTerm(term, out var sharedError))
+        {
+            error = null;
+            return true;
+        }
+
+        error = ToLocalValidationError(sharedError);
+        return false;
+    }
+
+    private static FindReplaceValidationError ToLocalValidationError(FindReplaceValidationErrorKind? error) =>
+        error switch
+        {
+            FindReplaceValidationErrorKind.SearchTermRequired => FindReplaceValidationError.SearchTermRequired,
+            _ => FindReplaceValidationError.SearchTermRequired
+        };
+
+    private static FindReplaceValidationErrorKind? ToSharedValidationError(FindReplaceValidationError? error) =>
+        error switch
+        {
+            FindReplaceValidationError.SearchTermRequired => FindReplaceValidationErrorKind.SearchTermRequired,
+            _ => FindReplaceValidationErrorKind.SearchTermRequired
+        };
 }

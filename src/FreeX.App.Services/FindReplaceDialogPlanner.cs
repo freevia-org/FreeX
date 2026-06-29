@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -85,7 +86,7 @@ public static class FindReplaceDialogPlanner
         FindLookIn lookIn = FindLookIn.Values,
         StyleDiff? replacementFormat = null)
     {
-        if (string.IsNullOrEmpty(searchText))
+        if (!FindReplaceDialogPolicy.CanRunWithQuery(searchText))
             return new ReplaceSingleMatchResult(false, null);
 
         var sheet = workbook.GetSheet(match.Address.Sheet);
