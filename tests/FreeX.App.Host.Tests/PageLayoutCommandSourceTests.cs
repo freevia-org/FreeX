@@ -62,8 +62,12 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId))");
         policySource.Should().Contain("PageLayoutInputParser.TryParseScalePages(text, out var pagesWide)");
         policySource.Should().Contain("PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanPageBreakAction(");
+        source.Should().Contain("PageBreakMenuAction.Insert");
+        source.Should().Contain("PageBreakMenuAction.Remove");
+        source.Should().Contain("PageBreakActionPlanner.ResetAll()");
+        source.Should().NotContain("PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(");
+        source.Should().NotContain("PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(");
         source.Should().Contain("PageBreakDialogPlanner.BuildDefaultInput(SheetGrid.SelectedRange)");
         source.Should().Contain("PageBreakDialogPlanner.PlanPageBreaks(");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan)");

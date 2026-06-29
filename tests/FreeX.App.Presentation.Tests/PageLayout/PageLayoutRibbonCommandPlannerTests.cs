@@ -116,13 +116,15 @@ public sealed class PageLayoutRibbonCommandPlannerTests
     {
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Sheet1");
-        var plan = PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(
+        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
+            PageBreakMenuAction.Insert,
             Range(sheet.Id, 6, 4, 6, 4),
             existingRowBreaks: [2u],
             existingColumnBreaks: [3u]);
 
         var command = PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheet.Id, plan);
 
+        plan.Status.Should().Be("Inserted page breaks");
         command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
         sheet.RowPageBreaks.Should().Equal(2u, 6u);
         sheet.ColumnPageBreaks.Should().Equal(3u, 4u);
