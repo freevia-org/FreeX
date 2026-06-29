@@ -51,7 +51,11 @@ public static class OpcRelationships
             ? OpcXml.TryLoadXml(archive, relsPath)
             : OpcXml.LoadXmlOrNull(archive, relsPath);
 
-        return document?.Root?
+        return document is null ? [] : Load(document);
+    }
+
+    public static IReadOnlyList<OpcRelationship> Load(XDocument relationshipsXml) =>
+        relationshipsXml.Root?
             .Elements(Namespace + "Relationship")
             .Select(element => new OpcRelationship(
                 element.Attribute("Id")?.Value ?? string.Empty,
@@ -60,8 +64,7 @@ public static class OpcRelationships
                 string.Equals(element.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase)))
             .Where(relationship => !string.IsNullOrEmpty(relationship.Id))
             .ToList()
-            ?? [];
-    }
+        ?? [];
 
     public static Dictionary<string, OpcRelationship> LoadById(
         ZipArchive archive,

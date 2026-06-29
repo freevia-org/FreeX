@@ -19,7 +19,6 @@ public static class PptxPackageWriter
     private static readonly XNamespace P       = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A       = PptxColorReader.A;
     private static readonly XNamespace R       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace PkgRels = OpcRelationships.Namespace;
 
     // ── Relationship types ────────────────────────────────────────────────────────
     private const string OfficeDocRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -3881,22 +3880,16 @@ public static class PptxPackageWriter
         if (sourceRels.Root is null)
             return;
 
-        foreach (var rel in sourceRels.Root.Elements(PkgRels + "Relationship"))
+        foreach (var rel in OpcRelationships.Load(sourceRels))
         {
-            var id = rel.Attribute("Id")?.Value;
-            var type = rel.Attribute("Type")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            var targetMode = rel.Attribute("TargetMode")?.Value;
-            if (string.IsNullOrWhiteSpace(id) ||
-                string.IsNullOrWhiteSpace(type) ||
-                string.IsNullOrWhiteSpace(target))
+            if (string.IsNullOrWhiteSpace(rel.Type) ||
+                string.IsNullOrWhiteSpace(rel.Target))
                 continue;
 
-            var external = string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase);
-            if (IsWriterOwnedRelationship(sourcePartPath, type, target, external))
+            if (IsWriterOwnedRelationship(sourcePartPath, rel.Type, rel.Target, rel.IsExternal))
                 continue;
 
-            rels.AddUnique(id, type, target, external);
+            rels.AddUnique(rel.Id, rel.Type, rel.Target, rel.IsExternal);
         }
     }
 
