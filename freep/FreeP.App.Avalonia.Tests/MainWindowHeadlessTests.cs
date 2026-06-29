@@ -148,6 +148,73 @@ public sealed class MainWindowHeadlessTests
         idx.Should().Be(0, "the first slide is selected by default");
     }
 
+    [Fact]
+    public async Task MainWindow_editing_marks_workflow_dirty()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "FreeP.Avalonia.WorkflowTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var recentPath = Path.Combine(tempDir, "recent.json");
+        var beforeDirty = true;
+        var afterDirty = false;
+        string? title = null;
+
+        try
+        {
+            var ran = await OnUiThread(() =>
+            {
+                var window = new MainWindow(Array.Empty<string>(), () => RecentFilesStore.Load(recentPath));
+                beforeDirty = window.IsDirty;
+                window.Editor.InsertSlide();
+                afterDirty = window.IsDirty;
+                title = window.Title;
+            });
+
+            if (!ran) return;
+            beforeDirty.Should().BeFalse("a new presentation starts as saved through FileCommandWorkflow");
+            afterDirty.Should().BeTrue("editing should mark the shared workflow dirty");
+            title.Should().EndWith(" *", "dirty state should still bind to the platform title");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task MainWindow_startup_file_loads_as_saved_and_registers_recent_file()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "FreeP.Avalonia.WorkflowTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var deckPath = Path.Combine(tempDir, "opened.pptx");
+        var recentPath = Path.Combine(tempDir, "recent.json");
+        using (var stream = File.Create(deckPath))
+            PptxPackageWriter.Write(Presentation.CreateEmpty(), stream);
+
+        string? currentPath = null;
+        var isDirty = true;
+        IReadOnlyList<RecentFileEntry> recentEntries = [];
+
+        try
+        {
+            var ran = await OnUiThread(() =>
+            {
+                var window = new MainWindow([deckPath], () => RecentFilesStore.Load(recentPath));
+                currentPath = window.CurrentPath;
+                isDirty = window.IsDirty;
+                recentEntries = window.RecentEntries;
+            });
+
+            if (!ran) return;
+            currentPath.Should().Be(deckPath);
+            isDirty.Should().BeFalse("opened presentations should be marked saved through FileCommandWorkflow");
+            recentEntries.Select(entry => entry.Path).Should().Contain(deckPath);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort */ }
+        }
+    }
+
     // ── Ribbon definition ───────────────────────────────────────────────────────
 
     [Fact]
