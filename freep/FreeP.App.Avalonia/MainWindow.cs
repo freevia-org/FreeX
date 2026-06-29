@@ -373,6 +373,8 @@ public sealed class MainWindow : Window
                 SlideObjectInsertionPlanner.Apply(Editor, plan)));
         }
 
+        r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
+
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
         r.Register("freep.redo", new ActionRibbonCommand(() => Editor.Redo()));
@@ -427,6 +429,21 @@ public sealed class MainWindow : Window
     }
 
     // ── File lifecycle ─────────────────────────────────────────────────────────
+
+    internal void OpenChartDataDialog()
+    {
+        if (Editor.SelectedChart is null)
+            return;
+
+        var dialog = new ChartDataDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
+    }
 
     private SaveChangesPrompt PromptSaveChangesSync(string action) =>
         ShowSaveChangesPromptAsync(_fileWorkflow.DisplayName, action).GetAwaiter().GetResult();

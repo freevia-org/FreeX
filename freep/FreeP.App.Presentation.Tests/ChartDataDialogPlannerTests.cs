@@ -146,6 +146,48 @@ public sealed class ChartDataDialogPlannerTests
         commit.Values[0][2].Should().Be(9.75);
     }
 
+    [Fact]
+    public void BuildSurfacePlan_ExposesSharedDialogLabelsAndCommandId()
+    {
+        var plan = ChartDataDialogPlanner.BuildSurfacePlan();
+
+        plan.CommandId.Should().Be(ChartDataDialogPlanner.EditDataCommandId);
+        plan.Title.Should().Be("Edit Chart Data");
+        plan.Width.Should().Be(640);
+        plan.Height.Should().Be(440);
+        plan.AddSeriesLabel.Should().Be("+ Series");
+        plan.RemoveSeriesLabel.Should().Be("- Series");
+        plan.AddCategoryLabel.Should().Be("+ Category");
+        plan.RemoveCategoryLabel.Should().Be("- Category");
+        plan.OkLabel.Should().Be("OK");
+        plan.CancelLabel.Should().Be("Cancel");
+    }
+
+    [Fact]
+    public void ApplySeriesNameAndValueEdits_UsesSharedParsingPolicyAndIgnoresOutOfRange()
+    {
+        var planner = ChartDataDialogPlanner.FromChart(MakeChart());
+
+        planner.ApplySeriesNameEdits(new[]
+        {
+            new ChartDataDialogSeriesNameEdit(1, "Actual"),
+            new ChartDataDialogSeriesNameEdit(99, "Ignored")
+        });
+        planner.ApplyValueEdits(
+            new[]
+            {
+                new ChartDataDialogValueEdit(0, 1, "12,5"),
+                new ChartDataDialogValueEdit(1, 0, "   "),
+                new ChartDataDialogValueEdit(1, 2, 8.0),
+                new ChartDataDialogValueEdit(99, 99, "123")
+            },
+            CultureInfo.GetCultureInfo("fr-FR"));
+
+        planner.SeriesNamesForCommit().Should().Equal("Sales", "Actual");
+        planner.ValuesForCommit()[0].Should().Equal(new double?[] { 1.0, 12.5, 3.0 });
+        planner.ValuesForCommit()[1].Should().Equal(new double?[] { null, null, 8.0 });
+    }
+
     [Theory]
     [InlineData(null, "")]
     [InlineData(1234.5, "1234.5")]
