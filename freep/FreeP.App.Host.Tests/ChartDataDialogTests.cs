@@ -107,6 +107,10 @@ public sealed class ChartDataDialogTests : IDisposable
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "ChartDataDialog.cs");
 
         source.Should().Contain("ChartDataDialogPlanner.FromChart(chart)");
+        source.Should().Contain("_planner.BuildTableProjection()");
+        source.Should().Contain("new ChartRowViewModel(row)");
+        source.Should().Contain("MakeEditableHeader(seriesColumn)");
+        source.Should().Contain("_planner.BuildCommitPlan(ReadCategoryEditsFromGrid())");
         source.Should().Contain("_planner.AddSeries()");
         source.Should().Contain("_planner.AddCategory()");
         source.Should().Contain("ChartDataDialogPlanner.FormatCellValue(");
@@ -117,6 +121,15 @@ public sealed class ChartDataDialogTests : IDisposable
         source.Should().NotContain("private void EnsureRectangular");
         source.Should().NotContain("double.TryParse");
         source.Should().NotContain("Enumerable.Repeat");
+        source.Should().NotContain("_planner.GetCategory(");
+        source.Should().NotContain("_planner.SetCategory(");
+        source.Should().NotContain("_planner.GetSeriesName(");
+        source.Should().NotContain("_planner.SetSeriesName(");
+        source.Should().NotContain("_planner.GetValue(");
+        source.Should().NotContain("_planner.SetValue(");
+        source.Should().NotContain("_planner.CategoriesForCommit()");
+        source.Should().NotContain("_planner.SeriesNamesForCommit()");
+        source.Should().NotContain("_planner.ValuesForCommit()");
     }
 
     // ── EditingSession chart API (from session, not dialog) ───────────────────────
