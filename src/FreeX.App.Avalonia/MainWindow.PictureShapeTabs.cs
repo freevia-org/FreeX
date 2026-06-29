@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Ribbon;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -94,12 +95,15 @@ public sealed partial class MainWindow
     /// <summary>
     /// Resolves the selected picture on the active sheet, or reports an explanatory status and returns null.
     /// </summary>
-    private bool HasSelectedPictureForRibbonCommand() =>
-        DrawingTargetResolver.ResolveSelectedPicture(
-                _session.ActiveSheet,
-                _selectedDrawingObjectKind,
-                _selectedDrawingObjectId)
-            .HasTarget;
+    private RibbonCommandState GetDrawingObjectContextualRibbonCommandState(
+        DrawingObjectContextualRibbonCommand command)
+    {
+        var plan = DrawingObjectContextualRibbonPlanner.Build(
+            _session.ActiveSheet,
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId);
+        return new RibbonCommandState(IsEnabled: plan.IsEnabled(command));
+    }
 
     private PictureModel? ResolveSelectedPicture()
     {

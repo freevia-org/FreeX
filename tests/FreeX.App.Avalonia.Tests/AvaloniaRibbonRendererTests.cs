@@ -12,10 +12,12 @@ using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Avalonia.VisualTree;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.DrawingUI;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon.Icons;
 using AvaloniaPath = Avalonia.Controls.Shapes.Path;
+using SelectionPaneObjectKind = FreeX.Core.Model.SelectionPaneObjectKind;
 
 [assembly: AvaloniaTestApplication(typeof(FreeX.App.Avalonia.Tests.RibbonHeadlessApp))]
 
@@ -471,6 +473,17 @@ public sealed class AvaloniaRibbonRendererTests
         source.SetParityCaptureContext(null);
 
         Assert.False(source.Current.IsActive("pivot.active"));
+    }
+
+    [Fact]
+    public void DrawingObjectContext_TextBoxActivatesShapeFormatContext()
+    {
+        var source = new AvaloniaRibbonContextSource();
+
+        source.OnDrawingObjectSelected(SelectionPaneObjectKind.TextBox);
+
+        Assert.True(source.Current.IsActive(DrawingObjectContextualRibbonPlanner.ShapeContextKey));
+        Assert.False(source.Current.IsActive(DrawingObjectContextualRibbonPlanner.PictureContextKey));
     }
 
     private sealed class FakeContextSource : IRibbonContextSource
