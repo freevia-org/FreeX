@@ -19,21 +19,46 @@ public sealed record SisterBackstageExportPaneTextSpec(
         PdfActionLabel: "Export to PDF...",
         PdfActionDescription: "Publish a fixed-layout copy.");
 
-    public static SisterBackstageExportPaneTextSpec FreeW { get; } = new(
-        Heading: "Export",
-        Description: "Create a fixed-layout copy or choose an editable document format.",
-        FixedLayoutGroupHeading: "Create PDF/XPS Document",
-        PdfActionLabel: "Create PDF or XPS",
-        PdfActionDescription: "Publish a fixed-layout copy for sharing or printing.",
-        XpsActionLabel: "Export to XPS",
-        XpsActionDescription: "Publish an XPS document with selectable, searchable vector text.");
+    public static SisterBackstageExportPaneTextSpec FreeW { get; } =
+        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export);
 
-    public static SisterBackstageExportPaneTextSpec FreeP { get; } = new(
-        Heading: "Export",
-        Description: "Create a PDF copy of this presentation - one page per slide, with selectable text.",
-        FixedLayoutGroupHeading: "Create PDF Copy",
-        PdfActionLabel: "Export to PDF...",
-        PdfActionDescription: "Publish a fixed-layout copy for sharing or presenting.");
+    public static SisterBackstageExportPaneTextSpec FreeP { get; } =
+        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP).Export);
+
+    public static SisterBackstageExportPaneTextSpec FromDescriptor(
+        SisterBackstageExportPaneTextDescriptor descriptor,
+        Func<string, string?>? getText = null)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        return new SisterBackstageExportPaneTextSpec(
+            Resolve(descriptor.Heading, getText),
+            Resolve(descriptor.Description, getText),
+            Resolve(descriptor.FixedLayoutGroupHeading, getText),
+            Resolve(descriptor.PdfActionLabel, getText),
+            Resolve(descriptor.PdfActionDescription, getText),
+            descriptor.XpsActionLabel is null ? null : Resolve(descriptor.XpsActionLabel, getText),
+            descriptor.XpsActionDescription is null ? null : Resolve(descriptor.XpsActionDescription, getText));
+    }
+
+    private static string Resolve(ResourceTextDescriptor descriptor, Func<string, string?>? getText)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        if (getText is not null)
+        {
+            var resolved = getText(descriptor.ResourceKey);
+            if (IsResolvedText(descriptor, resolved))
+                return resolved!;
+        }
+
+        return descriptor.FallbackText;
+    }
+
+    private static bool IsResolvedText(ResourceTextDescriptor descriptor, string? value) =>
+        !string.IsNullOrEmpty(value) &&
+        !string.Equals(value, descriptor.ResourceKey, StringComparison.Ordinal) &&
+        !string.Equals(value, "[[" + descriptor.ResourceKey + "]]", StringComparison.Ordinal);
 }
 
 public sealed record SisterBackstagePaneTextSpec(
@@ -44,32 +69,54 @@ public sealed record SisterBackstagePaneTextSpec(
     string OptionsDescription,
     string? OptionsEditText = null)
 {
-    public static SisterBackstagePaneTextSpec FreeW { get; } = new(
-        RecentEmptyText: "No recent documents.",
-        TemplateHeading: "New",
-        TemplateTileCaption: "Blank document",
-        TemplateFooterText: "More templates are not available in this build.",
-        OptionsDescription: "FreeW application settings. These persist between sessions and apply immediately.",
-        OptionsEditText: "Edit options\u2026")
-    {
-        Export = SisterBackstageExportPaneTextSpec.FreeW
-    };
+    public static SisterBackstagePaneTextSpec FreeW { get; } =
+        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW));
 
-    public static SisterBackstagePaneTextSpec FreeP { get; } = new(
-        RecentEmptyText: "No recent presentations.",
-        TemplateHeading: "New",
-        TemplateTileCaption: "Blank presentation",
-        TemplateFooterText: "More templates are not available in this build.",
-        OptionsDescription: "FreeP application settings. These persist between sessions.")
-    {
-        Export = SisterBackstageExportPaneTextSpec.FreeP
-    };
+    public static SisterBackstagePaneTextSpec FreeP { get; } =
+        FromDescriptor(SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP));
 
     public SisterBackstageAccountPaneTextSpec Account { get; init; } =
         SisterBackstageAccountPaneTextSpec.NeutralEnglish;
 
     public SisterBackstageExportPaneTextSpec Export { get; init; } =
         SisterBackstageExportPaneTextSpec.NeutralEnglish;
+
+    public static SisterBackstagePaneTextSpec FromDescriptor(
+        SisterBackstagePaneTextDescriptor descriptor,
+        Func<string, string?>? getText = null)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        return new SisterBackstagePaneTextSpec(
+            Resolve(descriptor.RecentEmptyText, getText),
+            Resolve(descriptor.TemplateHeading, getText),
+            Resolve(descriptor.TemplateTileCaption, getText),
+            Resolve(descriptor.TemplateFooterText, getText),
+            Resolve(descriptor.OptionsDescription, getText),
+            descriptor.OptionsEditText is null ? null : Resolve(descriptor.OptionsEditText, getText))
+        {
+            Export = SisterBackstageExportPaneTextSpec.FromDescriptor(descriptor.Export, getText)
+        };
+    }
+
+    private static string Resolve(ResourceTextDescriptor descriptor, Func<string, string?>? getText)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        if (getText is not null)
+        {
+            var resolved = getText(descriptor.ResourceKey);
+            if (IsResolvedText(descriptor, resolved))
+                return resolved!;
+        }
+
+        return descriptor.FallbackText;
+    }
+
+    private static bool IsResolvedText(ResourceTextDescriptor descriptor, string? value) =>
+        !string.IsNullOrEmpty(value) &&
+        !string.Equals(value, descriptor.ResourceKey, StringComparison.Ordinal) &&
+        !string.Equals(value, "[[" + descriptor.ResourceKey + "]]", StringComparison.Ordinal);
 }
 
 /// <summary>

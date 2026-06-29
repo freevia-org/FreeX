@@ -228,6 +228,61 @@ public sealed class SharedBackstagePaneComposerTests
     }
 
     [Fact]
+    public void SisterBackstagePaneTextDescriptorPlanner_ExposesResourceKeysAndFallbackText()
+    {
+        var freeW = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW);
+        var freeP = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP);
+
+        freeW.RecentEmptyText.Should().Be(new ResourceTextDescriptor(
+            SisterBackstagePaneResourceKeys.FreeWRecentEmptyText,
+            "No recent documents."));
+        freeW.Export.XpsActionLabel.Should().Be(new ResourceTextDescriptor(
+            SisterBackstagePaneResourceKeys.FreeWExportXpsActionLabel,
+            "Export to XPS"));
+        freeP.TemplateTileCaption.Should().Be(new ResourceTextDescriptor(
+            SisterBackstagePaneResourceKeys.FreePTemplateTileCaption,
+            "Blank presentation"));
+        freeP.Export.XpsActionLabel.Should().BeNull();
+
+        SisterBackstagePaneTextDescriptorPlanner.RequiredResourceKeys(SisterBackstageAppKind.FreeW)
+            .Should().OnlyHaveUniqueItems()
+            .And.Contain(SisterBackstagePaneResourceKeys.FreeWOptionsEditText);
+        SisterBackstagePaneTextDescriptorPlanner.RequiredResourceKeys(SisterBackstageAppKind.FreeP)
+            .Should().OnlyHaveUniqueItems()
+            .And.NotContain(SisterBackstagePaneResourceKeys.FreeWOptionsEditText);
+    }
+
+    [Fact]
+    public void SisterBackstagePaneTextSpec_ResolvesDescriptorKeysWithFallbacks()
+    {
+        static string? Resolve(string key) =>
+            key == SisterBackstagePaneResourceKeys.FreeWTemplateTileCaption
+                ? "Localized blank document"
+                : key == SisterBackstagePaneResourceKeys.FreeWExportPdfActionLabel
+                    ? "[[" + key + "]]"
+                : null;
+
+        var text = SisterBackstagePaneTextSpec.FromDescriptor(
+            SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW),
+            Resolve);
+
+        text.RecentEmptyText.Should().Be("No recent documents.");
+        text.TemplateTileCaption.Should().Be("Localized blank document");
+        text.Export.PdfActionLabel.Should().Be("Create PDF or XPS");
+    }
+
+    [Fact]
+    public void SisterBackstagePaneTextSpec_TreatsEchoedResourceKeysAsMissing()
+    {
+        var text = SisterBackstagePaneTextSpec.FromDescriptor(
+            SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeP),
+            key => key);
+
+        text.RecentEmptyText.Should().Be("No recent presentations.");
+        text.Export.PdfActionLabel.Should().Be("Export to PDF...");
+    }
+
+    [Fact]
     public void SisterBackstagePaneSpecPlanner_BuildsFreePPaneSpecsFromPreset()
     {
         var planner = new SisterBackstagePaneSpecPlanner(SisterBackstagePaneTextSpec.FreeP);
@@ -295,11 +350,11 @@ public sealed class SharedBackstagePaneComposerTests
     [Fact]
     public void SisterBackstagePaneResources_ComposesKitComposerAndSpecPlanner()
     {
-        var resources = new SisterBackstagePaneResources(
+        var resources = SisterBackstagePaneResources.ForApp(
+            SisterBackstageAppKind.FreeW,
             Color.FromRgb(0x0F, 0x6D, 0x8C),
             tileWidth: 150,
-            tileHeight: 190,
-            SisterBackstagePaneTextSpec.FreeW);
+            tileHeight: 190);
 
         resources.Kit.Should().NotBeNull();
         resources.Panes.Should().NotBeNull();

@@ -19,11 +19,12 @@ internal sealed class BackstageView : UserControl
 {
     private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeP;
 
-    private static readonly SisterBackstagePaneResources BackstageResources = new(
+    private static readonly SisterBackstagePaneResources BackstageResources = SisterBackstagePaneResources.ForApp(
+        SisterBackstageAppKind.FreeP,
         WpfThemeApplier.ToColor(BrandThemes.FreeP.Colors.Accent),
         Theme.TileWidth,
         Theme.TileHeight,
-        SisterBackstagePaneTextSpec.FreeP);
+        BackstageStrings.Current.Get);
     private static BackstagePaneComposer Panes => BackstageResources.Panes;
     private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
 
