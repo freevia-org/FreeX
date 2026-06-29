@@ -52,6 +52,20 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void MainWindow_InitializesCurrentSheetBeforeComponentSetupCanRaiseEvents()
+    {
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
+
+        var workbookAssignment = mainSource.IndexOf("_workbook = workbook;", StringComparison.Ordinal);
+        var currentSheetAssignment = mainSource.IndexOf("_currentSheetId = _workbook.Sheets[0].Id;", StringComparison.Ordinal);
+        var initializeComponentCall = mainSource.IndexOf("InitializeComponent();", StringComparison.Ordinal);
+
+        workbookAssignment.Should().BeGreaterThanOrEqualTo(0);
+        currentSheetAssignment.Should().BeGreaterThan(workbookAssignment);
+        currentSheetAssignment.Should().BeLessThan(initializeComponentCall);
+    }
+
+    [Fact]
     public void UpdateViewport_SyncsWorkbookViewStateAndPagePreviewInputs()
     {
         var viewportSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");

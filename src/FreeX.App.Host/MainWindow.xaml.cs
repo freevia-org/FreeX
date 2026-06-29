@@ -286,6 +286,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         _diagnosticsOptions = diagnosticsOptions ?? AppDiagnosticsOptions.CreateDefault();
         _workbookRef = workbookRef;
         _workbook = workbook;
+        _currentSheetId = _workbook.Sheets[0].Id;
         _options = options ?? FreeXOptions.Load();
         _windowRegistry = windowRegistry;
         // A window created while others already exist over the shared workbook is a secondary
@@ -313,7 +314,6 @@ public partial class MainWindow : Window, IWorkbookWindow
         InitializeBackstageFrame();
         RegisterKeyboardCommandShortcuts();
 
-        _currentSheetId = _workbook.Sheets[0].Id;
         SheetTabsControl.ItemsSource = _sheetTabs;
         
         // Wire up scrollbars
