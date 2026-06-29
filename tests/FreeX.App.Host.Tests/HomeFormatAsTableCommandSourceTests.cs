@@ -12,10 +12,13 @@ public sealed class HomeFormatAsTableCommandSourceTests
 
         source.Should().Contain("private void FormatTableBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("PopulateFormatTableGalleryMenu();");
-        source.Should().Contain("TableStyleGalleryPlanner.GetOptions(_workbook.Theme)");
-        source.Should().Contain("RibbonTooltip.SetKeyTip(menuItem, $\"{family[0]}{option.Label[(family.Length + 1)..]}\");");
+        source.Should().Contain("TableStyleGalleryPlanner.GetSurface(_workbook.Theme)");
+        source.Should().Contain("foreach (var group in surface.Groups)");
+        source.Should().Contain("foreach (var item in group.Items)");
+        source.Should().Contain("RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);");
+        source.Should().Contain("Tag = item");
         source.Should().Contain("menuItem.Click += FormatTableGalleryMenuItem_Click;");
-        source.Should().Contain("TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme)");
+        source.Should().Contain("ApplyTableFormat(item.Option);");
         source.Should().Contain("new CreateTableDialog(");
         source.Should().Contain("request => ApplyCreateTableRangeSelection(dialog, request)");
         source.Should().Contain("TableCreationPlanner.BuildStyledCommand(");

@@ -43,14 +43,14 @@ public sealed partial class MainWindow
             return;
 
         var sheetId = _session.ActiveSheet.Id;
-        var options = TableStyleGalleryPlanner.GetOptions(_session.Workbook.Theme);
+        var surface = TableStyleGalleryPlanner.GetSurface(_session.Workbook.Theme);
 
         var gallery = new ListBox
         {
             SelectionMode = SelectionMode.Single,
             MinHeight = 280,
-            ItemsSource = options.Select(option => option.Label).ToList(),
-            SelectedIndex = TableStyleGalleryPlanner.FindStyleIndex(options, table.StyleName),
+            ItemsSource = surface.Items.Select(item => item.Label).ToList(),
+            SelectedIndex = TableStyleGalleryPlanner.FindSurfaceItemIndex(surface, table.StyleName),
         };
         AutomationProperties.SetAutomationId(gallery, "TableStyleGalleryList");
         AutomationProperties.SetName(gallery, UiText.Get("TableStyleGallery_GalleryName"));
@@ -105,13 +105,14 @@ public sealed partial class MainWindow
             return;
 
         var selectedIndex = gallery.SelectedIndex < 0 ? 0 : gallery.SelectedIndex;
-        var option = TableStyleGalleryPlanner.GetOption(selectedIndex, _session.Workbook.Theme);
+        var item = TableStyleGalleryPlanner.GetSurfaceItem(surface, selectedIndex);
+        var option = item.Option;
 
         var result = _session.ExecuteReviewCommand(
             TableDesignCommandPlanner.BuildApplyStyleCommand(sheetId, table, option));
 
         if (result.Success)
-            RefreshShell(UiText.Format("TableStyleGallery_Applied", option.Label));
+            RefreshShell(UiText.Format("TableStyleGallery_Applied", item.Label));
         else
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableStyleGallery_Failed"));
     }

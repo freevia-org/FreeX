@@ -652,6 +652,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         tableNameSource.Should().Contain("TableDesignCommandPlanner.BuildRenameCommand(");
         tableResizeSource.Should().Contain("TableDesignCommandPlanner.BuildResizeCommand(");
         tableStyleSource.Should().Contain("TableDesignCommandPlanner.BuildApplyStyleCommand(");
+        tableStyleSource.Should().Contain("TableStyleGalleryPlanner.GetSurface(_session.Workbook.Theme)");
+        tableStyleSource.Should().Contain("ItemsSource = surface.Items.Select(item => item.Label).ToList()");
+        tableStyleSource.Should().Contain("TableStyleGalleryPlanner.FindSurfaceItemIndex(surface, table.StyleName)");
+        tableStyleSource.Should().Contain("TableStyleGalleryPlanner.GetSurfaceItem(surface, selectedIndex)");
         tableTabSource.Should().NotContain("new ReapplyStructuredTableStyleCommand(");
         tableTabSource.Should().NotContain("new SetStructuredTableTotalsRowCommand(");
         tableResizeSource.Should().NotContain("private IWorkbookCommand BuildResizeCommand(");
