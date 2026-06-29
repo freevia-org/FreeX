@@ -1040,10 +1040,13 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
         var requestPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellRequestPlanner.cs");
+        var openPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellOpenPlanner.cs");
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
         var shellPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
         source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
+        source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
+        source.Should().NotContain("if (!request.CanOpen");
         source.Should().Contain("ToolTip = item.ToolTip");
         source.Should().NotContain("QuickAnalysisSelectionReader.Describe(sheet, range)");
         source.Should().NotContain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
@@ -1054,6 +1057,7 @@ public sealed partial class MainWindowSourceHygieneTests
         requestPlanner.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
         requestPlanner.Should().Contain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         requestPlanner.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(displayModel, capabilities, range)");
+        openPlanner.Should().Contain("QuickAnalysisShellOpenDecision.ShowNoSuggestionsIssue");
         planner.Should().Contain("QuickAnalysisPreviewKind");
         shellPlanner.Should().Contain("public static QuickAnalysisShellPlan BuildMenuPlan(");
         shellPlanner.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");

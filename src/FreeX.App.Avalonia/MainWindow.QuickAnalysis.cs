@@ -26,25 +26,19 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var range = _session.SelectedRange;
+        var selection = _session.SelectedRange;
         var request = QuickAnalysisShellRequestPlanner.Build(
             _session.ActiveSheet,
-            range,
+            selection,
             QuickAnalysisShellCapabilities.DirectApplyLimited);
-        if (request.Status is QuickAnalysisShellRequestStatus.MissingSelection or
-            QuickAnalysisShellRequestStatus.UnsupportedSelection)
+        var openPlan = QuickAnalysisShellOpenPlanner.Plan(request);
+        if (!openPlan.CanOpen || openPlan.Selection is not { } range)
         {
-            ShowEditIssue(UiText.Get("TableLoc_QaSelectMoreThanOne"));
+            ShowQuickAnalysisOpenIssue(openPlan);
             return;
         }
 
-        if (!request.CanOpen)
-        {
-            ShowEditIssue(UiText.Format("TableLoc_QaNoSuggestions", FormatRangeReference(range)));
-            return;
-        }
-
-        var shellPlan = request.ShellPlan;
+        var shellPlan = openPlan.ShellPlan;
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_QaDialogTitle"),
@@ -128,6 +122,18 @@ public sealed partial class MainWindow
         };
 
         await dialog.ShowDialog(this);
+    }
+
+    private void ShowQuickAnalysisOpenIssue(QuickAnalysisShellOpenPlan openPlan)
+    {
+        if (openPlan.Decision == QuickAnalysisShellOpenDecision.ShowNoSuggestionsIssue &&
+            openPlan.Selection is { } range)
+        {
+            ShowEditIssue(UiText.Format("TableLoc_QaNoSuggestions", FormatRangeReference(range)));
+            return;
+        }
+
+        ShowEditIssue(UiText.Get("TableLoc_QaSelectMoreThanOne"));
     }
 
     /// <summary>
