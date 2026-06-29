@@ -1,4 +1,6 @@
+using System.Globalization;
 using Free.Shared.Ribbon;
+using FreeW.App.Localization;
 
 namespace FreeW.Ribbon.Definitions.Tests;
 
@@ -155,8 +157,142 @@ public sealed class FreeWRibbonDefinitionProfileTests
         unexpectedAvaloniaOnly.Should().BeEmpty("every Avalonia-only ribbon id must have an explicit capability rule");
     }
 
+    [Fact]
+    public void Home_clipboard_text_is_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        var neutral = WithUiCulture("en-US", () => new[]
+        {
+            ClipboardSurface(FreeWRibbonCapabilities.Wpf),
+            ClipboardSurface(FreeWRibbonCapabilities.Avalonia),
+        });
+
+        foreach (var surface in neutral)
+        {
+            surface.HomeHeader.Should().Be("Home");
+            surface.HomeKeyTip.Should().Be("H");
+            surface.ClipboardHeader.Should().Be("Clipboard");
+            surface.ClipboardKeyTip.Should().Be("C");
+            surface.PasteLabel.Should().Be("Paste");
+            surface.PasteKeyTip.Should().Be("V");
+            surface.CutLabel.Should().Be("Cut");
+            surface.CutKeyTip.Should().Be("X");
+            surface.CopyLabel.Should().Be("Copy");
+            surface.CopyKeyTip.Should().Be("C");
+        }
+
+        var pseudo = WithUiCulture(Loc.PseudoLocalizationCultureName, () => new[]
+        {
+            ClipboardSurface(FreeWRibbonCapabilities.Wpf),
+            ClipboardSurface(FreeWRibbonCapabilities.Avalonia),
+        });
+
+        foreach (var surface in pseudo)
+        {
+            surface.HomeHeader.Should().Be("[[HHoommee]]");
+            surface.HomeKeyTip.Should().Be("H");
+            surface.ClipboardHeader.Should().Be("[[CClliippbbooaarrdd]]");
+            surface.ClipboardKeyTip.Should().Be("C");
+            surface.PasteLabel.Should().Be("[[PPaassttee]]");
+            surface.PasteKeyTip.Should().Be("V");
+            surface.CutLabel.Should().Be("[[CCuutt]]");
+            surface.CutKeyTip.Should().Be("X");
+            surface.CopyLabel.Should().Be("[[CCooppyy]]");
+            surface.CopyKeyTip.Should().Be("C");
+        }
+    }
+
+    [Fact]
+    public void Home_clipboard_profile_sources_use_resource_descriptors()
+    {
+        var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+
+        wpfSource.Should().NotContain(".Tab(\"home\", \"Home\"");
+        wpfSource.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
+        wpfSource.Should().NotContain("g.Large(\"freew.paste\", \"Paste\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.cut\", \"Cut\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.copy\", \"Copy\"");
+        wpfSource.Should().Contain("FreeWRibbonText.HomeTab");
+        wpfSource.Should().Contain("FreeWRibbonText.ClipboardGroup");
+        wpfSource.Should().Contain("FreeWRibbonText.PasteCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.CutCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.CopyCommand");
+
+        avaloniaSource.Should().NotContain(".Tab(\"home\", \"Home\"");
+        avaloniaSource.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.cut\",   \"Cut\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.copy\",  \"Copy\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.paste\", \"Paste\"");
+        avaloniaSource.Should().Contain("FreeWRibbonText.HomeTab");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ClipboardGroup");
+        avaloniaSource.Should().Contain("FreeWRibbonText.PasteCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CutCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.CopyCommand");
+    }
+
     private static bool IsAllowed(CommandEntry entry, IReadOnlyList<DivergenceRule> rules) =>
         rules.Any(rule => rule.IsAllowed(entry));
+
+    private static T WithUiCulture<T>(string cultureName, Func<T> action)
+    {
+        var originalUi = CultureInfo.CurrentUICulture;
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            CultureInfo.CurrentUICulture = culture;
+            CultureInfo.CurrentCulture = culture;
+            return action();
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalUi;
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    private static ClipboardRibbonSurface ClipboardSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var definition = FreeWRibbon.Build(capabilities);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var clipboard = home!.FindGroup("clipboard");
+        clipboard.Should().NotBeNull();
+
+        var paste = RequiredControl(clipboard!, "freew.paste");
+        var cut = RequiredControl(clipboard!, "freew.cut");
+        var copy = RequiredControl(clipboard!, "freew.copy");
+
+        return new ClipboardRibbonSurface(
+            home.Header,
+            home.KeyTip,
+            clipboard.Header,
+            clipboard.KeyTip,
+            paste.Label,
+            paste.KeyTip,
+            cut.Label,
+            cut.KeyTip,
+            copy.Label,
+            copy.KeyTip);
+    }
+
+    private static RibbonControl RequiredControl(RibbonGroup group, string commandId) =>
+        group.Controls.Single(control => control.CommandId.Value == commandId);
+
+    private static string ReadRepositoryFile(params string[] relativeParts)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+        }
+
+        throw new FileNotFoundException(
+            $"Could not locate {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
+    }
 
     private static IEnumerable<CommandEntry> CommandEntries(RibbonDefinition definition)
     {
@@ -217,6 +353,18 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     private sealed record DivergenceRule(string Reason, Func<CommandEntry, bool> IsAllowed);
+
+    private sealed record ClipboardRibbonSurface(
+        string HomeHeader,
+        string? HomeKeyTip,
+        string ClipboardHeader,
+        string? ClipboardKeyTip,
+        string PasteLabel,
+        string? PasteKeyTip,
+        string CutLabel,
+        string? CutKeyTip,
+        string CopyLabel,
+        string? CopyKeyTip);
 
     private sealed record CommandEntry(string TabId, string GroupId, string CommandId)
     {

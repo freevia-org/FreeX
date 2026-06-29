@@ -286,13 +286,22 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.open", "Open");
                     g.Button("freew.save", "Save");
                 }))
-            .Tab("home", "Home", "H", tab =>
+            .Tab("home", FreeWRibbonText.HomeTab.Label, FreeWRibbonText.HomeTab.KeyTip, tab =>
             {
-                tab.Group("clipboard", "Clipboard", null, 100, g =>
+                tab.Group("clipboard", FreeWRibbonText.ClipboardGroup.Label, FreeWRibbonText.ClipboardGroup.KeyTip, 100, g =>
                 {
-                    g.Button("freew.cut",   "Cut");
-                    g.Button("freew.copy",  "Copy");
-                    g.Button("freew.paste", "Paste");
+                    g.Button("freew.cut", FreeWRibbonText.CutCommand.Label, b => b with
+                    {
+                        KeyTip = FreeWRibbonText.CutCommand.KeyTip
+                    });
+                    g.Button("freew.copy", FreeWRibbonText.CopyCommand.Label, b => b with
+                    {
+                        KeyTip = FreeWRibbonText.CopyCommand.KeyTip
+                    });
+                    g.Button("freew.paste", FreeWRibbonText.PasteCommand.Label, b => b with
+                    {
+                        KeyTip = FreeWRibbonText.PasteCommand.KeyTip
+                    });
                 });
                 tab.Group("font", "Font", null, 90, g =>
                 {
