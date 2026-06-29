@@ -20472,20 +20472,14 @@ public sealed partial class MainWindow : Window
         if (!await ConfirmBeforeDestructiveWorkbookActionAsync("Open Workbook", "Discard and Open"))
             return;
 
-        if (!StorageProvider.CanOpen)
+        var openPlan = WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats);
+        if (!openPlan.CanShowPicker)
         {
-            ShowOpenIssue("Open unavailable on this platform.");
+            ShowOpenIssue(openPlan.Message);
             return;
         }
 
-        var openPlan = WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats);
         var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(openPlan.FileTypes);
-        if (fileTypes.Count == 0)
-        {
-            ShowOpenIssue("No open formats are available.");
-            return;
-        }
-
         var storageFiles = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Open Workbook",
@@ -20868,24 +20862,19 @@ public sealed partial class MainWindow : Window
             if (!TryCommitPendingFormulaEdit())
                 return;
 
-            if (!StorageProvider.CanSave)
-            {
-                ShowSaveIssue("Save As unavailable on this platform.");
-                return;
-            }
-
-            var savePlan = WorkbookFilePickerPlanner.BuildSavePickerPlan(
+            var savePlan = WorkbookFileCommandPlanner.PlanSaveAsPicker(
+                StorageProvider.CanSave,
                 _session.SaveFormats,
                 _session.Workbook.Name,
                 _session.DisplayName,
                 NativeWorkbookExtension);
-            var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(savePlan.FileTypes);
-            if (fileTypes.Count == 0)
+            if (!savePlan.CanShowPicker)
             {
-                ShowSaveIssue("No save formats are available.");
+                ShowSaveIssue(savePlan.Message);
                 return;
             }
 
+            var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(savePlan.FileTypes);
             var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 Title = "Save Workbook",

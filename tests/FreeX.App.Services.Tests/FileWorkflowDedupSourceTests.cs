@@ -74,6 +74,39 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
+    public void FreeXWorkbookOpenSavePickerReadiness_StaysInSharedPlanner()
+    {
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileCommandPlanner.cs"));
+        var avaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.cs"));
+        var wpfLifecycleSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.WorkbookLifecycle.cs"));
+
+        plannerSource.Should().Contain("PlanOpenPicker(");
+        plannerSource.Should().Contain("PlanSaveAsPicker(");
+        plannerSource.Should().Contain("OpenUnavailableMessage");
+        plannerSource.Should().Contain("NoSaveFormatsMessage");
+
+        avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats)");
+        avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
+        avaloniaSource.Should().Contain("StorageProvider.CanSave,");
+        avaloniaSource.Should().NotContain("\"Open unavailable on this platform.\"");
+        avaloniaSource.Should().NotContain("\"No open formats are available.\"");
+        avaloniaSource.Should().NotContain("\"Save As unavailable on this platform.\"");
+        avaloniaSource.Should().NotContain("\"No save formats are available.\"");
+
+        wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
+        wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(");
+    }
+
+    [Fact]
     public void GetDataPickerPolicy_StaysInSharedPlanner()
     {
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
