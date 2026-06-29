@@ -43,7 +43,7 @@ public sealed class FindReplaceDialog : Window
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
-        Title  = showReplace ? "Find and Replace" : "Find";
+        Title  = FindReplaceDialogPlanner.TitleForMode(showReplace);
         Width  = 440;
         SizeToContent = SizeToContent.Height;
         ResizeMode    = ResizeMode.NoResize;
@@ -172,7 +172,7 @@ public sealed class FindReplaceDialog : Window
     public void ShowReplaceMode(bool show)
     {
         SetReplaceRowsVisible(show);
-        Title = show ? "Find and Replace" : "Find";
+        Title = FindReplaceDialogPlanner.TitleForMode(show);
     }
 
     private void SetReplaceRowsVisible(bool visible)
@@ -202,8 +202,8 @@ public sealed class FindReplaceDialog : Window
         if (_matches.Count == 0) return;
 
         // Replace current match (or first if none selected).
-        int idx = _currentMatchIndex >= 0 ? _currentMatchIndex : 0;
-        if (idx >= _matches.Count) idx = 0;
+        int idx = FindReplaceDialogPlanner.ReplacementTargetIndex(_currentMatchIndex, _matches.Count);
+        if (idx < 0) return;
 
         _editor.ReplaceOne(_matches[idx], _replaceBox.Text ?? string.Empty);
         InvalidateSearch();
@@ -213,14 +213,12 @@ public sealed class FindReplaceDialog : Window
     private void OnReplaceAll(object sender, RoutedEventArgs e)
     {
         var query = _findBox.Text;
-        if (string.IsNullOrEmpty(query)) return;
+        if (!FindReplaceDialogPlanner.CanReplaceAll(query)) return;
 
         int count = _editor.ReplaceAll(query, _replaceBox.Text ?? string.Empty, BuildOptions());
         InvalidateSearch();
-        _statusText.Text       = count == 0 ? "No replacements made." : $"{count} replacement(s) made.";
-        _statusText.Foreground = count == 0
-            ? new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28))
-            : new SolidColorBrush(Color.FromRgb(0x1B, 0x7E, 0x30));
+        var status = FindReplaceDialogPlanner.ReplacementStatus(count);
+        ApplyStatus(status.StatusText, status.StatusKind);
     }
 
     // ── Keyboard shortcut: Enter = Find Next ─────────────────────────────────
@@ -253,28 +251,37 @@ public sealed class FindReplaceDialog : Window
     {
         EnsureMatches();
 
-        if (_matches.Count == 0)
+        var plan = FindReplaceDialogPlanner.Navigate(_currentMatchIndex, _matches.Count, direction);
+        if (!plan.HasMatch)
         {
-            _statusText.Text       = "No matches found.";
-            _statusText.Foreground = new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28));
+            ApplyStatus(plan.StatusText, plan.StatusKind);
             return;
         }
 
-        // Advance (wrap around).
-        _currentMatchIndex = (_currentMatchIndex + direction + _matches.Count) % _matches.Count;
+        _currentMatchIndex = plan.MatchIndex;
         var match = _matches[_currentMatchIndex];
 
         _editor.NavigateTo(match);
 
-        _statusText.Text       = $"Match {_currentMatchIndex + 1} of {_matches.Count}";
-        _statusText.Foreground = new SolidColorBrush(Color.FromRgb(0x1B, 0x7E, 0x30));
+        ApplyStatus(plan.StatusText, plan.StatusKind);
     }
 
-    private TextSearchOptions BuildOptions() => new TextSearchOptions
+    private TextSearchOptions BuildOptions() => FindReplaceDialogPlanner.BuildOptions(
+        _matchCaseBox.IsChecked == true,
+        _wholeWordBox.IsChecked == true);
+
+    private void ApplyStatus(string text, FindReplaceStatusKind kind)
     {
-        MatchCase = _matchCaseBox.IsChecked == true,
-        WholeWord = _wholeWordBox.IsChecked == true,
-    };
+        _statusText.Text = text;
+        _statusText.Foreground = kind switch
+        {
+            FindReplaceStatusKind.NoMatches or FindReplaceStatusKind.NoReplacements =>
+                new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),
+            FindReplaceStatusKind.Match or FindReplaceStatusKind.Replacements =>
+                new SolidColorBrush(Color.FromRgb(0x1B, 0x7E, 0x30)),
+            _ => new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+        };
+    }
 
     // ── UI factory helpers ────────────────────────────────────────────────────
 
