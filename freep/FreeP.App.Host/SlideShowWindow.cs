@@ -473,45 +473,23 @@ public sealed class SlideShowWindow : Window
         // Play transition sound first (fire-and-forget; swallowed on error).
         PlayTransitionSound(t);
 
-        switch (t.Kind)
+        var plan = SlideShowTransitionPlanner.Plan(t);
+        switch (plan.PlaybackKind)
         {
-            case TransitionKind.Cut:
+            case SlideShowTransitionPlaybackKind.Cut:
                 ShowSlideInstant(slide);
                 return;
 
-            case TransitionKind.Fade:
-            case TransitionKind.Dissolve:
-            case TransitionKind.Flash:       // flash → fast fade approximation
+            case SlideShowTransitionPlaybackKind.Fade:
+            case SlideShowTransitionPlaybackKind.FadeFallback:
                 PlayFadeTransition(slide, ms);
                 return;
 
-            case TransitionKind.Push:
-            case TransitionKind.Cover:
-            case TransitionKind.Wipe:
-            case TransitionKind.Uncover:
-                PlayPushTransition(slide, t, ms);
+            case SlideShowTransitionPlaybackKind.PushLike:
+                PlayPushTransition(slide, plan, ms);
                 return;
 
-            // Directional / slide-like transitions: Push approximation
-            case TransitionKind.Gallery:
-            case TransitionKind.Conveyor:
-            case TransitionKind.Pan:
-            case TransitionKind.Reveal:
-            case TransitionKind.Comb:
-            case TransitionKind.Doors:
-            case TransitionKind.Window:
-                PlayPushTransition(slide, t, ms);
-                return;
-
-            // Exotic / 3-D transitions: Fade fallback
-            // Full morph/3D transition engines are out of scope; Fade is the safe approximation.
-            // Kinds: Morph, Cube, Box, Rotate, Flip, Ferris, Flythrough, Switch, Orbit, Honeycomb,
-            //        Glitter, Vortex, Shred, Wind, Ripple, Warp, Fracture, Crush, PeelOff,
-            //        PageCurlDouble, PageCurlSingle, Airplane, Origami, Prism, Curtains, Drape,
-            //        Prestige, WheelReverse, Zoom, Wheel, RandomBar, Strips, Blinds, Split, Random,
-            //        Fly, Other (unknown/exotic)
             default:
-                // All other kinds (including morph and all 3-D effects) fall back to Fade.
                 PlayFadeTransition(slide, ms);
                 return;
         }
@@ -598,12 +576,12 @@ public sealed class SlideShowWindow : Window
         _slideCanvas.BeginAnimation(OpacityProperty, anim);
     }
 
-    private void PlayPushTransition(Slide slide, SlideTransition t, int durationMs)
+    private void PlayPushTransition(Slide slide, SlideShowTransitionPlan plan, int durationMs)
     {
         var snapshot = CaptureCurrentSlide();
 
-        // Determine direction vector for the push.
-        var (dx, dy) = GetDirectionVector(t.Direction, t.Kind);
+        var dx = plan.IncomingOffsetX;
+        var dy = plan.IncomingOffsetY;
 
         double w = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : 960;
         double h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
@@ -636,26 +614,6 @@ public sealed class SlideShowWindow : Window
 
         incomingTranslate.BeginAnimation(TranslateTransform.XProperty, animX);
         incomingTranslate.BeginAnimation(TranslateTransform.YProperty, animY);
-    }
-
-    /// <summary>
-    /// Returns the (dx, dy) unit vector for the incoming slide's starting position
-    /// (before the push animation brings it to centre).
-    /// For Push/Cover: slide comes from the opposite edge it pushes toward.
-    /// </summary>
-    private static (double dx, double dy) GetDirectionVector(
-        TransitionDirection? dir, TransitionKind kind)
-    {
-        // Push/Cover right: incoming comes from the right → starts at +1,0
-        // Push left: incoming comes from the left → starts at -1,0
-        return dir switch
-        {
-            TransitionDirection.Right => (-1, 0),   // slide going right, incoming from left
-            TransitionDirection.Left  => ( 1, 0),   // slide going left,  incoming from right
-            TransitionDirection.Down  => ( 0,-1),   // slide going down,  incoming from top
-            TransitionDirection.Up    => ( 0, 1),   // slide going up,    incoming from bottom
-            _                         => ( 1, 0),   // default: slide from right
-        };
     }
 
     // ── Shape animation overlay ───────────────────────────────────────────────────
