@@ -142,19 +142,27 @@ public partial class MainWindow
         key is null ? null : UiText.Get(key);
 
     private Action ResolveBackstageCommand(FreeXBackstageCommandWorkflowPlan plan) =>
-        plan.Workflow switch
-        {
-            FreeXBackstageCommandWorkflowKind.NewWorkbook => async () => await RequestNewWorkbookAsync(),
-            FreeXBackstageCommandWorkflowKind.OpenWorkbook => () => OpenButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandWorkflowKind.ShareWorkbook => async () => await ShareWorkbookAsync(),
-            FreeXBackstageCommandWorkflowKind.SaveWorkbook => () => SaveButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandWorkflowKind.SaveWorkbookAs => () => SaveAsButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandWorkflowKind.ExportWorkbook => () => ExportPdfButton_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandWorkflowKind.CloseWorkbook => Close,
-            FreeXBackstageCommandWorkflowKind.Account => () => SsAccountBtn_Click(this, new RoutedEventArgs()),
-            FreeXBackstageCommandWorkflowKind.Options => () => SsOptionsBtn_Click(this, new RoutedEventArgs()),
-            _ => throw new InvalidOperationException($"Unsupported Backstage command '{plan.Command}'.")
-        };
+        async () => await FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(
+            plan,
+            CreateBackstageCommandHandlers());
+
+    private FreeXBackstageCommandHandlers CreateBackstageCommandHandlers() =>
+        new(
+            NewWorkbookAsync: RequestNewWorkbookAsync,
+            OpenWorkbookAsync: () => RunBackstageCommand(() => OpenButton_Click(this, new RoutedEventArgs())),
+            ShareWorkbookAsync: ShareWorkbookAsync,
+            SaveWorkbookAsync: () => RunBackstageCommand(() => SaveButton_Click(this, new RoutedEventArgs())),
+            SaveWorkbookAsAsync: () => RunBackstageCommand(() => SaveAsButton_Click(this, new RoutedEventArgs())),
+            ExportWorkbookAsync: () => RunBackstageCommand(() => ExportPdfButton_Click(this, new RoutedEventArgs())),
+            CloseWorkbookAsync: () => RunBackstageCommand(Close),
+            AccountAsync: () => RunBackstageCommand(() => SsAccountBtn_Click(this, new RoutedEventArgs())),
+            OptionsAsync: () => RunBackstageCommand(() => SsOptionsBtn_Click(this, new RoutedEventArgs())));
+
+    private static Task RunBackstageCommand(Action action)
+    {
+        action();
+        return Task.CompletedTask;
+    }
 
     // ── Pane content factories ──────────────────────────────────────────────────
     // Each runs the same live-refresh the old Show*View methods did, then hands the existing pane element to

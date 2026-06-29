@@ -64,8 +64,12 @@ public sealed partial class MainWindowSourceHygieneTests
         frameSource.Should().Contain("RequirePaneFlow(entry)");
         frameSource.Should().Contain("RequireCommandWorkflow(entry)");
         frameSource.Should().Contain("BuildBackstagePane(FreeXBackstagePaneFlowPlan plan)");
+        frameSource.Should().Contain("FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(");
+        frameSource.Should().Contain("CreateBackstageCommandHandlers()");
         frameSource.Should().NotContain("ResolveBackstageCommand(FreeXBackstageCommandId command)");
         frameSource.Should().NotContain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(");
+        frameSource.Should().NotContain("FreeXBackstageCommandWorkflowKind.NewWorkbook");
+        frameSource.Should().NotContain("FreeXBackstageCommandWorkflowKind.ExportWorkbook");
         frameSource.Should().NotContain("ResolveBackstagePane(FreeXBackstagePaneId pane)");
         frameSource.Should().NotContain("FreeXBackstageFlowPlanner.BuildPaneFlow(");
         frameSource.Should().NotContain("private const string BackstageHomePaneId");
@@ -487,10 +491,10 @@ public sealed partial class MainWindowSourceHygieneTests
 
         reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
 
-        // The backstage Share rail entry now lives on the shared frame and routes to ShareWorkbookAsync from
-        // the FreeX frame wrapper instead of a SsShareBtn_Click forwarder.
+        // The backstage Share rail entry now lives on the shared frame and routes through the shared
+        // workflow executor to the FreeX frame wrapper's ShareWorkbookAsync handler.
         var frameSource = DialogSourceTestSupport.ReadHostSources("MainWindow.BackstageFrame.cs");
-        frameSource.Should().Contain("await ShareWorkbookAsync()");
+        frameSource.Should().Contain("ShareWorkbookAsync: ShareWorkbookAsync");
     }
 
     [Fact]
