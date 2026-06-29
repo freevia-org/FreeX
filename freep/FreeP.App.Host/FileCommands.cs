@@ -110,7 +110,7 @@ internal sealed class FileCommands
     /// <summary>File &gt; Save As. Always prompts for a target.</summary>
     public bool SaveAs()
     {
-        var plan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(SourceFileName(_workflow.CurrentPath));
+        var plan = PresentationFileDialogPlanner.BuildSaveAsDialogPlan(_workflow.CurrentFileName);
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         return result.Chosen && SaveTo(result.FileName!);
     }
@@ -121,7 +121,7 @@ internal sealed class FileCommands
     /// </summary>
     public bool ExportPdf()
     {
-        var plan = PresentationFileDialogPlanner.BuildPdfExportDialogPlan(SourceFileName(_workflow.CurrentPath));
+        var plan = PresentationFileDialogPlanner.BuildPdfExportDialogPlan(_workflow.CurrentFileName);
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         if (!result.Chosen)
             return false;
@@ -188,9 +188,6 @@ internal sealed class FileCommands
         var result = WpfFileDialogService.ShowOpenDialog(_window, OpenDialogPlan);
         return result.Chosen ? result.FileName : null;
     }
-
-    private static string? SourceFileName(string? path) =>
-        path is null ? null : Path.GetFileName(path);
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
     private SaveChangesPrompt PromptSaveChanges(string action) =>

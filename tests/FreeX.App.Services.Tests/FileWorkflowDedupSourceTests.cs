@@ -106,4 +106,43 @@ public sealed class FileWorkflowDedupSourceTests
         avaloniaSource.Should().Contain("FileTypeFilter = CreateFilePickerFileTypes(pickerPlan.FileTypes)");
         avaloniaSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
     }
+
+    [Fact]
+    public void SisterAppFileNamePolicy_StaysInSharedWorkflow()
+    {
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared",
+            "Free.Shared.AppServices",
+            "FileCommandWorkflow.cs"));
+        var freewWpfSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freew",
+            "FreeW.App.Host",
+            "FileCommands.cs"));
+        var freewAvaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freew",
+            "FreeW.App.Avalonia",
+            "MainWindow.cs"));
+        var freepWpfSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freep",
+            "FreeP.App.Host",
+            "FileCommands.cs"));
+        var freepAvaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.cs"));
+
+        workflowSource.Should().Contain("CurrentFileName");
+        workflowSource.Should().Contain("CurrentFileNameWithoutExtensionOr");
+        freewWpfSource.Should().Contain("_workflow.CurrentFileName");
+        freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileName");
+        freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileNameWithoutExtensionOr(\"Document\")");
+        freepWpfSource.Should().Contain("_workflow.CurrentFileName");
+        freepAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileName");
+
+        freewWpfSource.Should().NotContain("Path.GetFileName(_workflow.CurrentPath)");
+        freewAvaloniaSource.Should().NotContain("Path.GetFileName(_fileWorkflow.CurrentPath)");
+        freewAvaloniaSource.Should().NotContain("Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentPath)");
+        freepWpfSource.Should().NotContain("SourceFileName(_workflow.CurrentPath)");
+        freepAvaloniaSource.Should().NotContain("SourceFileName(_fileWorkflow.CurrentPath)");
+    }
 }
