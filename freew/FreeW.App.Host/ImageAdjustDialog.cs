@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -24,10 +25,17 @@ internal sealed class ImageAdjustDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _brightnessBox   = Box(brightnessPct);
-        _contrastBox     = Box(contrastPct);
-        _saturationBox   = Box(saturationPct);
-        _transparencyBox = Box(transparencyPct);
+        var state = ImageAdjustDialogPlanner.BuildInitialState(
+            brightnessPct,
+            contrastPct,
+            saturationPct,
+            transparencyPct,
+            CultureInfo.CurrentCulture);
+
+        _brightnessBox = Box(state.BrightnessText);
+        _contrastBox = Box(state.ContrastText);
+        _saturationBox = Box(state.SaturationText);
+        _transparencyBox = Box(state.TransparencyText);
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -59,33 +67,32 @@ internal sealed class ImageAdjustDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         DialogFocus.FocusAndSelect(_brightnessBox);
     }
 
-    private static TextBox Box(double value) =>
-        new() { Text = value.ToString("0.##", CultureInfo.CurrentCulture), MinWidth = 80 };
+    private static TextBox Box(string text) =>
+        new() { Text = text, MinWidth = 80 };
 
     private static TextBlock Label(string text) =>
         new() { Text = text, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 0) };
 
     private void Accept()
     {
-        if (!TryParseDouble(_brightnessBox.Text, -100, 100, out var brightness, "Brightness"))   return;
-        if (!TryParseDouble(_contrastBox.Text,   -100, 100, out var contrast,   "Contrast"))     return;
-        if (!TryParseDouble(_saturationBox.Text,    0, 400, out var saturation, "Saturation"))   return;
-        if (!TryParseDouble(_transparencyBox.Text,  0, 100, out var transparency,"Transparency")) return;
-
-        _result = (brightness, contrast, saturation, transparency);
-        Close();
-    }
-
-    private bool TryParseDouble(string text, double min, double max, out double value, string label)
-    {
-        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value)
-            || value < min || value > max)
+        if (!ImageAdjustDialogPlanner.TryBuildResult(
+                new ImageAdjustDialogInput(
+                    _brightnessBox.Text,
+                    _contrastBox.Text,
+                    _saturationBox.Text,
+                    _transparencyBox.Text),
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, $"{label} must be a number between {min} and {max}.");
-            value = 0;
-            return false;
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation?.Message ?? ImageAdjustDialogPlanner.BrightnessValidationMessage);
+            return;
         }
-        return true;
+
+        _result = (result!.Brightness, result.Contrast, result.Saturation, result.Transparency);
+        Close();
     }
 
     /// <summary>Show the dialog. Returns (brightness, contrast, saturation, transparency), or null if cancelled.</summary>
