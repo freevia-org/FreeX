@@ -311,14 +311,14 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Toggle("freew.italic",          FreeWRibbonText.ItalicCommand.Label, b => b with { KeyTip = FreeWRibbonText.ItalicCommand.KeyTip });
                     g.Toggle("freew.underline",       FreeWRibbonText.UnderlineCommand.Label, b => b with { KeyTip = FreeWRibbonText.UnderlineCommand.KeyTip });
                     g.Toggle("freew.strikethrough",   FreeWRibbonText.StrikethroughCommand.Label);
-                    g.Toggle("freew.superscript",     "X²");
-                    g.Toggle("freew.subscript",       "X₂");
-                    g.Button("freew.highlight",       "Highlight");
-                    g.Button("freew.grow-font",       "A↑");
-                    g.Button("freew.shrink-font",     "A↓");
-                    g.Button("freew.clear-formatting", "Clear");
-                    g.Dropdown("freew.font-color", "Font Color", BuildFontColorMenu());
-                    g.Button("freew.change-case",     "Aa");
+                    g.Toggle("freew.superscript",     FreeWRibbonText.SuperscriptCompactCommand.Label);
+                    g.Toggle("freew.subscript",       FreeWRibbonText.SubscriptCompactCommand.Label);
+                    g.Button("freew.highlight",       FreeWRibbonText.HighlightCompactCommand.Label);
+                    g.Button("freew.grow-font",       FreeWRibbonText.GrowFontCompactCommand.Label);
+                    g.Button("freew.shrink-font",     FreeWRibbonText.ShrinkFontCompactCommand.Label);
+                    g.Button("freew.clear-formatting", FreeWRibbonText.ClearFormattingCompactCommand.Label);
+                    g.Dropdown("freew.font-color", FreeWRibbonText.FontColorDropdownCommand.Label, BuildFontColorMenu());
+                    g.Button("freew.change-case",     FreeWRibbonText.ChangeCaseCompactCommand.Label);
                     g.Button("freew.font-dialog",     FreeWRibbonText.FontDialogCommand.Label);
                 });
                 tab.Group("paragraph", "Paragraph", null, 80, g =>

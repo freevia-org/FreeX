@@ -18,6 +18,32 @@ public sealed class FreeWRibbonDefinitionProfileTests
         "file",
     ];
 
+    private static readonly string[] WpfFontEffectCommandIds =
+    [
+        "freew.grow-font",
+        "freew.shrink-font",
+        "freew.subscript",
+        "freew.superscript",
+        "freew.change-case",
+        "freew.smallcaps",
+        "freew.allcaps",
+        "freew.highlight",
+        "freew.font-color",
+        "freew.clear-formatting",
+    ];
+
+    private static readonly string[] AvaloniaFontEffectCommandIds =
+    [
+        "freew.grow-font",
+        "freew.shrink-font",
+        "freew.superscript",
+        "freew.subscript",
+        "freew.highlight",
+        "freew.clear-formatting",
+        "freew.font-color",
+        "freew.change-case",
+    ];
+
     private static readonly DivergenceRule[] WpfOnlyCommandRules =
     [
         new("WPF-only tabs", entry => WpfOnlyTabIds.Contains(entry.TabId, StringComparer.Ordinal)),
@@ -306,6 +332,75 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().Contain("FreeWRibbonText.FontDialogCommand");
     }
 
+    [Fact]
+    public void Home_font_effect_text_is_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            AssertWpfFontEffectLabelsUseResources(
+                FontControlLabels(FreeWRibbonCapabilities.Wpf, WpfFontEffectCommandIds));
+            AssertAvaloniaFontEffectLabelsUseResources(
+                FontControlLabels(FreeWRibbonCapabilities.Avalonia, AvaloniaFontEffectCommandIds));
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            AssertWpfFontEffectLabelsUseResources(
+                FontControlLabels(FreeWRibbonCapabilities.Wpf, WpfFontEffectCommandIds));
+            AssertAvaloniaFontEffectLabelsUseResources(
+                FontControlLabels(FreeWRibbonCapabilities.Avalonia, AvaloniaFontEffectCommandIds));
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Home_font_effect_profile_sources_use_resource_descriptors()
+    {
+        var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+
+        wpfSource.Should().NotContain("g.Icon(\"freew.grow-font\", \"Grow Font\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.shrink-font\", \"Shrink Font\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.subscript\", \"Subscript\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.superscript\", \"Superscript\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.change-case\", \"Change Case\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.smallcaps\", \"Small Caps\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.allcaps\", \"All Caps\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.highlight\", \"Text Highlight Colour\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.font-color\", \"Font Colour\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.clear-formatting\", \"Clear All Formatting\"");
+        wpfSource.Should().Contain("FreeWRibbonText.GrowFontCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.ShrinkFontCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.SubscriptCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.SuperscriptCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.ChangeCaseCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.SmallCapsCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.TextHighlightColorCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.FontColorCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.ClearAllFormattingCommand");
+
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.superscript\",     \"X");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.subscript\",       \"X");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.highlight\",       \"Highlight\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.grow-font\",       \"A");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.shrink-font\",     \"A");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.clear-formatting\", \"Clear\"");
+        avaloniaSource.Should().NotContain("g.Dropdown(\"freew.font-color\", \"Font Color\"");
+        avaloniaSource.Should().NotContain("g.Button(\"freew.change-case\",     \"Aa\"");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SuperscriptCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SubscriptCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.HighlightCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.GrowFontCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ShrinkFontCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ClearFormattingCompactCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.FontColorDropdownCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ChangeCaseCompactCommand");
+    }
+
     private static bool IsAllowed(CommandEntry entry, IReadOnlyList<DivergenceRule> rules) =>
         rules.Any(rule => rule.IsAllowed(entry));
 
@@ -400,6 +495,48 @@ public sealed class FreeWRibbonDefinitionProfileTests
         surface.UnderlineKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_Underline_KeyTip"));
         surface.StrikethroughLabel.Should().Be(Loc.Get("Ribbon_Command_Strikethrough_Label"));
         surface.FontDialogLabel.Should().Be(Loc.Get("Ribbon_Command_FontDialog_Label"));
+    }
+
+    private static IReadOnlyDictionary<string, string> FontControlLabels(
+        FreeWRibbonCapabilities capabilities,
+        IEnumerable<string> commandIds)
+    {
+        var definition = FreeWRibbon.Build(capabilities);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var font = home!.FindGroup("font");
+        font.Should().NotBeNull();
+
+        return commandIds.ToDictionary(
+            commandId => commandId,
+            commandId => RequiredControl(font!, commandId).Label,
+            StringComparer.Ordinal);
+    }
+
+    private static void AssertWpfFontEffectLabelsUseResources(IReadOnlyDictionary<string, string> labels)
+    {
+        labels["freew.grow-font"].Should().Be(Loc.Get("Ribbon_Command_GrowFont_Label"));
+        labels["freew.shrink-font"].Should().Be(Loc.Get("Ribbon_Command_ShrinkFont_Label"));
+        labels["freew.subscript"].Should().Be(Loc.Get("Ribbon_Command_Subscript_Label"));
+        labels["freew.superscript"].Should().Be(Loc.Get("Ribbon_Command_Superscript_Label"));
+        labels["freew.change-case"].Should().Be(Loc.Get("Ribbon_Command_ChangeCase_Label"));
+        labels["freew.smallcaps"].Should().Be(Loc.Get("Ribbon_Command_SmallCaps_Label"));
+        labels["freew.allcaps"].Should().Be(Loc.Get("Ribbon_Command_AllCaps_Label"));
+        labels["freew.highlight"].Should().Be(Loc.Get("Ribbon_Command_TextHighlightColor_Label"));
+        labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColor_Label"));
+        labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearAllFormatting_Label"));
+    }
+
+    private static void AssertAvaloniaFontEffectLabelsUseResources(IReadOnlyDictionary<string, string> labels)
+    {
+        labels["freew.grow-font"].Should().Be(Loc.Get("Ribbon_Command_GrowFontCompact_Label"));
+        labels["freew.shrink-font"].Should().Be(Loc.Get("Ribbon_Command_ShrinkFontCompact_Label"));
+        labels["freew.superscript"].Should().Be(Loc.Get("Ribbon_Command_SuperscriptCompact_Label"));
+        labels["freew.subscript"].Should().Be(Loc.Get("Ribbon_Command_SubscriptCompact_Label"));
+        labels["freew.highlight"].Should().Be(Loc.Get("Ribbon_Command_HighlightCompact_Label"));
+        labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearFormattingCompact_Label"));
+        labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColorDropdown_Label"));
+        labels["freew.change-case"].Should().Be(Loc.Get("Ribbon_Command_ChangeCaseCompact_Label"));
     }
 
     private static string ReadRepositoryFile(params string[] relativeParts)
