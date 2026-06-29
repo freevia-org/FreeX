@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -237,10 +238,22 @@ public sealed class ViewTabDepthTests
     [Fact]
     public async Task Zoom_dialog_page_relative_presets_resolve_to_their_scales()
     {
-        // Constants are exposed so the shell + tests agree on the page-relative fit factors.
-        ZoomDialog.PageWidthScale.Should().BeGreaterThan(1.0);
-        ZoomDialog.TextWidthScale.Should().BeGreaterThan(ZoomDialog.PageWidthScale);
-        ZoomDialog.WholePageScale.Should().BeLessThan(1.0);
+        // Page-relative fit arithmetic is owned by the shared presentation planner; the Avalonia
+        // dialog only supplies the host's current fit factors.
+        ZoomDialogPlanner
+            .TryCreateResult(
+                new ZoomDialogSelectionRequest(
+                    ZoomDialogFitOption.PageWidth,
+                    PresetPercent: null,
+                    CustomPercentText: "not parsed"),
+                new ZoomDialogFitFactors(1.25, 1.5, 0.6),
+                out var scale,
+                out var error)
+            .Should()
+            .BeTrue();
+
+        scale.Should().Be(1.25);
+        error.Should().BeNull();
         await Task.CompletedTask;
     }
 }

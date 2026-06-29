@@ -110,6 +110,13 @@ public static class ZoomDialogPlanner
         return true;
     }
 
+    public static string ValidationMessageFor(ZoomDialogValidationError? error) =>
+        error switch
+        {
+            ZoomDialogValidationError.WholePercentRequired => "Enter a whole zoom percentage.",
+            _ => "Enter a whole zoom percentage."
+        };
+
     private static double ResolveFit(ZoomDialogFitOption fitOption, ZoomDialogFitFactors fitFactors) =>
         fitOption switch
         {

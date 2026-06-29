@@ -1,47 +1,48 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
 /// <summary>
-/// AV-VIEW: Zoom dialog (modal). Mirrors Word's View → Zoom dialog: a set of preset radio buttons
-/// (200% / 100% / 75% / Page width / Text width / Whole page) plus a custom-percent box. The chosen
-/// zoom is returned to the caller as a scale factor (1.0 == 100%) so <c>MainWindow.ApplyZoom</c> can
-/// apply it through the same path as the quick zoom-in / zoom-out / 100% commands.
+/// AV-VIEW: Zoom dialog (modal). Mirrors Word's View > Zoom dialog: fixed preset radio buttons,
+/// page-relative fit options, and a custom-percent box.
 ///
 /// <para>
-/// "Page width", "Text width" and "Whole page" map to representative fixed scales here (the shell does
-/// not yet expose viewport metrics to compute exact fit factors); the custom box and the numeric
-/// presets are exact. The dialog returns <c>null</c> on Cancel so the current zoom is left untouched.
+/// The dialog stays Avalonia-only chrome: preset/default selection, custom percentage parsing,
+/// validation, and result resolution live in <see cref="ZoomDialogPlanner"/> so it matches the WPF
+/// dialog policy.
 /// </para>
 /// </summary>
 internal sealed class ZoomDialog : Window
 {
-    // Representative "fit" scales for the page-relative presets. These mirror typical Word values for
-    // a Letter page in a ~1000px workspace; an exact fit-to-viewport computation is deferred.
-    internal const double PageWidthScale = 1.25;
-    internal const double TextWidthScale = 1.5;
-    internal const double WholePageScale = 0.6;
+    // Representative fit scales for the page-relative presets. These mirror typical Word values for
+    // a Letter page in a roughly 1000px workspace; exact fit-to-viewport computation is deferred.
+    private static readonly ZoomDialogFitFactors DefaultFitFactors = new(
+        PageWidthFactor: 1.25,
+        TextWidthFactor: 1.5,
+        WholePageFactor: 0.6);
 
-    private readonly RadioButton _r200      = Preset("200%");
-    private readonly RadioButton _r100      = Preset("100%");
-    private readonly RadioButton _r75       = Preset("75%");
-    private readonly RadioButton _rPageWide = Preset("Page width");
-    private readonly RadioButton _rTextWide = Preset("Text width");
-    private readonly RadioButton _rWhole    = Preset("Whole page");
-    private readonly RadioButton _rCustom   = Preset("Percent:");
-    private readonly NumericUpDown _percent = new()
+    private readonly RadioButton _pageWidthButton = Preset("Page width");
+    private readonly RadioButton _textWidthButton = Preset("Text width");
+    private readonly RadioButton _wholePageButton = Preset("Whole page");
+    private readonly RadioButton _customButton = Preset("Percent:");
+    private readonly TextBox _percentBox = new()
     {
-        Minimum = 50,
-        Maximum = 300,
-        Increment = 10,
-        Width = 90,
-        FormatString = "0",
+        Width = 64,
         VerticalAlignment = VerticalAlignment.Center,
     };
+    private readonly TextBlock _status = new()
+    {
+        Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00)),
+        FontSize = 11,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(16, 8, 16, 0),
+        IsVisible = false,
+    };
+    private readonly List<(RadioButton Button, int Percent)> _presetButtons = [];
 
     /// <summary>The scale the user accepted (1.0 == 100%), or <c>null</c> if cancelled.</summary>
     public double? Result { get; private set; }
@@ -50,40 +51,53 @@ internal sealed class ZoomDialog : Window
     {
         Title = "Zoom";
         Width = 280;
-        Height = 300;
+        SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
+        ShowInTaskbar = false;
 
-        _percent.Value = (decimal)System.Math.Round(currentScale * 100);
-
-        // Select the radio matching the current scale, else fall back to the custom box.
-        var pct = (int)System.Math.Round(currentScale * 100);
-        switch (pct)
-        {
-            case 200: _r200.IsChecked = true; break;
-            case 100: _r100.IsChecked = true; break;
-            case 75:  _r75.IsChecked = true;  break;
-            default:  _rCustom.IsChecked = true; break;
-        }
-
-        // Editing the custom percent switches selection to the custom radio.
-        _percent.ValueChanged += (_, _) => _rCustom.IsChecked = true;
+        var plan = ZoomDialogPlanner.Build(currentScale);
+        _percentBox.Text = plan.CustomPercentText;
+        _percentBox.GotFocus += (_, _) => _customButton.IsChecked = true;
+        _percentBox.TextChanged += (_, _) => _customButton.IsChecked = true;
 
         var customRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Children = { _rCustom, _percent },
+            Children =
+            {
+                _customButton,
+                _percentBox,
+                new TextBlock
+                {
+                    Text = "%",
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0, 0, 0),
+                },
+            },
         };
 
         var presets = new StackPanel
         {
             Margin = new Thickness(16, 14, 16, 0),
             Spacing = 2,
-            Children = { _r200, _r100, _r75, _rPageWide, _rTextWide, _rWhole, customRow },
         };
+        foreach (var preset in plan.Presets)
+        {
+            var button = Preset($"{preset.Percent}%");
+            button.IsChecked = preset.IsSelected;
+            _presetButtons.Add((button, preset.Percent));
+            presets.Children.Add(button);
+        }
+
+        presets.Children.Add(_pageWidthButton);
+        presets.Children.Add(_textWidthButton);
+        presets.Children.Add(_wholePageButton);
+        _customButton.IsChecked = plan.InitialChoice == ZoomDialogInitialChoice.Custom;
+        presets.Children.Add(customRow);
 
         var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
-        ok.Click += (_, _) => { Result = ResolveScale(); Close(); };
+        ok.Click += (_, _) => Accept();
         var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
         cancel.Click += (_, _) => { Result = null; Close(); };
 
@@ -99,7 +113,7 @@ internal sealed class ZoomDialog : Window
         Content = new DockPanel
         {
             LastChildFill = true,
-            Children = { buttons, presets },
+            Children = { buttons, new StackPanel { Children = { presets, _status } } },
         };
     }
 
@@ -109,15 +123,57 @@ internal sealed class ZoomDialog : Window
     /// </summary>
     internal double ResolveScale()
     {
-        if (_r200.IsChecked == true) return 2.0;
-        if (_r100.IsChecked == true) return 1.0;
-        if (_r75.IsChecked == true)  return 0.75;
-        if (_rPageWide.IsChecked == true) return PageWidthScale;
-        if (_rTextWide.IsChecked == true) return TextWidthScale;
-        if (_rWhole.IsChecked == true)    return WholePageScale;
-        // Custom percent (default).
-        var pct = (double)(_percent.Value ?? 100m);
-        return pct / 100.0;
+        if (TryResolveScale(out var scale, out var error))
+            return scale;
+
+        throw new InvalidOperationException(ZoomDialogPlanner.ValidationMessageFor(error));
+    }
+
+    internal bool TryResolveScale(out double scale, out ZoomDialogValidationError? error) =>
+        ZoomDialogPlanner.TryCreateResult(BuildSelectionRequest(), DefaultFitFactors, out scale, out error);
+
+    private void Accept()
+    {
+        _status.IsVisible = false;
+        if (!TryResolveScale(out var scale, out var error))
+        {
+            _status.Text = ZoomDialogPlanner.ValidationMessageFor(error);
+            _status.IsVisible = true;
+            _customButton.IsChecked = true;
+            _percentBox.Focus();
+            return;
+        }
+
+        Result = scale;
+        Close();
+    }
+
+    private ZoomDialogSelectionRequest BuildSelectionRequest() => new ZoomDialogSelectionRequest(
+        GetSelectedFitOption(),
+        GetSelectedPresetPercent(),
+        _percentBox.Text);
+
+    private ZoomDialogFitOption? GetSelectedFitOption()
+    {
+        if (_pageWidthButton.IsChecked == true)
+            return ZoomDialogFitOption.PageWidth;
+        if (_textWidthButton.IsChecked == true)
+            return ZoomDialogFitOption.TextWidth;
+        if (_wholePageButton.IsChecked == true)
+            return ZoomDialogFitOption.WholePage;
+
+        return null;
+    }
+
+    private int? GetSelectedPresetPercent()
+    {
+        foreach (var (button, percent) in _presetButtons)
+        {
+            if (button.IsChecked == true)
+                return percent;
+        }
+
+        return null;
     }
 
     private static RadioButton Preset(string label) => new()
