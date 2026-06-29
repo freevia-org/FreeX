@@ -48,6 +48,9 @@ public sealed partial class MainWindowXamlKeyTipTests
         LocalizedAttribute(zoomSlider, "AutomationProperties.Name").Should().Be(UiText.Get("MainWindow_AutomationName_ZoomSlider"));
         LocalizedAttribute(zoomSlider, "AutomationProperties.HelpText").Should().Contain("10%").And.Contain("400%");
         LocalizedAttribute(zoomSlider, "ToolTip").Should().Be(UiText.Get("MainWindow_ToolTip_Zoom"));
+        zoomSlider.Attribute("Minimum").Should().BeNull("status zoom range is planned by StatusBarZoomSliderPlanner");
+        zoomSlider.Attribute("Maximum").Should().BeNull("status zoom range is planned by StatusBarZoomSliderPlanner");
+        zoomSlider.Attribute("Ticks").Should().BeNull("status zoom tick marks are planned by StatusBarZoomSliderPlanner");
     }
 
     [Fact]

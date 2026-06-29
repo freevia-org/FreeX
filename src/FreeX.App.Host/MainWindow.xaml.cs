@@ -294,6 +294,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        ConfigureStatusZoomSlider();
         // Merge the active brand theme into this window's own resources (as the last entry so it
         // overrides same-keyed brushes from ThemeResources.xaml merged earlier in this dict).
         // DynamicResource references in the title-bar chrome then resolve to these token brushes,

@@ -1317,13 +1317,12 @@
                                                Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                                 </Grid>
                             </Button>
-                            <Slider x:Name="ZoomSlider" Grid.Column="2" Width="120" Height="22" Minimum="0" Maximum="200" Value="100"
+                            <Slider x:Name="ZoomSlider" Grid.Column="2" Width="120" Height="22"
                                     VerticalAlignment="Center" Margin="0"
                                     AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ZoomSlider}"
                                     AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_AdjustWorksheetZoomFrom10To400}"
                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_Zoom}"
-                                    SmallChange="5" LargeChange="10"
-                                    TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
+                                    TickPlacement="BottomRight" IsSnapToTickEnabled="False"
                                     ValueChanged="ZoomSlider_ValueChanged"/>
                             <Button x:Name="StatusZoomInButton" Grid.Column="4" Width="22" Height="22"
                                     Style="{StaticResource StatusBarZoomButtonStyle}"

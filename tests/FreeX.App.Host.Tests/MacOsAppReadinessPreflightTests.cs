@@ -819,7 +819,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("NativeMenuItemId.Zoom100 => _zoom100MenuItem,");
         script.Should().Contain("NativeMenuItemId.ZoomToSelection => _zoomToSelectionMenuItem,");
         script.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
-        script.Should().Contain("_zoomText.Text = FormatZoomPercent(_session.ZoomPercent);");
+        script.Should().Contain("_zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);");
         script.Should().Contain("CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor)");
         script.Should().Contain("displayHeight / zoomFactor");
         script.Should().Contain("showGridlines ? GridLine : Brushes.Transparent");
@@ -2766,16 +2766,16 @@ public sealed class MacOsAppReadinessPreflightTests
                     ToggleShowHeadings();
                     var result = _session.SetShowHeadings(showHeadings);
                     ZoomIn();
-                    ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, "Zoom In failed.");
+                    ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom In failed.");
                     ZoomOut();
-                    ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, "Zoom Out failed.");
+                    ApplyZoomPercent(_session.ZoomPercent - StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom Out failed.");
                     ZoomTo100Percent();
                     ApplyZoomPercent(100, "100% Zoom failed.");
                     ZoomToSelection();
                     ApplyZoomPercent(zoomPercent, "Zoom to Selection failed.");
                     var result = _session.SetZoomPercent(zoomPercent);
                     CalculateZoomAxisFitPercent(viewportWidth, range.ColCount, ZoomToSelectionDefaultColumnWidth);
-                    _zoomText.Text = FormatZoomPercent(_session.ZoomPercent);
+                    _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);
                     var showHeadings = _session.ActiveSheet.ShowHeadings;
                     var zoomFactor = GetActiveZoomFactor();
                     showGridlines ? GridLine : Brushes.Transparent;
@@ -3079,8 +3079,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 private void UngroupSheets() { }
                 private void ToggleShowGridlines() { }
                 private void ToggleShowHeadings() { }
-                private void ZoomIn() => ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, "Zoom In failed.");
-                private void ZoomOut() => ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, "Zoom Out failed.");
+                private void ZoomIn() => ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom In failed.");
+                private void ZoomOut() => ApplyZoomPercent(_session.ZoomPercent - StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom Out failed.");
                 private void ZoomTo100Percent() => ApplyZoomPercent(100, "100% Zoom failed.");
                 private void ZoomToSelection() { }
                 private void ApplyZoomPercent(int zoomPercent, string errorMessage) { }

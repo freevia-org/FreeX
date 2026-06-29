@@ -775,9 +775,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("[\"view.zoom\"] = () => _ = ShowZoomDialogAsync(),");
         source.Should().Contain("[\"More\"] = () => _ = ShowZoomDialogAsync(),");
         source.Should().Contain("private void ZoomIn() =>");
-        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, \"Zoom In failed.\")");
+        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, \"Zoom In failed.\")");
         source.Should().Contain("private void ZoomOut() =>");
-        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, \"Zoom Out failed.\")");
+        source.Should().Contain("ApplyZoomPercent(_session.ZoomPercent - StatusBarZoomSliderPlanner.ZoomStepPercent, \"Zoom Out failed.\")");
         source.Should().Contain("private void ZoomTo100Percent() =>");
         source.Should().Contain("ApplyZoomPercent(100, \"100% Zoom failed.\")");
         source.Should().Contain("private void ZoomToSelection()");
@@ -794,10 +794,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("selectedZoomPercent = CalculateZoomToSelectionPercent();");
         source.Should().Contain("private void ApplyZoomPercent(int zoomPercent, string errorMessage)");
         source.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
-        source.Should().Contain("RefreshShell($\"Zoom {FormatZoomPercent(_session.ZoomPercent)}\");");
+        source.Should().Contain("RefreshShell($\"Zoom {StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)}\");");
         source.Should().Contain("private int CalculateZoomToSelectionPercent()");
         source.Should().Contain("CalculateZoomAxisFitPercent(");
-        source.Should().Contain("_zoomText.Text = FormatZoomPercent(_session.ZoomPercent);");
+        source.Should().Contain("_zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);");
         catalogSource.Should().Contain("new(NativeMenuItemId.ShowFormulas, context.IsIdle, context.IsShowingFormulas)");
         source.Should().Contain("IsShowingFormulas: _session.IsShowingFormulas");
         source.Should().NotContain("_showFormulasMenuItem.IsEnabled = isIdle;");

@@ -328,7 +328,6 @@ public sealed partial class MainWindow : Window
     private const uint PortablePdfRowsPerPage = 28;
     private const double ZoomToSelectionDefaultColumnWidth = 80;
     private const double ZoomToSelectionDefaultRowHeight = 20;
-    private const int ZoomStepPercent = 10;
     private const string WorkbookShareSheetLabel = "macOS Share Sheet";
     private const string NativeWorkbookExtension = ".fxl";
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
@@ -3218,22 +3217,36 @@ public sealed partial class MainWindow : Window
         _zoomText.ContextMenu = statusBarCustomizeMenu;
         _statusZoomSliderHost.ContextMenu = statusBarCustomizeMenu;
         _statusZoomSlider.ContextMenu = statusBarCustomizeMenu;
-        _statusZoomSlider.Minimum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MinZoomPercent);
-        _statusZoomSlider.Maximum = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(SetWorksheetZoomCommand.MaxZoomPercent);
-        _statusZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(_session.ZoomPercent);
-        _statusZoomSlider.SmallChange = 5;
-        _statusZoomSlider.LargeChange = 10;
-        _statusZoomSlider.Width = 120;
-        _statusZoomSlider.Height = 22;
+        var statusZoomPlan = StatusBarZoomSliderPlanner.Build(_session.ZoomPercent);
+        _statusZoomSlider.Minimum = statusZoomPlan.MinimumSliderValue;
+        _statusZoomSlider.Maximum = statusZoomPlan.MaximumSliderValue;
+        _statusZoomSlider.Value = statusZoomPlan.SliderValue;
+        _statusZoomSlider.SmallChange = statusZoomPlan.SmallChange;
+        _statusZoomSlider.LargeChange = statusZoomPlan.LargeChange;
+        _statusZoomSlider.Width = statusZoomPlan.SliderWidth;
+        _statusZoomSlider.Height = statusZoomPlan.SliderHeight;
         _statusZoomSlider.Margin = new Thickness(0);
         _statusZoomSlider.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _statusZoomSlider.ValueChanged += (_, args) =>
         {
-            UpdateStatusZoomSliderThumb(args.NewValue);
+            var inputPlan = StatusBarZoomSliderPlanner.BuildInput(args.NewValue);
+            UpdateStatusZoomSliderThumb(inputPlan.SliderValue);
             if (_isUpdatingStatusZoomSlider)
                 return;
-            var zoomPercent = (int)Math.Round(FreeX.App.Services.ZoomLevelMapper.SliderToZoomPercent(args.NewValue));
-            ApplyZoomPercent(zoomPercent, "Zoom failed.");
+            if (inputPlan.SnappedToDefault)
+            {
+                _isUpdatingStatusZoomSlider = true;
+                try
+                {
+                    _statusZoomSlider.Value = inputPlan.SliderValue;
+                }
+                finally
+                {
+                    _isUpdatingStatusZoomSlider = false;
+                }
+            }
+
+            ApplyZoomPercent(inputPlan.ZoomPercent, "Zoom failed.");
         };
         AutomationProperties.SetName(_statusZoomSlider, "Zoom slider");
         AutomationProperties.SetHelpText(_statusZoomSlider, "Adjusts the worksheet zoom from 10 to 400 percent.");
@@ -3386,8 +3399,9 @@ public sealed partial class MainWindow : Window
 
     private Control BuildStatusZoomSliderHost()
     {
-        _statusZoomSliderHost.Width = 120;
-        _statusZoomSliderHost.Height = 22;
+        var zoomSliderPlan = StatusBarZoomSliderPlanner.Build(_session.ZoomPercent);
+        _statusZoomSliderHost.Width = zoomSliderPlan.SliderWidth;
+        _statusZoomSliderHost.Height = zoomSliderPlan.SliderHeight;
         _statusZoomSliderHost.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _statusZoomSliderHost.ClipToBounds = true;
         _statusZoomSliderHost.Children.Clear();
@@ -3404,8 +3418,8 @@ public sealed partial class MainWindow : Window
         track.ZIndex = 0;
         _statusZoomSliderHost.Children.Add(track);
 
-        _statusZoomSliderThumb.Width = 9;
-        _statusZoomSliderThumb.Height = 16;
+        _statusZoomSliderThumb.Width = StatusBarZoomSliderPlanner.ThumbWidth;
+        _statusZoomSliderThumb.Height = StatusBarZoomSliderPlanner.ThumbHeight;
         _statusZoomSliderThumb.Background = Brush(248, 249, 250);
         _statusZoomSliderThumb.BorderBrush = Brush(124, 133, 143);
         _statusZoomSliderThumb.BorderThickness = new Thickness(1);
@@ -3421,9 +3435,8 @@ public sealed partial class MainWindow : Window
         _statusZoomSlider.Background = Brushes.Transparent;
         _statusZoomSlider.ZIndex = 20;
         _statusZoomSliderHost.Children.Add(_statusZoomSlider);
-        _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 8));
-        _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 60));
-        _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left: 111));
+        foreach (var left in zoomSliderPlan.VisualTickLefts)
+            _statusZoomSliderHost.Children.Add(BuildStatusZoomTick(left));
         UpdateStatusZoomSliderThumb(_statusZoomSlider.Value);
         return _statusZoomSliderHost;
     }
@@ -3443,13 +3456,11 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatusZoomSliderThumb(double sliderValue)
     {
-        var min = _statusZoomSlider.Minimum;
-        var max = _statusZoomSlider.Maximum;
-        var clamped = Math.Clamp(sliderValue, min, max);
-        var normalized = max <= min ? 0 : (clamped - min) / (max - min);
-        var trackWidth = Math.Max(1, _statusZoomSliderHost.Width - 16);
-        var left = 8 + normalized * trackWidth - (_statusZoomSliderThumb.Width / 2);
-        _statusZoomSliderThumb.Margin = new Thickness(Math.Clamp(left, 0, _statusZoomSliderHost.Width - _statusZoomSliderThumb.Width), 0, 0, 0);
+        var thumbPlan = StatusBarZoomSliderPlanner.BuildThumbPlan(
+            sliderValue,
+            _statusZoomSliderHost.Width,
+            _statusZoomSliderThumb.Width);
+        _statusZoomSliderThumb.Margin = new Thickness(thumbPlan.Left, 0, 0, 0);
     }
 
     private static void ConfigureStatusBarViewButton(
@@ -3613,7 +3624,7 @@ public sealed partial class MainWindow : Window
         // shared model is built from; ApplyStatusBarModel then refines them with the customize toggles.
         _statusText.Text = status;
         _selectionStatsText.Text = _session.SelectionStatsText;
-        _zoomText.Text = FormatZoomPercent(_session.ZoomPercent);
+        _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);
         ApplyStatusBarModel(status);
         UpdateStatusBarViewButtons();
         _statusText.Foreground = ShouldUseWarningStatusColor(status)
@@ -8270,10 +8281,10 @@ public sealed partial class MainWindow : Window
     }
 
     private void ZoomIn() =>
-        ApplyZoomPercent(_session.ZoomPercent + ZoomStepPercent, "Zoom In failed.");
+        ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom In failed.");
 
     private void ZoomOut() =>
-        ApplyZoomPercent(_session.ZoomPercent - ZoomStepPercent, "Zoom Out failed.");
+        ApplyZoomPercent(_session.ZoomPercent - StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom Out failed.");
 
     private void ZoomTo100Percent() =>
         ApplyZoomPercent(100, "100% Zoom failed.");
@@ -8293,7 +8304,7 @@ public sealed partial class MainWindow : Window
             return;
 
         int? selectedZoomPercent = null;
-        var currentZoom = ClampZoomPercent(_session.ZoomPercent);
+        var currentZoom = StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent);
         var dialog = new Window
         {
             Title = "Zoom",
@@ -8401,7 +8412,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            selectedZoomPercent = ClampZoomPercent(customResult.ZoomPercent);
+            selectedZoomPercent = StatusBarZoomSliderPlanner.ClampZoomPercent(customResult.ZoomPercent);
             dialog.Close();
         }
 
@@ -8495,7 +8506,7 @@ public sealed partial class MainWindow : Window
             return;
 
         ClearSelectedDrawingObject();
-        zoomPercent = ClampZoomPercent(zoomPercent);
+        zoomPercent = StatusBarZoomSliderPlanner.ClampZoomPercent(zoomPercent);
         var result = _session.SetZoomPercent(zoomPercent);
         if (!result.Success)
         {
@@ -8504,7 +8515,7 @@ public sealed partial class MainWindow : Window
         }
 
         RefreshViewportSizeForZoom();
-        RefreshShell($"Zoom {FormatZoomPercent(_session.ZoomPercent)}");
+        RefreshShell($"Zoom {StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)}");
     }
 
     private int CalculateZoomToSelectionPercent()
@@ -8521,7 +8532,7 @@ public sealed partial class MainWindow : Window
             viewportHeight,
             range.RowCount,
             ZoomToSelectionDefaultRowHeight);
-        return ClampZoomPercent((int)Math.Round(Math.Min(widthFit, heightFit)));
+        return StatusBarZoomSliderPlanner.ClampZoomPercent((int)Math.Round(Math.Min(widthFit, heightFit)));
     }
 
     private static double CalculateZoomAxisFitPercent(double viewportPixels, uint selectedCount, double defaultCellPixels)
@@ -22008,16 +22019,7 @@ public sealed partial class MainWindow : Window
     }
 
     private double GetActiveZoomFactor() =>
-        ClampZoomPercent(_session.ZoomPercent) / 100d;
-
-    private static int ClampZoomPercent(int zoomPercent) =>
-        Math.Clamp(
-            zoomPercent,
-            SetWorksheetZoomCommand.MinZoomPercent,
-            SetWorksheetZoomCommand.MaxZoomPercent);
-
-    private static string FormatZoomPercent(int zoomPercent) =>
-        $"{ClampZoomPercent(zoomPercent)}%";
+        StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent) / 100d;
 
     private bool ShouldUseWarningStatusColor(string status) =>
         _session.IsFallback ||
