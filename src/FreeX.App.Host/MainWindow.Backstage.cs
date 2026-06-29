@@ -24,10 +24,10 @@ public partial class MainWindow
         // and lands focus on the Home rail entry. The overlay/frame become visible on the next layout pass,
         // so post the focus at Loaded priority (the rail buttons aren't focusable until they are visible) —
         // mirroring how the Print pane focuses Print Now.
-        _backstageFrame?.Show(BackstageHomePaneId);
-        FocusBackstageHomeNavigation();
+        _backstageFrame?.Show(BackstageFramePlan.Selection.DefaultPaneAutomationId);
+        FocusDefaultBackstagePaneNavigation();
         Dispatcher.BeginInvoke(
-            new Action(FocusBackstageHomeNavigation),
+            new Action(FocusDefaultBackstagePaneNavigation),
             System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
@@ -45,8 +45,8 @@ public partial class MainWindow
         SheetGrid.Focus();
     }
 
-    private void FocusBackstageHomeNavigation() =>
-        _backstageFrame?.FocusEntry(BackstageHomePaneId);
+    private void FocusDefaultBackstagePaneNavigation() =>
+        _backstageFrame?.FocusEntry(BackstageFramePlan.Selection.DefaultPaneAutomationId);
 
     private void ConfigureBackstageInfoActionButtons()
     {
@@ -117,7 +117,7 @@ public partial class MainWindow
         if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
             !IsInsideStartScreenOverlay(focusedElement))
         {
-            FocusBackstageHomeNavigation();
+            FocusDefaultBackstagePaneNavigation();
             return true;
         }
 
@@ -128,7 +128,7 @@ public partial class MainWindow
         if (StartScreenOverlay.MoveFocus(new TraversalRequest(direction)))
             return true;
 
-        FocusBackstageHomeNavigation();
+        FocusDefaultBackstagePaneNavigation();
         return true;
     }
 
@@ -184,11 +184,14 @@ public partial class MainWindow
     // The three Show*View methods now drive the shared frame: selecting a pane entry highlights the rail
     // button and runs that pane's ContentFactory (which does the live refresh + reparents the pane element).
     // They are addressed by language-invariant automation id so they work in any UI language.
-    private void ShowHomeView() => _backstageFrame?.Show(BackstageHomePaneId);
+    private void ShowHomeView() => ShowBackstagePane(FreeXBackstagePaneId.Home);
 
-    private void ShowInfoView() => _backstageFrame?.Show(BackstageInfoPaneId);
+    private void ShowInfoView() => ShowBackstagePane(FreeXBackstagePaneId.Info);
 
-    private void ShowPrintView() => _backstageFrame?.Show(BackstagePrintPaneId);
+    private void ShowPrintView() => ShowBackstagePane(FreeXBackstagePaneId.Print);
+
+    private void ShowBackstagePane(FreeXBackstagePaneId pane) =>
+        _backstageFrame?.Show(BackstageFramePlan.Selection.For(pane));
 
     private void ConfigureBackstagePrintOptions(Sheet? activeSheet)
     {

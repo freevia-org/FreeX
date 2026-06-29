@@ -41,32 +41,46 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void FreeXBackstageRailEntries_UsePresentationNavigationPlanner()
+    public void FreeXBackstageRailEntries_UsePresentationFramePlanner()
     {
+        var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var frameSource = DialogSourceTestSupport.ReadHostSources("MainWindow.BackstageFrame.cs");
-        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstageNavigationPlanner.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources("Backstage", "FreeXBackstageFramePlanner.cs");
         var buildMethod = ExtractMethodSource(frameSource, "private IEnumerable<BackstageEntry> BuildBackstageEntries()");
 
         frameSource.Should().Contain("BackstageFrameComposer.Build(");
         frameSource.Should().Contain("new BackstageFrameComposerSpec(");
         frameSource.Should().Contain("DecorateNavButtons = DecorateBackstageNavButton");
         frameSource.Should().Contain("Closed = OnBackstageFrameClosed");
+        frameSource.Should().Contain("private static readonly FreeXBackstageFramePlan BackstageFramePlan = FreeXBackstageFramePlanner.Build();");
         frameSource.Should().NotContain("new BackstageFrame()");
         frameSource.Should().NotContain("frame.SetEntries(");
-        buildMethod.Should().Contain("FreeXBackstageNavigationPlanner.Build().Select(MapBackstageNavigationEntry)");
+        buildMethod.Should().Contain("BackstageFramePlan.Entries.Select(MapBackstageFrameEntry)");
         buildMethod.Should().NotContain("UiText.Get(\"MainWindow_Text_Home\")");
         buildMethod.Should().NotContain("UiText.Get(\"MainWindow_Text_SaveAs\")");
         buildMethod.Should().NotContain("BackstageSaveAsButton");
         buildMethod.Should().NotContain("BackstageAccountButton");
 
-        frameSource.Should().Contain("ResolveBackstageCommand(FreeXBackstageCommandId command)");
-        frameSource.Should().Contain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(command)");
-        frameSource.Should().Contain("ResolveBackstagePane(FreeXBackstagePaneId pane)");
-        frameSource.Should().Contain("FreeXBackstageFlowPlanner.BuildPaneFlow(pane)");
+        frameSource.Should().Contain("RequirePaneFlow(entry)");
+        frameSource.Should().Contain("RequireCommandWorkflow(entry)");
+        frameSource.Should().Contain("BuildBackstagePane(FreeXBackstagePaneFlowPlan plan)");
+        frameSource.Should().NotContain("ResolveBackstageCommand(FreeXBackstageCommandId command)");
+        frameSource.Should().NotContain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(");
+        frameSource.Should().NotContain("ResolveBackstagePane(FreeXBackstagePaneId pane)");
+        frameSource.Should().NotContain("FreeXBackstageFlowPlanner.BuildPaneFlow(");
+        frameSource.Should().NotContain("private const string BackstageHomePaneId");
 
-        plannerSource.Should().Contain("BackstageSaveAsButton");
-        plannerSource.Should().Contain("BackstageAccountButton");
-        plannerSource.Should().Contain("MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage");
+        backstageSource.Should().Contain("BackstageFramePlan.Selection.DefaultPaneAutomationId");
+        backstageSource.Should().Contain("ShowBackstagePane(FreeXBackstagePaneId.Info)");
+        backstageSource.Should().Contain("BackstageFramePlan.Selection.For(pane)");
+        backstageSource.Should().NotContain("BackstageHomePaneId");
+        backstageSource.Should().NotContain("BackstageInfoPaneId");
+        backstageSource.Should().NotContain("BackstagePrintPaneId");
+
+        plannerSource.Should().Contain("FreeXBackstageNavigationPlanner.Build()");
+        plannerSource.Should().Contain("FreeXBackstageFlowPlanner.BuildPaneFlow(pane)");
+        plannerSource.Should().Contain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(command)");
+        plannerSource.Should().Contain("FreeXBackstagePaneSelectionPlan");
     }
 
     [Fact]
@@ -265,6 +279,25 @@ public sealed partial class MainWindowSourceHygieneTests
             harness.IsBackstageVisible.Should().BeTrue();
             harness.ContentHostShows("SsHomeView").Should().BeTrue("Home is the default landing pane");
             harness.IsRailButtonFocused("BackstageHomeButton").Should().BeTrue("keyboard focus starts on Home");
+        });
+    }
+
+    [Fact]
+    public void BackstagePaneEntryPoints_SelectPlannedPaneTargets()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            harness.Invoke("ShowInfoView");
+            harness.ContentHostShows("SsInfoView").Should().BeTrue("Info is selected by the planned pane target");
+
+            harness.Invoke("ShowPrintView");
+            harness.ContentHostShows("SsPrintView").Should().BeTrue("Print is selected by the planned pane target");
+
+            harness.Invoke("ShowHomeView");
+            harness.ContentHostShows("SsHomeView").Should().BeTrue("Home is selected by the planned pane target");
         });
     }
 

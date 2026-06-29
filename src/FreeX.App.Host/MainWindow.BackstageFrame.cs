@@ -21,13 +21,9 @@ namespace FreeX.App.Host;
 /// </summary>
 public partial class MainWindow
 {
-    private BackstageFrame? _backstageFrame;
+    private static readonly FreeXBackstageFramePlan BackstageFramePlan = FreeXBackstageFramePlanner.Build();
 
-    // Language-invariant pane identifiers (the frame's automation ids) so ShowInfoView()/ShowPrintView()
-    // and Ctrl+P can land on a specific pane regardless of the current UI language.
-    private const string BackstageHomePaneId = FreeXBackstageNavigationPlanner.HomePaneAutomationId;
-    private const string BackstageInfoPaneId = FreeXBackstageNavigationPlanner.InfoPaneAutomationId;
-    private const string BackstagePrintPaneId = FreeXBackstageNavigationPlanner.PrintPaneAutomationId;
+    private BackstageFrame? _backstageFrame;
 
     private void InitializeBackstageFrame()
     {
@@ -81,73 +77,69 @@ public partial class MainWindow
 
     private IEnumerable<BackstageEntry> BuildBackstageEntries()
     {
-        // Pane entries swap the content host to the existing FreeX pane after running its refresh logic;
-        // command entries fire an existing handler and the frame closes itself first (matching FreeW).
-        // IconCommandName routes each rail glyph to FreeX's Office SVG of that name (the same CommandName
-        // the old XAML RibbonIcon used); Icon is the geometry fallback.
-        return FreeXBackstageNavigationPlanner.Build().Select(MapBackstageNavigationEntry);
+        // Pane entries swap the content host to an existing FreeX pane; command entries resolve to existing
+        // WPF handlers. The presentation frame plan owns ordering, selection targets, refresh policy, and
+        // command workflow classification.
+        return BackstageFramePlan.Entries.Select(MapBackstageFrameEntry);
     }
 
-    private BackstageEntry MapBackstageNavigationEntry(FreeXBackstageNavigationEntry entry)
+    private BackstageEntry MapBackstageFrameEntry(FreeXBackstageFrameEntryPlan entry)
     {
-        if (entry.Kind == FreeXBackstageNavigationEntryKind.Divider)
-            return BackstageEntry.Divider(entry.DockBottom);
+        var navigation = entry.Navigation;
+        if (navigation.Kind == FreeXBackstageNavigationEntryKind.Divider)
+            return BackstageEntry.Divider(navigation.DockBottom);
 
-        var label = ResolveBackstageText(entry.LabelKey);
-        var automationName = ResolveOptionalBackstageText(entry.AutomationNameKey);
-        var automationHelpText = ResolveOptionalBackstageText(entry.AutomationHelpTextKey);
-        var tooltipTitle = ResolveOptionalBackstageText(entry.TooltipTitleKey);
-        var tooltipDescription = ResolveOptionalBackstageText(entry.TooltipDescriptionKey);
+        var label = ResolveBackstageText(navigation.LabelKey);
+        var automationName = ResolveOptionalBackstageText(navigation.AutomationNameKey);
+        var automationHelpText = ResolveOptionalBackstageText(navigation.AutomationHelpTextKey);
+        var tooltipTitle = ResolveOptionalBackstageText(navigation.TooltipTitleKey);
+        var tooltipDescription = ResolveOptionalBackstageText(navigation.TooltipDescriptionKey);
 
-        return entry.Kind switch
+        return navigation.Kind switch
         {
             FreeXBackstageNavigationEntryKind.Pane => BackstageEntry.Pane(
                 label,
-                entry.Icon,
-                ResolveBackstagePane(entry.Pane!.Value),
-                entry.DockBottom,
-                entry.KeyTip,
-                entry.AutomationId,
+                navigation.Icon,
+                () => BuildBackstagePane(RequirePaneFlow(entry)),
+                navigation.DockBottom,
+                navigation.KeyTip,
+                navigation.AutomationId,
                 automationName,
                 automationHelpText,
                 tooltipTitle,
                 tooltipDescription,
-                entry.IconCommandName),
+                navigation.IconCommandName),
 
             FreeXBackstageNavigationEntryKind.Command => BackstageEntry.Command(
                 label,
-                entry.Icon,
-                ResolveBackstageCommand(entry.Command!.Value),
-                entry.DockBottom,
-                entry.KeyTip,
-                entry.AutomationId,
+                navigation.Icon,
+                ResolveBackstageCommand(RequireCommandWorkflow(entry)),
+                navigation.DockBottom,
+                navigation.KeyTip,
+                navigation.AutomationId,
                 automationName,
                 automationHelpText,
                 tooltipTitle,
                 tooltipDescription,
-                entry.IconCommandName),
+                navigation.IconCommandName),
 
-            _ => throw new InvalidOperationException($"Unsupported Backstage entry kind '{entry.Kind}'.")
+            _ => throw new InvalidOperationException($"Unsupported Backstage entry kind '{navigation.Kind}'.")
         };
     }
+
+    private static FreeXBackstagePaneFlowPlan RequirePaneFlow(FreeXBackstageFrameEntryPlan entry) =>
+        entry.PaneFlow
+        ?? throw new InvalidOperationException($"Backstage pane entry '{entry.Navigation.LabelKey}' is missing a flow plan.");
+
+    private static FreeXBackstageCommandWorkflowPlan RequireCommandWorkflow(FreeXBackstageFrameEntryPlan entry) =>
+        entry.CommandWorkflow
+        ?? throw new InvalidOperationException($"Backstage command entry '{entry.Navigation.LabelKey}' is missing a workflow plan.");
 
     private static string ResolveBackstageText(string? key) =>
         key is null ? string.Empty : UiText.Get(key);
 
     private static string? ResolveOptionalBackstageText(string? key) =>
         key is null ? null : UiText.Get(key);
-
-    private Func<UIElement> ResolveBackstagePane(FreeXBackstagePaneId pane) =>
-        pane switch
-        {
-            FreeXBackstagePaneId.Home => BuildHomePane,
-            FreeXBackstagePaneId.Info => BuildInfoPane,
-            FreeXBackstagePaneId.Print => BuildPrintPane,
-            _ => throw new InvalidOperationException($"Unsupported Backstage pane '{pane}'.")
-        };
-
-    private Action ResolveBackstageCommand(FreeXBackstageCommandId command) =>
-        ResolveBackstageCommand(FreeXBackstageFlowPlanner.BuildCommandWorkflow(command));
 
     private Action ResolveBackstageCommand(FreeXBackstageCommandWorkflowPlan plan) =>
         plan.Workflow switch
@@ -168,18 +160,8 @@ public partial class MainWindow
     // Each runs the same live-refresh the old Show*View methods did, then hands the existing pane element to
     // the frame (after detaching it from its current parent — a WPF element has exactly one logical parent).
 
-    private UIElement BuildHomePane() =>
-        BuildBackstagePane(FreeXBackstagePaneId.Home);
-
-    private UIElement BuildInfoPane() =>
-        BuildBackstagePane(FreeXBackstagePaneId.Info);
-
-    private UIElement BuildPrintPane() =>
-        BuildBackstagePane(FreeXBackstagePaneId.Print);
-
-    private UIElement BuildBackstagePane(FreeXBackstagePaneId pane)
+    private UIElement BuildBackstagePane(FreeXBackstagePaneFlowPlan plan)
     {
-        var plan = FreeXBackstageFlowPlanner.BuildPaneFlow(pane);
         ApplyBackstagePaneFlow(plan);
         var element = ReparentForBackstage(ResolveBackstagePaneElement(plan.Pane));
         ApplyBackstagePaneFocus(plan);
