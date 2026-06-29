@@ -321,21 +321,36 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
         source.Should().Contain("AvaloniaBackstageChrome.CreateDialogLayout(");
-        source.Should().Contain("AvaloniaBackstageChrome.CreateHeading(");
-        source.Should().Contain("AvaloniaBackstageChrome.CreateSectionHeader(");
-        source.Should().Contain("AvaloniaBackstageChrome.CreateNote(");
-        source.Should().Contain("AvaloniaBackstageChrome.CreateDetailGrid(");
-        source.Should().Contain("AvaloniaBackstageChrome.AddDetailRow(");
+        source.Should().Contain("AvaloniaBackstageChrome.CreatePane(");
+        source.Should().Contain("new AvaloniaBackstagePaneSpec(elements)");
+        source.Should().Contain("AvaloniaBackstageDetailRowsElementSpec");
+        source.Should().Contain("AvaloniaBackstageActionRowElementSpec");
+        source.Should().Contain("AvaloniaBackstageRadioGroupElementSpec");
         source.Should().Contain("AvaloniaBackstageChrome.CreateActionButton(");
+        source.Should().Contain("CreateBackstageClosingActionButtonSpec(");
         source.Should().NotContain("new ScrollViewer");
+        source.Should().NotContain("new RadioButton");
+        source.Should().NotContain("CreateBackstageDetailGrid");
+        source.Should().NotContain("AddBackstageDetailRow");
+        source.Should().NotContain("AvaloniaBackstageChrome.CreateHeading(");
+        source.Should().NotContain("AvaloniaBackstageChrome.CreateSectionHeader(");
+        source.Should().NotContain("AvaloniaBackstageChrome.CreateNote(");
+        source.Should().NotContain("AvaloniaBackstageChrome.CreateDetailGrid(");
+        source.Should().NotContain("AvaloniaBackstageChrome.AddDetailRow(");
+        source.Should().NotContain("new StackPanel { Spacing = 14 }");
         source.Should().NotContain("var rowIndex = grid.RowDefinitions.Count");
         source.Should().NotContain("new RowDefinition(GridLength.Auto)");
         source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*\")");
         source.Should().NotContain("            LineHeight = 20");
 
         sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
+        sharedSource.Should().Contain("public sealed record AvaloniaBackstagePaneSpec");
+        sharedSource.Should().Contain("public sealed record AvaloniaBackstageRadioGroupElementSpec");
+        sharedSource.Should().Contain("public static StackPanel CreatePane(");
         sharedSource.Should().Contain("public static DockPanel CreateDialogLayout(");
-        sharedSource.Should().Contain("public static void AddDetailRow(");
+        sharedSource.Should().Contain("public static Grid CreateDetailRows(");
+        sharedSource.Should().Contain("public static StackPanel CreateActionRow(");
+        sharedSource.Should().Contain("public static StackPanel CreateRadioGroup(");
     }
 
     [Fact]
