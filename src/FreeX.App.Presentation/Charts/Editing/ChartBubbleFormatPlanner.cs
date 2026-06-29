@@ -16,6 +16,31 @@ public enum ChartBubbleFormatParseIssue
     BubbleScale
 }
 
+public enum ChartBubbleFormatDialogControlKind
+{
+    Number,
+    CheckBox,
+    ComboBox,
+}
+
+public enum ChartBubbleFormatDialogFieldId
+{
+    BubbleScale,
+    ShowNegativeBubbles,
+    SizeRepresents,
+}
+
+public sealed record ChartBubbleFormatDialogFieldDescriptor(
+    ChartBubbleFormatDialogFieldId Id,
+    ChartBubbleFormatDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartBubbleFormatDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartBubbleFormatDialogFieldDescriptor> Fields);
+
 /// <summary>
 /// Portable (no UI) planner for the "Format Bubble Chart" editing dialog: the bubble scale (percent), whether
 /// negative-value bubbles are drawn, and whether the third column represents bubble area or width. Single-
@@ -27,8 +52,44 @@ public enum ChartBubbleFormatParseIssue
 /// </summary>
 public static class ChartBubbleFormatPlanner
 {
+    public const string TitleResourceKey = "ChartBubbleFormat_Title";
+    public const string DialogAutomationId = "ChartBubbleFormatDialog";
+
     public const int MinBubbleScale = 1;
     public const int MaxBubbleScale = 300;
+
+    private static readonly ChartBubbleFormatDialogFieldDescriptor[] OptionFields =
+    [
+        new(ChartBubbleFormatDialogFieldId.BubbleScale, ChartBubbleFormatDialogControlKind.Number, "ChartBubbleFormat_BubbleScaleLabel", "ChartBubbleFormatScaleBox", "ChartBubbleFormat_BubbleScaleHelpText"),
+        new(ChartBubbleFormatDialogFieldId.ShowNegativeBubbles, ChartBubbleFormatDialogControlKind.CheckBox, "ChartBubbleFormat_ShowNegativeBubbles", "ChartBubbleFormatNegativeCheck"),
+        new(ChartBubbleFormatDialogFieldId.SizeRepresents, ChartBubbleFormatDialogControlKind.ComboBox, "ChartBubbleFormat_SizeRepresentsLabel", "ChartBubbleFormatSizeCombo"),
+    ];
+
+    private static readonly ChartBubbleFormatDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartBubbleFormat_OptionsGroup", OptionFields),
+    ];
+
+    public static IReadOnlyList<ChartBubbleFormatDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartBubbleFormatDialogSectionDescriptor GetOptionsSection() => DialogSections[0];
+
+    public static ChartBubbleFormatDialogFieldDescriptor GetDialogField(ChartBubbleFormatDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
+
+    public static string InvalidInputMessageResourceKey(ChartBubbleFormatParseIssue issue) =>
+        "ChartBubbleFormat_InvalidBubbleScaleMessage";
 
     /// <summary>True when the chart is a bubble chart that has these sizing options.</summary>
     public static bool Supports(ChartModel chart)

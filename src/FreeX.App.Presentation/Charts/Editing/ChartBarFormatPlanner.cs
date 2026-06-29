@@ -14,6 +14,28 @@ public enum ChartBarFormatParseIssue
     Overlap
 }
 
+public enum ChartBarFormatDialogControlKind
+{
+    Number,
+}
+
+public enum ChartBarFormatDialogFieldId
+{
+    GapWidth,
+    Overlap,
+}
+
+public sealed record ChartBarFormatDialogFieldDescriptor(
+    ChartBarFormatDialogFieldId Id,
+    ChartBarFormatDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartBarFormatDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartBarFormatDialogFieldDescriptor> Fields);
+
 /// <summary>
 /// Portable (no UI) planner for the "Format Bar/Column" editing dialog: the inter-category gap width and the
 /// series overlap. Single-sources the read/validate/project rules and maps an edited
@@ -24,6 +46,9 @@ public enum ChartBarFormatParseIssue
 /// </summary>
 public static class ChartBarFormatPlanner
 {
+    public const string TitleResourceKey = "ChartBarFormat_Title";
+    public const string DialogAutomationId = "ChartBarFormatDialog";
+
     /// <summary>The gap-width bounds Core clamps to (percent of bar width).</summary>
     public const int MinGapWidth = 0;
     public const int MaxGapWidth = 500;
@@ -31,6 +56,40 @@ public static class ChartBarFormatPlanner
     /// <summary>The series-overlap bounds Core clamps to (percent).</summary>
     public const int MinOverlap = -100;
     public const int MaxOverlap = 100;
+
+    private static readonly ChartBarFormatDialogFieldDescriptor[] OptionFields =
+    [
+        new(ChartBarFormatDialogFieldId.GapWidth, ChartBarFormatDialogControlKind.Number, "ChartBarFormat_GapWidthLabel", "ChartBarFormatGapWidthBox", "ChartBarFormat_GapWidthHelpText"),
+        new(ChartBarFormatDialogFieldId.Overlap, ChartBarFormatDialogControlKind.Number, "ChartBarFormat_OverlapLabel", "ChartBarFormatOverlapBox", "ChartBarFormat_OverlapHelpText"),
+    ];
+
+    private static readonly ChartBarFormatDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartBarFormat_OptionsGroup", OptionFields),
+    ];
+
+    public static IReadOnlyList<ChartBarFormatDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartBarFormatDialogSectionDescriptor GetOptionsSection() => DialogSections[0];
+
+    public static ChartBarFormatDialogFieldDescriptor GetDialogField(ChartBarFormatDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
+
+    public static string InvalidInputMessageResourceKey(ChartBarFormatParseIssue issue) =>
+        issue == ChartBarFormatParseIssue.Overlap
+            ? "ChartBarFormat_InvalidOverlapMessage"
+            : "ChartBarFormat_InvalidGapWidthMessage";
 
     /// <summary>True when the chart is a bar/column family that has a gap-width / overlap to format.</summary>
     public static bool Supports(ChartModel chart)

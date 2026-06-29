@@ -25,6 +25,34 @@ public enum ChartStockFormatParseIssue
     HighLowLineThickness
 }
 
+public enum ChartStockFormatDialogControlKind
+{
+    Number,
+    Color,
+}
+
+public enum ChartStockFormatDialogFieldId
+{
+    GapWidth,
+    UpBarFill,
+    UpBarBorder,
+    DownBarFill,
+    DownBarBorder,
+    HighLowLineColor,
+    HighLowLineThickness,
+}
+
+public sealed record ChartStockFormatDialogFieldDescriptor(
+    ChartStockFormatDialogFieldId Id,
+    ChartStockFormatDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartStockFormatDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartStockFormatDialogFieldDescriptor> Fields);
+
 /// <summary>
 /// Portable (no UI) planner for the "Format Stock Chart" editing dialog: the up/down-bar gap width, the
 /// up-bar and down-bar fill/border colors, and the high-low connector line color/thickness. Single-sources
@@ -36,11 +64,55 @@ public enum ChartStockFormatParseIssue
 /// </summary>
 public static class ChartStockFormatPlanner
 {
+    public const string TitleResourceKey = "ChartStockFormat_Title";
+    public const string DialogAutomationId = "ChartStockFormatDialog";
+    public const string BarsGroupResourceKey = "ChartFmt_StockBarsLabel";
+    public const string HighLowGroupResourceKey = "ChartFmt_StockHighLowLabel";
+
     public const int MinGapWidth = 0;
     public const int MaxGapWidth = 500;
 
     public const double MinLineThickness = 0.5;
     public const double MaxLineThickness = 10.0;
+
+    private static readonly ChartStockFormatDialogFieldDescriptor[] OptionFields =
+    [
+        new(ChartStockFormatDialogFieldId.GapWidth, ChartStockFormatDialogControlKind.Number, "ChartStockFormat_GapWidthLabel", "ChartStockFormatGapWidthBox", "ChartStockFormat_GapWidthHelpText"),
+        new(ChartStockFormatDialogFieldId.UpBarFill, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_UpBarFillLabel", "ChartStockFormatUpFillButton"),
+        new(ChartStockFormatDialogFieldId.UpBarBorder, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_UpBarBorderLabel", "ChartStockFormatUpBorderButton"),
+        new(ChartStockFormatDialogFieldId.DownBarFill, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_DownBarFillLabel", "ChartStockFormatDownFillButton"),
+        new(ChartStockFormatDialogFieldId.DownBarBorder, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_DownBarBorderLabel", "ChartStockFormatDownBorderButton"),
+        new(ChartStockFormatDialogFieldId.HighLowLineColor, ChartStockFormatDialogControlKind.Color, "ChartStockFormat_HighLowLineColorLabel", "ChartStockFormatHighLowButton"),
+        new(ChartStockFormatDialogFieldId.HighLowLineThickness, ChartStockFormatDialogControlKind.Number, "ChartStockFormat_LineThicknessLabel", "ChartStockFormatThicknessBox", "ChartStockFormat_LineThicknessHelpText"),
+    ];
+
+    private static readonly ChartStockFormatDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartStockFormat_OptionsGroup", OptionFields),
+    ];
+
+    public static IReadOnlyList<ChartStockFormatDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartStockFormatDialogSectionDescriptor GetOptionsSection() => DialogSections[0];
+
+    public static ChartStockFormatDialogFieldDescriptor GetDialogField(ChartStockFormatDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
+
+    public static string InvalidInputMessageResourceKey(ChartStockFormatParseIssue issue) =>
+        issue == ChartStockFormatParseIssue.HighLowLineThickness
+            ? "ChartStockFormat_InvalidLineThicknessMessage"
+            : "ChartStockFormat_InvalidGapWidthMessage";
 
     /// <summary>True when the chart is a stock chart that has up/down bars and high-low lines.</summary>
     public static bool Supports(ChartModel chart)
