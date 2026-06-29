@@ -1,16 +1,15 @@
-using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
 /// <summary>
 /// Word's "Custom Paragraph Spacing" dialog (Design &gt; Document Formatting &gt; Paragraph Spacing &gt;
-/// Custom Paragraph Spacing…). Lets the user set explicit space-before / space-after / line-spacing
-/// values for the document default, mirroring the same model fields that the six paragraph-spacing
-/// presets write. Returns a <see cref="DocumentParagraphSpacingSet"/> on OK, or null on Cancel.
+/// Custom Paragraph Spacing...). Lets the user set explicit space-before / space-after / line-spacing
+/// values for the document default.
 /// </summary>
 internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
@@ -30,13 +29,13 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var seed = current ?? DocumentParagraphSpacingSet.Default;
-        _beforeBox = NumberBox(seed.SpaceBeforePt);
-        _afterBox  = NumberBox(seed.SpaceAfterPt);
-        _lineBox   = NumberBox(seed.LineSpacing);
+        var state = CustomParagraphSpacingDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
+        _beforeBox = NumberBox(state.SpaceBeforeText);
+        _afterBox = NumberBox(state.SpaceAfterText);
+        _lineBox = NumberBox(state.LineSpacingText);
 
         Content = BuildContent();
-        Loaded += (_, _) => _beforeBox.Focus();
+        Loaded += (_, _) => DialogFocus.FocusAndSelect(_beforeBox);
     }
 
     private UIElement BuildContent()
@@ -66,7 +65,6 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
             grid.Children.Add(field);
         }
 
-        // Helper note row.
         var hint = new TextBlock
         {
             Text = "All values in points (pt). Line spacing is a multiple (e.g. 1.15 = 115%).",
@@ -80,10 +78,9 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
         grid.Children.Add(hint);
 
         AddRow(1, "Space before (pt):", _beforeBox);
-        AddRow(2, "Space after (pt):",  _afterBox);
-        AddRow(3, "Line spacing (×):",  _lineBox);
+        AddRow(2, "Space after (pt):", _afterBox);
+        AddRow(3, "Line spacing (\u00d7):", _lineBox);
 
-        // Buttons.
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 4);
         Grid.SetColumnSpan(buttons, 2);
@@ -94,37 +91,45 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
     private void Accept()
     {
-        if (!TryParse(_beforeBox.Text, out var before) || before < 0 || before > 200)
+        var input = new CustomParagraphSpacingDialogInput(
+            _beforeBox.Text,
+            _afterBox.Text,
+            _lineBox.Text);
+
+        if (!CustomParagraphSpacingDialogPlanner.TryBuildResult(
+                input,
+                CultureInfo.CurrentCulture,
+                out var result,
+                out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, "Space before must be between 0 and 200 pt.", Title);
-            _beforeBox.Focus();
-            return;
-        }
-        if (!TryParse(_afterBox.Text, out var after) || after < 0 || after > 200)
-        {
-            DialogMessageHelper.ShowWarning(this, "Space after must be between 0 and 200 pt.", Title);
-            _afterBox.Focus();
-            return;
-        }
-        if (!TryParse(_lineBox.Text, out var line) || line <= 0 || line > 10)
-        {
-            DialogMessageHelper.ShowWarning(this, "Line spacing must be between 0.01 and 10.", Title);
-            _lineBox.Focus();
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation?.Message ?? CustomParagraphSpacingDialogPlanner.LineSpacingValidationMessage,
+                Title);
+            FocusFailure(validation?.Field);
             return;
         }
 
-        _result = new DocumentParagraphSpacingSet("Custom", before, after, line);
+        _result = result;
         Close();
     }
 
-    private static TextBox NumberBox(double value) => new()
+    private static TextBox NumberBox(string text) => new()
     {
-        Text = value.ToString("0.##", CultureInfo.CurrentCulture),
+        Text = text,
         MinWidth = 120
     };
 
-    private static bool TryParse(string text, out double value) =>
-        double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out value);
+    private void FocusFailure(CustomParagraphSpacingDialogField? field)
+    {
+        var target = field switch
+        {
+            CustomParagraphSpacingDialogField.SpaceAfter => _afterBox,
+            CustomParagraphSpacingDialogField.LineSpacing => _lineBox,
+            _ => _beforeBox
+        };
+        DialogFocus.FocusAndSelect(target);
+    }
 
     /// <summary>
     /// Show the dialog seeded with <paramref name="current"/> spacing; returns a new
