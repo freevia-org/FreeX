@@ -4281,11 +4281,11 @@ public static class DocxWriter
                         new XAttribute(sr + "id", "rId1")))));
 
         var workbookRels = new XDocument(
-            new XElement(Rel + "Relationships",
-                new XElement(Rel + "Relationship",
-                    new XAttribute("Id", "rId1"),
-                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
-                    new XAttribute("Target", "worksheets/sheet1.xml"))));
+            OpcRelationships.CreateRoot(
+                OpcRelationships.CreateRelationship(
+                    "rId1",
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
+                    "worksheets/sheet1.xml")));
 
         var contentTypes = new XDocument(
             new XElement(Ct + "Types",
@@ -4299,11 +4299,11 @@ public static class DocxWriter
                     new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"))));
 
         var packageRels = new XDocument(
-            new XElement(Rel + "Relationships",
-                new XElement(Rel + "Relationship",
-                    new XAttribute("Id", "rId1"),
-                    new XAttribute("Type", OfficeDocumentRel),
-                    new XAttribute("Target", "xl/workbook.xml"))));
+            OpcRelationships.CreateRoot(
+                OpcRelationships.CreateRelationship(
+                    "rId1",
+                    OfficeDocumentRel,
+                    "xl/workbook.xml")));
 
         using var buffer = new MemoryStream();
         using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
