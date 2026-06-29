@@ -29,6 +29,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         "freew.allcaps",
         "freew.highlight",
         "freew.font-color",
+        "freew.char-border",
+        "freew.char-shading",
         "freew.clear-formatting",
     ];
 
@@ -206,6 +208,13 @@ public sealed class FreeWRibbonDefinitionProfileTests
             surface.CopyKeyTip.Should().Be("C");
         }
 
+        WithUiCulture("en-US", () =>
+        {
+            AssertWpfClipboardAccessoryLabelsUseResources(WpfClipboardAccessorySurface());
+
+            return true;
+        }).Should().BeTrue();
+
         var pseudo = WithUiCulture(Loc.PseudoLocalizationCultureName, () => new[]
         {
             ClipboardSurface(FreeWRibbonCapabilities.Wpf),
@@ -225,6 +234,18 @@ public sealed class FreeWRibbonDefinitionProfileTests
             surface.CopyLabel.Should().Be("[[CCooppyy]]");
             surface.CopyKeyTip.Should().Be("C");
         }
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var surface = WpfClipboardAccessorySurface();
+
+            AssertWpfClipboardAccessoryLabelsUseResources(surface);
+            surface.FormatPainterLabel.Should().Be("[[FFoorrmmaatt PPaaiinntteerr]]");
+            surface.FormatPainterKeyTip.Should().Be("FP");
+            surface.PasteTextOnlyLabel.Should().Be("[[PPaassttee TTeexxtt OOnnllyy]]");
+
+            return true;
+        }).Should().BeTrue();
     }
 
     [Fact]
@@ -238,11 +259,19 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfSource.Should().NotContain("g.Large(\"freew.paste\", \"Paste\"");
         wpfSource.Should().NotContain("g.Medium(\"freew.cut\", \"Cut\"");
         wpfSource.Should().NotContain("g.Medium(\"freew.copy\", \"Copy\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.format-painter\", \"Format Painter\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.paste-plain\", \"Paste Text Only\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.paste-merge\", \"Merge Formatting\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.paste-special\", \"Paste Special");
         wpfSource.Should().Contain("FreeWRibbonText.HomeTab");
         wpfSource.Should().Contain("FreeWRibbonText.ClipboardGroup");
         wpfSource.Should().Contain("FreeWRibbonText.PasteCommand");
         wpfSource.Should().Contain("FreeWRibbonText.CutCommand");
         wpfSource.Should().Contain("FreeWRibbonText.CopyCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.FormatPainterCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.PasteTextOnlyCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.PasteMergeFormattingCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.PasteSpecialCommand");
 
         avaloniaSource.Should().NotContain(".Tab(\"home\", \"Home\"");
         avaloniaSource.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
@@ -371,6 +400,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfSource.Should().NotContain("g.Icon(\"freew.allcaps\", \"All Caps\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.highlight\", \"Text Highlight Colour\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.font-color\", \"Font Colour\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.char-border\", \"Character Border\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.char-shading\", \"Character Shading\"");
         wpfSource.Should().NotContain("g.Icon(\"freew.clear-formatting\", \"Clear All Formatting\"");
         wpfSource.Should().Contain("FreeWRibbonText.GrowFontCommand");
         wpfSource.Should().Contain("FreeWRibbonText.ShrinkFontCommand");
@@ -381,6 +412,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         wpfSource.Should().Contain("FreeWRibbonText.AllCapsCommand");
         wpfSource.Should().Contain("FreeWRibbonText.TextHighlightColorCommand");
         wpfSource.Should().Contain("FreeWRibbonText.FontColorCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.CharacterBorderCommand");
+        wpfSource.Should().Contain("FreeWRibbonText.CharacterShadingCommand");
         wpfSource.Should().Contain("FreeWRibbonText.ClearAllFormattingCommand");
 
         avaloniaSource.Should().NotContain("g.Toggle(\"freew.superscript\",     \"X");
@@ -524,7 +557,39 @@ public sealed class FreeWRibbonDefinitionProfileTests
         labels["freew.allcaps"].Should().Be(Loc.Get("Ribbon_Command_AllCaps_Label"));
         labels["freew.highlight"].Should().Be(Loc.Get("Ribbon_Command_TextHighlightColor_Label"));
         labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColor_Label"));
+        labels["freew.char-border"].Should().Be(Loc.Get("Ribbon_Command_CharacterBorder_Label"));
+        labels["freew.char-shading"].Should().Be(Loc.Get("Ribbon_Command_CharacterShading_Label"));
         labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearAllFormatting_Label"));
+    }
+
+    private static WpfClipboardAccessoryRibbonSurface WpfClipboardAccessorySurface()
+    {
+        var definition = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var clipboard = home!.FindGroup("clipboard");
+        clipboard.Should().NotBeNull();
+
+        var formatPainter = RequiredControl(clipboard!, "freew.format-painter");
+        var pasteTextOnly = RequiredControl(clipboard!, "freew.paste-plain");
+        var pasteMergeFormatting = RequiredControl(clipboard!, "freew.paste-merge");
+        var pasteSpecial = RequiredControl(clipboard!, "freew.paste-special");
+
+        return new WpfClipboardAccessoryRibbonSurface(
+            formatPainter.Label,
+            formatPainter.KeyTip,
+            pasteTextOnly.Label,
+            pasteMergeFormatting.Label,
+            pasteSpecial.Label);
+    }
+
+    private static void AssertWpfClipboardAccessoryLabelsUseResources(WpfClipboardAccessoryRibbonSurface surface)
+    {
+        surface.FormatPainterLabel.Should().Be(Loc.Get("Ribbon_Command_FormatPainter_Label"));
+        surface.FormatPainterKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Command_FormatPainter_KeyTip"));
+        surface.PasteTextOnlyLabel.Should().Be(Loc.Get("Ribbon_Command_PasteTextOnly_Label"));
+        surface.PasteMergeFormattingLabel.Should().Be(Loc.Get("Ribbon_Command_PasteMergeFormatting_Label"));
+        surface.PasteSpecialLabel.Should().Be(Loc.Get("Ribbon_Command_PasteSpecial_Label"));
     }
 
     private static void AssertAvaloniaFontEffectLabelsUseResources(IReadOnlyDictionary<string, string> labels)
@@ -625,6 +690,13 @@ public sealed class FreeWRibbonDefinitionProfileTests
         string? CutKeyTip,
         string CopyLabel,
         string? CopyKeyTip);
+
+    private sealed record WpfClipboardAccessoryRibbonSurface(
+        string FormatPainterLabel,
+        string? FormatPainterKeyTip,
+        string PasteTextOnlyLabel,
+        string PasteMergeFormattingLabel,
+        string PasteSpecialLabel);
 
     private sealed record FontCoreRibbonSurface(
         string FontGroupHeader,

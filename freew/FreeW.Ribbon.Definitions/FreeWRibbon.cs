@@ -53,6 +53,10 @@ public static class FreeWRibbon
         var pasteCommand = FreeWRibbonText.PasteCommand;
         var cutCommand = FreeWRibbonText.CutCommand;
         var copyCommand = FreeWRibbonText.CopyCommand;
+        var formatPainterCommand = FreeWRibbonText.FormatPainterCommand;
+        var pasteTextOnlyCommand = FreeWRibbonText.PasteTextOnlyCommand;
+        var pasteMergeFormattingCommand = FreeWRibbonText.PasteMergeFormattingCommand;
+        var pasteSpecialCommand = FreeWRibbonText.PasteSpecialCommand;
         var fontGroup = FreeWRibbonText.FontGroup;
         var fontFamilyCommand = FreeWRibbonText.FontFamilyCommand;
         var fontSizeCommand = FreeWRibbonText.FontSizeCommand;
@@ -69,6 +73,8 @@ public static class FreeWRibbon
         var allCapsCommand = FreeWRibbonText.AllCapsCommand;
         var textHighlightColorCommand = FreeWRibbonText.TextHighlightColorCommand;
         var fontColorCommand = FreeWRibbonText.FontColorCommand;
+        var characterBorderCommand = FreeWRibbonText.CharacterBorderCommand;
+        var characterShadingCommand = FreeWRibbonText.CharacterShadingCommand;
         var clearAllFormattingCommand = FreeWRibbonText.ClearAllFormattingCommand;
         var fontDialogCommand = FreeWRibbonText.FontDialogCommand;
 
@@ -81,11 +87,11 @@ public static class FreeWRibbon
                     g.Large("freew.paste", pasteCommand.Label, RibbonCommandIconKind.Paste, pasteCommand.KeyTip);
                     g.Medium("freew.cut", cutCommand.Label, RibbonCommandIconKind.Cut, cutCommand.KeyTip);
                     g.Medium("freew.copy", copyCommand.Label, RibbonCommandIconKind.Copy, copyCommand.KeyTip);
-                    g.Medium("freew.format-painter", "Format Painter", RibbonCommandIconKind.FormatPainter, "FP");
-                    g.Icon("freew.paste-plain", "Paste Text Only", RibbonCommandIconKind.Paste);
-                    g.Icon("freew.paste-merge", "Merge Formatting", RibbonCommandIconKind.Paste);
+                    g.Medium("freew.format-painter", formatPainterCommand.Label, RibbonCommandIconKind.FormatPainter, formatPainterCommand.KeyTip);
+                    g.Icon("freew.paste-plain", pasteTextOnlyCommand.Label, RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-merge", pasteMergeFormattingCommand.Label, RibbonCommandIconKind.Paste);
                     // Paste Special: dialog offering Keep Source Formatting / Merge Formatting / Keep Text Only.
-                    g.Icon("freew.paste-special", "Paste Special…", RibbonCommandIconKind.Paste);
+                    g.Icon("freew.paste-special", pasteSpecialCommand.Label, RibbonCommandIconKind.Paste);
                 });
                 tab.Group("font", fontGroup.Label, fontGroup.KeyTip, 90, g =>
                 {
@@ -116,8 +122,8 @@ public static class FreeWRibbon
                     g.Icon("freew.allcaps", allCapsCommand.Label, RibbonCommandIconKind.Font);
                     g.Icon("freew.highlight", textHighlightColorCommand.Label, RibbonCommandIconKind.Highlight);
                     g.Icon("freew.font-color", fontColorCommand.Label, RibbonCommandIconKind.FontColor);
-                    g.Icon("freew.char-border", "Character Border", RibbonCommandIconKind.Border);
-                    g.Icon("freew.char-shading", "Character Shading", RibbonCommandIconKind.Fill);
+                    g.Icon("freew.char-border", characterBorderCommand.Label, RibbonCommandIconKind.Border);
+                    g.Icon("freew.char-shading", characterShadingCommand.Label, RibbonCommandIconKind.Fill);
                     g.Icon("freew.clear-formatting", clearAllFormattingCommand.Label, RibbonCommandIconKind.Clear);
                     // Font dialog-launcher: opens the two-tab Font dialog (Font + Advanced tab with
                     // character spacing, kerning, position, ligatures, stylistic sets, number form/spacing).
