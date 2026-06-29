@@ -524,7 +524,7 @@ public sealed class MainWindow : Window
             return false;
         }
 
-        var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(SourceFileName(_fileWorkflow.CurrentPath));
+        var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(_fileWorkflow.CurrentFileName);
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
@@ -597,9 +597,6 @@ public sealed class MainWindow : Window
                 Patterns = descriptor.Patterns.ToArray(),
             })
             .ToArray();
-
-    private static string? SourceFileName(string? path) =>
-        path is null ? null : Path.GetFileName(path);
 
     private static bool IsSupportedPresentationPath(string path)
     {
@@ -762,7 +759,7 @@ public sealed class MainWindow : Window
 
     private void UpdateTitle()
     {
-        var filename = _fileWorkflow.CurrentPath is not null ? Path.GetFileName(_fileWorkflow.CurrentPath) : "Untitled";
+        var filename = _fileWorkflow.CurrentFileName ?? "Untitled";
         var dirty    = _fileWorkflow.IsDirty ? " *" : string.Empty;
         Title = $"FreeP — {filename}{dirty}";
     }

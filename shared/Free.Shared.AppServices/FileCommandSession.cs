@@ -32,6 +32,8 @@ public sealed class FileCommandSession
 
     public string DisplayName => DisplayNameFromPath(_state.CurrentFilePath, _untitledDisplayName);
 
+    public string? CurrentFileName => FileNameFromPath(_state.CurrentFilePath);
+
     /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
     public IReadOnlyList<RecentFileEntry> RecentEntries
     {
@@ -57,6 +59,31 @@ public sealed class FileCommandSession
 
         var displayName = Path.GetFileNameWithoutExtension(currentFilePath);
         return string.IsNullOrWhiteSpace(displayName) ? untitledDisplayName : displayName;
+    }
+
+    public static string? FileNameFromPath(string? currentFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(currentFilePath))
+            return null;
+
+        var fileName = Path.GetFileName(currentFilePath);
+        return string.IsNullOrWhiteSpace(fileName) ? null : fileName;
+    }
+
+    public static string FileNameWithoutExtensionFromPath(
+        string? currentFilePath,
+        string fallbackDisplayName = DefaultUntitledDisplayName)
+    {
+        var effectiveName = FileNameFromPath(currentFilePath);
+        if (string.IsNullOrWhiteSpace(effectiveName))
+            effectiveName = string.IsNullOrWhiteSpace(fallbackDisplayName)
+                ? DefaultUntitledDisplayName
+                : fallbackDisplayName;
+
+        var baseName = Path.GetFileNameWithoutExtension(effectiveName);
+        return string.IsNullOrWhiteSpace(baseName)
+            ? DefaultUntitledDisplayName
+            : baseName;
     }
 
     public void ClearCurrentPath() => _state.ClearCurrentFilePath();

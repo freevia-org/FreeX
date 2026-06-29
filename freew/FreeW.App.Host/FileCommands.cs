@@ -303,9 +303,7 @@ internal sealed class FileCommands
             : DefaultSaveExtension;
         var plan = DocumentFileDialogRequestPlanner.BuildSaveDialogPlanFromSourceName(
             _adapters,
-            string.IsNullOrWhiteSpace(suggestedFileName)
-                ? _workflow.CurrentPath is null ? null : Path.GetFileName(_workflow.CurrentPath)
-                : suggestedFileName,
+            string.IsNullOrWhiteSpace(suggestedFileName) ? _workflow.CurrentFileName : suggestedFileName,
             "Document",
             currentExtension);
 

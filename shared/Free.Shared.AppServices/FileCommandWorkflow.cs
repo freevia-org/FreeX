@@ -2,8 +2,8 @@ namespace Free.Shared.AppServices;
 
 /// <summary>
 /// Shared file-command ceremony for small document hosts. Apps still own dialogs and document I/O; this
-/// class owns the repeated dirty-gate, save dispatch, recent-file registration, and change notification
-/// choreography around <see cref="FileCommandSession"/>.
+/// class owns the repeated dirty-gate, save dispatch, recent-file registration, current-path filename
+/// derivation, and change notification choreography around <see cref="FileCommandSession"/>.
 /// </summary>
 public sealed class FileCommandWorkflow
 {
@@ -39,9 +39,14 @@ public sealed class FileCommandWorkflow
 
     public string? CurrentPath => _session.CurrentPath;
 
+    public string? CurrentFileName => _session.CurrentFileName;
+
     public string DisplayName => _session.DisplayName;
 
     public IReadOnlyList<RecentFileEntry> RecentEntries => _session.RecentEntries;
+
+    public string CurrentFileNameWithoutExtensionOr(string fallbackDisplayName) =>
+        FileCommandSession.FileNameWithoutExtensionFromPath(_session.CurrentPath, fallbackDisplayName);
 
     public void MarkDirty() => _session.MarkDirtyIfClean(_onChanged);
 

@@ -849,7 +849,7 @@ public sealed class MainWindow : Window
             : Path.GetExtension(_fileWorkflow.CurrentPath);
         var savePlan = DocumentFileDialogRequestPlanner.BuildSavePickerPlan(
             _adapters,
-            _fileWorkflow.CurrentPath is null ? null : Path.GetFileName(_fileWorkflow.CurrentPath),
+            _fileWorkflow.CurrentFileName,
             "Document",
             defaultExtension);
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
@@ -901,7 +901,7 @@ public sealed class MainWindow : Window
         {
             Title = "Export to PDF",
             DefaultExtension = "pdf",
-            SuggestedFileName = (_fileWorkflow.CurrentPath is null ? "Document" : Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentPath)) + ".pdf",
+            SuggestedFileName = _fileWorkflow.CurrentFileNameWithoutExtensionOr("Document") + ".pdf",
             FileTypeChoices = [PdfFileType],
         });
         var path = file?.TryGetLocalPath();
@@ -1224,9 +1224,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        var suggestedName = (_fileWorkflow.CurrentPath is null
-            ? "Document"
-            : System.IO.Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentPath)) + normalizedExt;
+        var suggestedName = _fileWorkflow.CurrentFileNameWithoutExtensionOr("Document") + normalizedExt;
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
