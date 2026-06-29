@@ -354,15 +354,15 @@ public sealed partial class MainWindow
             target.Values.RotationDegrees.ToString("0.##", CultureInfo.CurrentCulture));
         if (input is null)
             return;
-        if (!double.TryParse(input, NumberStyles.Float, CultureInfo.CurrentCulture, out var degrees))
+        if (!FormatPicturePlanner.TryCreateRotationResult(input, out var rotation) || rotation is null)
         {
             ShowEditIssue(UiText.Get("InsertLoc_EnterValidRotation"));
             return;
         }
 
         RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildRotateCommand(_session.ActiveSheet.Id, target.Kind, target.Id, degrees),
-            UiText.Format("InsertLoc_RotatedObject", degrees),
+            DrawingObjectFormatCommandPolicy.BuildRotationCommand(_session.ActiveSheet.Id, target, rotation),
+            UiText.Format("InsertLoc_RotatedObject", rotation.Degrees),
             UiText.Get("InsertLoc_RotateObjectTitle"));
     }
 
@@ -382,12 +382,10 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildResizeCommand(
+            DrawingObjectFormatCommandPolicy.BuildResizeCommand(
                 _session.ActiveSheet.Id,
-                target.Kind,
-                target.Id,
-                chosen.Width,
-                chosen.Height),
+                target,
+                chosen),
             UiText.Format("InsertLoc_ResizedObject", chosen.Width, chosen.Height),
             UiText.Get("InsertLoc_ObjectSizeTitle"));
     }
@@ -412,7 +410,7 @@ public sealed partial class MainWindow
             return;
 
         RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildAltTextCommand(_session.ActiveSheet.Id, target.Kind, target.Id, input),
+            DrawingObjectFormatCommandPolicy.BuildAltTextCommand(_session.ActiveSheet.Id, target, input),
             string.IsNullOrWhiteSpace(input) ? UiText.Get("InsertLoc_AltTextCleared") : UiText.Get("InsertLoc_AltTextUpdated"),
             UiText.Get("InsertLoc_AltTextTitle"));
     }
@@ -479,13 +477,19 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<string?>(this);
     }
 
-    private async System.Threading.Tasks.Task<(double Width, double Height)?> ShowSizeDialogAsync(
+    private async System.Threading.Tasks.Task<ObjectSizeDialogSize?> ShowSizeDialogAsync(
         double initialWidth,
         double initialHeight)
     {
+        var state = ObjectSizeDialogPlanner.CreateState(
+            initialWidth,
+            initialHeight,
+            ObjectSizeDialogField.Width,
+            ObjectSizeDialogField.Width,
+            CultureInfo.CurrentCulture);
         var widthBox = new TextBox
         {
-            Text = initialWidth.ToString("0.##", CultureInfo.CurrentCulture),
+            Text = state.WidthText,
             Width = 120,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
@@ -493,7 +497,7 @@ public sealed partial class MainWindow
 
         var heightBox = new TextBox
         {
-            Text = initialHeight.ToString("0.##", CultureInfo.CurrentCulture),
+            Text = state.HeightText,
             Width = 120,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
@@ -520,21 +524,22 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(okButton, "ObjectSizeOkButton");
         okButton.Click += (_, _) =>
         {
-            if (!double.TryParse(widthBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var w) ||
-                !double.TryParse(heightBox.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var h) ||
-                !(w > 0) || !(h > 0))
+            if (!ObjectSizeDialogPlanner.TryCreateSize(
+                    new ObjectSizeDialogSubmission(widthBox.Text, heightBox.Text, state.FirstInvalidField),
+                    out var size,
+                    out _))
             {
                 warning.Text = UiText.Get("InsertLoc_EnterPositiveSize");
                 warning.IsVisible = true;
                 return;
             }
 
-            dialog.Close(((double, double)?)(w, h));
+            dialog.Close((ObjectSizeDialogSize?)size);
         };
 
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ObjectSizeCancelButton");
-        cancelButton.Click += (_, _) => dialog.Close(((double, double)?)null);
+        cancelButton.Click += (_, _) => dialog.Close((ObjectSizeDialogSize?)null);
         ApplyDialogButtonChrome(okButton, 80, isDefault: true);
         ApplyDialogButtonChrome(cancelButton, 80);
 
@@ -570,7 +575,6 @@ public sealed partial class MainWindow
             },
         };
 
-        var result = await dialog.ShowDialog<(double, double)?>(this);
-        return result is { } tuple ? (tuple.Item1, tuple.Item2) : null;
+        return await dialog.ShowDialog<ObjectSizeDialogSize?>(this);
     }
 }

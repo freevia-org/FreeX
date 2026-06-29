@@ -564,15 +564,18 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var formatDialogSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
 
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildZOrderCommand(");
-        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
-        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
-        contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildRotationCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildResizeCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildAltTextCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveSelectedFormatTarget(");
         contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.SupportsFillAndOutline(");
         contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveFillColor(");
         contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveOutlineColor(");
+        contextualTabsSource.Should().Contain("FormatPicturePlanner.TryCreateRotationResult(");
+        contextualTabsSource.Should().Contain("ObjectSizeDialogPlanner.TryCreateSize(");
+        contextualTabsSource.Should().Contain("new ObjectSizeDialogSubmission(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedDrawingShape(");
         formatDialogSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildFormatCommands(");
@@ -584,6 +587,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().NotContain("new BringDrawingShapeForwardCommand(");
         contextualTabsSource.Should().NotContain("new SendDrawingShapeBackwardCommand(");
         contextualTabsSource.Should().NotContain("new SetDrawingObjectRotationCommand(");
+        contextualTabsSource.Should().NotContain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        contextualTabsSource.Should().NotContain("DrawingObjectCommandPlanner.BuildResizeCommand(");
+        contextualTabsSource.Should().NotContain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
         contextualTabsSource.Should().NotContain("new SetDrawingShapeColorsCommand(");
         contextualTabsSource.Should().NotContain("new ResizePictureCommand(");
         contextualTabsSource.Should().NotContain("new ResizeDrawingShapeCommand(");

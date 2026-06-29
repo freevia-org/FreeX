@@ -151,7 +151,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var groupedTarget = GetTargetAltTextObject(sheetId, target.Kind);
-                    return DrawingObjectCommandPlanner.BuildAltTextCommand(
+                    return DrawingObjectFormatCommandPolicy.BuildAltTextCommand(
                         sheetId,
                         target.Kind,
                         groupedTarget?.Id ?? Guid.Empty,

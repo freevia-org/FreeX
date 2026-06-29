@@ -91,22 +91,20 @@ public sealed partial class MainWindow
         if (ResolveSelectedFormatTarget() is not { } target)
             return;
 
-        var values = target.Values;
-
-        var aspectRatio = FormatPicturePlanner.AspectRatio(values.Width, values.Height);
+        var state = FormatPicturePlanner.CreateDialogState(target.Values);
         var suppressSync = false;
 
-        var widthBox = new TextBox { Text = FormatPicturePlanner.FormatSize(values.Width), Width = 140 };
+        var widthBox = new TextBox { Text = state.WidthText, Width = 140 };
         ApplyDrawingTextBoxChrome(widthBox);
         AutomationProperties.SetAutomationId(widthBox, "FormatObjectWidthBox");
         AutomationProperties.SetName(widthBox, UiText.Get("FormatPicture_WidthLabel"));
 
-        var heightBox = new TextBox { Text = FormatPicturePlanner.FormatSize(values.Height), Width = 140 };
+        var heightBox = new TextBox { Text = state.HeightText, Width = 140 };
         ApplyDrawingTextBoxChrome(heightBox);
         AutomationProperties.SetAutomationId(heightBox, "FormatObjectHeightBox");
         AutomationProperties.SetName(heightBox, UiText.Get("FormatPicture_HeightLabel"));
 
-        var rotationBox = new TextBox { Text = FormatPicturePlanner.FormatRotation(values.RotationDegrees), Width = 140 };
+        var rotationBox = new TextBox { Text = state.RotationText, Width = 140 };
         ApplyDrawingTextBoxChrome(rotationBox);
         AutomationProperties.SetAutomationId(rotationBox, "FormatObjectRotationBox");
         AutomationProperties.SetName(rotationBox, UiText.Get("FormatPicture_RotationLabel"));
@@ -114,15 +112,15 @@ public sealed partial class MainWindow
         var lockAspectBox = new CheckBox
         {
             Content = StripDisplayMnemonic(UiText.Get("FormatPicture_LockAspectRatio")),
-            IsChecked = values.LockAspectRatio,
-            IsVisible = values.LockAspectRatioSupported,
+            IsChecked = state.LockAspectRatio,
+            IsVisible = state.LockAspectRatioSupported,
         };
         ApplyDrawingCheckBoxChrome(lockAspectBox);
         AutomationProperties.SetAutomationId(lockAspectBox, "FormatObjectLockAspectBox");
 
         var altTextBox = new TextBox
         {
-            Text = values.AltText,
+            Text = state.AltText,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 64,
@@ -135,13 +133,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(altTextBox, "FormatObjectAltTextBox");
         AutomationProperties.SetName(altTextBox, UiText.Get("FormatPicture_AltTextLabel"));
 
-        bool AspectLocked() => values.LockAspectRatioSupported && lockAspectBox.IsChecked == true;
+        bool AspectLocked() => state.LockAspectRatioSupported && lockAspectBox.IsChecked == true;
 
         widthBox.TextChanged += (_, _) =>
         {
             if (suppressSync || !AspectLocked())
                 return;
-            if (FormatPicturePlanner.SyncHeightFromWidth(widthBox.Text, aspectRatio) is { } h)
+            if (FormatPicturePlanner.SyncHeightFromWidth(widthBox.Text, state.AspectRatio) is { } h)
             {
                 suppressSync = true;
                 heightBox.Text = FormatPicturePlanner.FormatSize(h);
@@ -152,7 +150,7 @@ public sealed partial class MainWindow
         {
             if (suppressSync || !AspectLocked())
                 return;
-            if (FormatPicturePlanner.SyncWidthFromHeight(heightBox.Text, aspectRatio) is { } w)
+            if (FormatPicturePlanner.SyncWidthFromHeight(heightBox.Text, state.AspectRatio) is { } w)
             {
                 suppressSync = true;
                 widthBox.Text = FormatPicturePlanner.FormatSize(w);
@@ -183,8 +181,14 @@ public sealed partial class MainWindow
         ok.Click += (_, _) =>
         {
             if (!FormatPicturePlanner.TryCreateResult(
-                    widthBox.Text, heightBox.Text, rotationBox.Text,
-                    lockAspectBox.IsChecked == true, altTextBox.Text, out _, out var error))
+                    new FormatPicturePlanner.FormatObjectSubmission(
+                        widthBox.Text,
+                        heightBox.Text,
+                        rotationBox.Text,
+                        lockAspectBox.IsChecked == true,
+                        altTextBox.Text),
+                    out _,
+                    out var error))
             {
                 ShowEditIssue(error ?? FormatPicturePlanner.InvalidSizeMessage);
                 return;
@@ -198,7 +202,7 @@ public sealed partial class MainWindow
         content.Children.Add(FormRow(UiText.Get("FormatPicture_WidthLabel"), widthBox));
         content.Children.Add(FormRow(UiText.Get("FormatPicture_HeightLabel"), heightBox));
         content.Children.Add(FormRow(UiText.Get("FormatPicture_RotationLabel"), rotationBox));
-        if (values.LockAspectRatioSupported)
+        if (state.LockAspectRatioSupported)
             content.Children.Add(lockAspectBox);
         content.Children.Add(SectionHeader(UiText.Get("FormatPicture_AltTextHeader")));
         content.Children.Add(new TextBlock
@@ -223,8 +227,14 @@ public sealed partial class MainWindow
             return;
 
         if (!FormatPicturePlanner.TryCreateResult(
-                widthBox.Text, heightBox.Text, rotationBox.Text,
-                lockAspectBox.IsChecked == true, altTextBox.Text, out var result, out _) ||
+                new FormatPicturePlanner.FormatObjectSubmission(
+                    widthBox.Text,
+                    heightBox.Text,
+                    rotationBox.Text,
+                    lockAspectBox.IsChecked == true,
+                    altTextBox.Text),
+                out var result,
+                out _) ||
             result is null)
         {
             return;

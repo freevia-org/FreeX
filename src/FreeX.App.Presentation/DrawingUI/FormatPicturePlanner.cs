@@ -18,6 +18,20 @@ public static class FormatPicturePlanner
     public const string InvalidSizeMessage = "Enter positive numbers for width and height.";
     public const string InvalidRotationMessage = "Enter a valid rotation in degrees.";
 
+    public enum FormatObjectDialogField
+    {
+        Width,
+        Height,
+        Rotation
+    }
+
+    public enum FormatPictureDialogValidationError
+    {
+        Size,
+        Rotation,
+        Crop
+    }
+
     /// <summary>The fields seeded into / read back from the dialog.</summary>
     public sealed record FormatObjectValues(
         double Width,
@@ -27,6 +41,24 @@ public static class FormatPicturePlanner
         bool LockAspectRatioSupported,
         string AltText);
 
+    /// <summary>Portable initial edit-box state for the combined size / rotation / alt-text dialog.</summary>
+    public sealed record FormatObjectDialogState(
+        string WidthText,
+        string HeightText,
+        string RotationText,
+        double AspectRatio,
+        bool LockAspectRatio,
+        bool LockAspectRatioSupported,
+        string AltText);
+
+    /// <summary>Portable submission payload for the combined size / rotation / alt-text dialog.</summary>
+    public sealed record FormatObjectSubmission(
+        string? WidthText,
+        string? HeightText,
+        string? RotationText,
+        bool LockAspectRatio,
+        string? AltText);
+
     /// <summary>The validated result the shell hands to the resize / rotate / alt-text commands.</summary>
     public sealed record FormatObjectResult(
         double Width,
@@ -34,6 +66,11 @@ public static class FormatPicturePlanner
         double RotationDegrees,
         bool LockAspectRatio,
         string? AltText);
+
+    /// <summary>The validated picture-format result, including the crop tab fields used only by pictures.</summary>
+    public sealed record PictureFormatResult(
+        FormatObjectResult Format,
+        PictureCropDialogPlanner.CropResult Crop);
 
     /// <summary>The validated size fields used by the standalone object-size dialog.</summary>
     public sealed record SizeResult(double Width, double Height);
@@ -80,6 +117,29 @@ public static class FormatPicturePlanner
             textBox.AltText ?? string.Empty);
     }
 
+    /// <summary>Creates the initial UI-free state for a host-owned format-object dialog.</summary>
+    public static FormatObjectDialogState CreateDialogState(FormatObjectValues values, CultureInfo? culture = null)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return new FormatObjectDialogState(
+            FormatSize(values.Width, culture),
+            FormatSize(values.Height, culture),
+            FormatRotation(values.RotationDegrees, culture),
+            AspectRatio(values.Width, values.Height),
+            values.LockAspectRatio,
+            values.LockAspectRatioSupported,
+            values.AltText);
+    }
+
+    /// <summary>Creates the initial state for the WPF Format Picture dialog, including its crop tab values.</summary>
+    public static (FormatObjectDialogState Format, PictureCropDialogPlanner.CropValues Crop) CreatePictureDialogState(
+        PictureModel picture,
+        CultureInfo? culture = null)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+        return (CreateDialogState(Capture(picture), culture), PictureCropDialogPlanner.Capture(picture));
+    }
+
     /// <summary>
     /// The aspect ratio (width / height) used to keep the two size boxes in sync while locked; returns a
     /// non-positive value when it cannot be computed (height is zero), which the syncing helpers treat as
@@ -89,12 +149,12 @@ public static class FormatPicturePlanner
         height > 0 ? width / height : 0;
 
     /// <summary>Formats a size component for an input box, using the current culture.</summary>
-    public static string FormatSize(double value) =>
-        value.ToString("0.###", CultureInfo.CurrentCulture);
+    public static string FormatSize(double value, CultureInfo? culture = null) =>
+        value.ToString("0.###", culture ?? CultureInfo.CurrentCulture);
 
     /// <summary>Formats a rotation for an input box, using the current culture.</summary>
-    public static string FormatRotation(double value) =>
-        value.ToString("0.##", CultureInfo.CurrentCulture);
+    public static string FormatRotation(double value, CultureInfo? culture = null) =>
+        value.ToString("0.##", culture ?? CultureInfo.CurrentCulture);
 
     /// <summary>Parses a single size/rotation component (current culture, with invariant fallback).</summary>
     public static bool TryParseNumber(string? text, out double value)
@@ -141,6 +201,31 @@ public static class FormatPicturePlanner
 
         result = new RotationResult(NormalizeRotationDegrees(rotation));
         return true;
+    }
+
+    public static FormatObjectDialogField ResolveInvalidField(
+        string? widthText,
+        string? heightText,
+        string? rotationText,
+        FormatObjectDialogField firstInvalidSizeField = FormatObjectDialogField.Height)
+    {
+        if (!TryCreateSizeResult(widthText, heightText, out _))
+        {
+            if (firstInvalidSizeField == FormatObjectDialogField.Height)
+            {
+                return !TryCreateSizeResult(heightText, heightText, out _)
+                    ? FormatObjectDialogField.Height
+                    : FormatObjectDialogField.Width;
+            }
+
+            return !TryCreateSizeResult(widthText, widthText, out _)
+                ? FormatObjectDialogField.Width
+                : FormatObjectDialogField.Height;
+        }
+
+        return !TryCreateRotationResult(rotationText, out _)
+            ? FormatObjectDialogField.Rotation
+            : firstInvalidSizeField;
     }
 
     /// <summary>Normalizes arbitrary finite degrees to the Excel-style 0..360 range.</summary>
@@ -193,6 +278,83 @@ public static class FormatPicturePlanner
     /// height must be finite and at least <see cref="MinimumSize"/>; rotation must be a finite number.
     /// </summary>
     public static bool TryCreateResult(
+        FormatObjectSubmission submission,
+        out FormatObjectResult? result,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(submission);
+        return TryCreateResult(
+            submission.WidthText,
+            submission.HeightText,
+            submission.RotationText,
+            submission.LockAspectRatio,
+            submission.AltText,
+            out result,
+            out error);
+    }
+
+    /// <summary>
+    /// Validates the typed Format Picture fields and crop-tab fields in one shared path. Hosts map the error code
+    /// to localized text/focus behavior.
+    /// </summary>
+    public static bool TryCreatePictureResult(
+        FormatObjectSubmission submission,
+        string? cropInput,
+        out PictureFormatResult? result,
+        out FormatPictureDialogValidationError? error)
+    {
+        result = null;
+        error = null;
+
+        if (!TryCreateResult(submission, out var format, out var formatError) || format is null)
+        {
+            error = string.Equals(formatError, InvalidRotationMessage, StringComparison.Ordinal)
+                ? FormatPictureDialogValidationError.Rotation
+                : FormatPictureDialogValidationError.Size;
+            return false;
+        }
+
+        if (!PictureCropDialogPlanner.TryCreateResult(cropInput, out var crop, out _) || crop is null)
+        {
+            error = FormatPictureDialogValidationError.Crop;
+            return false;
+        }
+
+        result = new PictureFormatResult(format, crop);
+        return true;
+    }
+
+    public static bool TryCreatePictureResult(
+        string? sizeText,
+        string? rotationText,
+        bool lockAspectRatio,
+        string? cropInput,
+        string? altText,
+        out PictureFormatResult? result,
+        out FormatPictureDialogValidationError? error)
+    {
+        var parts = (sizeText ?? string.Empty).Split(
+            'x',
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+        {
+            result = null;
+            error = FormatPictureDialogValidationError.Size;
+            return false;
+        }
+
+        return TryCreatePictureResult(
+            new FormatObjectSubmission(parts[0], parts[1], rotationText, lockAspectRatio, altText),
+            cropInput,
+            out result,
+            out error);
+    }
+
+    /// <summary>Normalizes host-entered alt text to the command model's null-or-trimmed convention.</summary>
+    public static string? NormalizeAltText(string? altText) =>
+        string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+
+    public static bool TryCreateResult(
         string? widthText,
         string? heightText,
         string? rotationText,
@@ -216,7 +378,7 @@ public static class FormatPicturePlanner
             return false;
         }
 
-        var normalizedAlt = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+        var normalizedAlt = NormalizeAltText(altText);
         result = new FormatObjectResult(size.Width, size.Height, rotation.Degrees, lockAspectRatio, normalizedAlt);
         return true;
     }

@@ -81,14 +81,17 @@ public sealed class ObjectSizeDialog : Window
 
     private void Accept()
     {
-        if (!TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var result))
+        if (!ObjectSizeDialogPlanner.TryCreateSize(
+                new ObjectSizeDialogSubmission(_widthBox.Text, _heightBox.Text, _sizeState.FirstInvalidField),
+                out var size,
+                out var invalidField))
         {
             DialogMessageHelper.ShowWarning(this, UiText.Get("ObjectSizing_EnterPositiveWidthAndHeightValues"), Title);
-            FocusInvalidSizeInput(ResolveInvalidSizeInput());
+            FocusInvalidSizeInput(invalidField == ObjectSizeDialogField.Height ? _heightBox : _widthBox);
             return;
         }
 
-        Result = result;
+        Result = new ObjectSizeDialogResult(size.Width, size.Height);
         DialogResult = true;
     }
 
@@ -96,18 +99,6 @@ public sealed class ObjectSizeDialog : Window
     {
         DialogFocus.FocusAndSelect(_heightBox);
     }
-
-    private TextBox ResolveInvalidSizeInput()
-    {
-        var invalidField = ObjectSizeDialogPlanner.ResolveInvalidSizeField(
-            _widthBox.Text,
-            _heightBox.Text,
-            _sizeState.FirstInvalidField);
-        return invalidField == ObjectSizeDialogField.Height ? _heightBox : _widthBox;
-    }
-
-    private static bool TryParsePositiveSize(string text) =>
-        ObjectSizeDialogPlanner.TryParsePositiveSize(text, out _);
 
     private static void FocusInvalidSizeInput(TextBox textBox)
     {

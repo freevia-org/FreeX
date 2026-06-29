@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -107,27 +106,20 @@ public partial class MainWindow
         if (picture is null)
             return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_PictureWasNotFound"));
 
-        var target = new DrawingObjectFormatTarget(
-            DrawingObjectTarget.FromPicture(picture),
-            FormatPicturePlanner.Capture(picture));
         var formatResult = new FormatPicturePlanner.FormatObjectResult(
             result.Width,
             result.Height,
             result.RotationDegrees,
             result.LockAspectRatio,
             result.AltText);
-        var commands = new List<IWorkbookCommand>(
-            DrawingObjectFormatCommandPolicy.BuildFormatCommands(sheetId, target, formatResult));
-        if (picture.Kind == PictureKind.Image)
-        {
-            commands.Add(new SetPictureCropCommand(
-                sheetId,
-                picture.Id,
+        var pictureResult = new FormatPicturePlanner.PictureFormatResult(
+            formatResult,
+            new PictureCropDialogPlanner.CropResult(
                 result.CropLeft,
                 result.CropTop,
                 result.CropRight,
                 result.CropBottom));
-        }
+        var commands = DrawingObjectFormatCommandPolicy.BuildPictureFormatCommands(sheetId, picture, pictureResult);
 
         return new CompositeWorkbookCommand("Format Picture", commands);
     }
@@ -388,12 +380,11 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var groupedTarget = GetTargetTransformDrawingObject(sheetId, target.Kind);
-                    return DrawingObjectCommandPlanner.BuildResizeCommand(
+                    return DrawingObjectFormatCommandPolicy.BuildResizeCommand(
                         sheetId,
                         target.Kind,
                         groupedTarget?.Id ?? Guid.Empty,
-                        dialog.Result.Width,
-                        dialog.Result.Height);
+                        new ObjectSizeDialogSize(dialog.Result.Width, dialog.Result.Height));
                 }))
             return;
 
@@ -423,11 +414,11 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var groupedTarget = GetTargetTransformDrawingObject(sheetId, target.Kind);
-                    return DrawingObjectCommandPlanner.BuildRotateCommand(
+                    return DrawingObjectFormatCommandPolicy.BuildRotationCommand(
                         sheetId,
                         target.Kind,
                         groupedTarget?.Id ?? Guid.Empty,
-                        dialog.Result.Degrees);
+                        new FormatPicturePlanner.RotationResult(dialog.Result.Degrees));
                 }))
             return;
 

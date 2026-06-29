@@ -17,7 +17,8 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_workbook)");
         source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
         source.Should().Contain("DrawingTargetResolver.GetTargetAltTextObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
-        source.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildAltTextCommand(");
+        source.Should().NotContain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
         source.Should().NotContain("AltTextTargetResolver.Resolve(");
         source.Should().NotContain("AltTextObjectKind.");
         source.Should().Contain("CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr)");
