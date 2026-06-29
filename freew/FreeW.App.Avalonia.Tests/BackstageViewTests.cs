@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Avalonia.Headless;
+using Free.Shared.Shell;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Presentation.Backstage;
 using FreeW.Core.IO;
@@ -190,12 +191,13 @@ public class BackstageViewTests
     [Fact]
     public void Account_planner_includes_product_and_user_sections()
     {
-        var plan = BackstageAccountPanePlanner.Build(
-            productName: "FreeW",
-            version: "1.0.0",
-            userName: "TestUser",
-            machineName: "TestMachine",
-            dataFolder: @"C:\AppData\FreeW");
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.0.0",
+                "TestUser",
+                "TestMachine",
+                @"C:\AppData\FreeW"));
 
         plan.Groups.Should().Contain(g => g.Heading == "Product Information");
         plan.Groups.Should().Contain(g => g.Heading == "User Information");

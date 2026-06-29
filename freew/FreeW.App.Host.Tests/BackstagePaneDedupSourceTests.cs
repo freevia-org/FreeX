@@ -20,15 +20,18 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("BackstagePaneComposer");
         source.Should().Contain("SisterBackstageTheme.");
         source.Should().Contain("SisterBackstagePaneSpecPlanner");
+        source.Should().Contain("SisterBackstagePaneResources");
         source.Should().Contain("SisterBackstageEntryBuilder.Build(");
         source.Should().Contain("Panes.BuildInfoPane(");
-        source.Should().Contain("BackstageCorePropertiesPlanner.Build(");
+        source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
         source.Should().Contain("Panes.BuildRecentPane(");
         source.Should().Contain("PaneSpecs.BuildRecentPaneSpec(");
         source.Should().Contain("Panes.BuildTemplatePane(");
         source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
         source.Should().Contain("Panes.BuildOptionsPane(");
         source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
+        source.Should().Contain("SisterBackstageAccountPanePlanner.Build(");
+        source.Should().Contain("Panes.BuildAccountPane(");
 
         if (appFolder == "freew")
         {
@@ -58,7 +61,6 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("PrintPreview");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
             source.Should().Contain("HideRecentPane = true");
-            source.Should().Contain("BackstageAccountPanePlanner.Build(");
             source.Should().Contain("BackstageInfoSafetyPanePlanner.Build(");
             source.Should().Contain("SafetyAction(action.Kind)");
             source.Should().Contain("MarkAsFinal");
@@ -76,13 +78,16 @@ public sealed class BackstagePaneDedupSourceTests
         {
             source.Should().NotContain("BuildHomePane = BuildHomePane");
             source.Should().NotContain("UseNewPane = true");
+            source.Should().Contain("BuildAccountPane = BuildAccountPane");
         }
 
         source.Should().NotContain("BackstageEntry.Pane(\"Info\"");
         source.Should().NotContain("BackstageEntry.Command(\"Save\"");
+        source.Should().NotContain("BackstageCorePropertiesPlanner.Build(");
         source.Should().NotContain("BackstageApplicationOptionsPanePlanner.Build(");
         source.Should().NotContain("new BackstageRecentPaneSpec(");
         source.Should().NotContain("new BackstageTemplatePaneSpec(");
+        source.Should().NotContain("new BackstageInfoPaneSpec(");
         source.Should().NotContain("Color.FromRgb(");
         source.Should().NotContain("BackstageAccent(");
         source.Should().NotContain("No recent documents.");

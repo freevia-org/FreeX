@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
@@ -11,24 +13,20 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host.Backstage;
 
 /// <summary>
-/// FreeP's Office-style Backstage, built on the shared Backstage frame, theme, entry builder, and pane specs.
-/// The backstage rail colours (sidebar/hover/selected/separator) come from <see cref="SisterBackstageTheme.FreeP"/>.
-/// The in-content link accent is sourced from the design-token (<see cref="BrandThemes.FreeP"/> Accent role)
-/// so that changing the theme value propagates to the backstage — byte-identical today since
-/// <c>BrandThemes.FreeP.Colors.Accent == #B7472A</c> matches the previous hard-coded <c>LinkColor</c>.
+/// FreeP's Office-style Backstage, built on the shared Backstage frame, theme, entry builder, pane resources,
+/// and pane specs. Hosts still provide live presentation values and command adapters.
 /// </summary>
 internal sealed class BackstageView : UserControl
 {
     private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeP;
 
-    // Link accent sourced from the design token (BrandThemes.FreeP.Colors.Accent = #B7472A).
-    // Byte-identical to the previous hard-coded SisterBackstageTheme.FreeP.LinkColor (#B7472A).
-    private static readonly BackstageVisualKit Kit = new(
+    private static readonly SisterBackstagePaneResources BackstageResources = new(
         WpfThemeApplier.ToColor(BrandThemes.FreeP.Colors.Accent),
         Theme.TileWidth,
-        Theme.TileHeight);
-    private static readonly BackstagePaneComposer Panes = new(Kit);
-    private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(SisterBackstagePaneTextSpec.FreeP);
+        Theme.TileHeight,
+        SisterBackstagePaneTextSpec.FreeP);
+    private static BackstagePaneComposer Panes => BackstageResources.Panes;
+    private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
 
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
@@ -68,22 +66,22 @@ internal sealed class BackstageView : UserControl
             BuildOptionsPane)
         {
             BuildExportPane = BuildExportPane,
+            BuildAccountPane = BuildAccountPane,
         });
     }
 
     private UIElement BuildExportPane()
     {
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Export"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Create a PDF copy of this presentation — one page per slide, with selectable text.",
-            Foreground = Kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-        panel.Children.Add(Kit.LinkButton("Export to PDF…", () => { Hide(); _actions.ExportPdf(); }));
-        return panel;
+        return Panes.BuildActionPane(new BackstageActionPaneSpec(
+            Heading: "Export",
+            Description: "Create a PDF copy of this presentation - one page per slide, with selectable text.",
+            Groups:
+            [
+                new("Create PDF Copy",
+                [
+                    new("Export to PDF...", "Publish a fixed-layout copy for sharing or presenting.", () => { Hide(); _actions.ExportPdf(); }),
+                ]),
+            ]));
     }
 
     private UIElement BuildInfoPane()
@@ -91,20 +89,20 @@ internal sealed class BackstageView : UserControl
         var model = _getModel();
         var properties = model.Properties;
 
-        return Panes.BuildInfoPane(new BackstageInfoPaneSpec(
+        return Panes.BuildInfoPane(SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
             DocumentKindLabel: "Presentation",
             DisplayName: _file.DisplayName,
             IsDirty: _file.IsDirty,
             Location: _file.CurrentPath,
-            Properties: BackstageCorePropertiesPlanner.Build(new BackstageCoreProperties(
+            CoreProperties: new BackstageCoreProperties(
                 properties.Title,
                 properties.Author,
                 properties.Subject,
-                properties.Keywords)),
+                properties.Keywords),
             Statistics:
             [
                 new("Slides", model.Slides.Count.ToString()),
-            ]));
+            ])));
     }
 
     private UIElement BuildRecentPane()
@@ -127,6 +125,24 @@ internal sealed class BackstageView : UserControl
         return Panes.BuildOptionsPane(PaneSpecs.BuildOptionsPaneSpec(
             options,
             _actions.DataFolder()));
+    }
+
+    private UIElement BuildAccountPane()
+    {
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                AppProduct.Current.ProductName,
+                EntryAssemblyVersion.Resolve(),
+                Environment.UserName,
+                Environment.MachineName,
+                _actions.DataFolder()));
+
+        return Panes.BuildAccountPane(new BackstageAccountPaneSpec(
+            "Account",
+            plan.Description,
+            plan.Groups,
+            plan.OptionsText,
+            () => _shell.Show("Options")));
     }
 }
 

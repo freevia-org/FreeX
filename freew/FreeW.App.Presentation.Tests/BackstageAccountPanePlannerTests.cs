@@ -1,19 +1,19 @@
 using Free.Shared.Shell;
-using FreeW.App.Presentation.Backstage;
 
 namespace FreeW.App.Presentation.Tests;
 
-public sealed class BackstageAccountPanePlannerTests
+public sealed class SisterBackstageAccountPanePlannerTests
 {
     [Fact]
     public void Build_UsesLocalProductUserAndStorageFields()
     {
-        var plan = BackstageAccountPanePlanner.Build(
-            productName: "FreeW",
-            version: "1.2.3",
-            userName: "Ada",
-            machineName: "WORD-BOX",
-            dataFolder: @"C:\Users\Ada\AppData\Local\FreeW");
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.2.3",
+                "Ada",
+                "WORD-BOX",
+                @"C:\Users\Ada\AppData\Local\FreeW"));
 
         plan.Description.Should().Contain("local product and user information");
         plan.OptionsText.Should().Be("FreeW Options...");
@@ -31,12 +31,13 @@ public sealed class BackstageAccountPanePlannerTests
     [Fact]
     public void Build_UsesFallbackForBlankValues()
     {
-        var plan = BackstageAccountPanePlanner.Build(
-            productName: "",
-            version: " ",
-            userName: "\t",
-            machineName: "",
-            dataFolder: "");
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                "",
+                " ",
+                "\t",
+                "",
+                ""));
 
         plan.Groups.SelectMany(group => group.Fields)
             .Where(field => field.Label != "Connected services")
