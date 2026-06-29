@@ -2126,6 +2126,62 @@ public sealed class ChartEditingPlannerTests
         issue.Should().Be(ChartBarFormatParseIssue.Overlap);
     }
 
+    [Fact]
+    public void TypeFormat_DialogDescriptors_CoverBarPieBubbleAndStockFields()
+    {
+        ChartBarFormatPlanner.TitleResourceKey.Should().Be("ChartBarFormat_Title");
+        ChartBarFormatPlanner.DialogAutomationId.Should().Be("ChartBarFormatDialog");
+        ChartBarFormatPlanner.GetOptionsSection().HeaderResourceKey.Should().Be("ChartBarFormat_OptionsGroup");
+        ChartBarFormatPlanner.GetOptionsSection().Fields.Select(field => field.Id).Should().Equal(
+            ChartBarFormatDialogFieldId.GapWidth,
+            ChartBarFormatDialogFieldId.Overlap);
+        ChartBarFormatPlanner.GetDialogField(ChartBarFormatDialogFieldId.GapWidth).AutomationId
+            .Should().Be("ChartBarFormatGapWidthBox");
+        ChartBarFormatPlanner.InvalidInputMessageResourceKey(ChartBarFormatParseIssue.Overlap)
+            .Should().Be("ChartBarFormat_InvalidOverlapMessage");
+
+        ChartPieFormatPlanner.TitleResourceKey.Should().Be("ChartPieFormat_Title");
+        ChartPieFormatPlanner.DialogAutomationId.Should().Be("ChartPieFormatDialog");
+        ChartPieFormatPlanner.GetOptionsSection().HeaderResourceKey.Should().Be("ChartPieFormat_OptionsGroup");
+        ChartPieFormatPlanner.GetOptionsSection().Fields.Select(field => field.Id).Should().Equal(
+            ChartPieFormatDialogFieldId.FirstSliceAngle,
+            ChartPieFormatDialogFieldId.ExplodedSliceIndex,
+            ChartPieFormatDialogFieldId.ExplodedSliceDistance,
+            ChartPieFormatDialogFieldId.DoughnutHoleSize);
+        ChartPieFormatPlanner.GetDialogField(ChartPieFormatDialogFieldId.DoughnutHoleSize).HelpResourceKey
+            .Should().Be("ChartPieFormat_HoleSizeHelpText");
+        ChartPieFormatPlanner.InvalidInputMessageResourceKey(ChartPieFormatParseIssue.DoughnutHoleSize)
+            .Should().Be("ChartPieFormat_InvalidHoleSizeMessage");
+
+        ChartBubbleFormatPlanner.TitleResourceKey.Should().Be("ChartBubbleFormat_Title");
+        ChartBubbleFormatPlanner.DialogAutomationId.Should().Be("ChartBubbleFormatDialog");
+        ChartBubbleFormatPlanner.GetOptionsSection().HeaderResourceKey.Should().Be("ChartBubbleFormat_OptionsGroup");
+        ChartBubbleFormatPlanner.GetOptionsSection().Fields.Select(field => field.Id).Should().Equal(
+            ChartBubbleFormatDialogFieldId.BubbleScale,
+            ChartBubbleFormatDialogFieldId.ShowNegativeBubbles,
+            ChartBubbleFormatDialogFieldId.SizeRepresents);
+        ChartBubbleFormatPlanner.GetDialogField(ChartBubbleFormatDialogFieldId.SizeRepresents).AutomationId
+            .Should().Be("ChartBubbleFormatSizeCombo");
+
+        ChartStockFormatPlanner.TitleResourceKey.Should().Be("ChartStockFormat_Title");
+        ChartStockFormatPlanner.DialogAutomationId.Should().Be("ChartStockFormatDialog");
+        ChartStockFormatPlanner.BarsGroupResourceKey.Should().Be("ChartFmt_StockBarsLabel");
+        ChartStockFormatPlanner.HighLowGroupResourceKey.Should().Be("ChartFmt_StockHighLowLabel");
+        ChartStockFormatPlanner.GetOptionsSection().HeaderResourceKey.Should().Be("ChartStockFormat_OptionsGroup");
+        ChartStockFormatPlanner.GetOptionsSection().Fields.Select(field => field.Id).Should().Equal(
+            ChartStockFormatDialogFieldId.GapWidth,
+            ChartStockFormatDialogFieldId.UpBarFill,
+            ChartStockFormatDialogFieldId.UpBarBorder,
+            ChartStockFormatDialogFieldId.DownBarFill,
+            ChartStockFormatDialogFieldId.DownBarBorder,
+            ChartStockFormatDialogFieldId.HighLowLineColor,
+            ChartStockFormatDialogFieldId.HighLowLineThickness);
+        ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.HighLowLineThickness).HelpResourceKey
+            .Should().Be("ChartStockFormat_LineThicknessHelpText");
+        ChartStockFormatPlanner.InvalidInputMessageResourceKey(ChartStockFormatParseIssue.HighLowLineThickness)
+            .Should().Be("ChartStockFormat_InvalidLineThicknessMessage");
+    }
+
     // ---- ChartPieFormatPlanner -----------------------------------------------------------------------
 
     [Fact]

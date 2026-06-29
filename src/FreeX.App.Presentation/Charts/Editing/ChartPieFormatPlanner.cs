@@ -24,6 +24,30 @@ public enum ChartPieFormatParseIssue
     DoughnutHoleSize
 }
 
+public enum ChartPieFormatDialogControlKind
+{
+    Number,
+}
+
+public enum ChartPieFormatDialogFieldId
+{
+    FirstSliceAngle,
+    ExplodedSliceIndex,
+    ExplodedSliceDistance,
+    DoughnutHoleSize,
+}
+
+public sealed record ChartPieFormatDialogFieldDescriptor(
+    ChartPieFormatDialogFieldId Id,
+    ChartPieFormatDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartPieFormatDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartPieFormatDialogFieldDescriptor> Fields);
+
 /// <summary>
 /// Portable (no UI) planner for the "Format Pie/Doughnut" editing dialog. Single-sources the read/validate/
 /// project rules and maps an edited <see cref="ChartPieFormatInput"/> onto the <see cref="ChartLayoutOptions"/>
@@ -33,6 +57,9 @@ public enum ChartPieFormatParseIssue
 /// </summary>
 public static class ChartPieFormatPlanner
 {
+    public const string TitleResourceKey = "ChartPieFormat_Title";
+    public const string DialogAutomationId = "ChartPieFormatDialog";
+
     public const int MinFirstSliceAngle = 0;
     public const int MaxFirstSliceAngle = 359;
 
@@ -43,6 +70,46 @@ public static class ChartPieFormatPlanner
     /// <summary>The doughnut hole-size bounds (fraction of radius) Core clamps to.</summary>
     public const double MinHoleSize = 0.1;
     public const double MaxHoleSize = 0.9;
+
+    private static readonly ChartPieFormatDialogFieldDescriptor[] OptionFields =
+    [
+        new(ChartPieFormatDialogFieldId.FirstSliceAngle, ChartPieFormatDialogControlKind.Number, "ChartPieFormat_FirstSliceAngleLabel", "ChartPieFormatAngleBox", "ChartPieFormat_FirstSliceAngleHelpText"),
+        new(ChartPieFormatDialogFieldId.ExplodedSliceIndex, ChartPieFormatDialogControlKind.Number, "ChartPieFormat_ExplodedSliceIndexLabel", "ChartPieFormatExplodedIndexBox", "ChartPieFormat_ExplodedSliceIndexHelpText"),
+        new(ChartPieFormatDialogFieldId.ExplodedSliceDistance, ChartPieFormatDialogControlKind.Number, "ChartPieFormat_ExplodedDistanceLabel", "ChartPieFormatExplodedDistanceBox", "ChartPieFormat_ExplodedDistanceHelpText"),
+        new(ChartPieFormatDialogFieldId.DoughnutHoleSize, ChartPieFormatDialogControlKind.Number, "ChartPieFormat_HoleSizeLabel", "ChartPieFormatHoleSizeBox", "ChartPieFormat_HoleSizeHelpText"),
+    ];
+
+    private static readonly ChartPieFormatDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartPieFormat_OptionsGroup", OptionFields),
+    ];
+
+    public static IReadOnlyList<ChartPieFormatDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartPieFormatDialogSectionDescriptor GetOptionsSection() => DialogSections[0];
+
+    public static ChartPieFormatDialogFieldDescriptor GetDialogField(ChartPieFormatDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
+
+    public static string InvalidInputMessageResourceKey(ChartPieFormatParseIssue issue) =>
+        issue switch
+        {
+            ChartPieFormatParseIssue.ExplodedSliceIndex => "ChartPieFormat_InvalidExplodedSliceIndexMessage",
+            ChartPieFormatParseIssue.ExplodedSliceDistance => "ChartPieFormat_InvalidExplodedDistanceMessage",
+            ChartPieFormatParseIssue.DoughnutHoleSize => "ChartPieFormat_InvalidHoleSizeMessage",
+            _ => "ChartPieFormat_InvalidFirstSliceAngleMessage",
+        };
 
     /// <summary>True when the chart is a pie/doughnut family that has these layout options.</summary>
     public static bool Supports(ChartModel chart)

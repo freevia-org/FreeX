@@ -99,6 +99,32 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().NotContain("UiText.Get(\"ChartErrorBars_KindLabel\")");
     }
 
+    [Fact]
+    public void TypeFormatDialogs_UseSharedDescriptorsAndPlannerParsers()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTypeFormatDialogs.cs"));
+
+        source.Should().Contain("ChartBarFormatPlanner.GetDialogField(ChartBarFormatDialogFieldId.GapWidth)");
+        source.Should().Contain("ChartPieFormatPlanner.GetDialogField(ChartPieFormatDialogFieldId.FirstSliceAngle)");
+        source.Should().Contain("ChartBubbleFormatPlanner.GetDialogField(ChartBubbleFormatDialogFieldId.BubbleScale)");
+        source.Should().Contain("ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.GapWidth)");
+        source.Should().Contain("ChartBarFormatPlanner.TryParseDialogInput(");
+        source.Should().Contain("ChartPieFormatPlanner.TryParseDialogInput(");
+        source.Should().Contain("ChartBubbleFormatPlanner.TryParseDialogInput(");
+        source.Should().Contain("ChartStockFormatPlanner.TryParseDialogInput(");
+        source.Should().Contain("TypeFormatDescriptorLabel(");
+        source.Should().Contain("ColorPickerButton(ChartStockFormatDialogFieldDescriptor field");
+
+        source.Should().NotContain("UiText.Get(\"ChartFmt_BarTitle\")");
+        source.Should().NotContain("UiText.Get(\"ChartFmt_PieTitle\")");
+        source.Should().NotContain("UiText.Get(\"ChartFmt_BubbleTitle\")");
+        source.Should().NotContain("UiText.Get(\"ChartFmt_StockTitle\")");
+        source.Should().NotContain("TryParseIntInRange(gapWidthBox.Text");
+        source.Should().NotContain("double.TryParse((thicknessBox.Text");
+        source.Should().NotContain("AutomationProperties.SetName(gapWidthBox, \"Up/down bar gap width\")");
+        source.Should().NotContain("AutomationProperties.SetAutomationId(gapWidthBox, \"ChartStockFormatGapWidthBox\")");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
