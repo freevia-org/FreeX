@@ -126,61 +126,18 @@ public sealed class SlidePane : Border
     {
         _stack.Children.Clear();
 
-        var slides   = _editor.Presentation.Slides;
-        var sections = _editor.Presentation.Sections;
+        var slides = _editor.Presentation.Slides;
+        var entries = SlidePanePlanner.BuildEntries(slides, _editor.Presentation.Sections);
 
-        // Build a mapping: slide index → section name to inject before it.
-        // A section header is shown above the first slide whose sldId numeric string is in
-        // that section's SlideIds list.  We walk sections in order and cross-reference the
-        // presentation sldIdLst order which is captured as the Slide.Id on read.
-        //
-        // Slide.Id is either the numeric sldId string (set by the reader) or a GUID for
-        // new slides.  We match by index as a fallback when section membership isn't found.
-        var sectionHeaderBefore = new Dictionary<int, PresentationSection>();
-        if (sections.Count > 0)
+        foreach (var entry in entries)
         {
-            // Build a map from Slide.Id → slide list index for fast lookup.
-            var slideIndexById = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < slides.Count; i++)
-                slideIndexById[slides[i].Id] = i;
-
-            // For each section, find the first slide index mentioned in its SlideIds list.
-            foreach (var section in sections)
+            if (entry.Kind == SlidePaneEntryKind.SectionHeader)
             {
-                int firstIdx = -1;
-                foreach (var sldId in section.SlideIds)
-                {
-                    if (slideIndexById.TryGetValue(sldId, out var idx))
-                    {
-                        if (firstIdx < 0 || idx < firstIdx)
-                            firstIdx = idx;
-                    }
-                }
-                if (firstIdx >= 0 && !sectionHeaderBefore.ContainsKey(firstIdx))
-                    sectionHeaderBefore[firstIdx] = section;
-            }
-        }
-
-        for (int i = 0; i < slides.Count; i++)
-        {
-            // Inject section header if this slide begins a section.
-            if (sectionHeaderBefore.TryGetValue(i, out var sec))
-            {
-                // Count slides that belong to this section (for the badge).
-                int sectionSlideCount = 0;
-                if (sections.Count > 0)
-                {
-                    var secIdx = sections.IndexOf(sec);
-                    var nextSec = secIdx + 1 < sections.Count ? sections[secIdx + 1] : null;
-                    var slideIndexById2 = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-                    for (int k = 0; k < slides.Count; k++) slideIndexById2[slides[k].Id] = k;
-                    foreach (var sldId in sec.SlideIds)
-                        if (slideIndexById2.ContainsKey(sldId)) sectionSlideCount++;
-                }
-                _stack.Children.Add(BuildSectionHeader(sec.Name, sectionSlideCount));
+                _stack.Children.Add(BuildSectionHeader(entry.Text));
+                continue;
             }
 
-            var item = BuildSlideItem(i, slides[i]);
+            var item = BuildSlideItem(entry.SlideIndex, slides[entry.SlideIndex], entry.Text);
             _stack.Children.Add(item);
         }
 
@@ -192,13 +149,11 @@ public sealed class SlidePane : Border
     /// Builds a non-interactive section-header row showing the section name and slide count.
     /// Wave 11B.
     /// </summary>
-    private static Border BuildSectionHeader(string name, int slideCount)
+    private static Border BuildSectionHeader(string text)
     {
         var label = new TextBlock
         {
-            Text                = slideCount > 0
-                                    ? $"{name}  ({slideCount})"
-                                    : name,
+            Text                = text,
             FontSize            = 11,
             FontWeight          = FontWeights.SemiBold,
             Foreground          = SectionHeaderFg,
@@ -234,14 +189,14 @@ public sealed class SlidePane : Border
 
     // ── Item construction ─────────────────────────────────────────────────────────
 
-    private Border BuildSlideItem(int index, Slide slide)
+    private Border BuildSlideItem(int index, Slide slide, string labelText)
     {
         bool selected = index == _editor.CurrentSlideIndex;
 
         // Slide-number label.
         var label = new TextBlock
         {
-            Text                = (index + 1).ToString(),
+            Text                = labelText,
             FontSize            = 11,
             Foreground          = LabelBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -326,7 +281,7 @@ public sealed class SlidePane : Border
     {
         var btn = new Button
         {
-            Content             = "+ New Slide",
+            Content             = SlidePanePlanner.NewSlideButtonText,
             Margin              = new Thickness(12, 8, 12, 12),
             Padding             = new Thickness(0, 6, 0, 6),
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -344,21 +299,21 @@ public sealed class SlidePane : Border
     {
         var menu = new ContextMenu();
 
-        var newItem = new MenuItem { Header = "New Slide" };
+        var newItem = new MenuItem { Header = SlidePanePlanner.NewSlideMenuText };
         newItem.Click += (_, _) =>
         {
             _editor.SelectSlide(index);
             _editor.InsertSlide();
         };
 
-        var dupItem = new MenuItem { Header = "Duplicate Slide" };
+        var dupItem = new MenuItem { Header = SlidePanePlanner.DuplicateSlideMenuText };
         dupItem.Click += (_, _) =>
         {
             _editor.SelectSlide(index);
             _editor.DuplicateCurrentSlide();
         };
 
-        var delItem = new MenuItem { Header = "Delete Slide" };
+        var delItem = new MenuItem { Header = SlidePanePlanner.DeleteSlideMenuText };
         delItem.Click += (_, _) =>
         {
             _editor.SelectSlide(index);
@@ -426,56 +381,27 @@ public sealed class SlidePane : Border
     /// </summary>
     private int HitTestInsertionPoint(double y)
     {
-        int slideIdx = 0;
-        double runningY = 0.0;
-        const double SectionHeaderHeight = 30.0; // approximate; avoids layout query
-
-        foreach (UIElement child in _stack.Children)
-        {
-            if (child is Border b && b.Tag is int)
-            {
-                double midY = runningY + ItemHeight * 0.5;
-                if (y < midY) return slideIdx;
-                runningY += ItemHeight;
-                slideIdx++;
-            }
-            else if (child is Border sectionHeader && !(sectionHeader.Tag is int))
-            {
-                // section header or new-slide button
-                runningY += SectionHeaderHeight;
-            }
-        }
-        return slideIdx;
+        return SlidePanePlanner.HitTestInsertionPoint(GetPaneItemKinds(), y, ItemHeight);
     }
-
-    private int SlideItemCount() =>
-        // Count only items whose Tag is an int (slide items); exclude section headers and the "New Slide" button.
-        _stack.Children.OfType<Border>().Count(b => b.Tag is int);
 
     private void ShowInsertIndicator()
     {
-        // Walk children to find the Y offset of the insertion point.
-        int count = SlideItemCount();
-        double indicatorY = 0.0;
-        int slideIdx = 0;
-        const double SectionHeaderHeight = 30.0;
-
-        foreach (UIElement child in _stack.Children)
-        {
-            if (slideIdx >= _dragTargetIndex) break;
-            if (child is Border b && b.Tag is int)
-            {
-                indicatorY += ItemHeight;
-                slideIdx++;
-            }
-            else
-            {
-                indicatorY += SectionHeaderHeight;
-            }
-        }
+        var indicatorY = SlidePanePlanner.ComputeInsertionIndicatorOffset(
+            GetPaneItemKinds(),
+            _dragTargetIndex,
+            ItemHeight);
 
         _insertIndicator.Margin     = new Thickness(0, indicatorY - 1, 0, 0);
         _insertIndicator.Visibility = Visibility.Visible;
+    }
+
+    private IReadOnlyList<bool> GetPaneItemKinds()
+    {
+        var result = new List<bool>(_stack.Children.Count);
+        foreach (UIElement child in _stack.Children)
+            result.Add(child is Border b && b.Tag is int);
+
+        return result;
     }
 
     private void HideInsertIndicator() =>
