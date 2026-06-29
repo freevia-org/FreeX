@@ -3,8 +3,105 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public sealed class ChartDataDialogSeriesColumn
+{
+    private readonly ChartDataDialogPlanner _planner;
+
+    internal ChartDataDialogSeriesColumn(
+        ChartDataDialogPlanner planner,
+        int seriesIndex,
+        int valueIndex)
+    {
+        _planner = planner;
+        SeriesIndex = seriesIndex;
+        ValueIndex = valueIndex;
+    }
+
+    public int SeriesIndex { get; }
+
+    public int ValueIndex { get; }
+
+    public string Name
+    {
+        get => _planner.GetSeriesName(SeriesIndex);
+        set => _planner.SetSeriesName(SeriesIndex, value);
+    }
+}
+
+public sealed class ChartDataDialogValueCell
+{
+    private readonly ChartDataDialogPlanner _planner;
+
+    internal ChartDataDialogValueCell(
+        ChartDataDialogPlanner planner,
+        int seriesIndex,
+        int categoryIndex)
+    {
+        _planner = planner;
+        SeriesIndex = seriesIndex;
+        CategoryIndex = categoryIndex;
+    }
+
+    public int SeriesIndex { get; }
+
+    public int CategoryIndex { get; }
+
+    public double? Value
+    {
+        get => _planner.GetValue(SeriesIndex, CategoryIndex);
+        set => _planner.SetValue(SeriesIndex, CategoryIndex, value);
+    }
+}
+
+public sealed class ChartDataDialogTableRow
+{
+    private readonly ChartDataDialogPlanner _planner;
+
+    internal ChartDataDialogTableRow(
+        ChartDataDialogPlanner planner,
+        int categoryIndex,
+        IReadOnlyList<ChartDataDialogValueCell> values)
+    {
+        _planner = planner;
+        CategoryIndex = categoryIndex;
+        Values = values;
+    }
+
+    public int CategoryIndex { get; }
+
+    public string Category
+    {
+        get => _planner.GetCategory(CategoryIndex);
+        set => _planner.SetCategory(CategoryIndex, value);
+    }
+
+    public IReadOnlyList<ChartDataDialogValueCell> Values { get; }
+}
+
+public sealed record ChartDataDialogTableProjection(
+    string CategoryColumnHeader,
+    IReadOnlyList<ChartDataDialogSeriesColumn> SeriesColumns,
+    IReadOnlyList<ChartDataDialogTableRow> Rows);
+
+public sealed record ChartDataDialogCategoryEdit(
+    int CategoryIndex,
+    string? Category);
+
+public sealed record ChartDataDialogCommitPlan(
+    IReadOnlyList<string> Categories,
+    IReadOnlyList<string> SeriesNames,
+    IReadOnlyList<IReadOnlyList<double?>> Values)
+{
+    public IEnumerable<IEnumerable<double?>> ValuesForCommand()
+    {
+        return Values.Select(values => (IEnumerable<double?>)values);
+    }
+}
+
 public sealed class ChartDataDialogPlanner
 {
+    public const string CategoryColumnHeader = "Category";
+
     private readonly List<string> _categories;
     private readonly List<string> _seriesNames;
     private readonly List<List<double?>> _values;
@@ -29,8 +126,8 @@ public sealed class ChartDataDialogPlanner
         ArgumentNullException.ThrowIfNull(chart);
 
         return new ChartDataDialogPlanner(
-            chart.Categories.ToList(),
-            chart.Series.Select(series => series.Name).ToList(),
+            chart.Categories.Select(NormalizeLabel).ToList(),
+            chart.Series.Select(series => NormalizeLabel(series.Name)).ToList(),
             chart.Series.Select(series => series.Values.ToList()).ToList());
     }
 
@@ -41,11 +138,11 @@ public sealed class ChartDataDialogPlanner
             : string.Empty;
     }
 
-    public void SetCategory(int categoryIndex, string label)
+    public void SetCategory(int categoryIndex, string? label)
     {
         if (IsValidCategoryIndex(categoryIndex))
         {
-            _categories[categoryIndex] = label;
+            _categories[categoryIndex] = NormalizeLabel(label);
         }
     }
 
@@ -56,11 +153,11 @@ public sealed class ChartDataDialogPlanner
             : string.Empty;
     }
 
-    public void SetSeriesName(int seriesIndex, string name)
+    public void SetSeriesName(int seriesIndex, string? name)
     {
         if (IsValidSeriesIndex(seriesIndex))
         {
-            _seriesNames[seriesIndex] = name;
+            _seriesNames[seriesIndex] = NormalizeLabel(name);
         }
     }
 
@@ -86,7 +183,7 @@ public sealed class ChartDataDialogPlanner
 
     public void AddSeries()
     {
-        _seriesNames.Add($"Series {_seriesNames.Count + 1}");
+        _seriesNames.Add(DefaultSeriesName(_seriesNames.Count + 1));
         _values.Add(Enumerable.Repeat((double?)null, _categories.Count).ToList());
         EnsureRectangular();
     }
@@ -107,7 +204,7 @@ public sealed class ChartDataDialogPlanner
 
     public void AddCategory()
     {
-        _categories.Add($"Cat {_categories.Count + 1}");
+        _categories.Add(DefaultCategoryName(_categories.Count + 1));
         foreach (var seriesValues in _values)
         {
             seriesValues.Add(null);
@@ -129,6 +226,57 @@ public sealed class ChartDataDialogPlanner
                 seriesValues.RemoveAt(seriesValues.Count - 1);
             }
         }
+    }
+
+    public ChartDataDialogTableProjection BuildTableProjection()
+    {
+        var columns = Enumerable.Range(0, _seriesNames.Count)
+            .Select(seriesIndex => new ChartDataDialogSeriesColumn(
+                this,
+                seriesIndex,
+                valueIndex: seriesIndex))
+            .ToList();
+
+        var rows = Enumerable.Range(0, _categories.Count)
+            .Select(categoryIndex => new ChartDataDialogTableRow(
+                this,
+                categoryIndex,
+                columns
+                    .Select(column => new ChartDataDialogValueCell(
+                        this,
+                        column.SeriesIndex,
+                        categoryIndex))
+                    .ToList()))
+            .ToList();
+
+        return new ChartDataDialogTableProjection(
+            CategoryColumnHeader,
+            columns,
+            rows);
+    }
+
+    public void ApplyCategoryEdits(IEnumerable<ChartDataDialogCategoryEdit> categoryEdits)
+    {
+        ArgumentNullException.ThrowIfNull(categoryEdits);
+
+        foreach (var edit in categoryEdits)
+        {
+            SetCategory(edit.CategoryIndex, edit.Category);
+        }
+    }
+
+    public ChartDataDialogCommitPlan BuildCommitPlan(
+        IEnumerable<ChartDataDialogCategoryEdit>? categoryEdits = null)
+    {
+        if (categoryEdits is not null)
+        {
+            ApplyCategoryEdits(categoryEdits);
+        }
+
+        return new ChartDataDialogCommitPlan(
+            CategoriesForCommit(),
+            SeriesNamesForCommit(),
+            ValuesForCommit());
     }
 
     public IReadOnlyList<string> CategoriesForCommit()
@@ -171,6 +319,18 @@ public sealed class ChartDataDialogPlanner
             : null;
     }
 
+    public static string DefaultSeriesName(int oneBasedIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(oneBasedIndex, 1);
+        return $"Series {oneBasedIndex}";
+    }
+
+    public static string DefaultCategoryName(int oneBasedIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(oneBasedIndex, 1);
+        return $"Cat {oneBasedIndex}";
+    }
+
     private void EnsureRectangular()
     {
         int categoryCount = _categories.Count;
@@ -196,5 +356,10 @@ public sealed class ChartDataDialogPlanner
     private bool IsValidSeriesIndex(int seriesIndex)
     {
         return seriesIndex >= 0 && seriesIndex < _seriesNames.Count;
+    }
+
+    private static string NormalizeLabel(string? label)
+    {
+        return label ?? string.Empty;
     }
 }

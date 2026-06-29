@@ -156,27 +156,27 @@ public sealed class ChartDataDialog : Window
         // Flush any pending edits before rebuilding.
         _grid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
 
+        var table = _planner.BuildTableProjection();
+
         _grid.Columns.Clear();
 
         // Column 0: Category label (editable text).
         var catCol = new DataGridTextColumn
         {
-            Header  = "Category",
+            Header  = table.CategoryColumnHeader,
             Width   = new DataGridLength(130),
             Binding = new Binding("Category") { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.LostFocus }
         };
         _grid.Columns.Add(catCol);
 
         // One column per series; header = series name (editable via cell template).
-        for (int si = 0; si < _planner.SeriesCount; si++)
+        foreach (var seriesColumn in table.SeriesColumns)
         {
-            int capturedSi = si; // closure capture
-
             var col = new DataGridTextColumn
             {
-                Header  = MakeEditableHeader(si),
+                Header  = MakeEditableHeader(seriesColumn),
                 Width   = new DataGridLength(1, DataGridLengthUnitType.Star),
-                Binding = new Binding($"Values[{capturedSi}]")
+                Binding = new Binding($"Values[{seriesColumn.ValueIndex}]")
                 {
                     Mode = BindingMode.TwoWay,
                     UpdateSourceTrigger = UpdateSourceTrigger.LostFocus,
@@ -187,38 +187,25 @@ public sealed class ChartDataDialog : Window
         }
 
         // Build row items.
-        var rows = new List<ChartRowViewModel>();
-        for (int ci = 0; ci < _planner.CategoryCount; ci++)
-        {
-            int capturedCi = ci;
-            // W7: pass nullable values to ObservableDoubleNullableArray; display converts null↔blank.
-            var rowValues = new ObservableDoubleNullableArray(
-                _planner.SeriesCount,
-                si => _planner.GetValue(si, capturedCi),
-                (si, v) => _planner.SetValue(si, capturedCi, v));
-
-            rows.Add(new ChartRowViewModel(
-                category: _planner.GetCategory(capturedCi),
-                values:   rowValues,
-                onCategoryChanged: label => _planner.SetCategory(capturedCi, label)));
-        }
-
+        var rows = table.Rows
+            .Select(row => new ChartRowViewModel(row))
+            .ToList();
         _grid.ItemsSource = rows;
     }
 
     /// <summary>Creates a TextBox header element that updates the series name on leave.</summary>
-    private FrameworkElement MakeEditableHeader(int seriesIndex)
+    private FrameworkElement MakeEditableHeader(ChartDataDialogSeriesColumn seriesColumn)
     {
         var tb = new TextBox
         {
-            Text        = _planner.GetSeriesName(seriesIndex),
+            Text        = seriesColumn.Name,
             Background  = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             FontWeight  = FontWeights.SemiBold,
             MinWidth    = 60,
             Padding     = new Thickness(2),
         };
-        tb.LostFocus += (_, _) => _planner.SetSeriesName(seriesIndex, tb.Text);
+        tb.LostFocus += (_, _) => seriesColumn.Name = tb.Text;
         return tb;
     }
 
@@ -255,25 +242,30 @@ public sealed class ChartDataDialog : Window
         // Flush any cell being edited.
         _grid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
 
-        // Collect category labels from the row view-models (they are updated via the callback
-        // in ChartRowViewModel, but the TextBox binding updates on LostFocus — flush here).
-        if (_grid.ItemsSource is List<ChartRowViewModel> rows)
-        {
-            for (int ci = 0; ci < rows.Count; ci++)
-                _planner.SetCategory(ci, rows[ci].Category);
-        }
+        // Flush row-bound category labels that have not yet lost focus.
+        var commit = _planner.BuildCommitPlan(ReadCategoryEditsFromGrid());
 
         // W7: pass nullable values so gaps stay null in the committed model.
         _editor.ReplaceChartData(
-            _planner.CategoriesForCommit(),
-            _planner.SeriesNamesForCommit(),
-            _planner.ValuesForCommit().Select(values => (IEnumerable<double?>)values));
+            commit.Categories,
+            commit.SeriesNames,
+            commit.ValuesForCommand());
 
         DialogResult = true;
         Close();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private IEnumerable<ChartDataDialogCategoryEdit> ReadCategoryEditsFromGrid()
+    {
+        if (_grid.ItemsSource is IEnumerable<ChartRowViewModel> rows)
+        {
+            return rows.Select(row => row.ToCategoryEdit()).ToList();
+        }
+
+        return Array.Empty<ChartDataDialogCategoryEdit>();
+    }
 
     private static Button MakeToolbarButton(string label, Action onClick)
     {
@@ -292,27 +284,29 @@ public sealed class ChartDataDialog : Window
     /// <summary>One row in the DataGrid: a category label + one value per series.</summary>
     internal sealed class ChartRowViewModel
     {
-        private string _category;
-        private readonly Action<string> _onCategoryChanged;
+        private readonly ChartDataDialogTableRow _row;
 
-        public ChartRowViewModel(
-            string                      category,
-            ObservableDoubleNullableArray values,
-            Action<string>              onCategoryChanged)
+        public ChartRowViewModel(ChartDataDialogTableRow row)
         {
-            _category          = category;
-            Values             = values;
-            _onCategoryChanged = onCategoryChanged;
+            _row = row;
+            Values = new ObservableDoubleNullableArray(row.Values);
         }
+
+        public int CategoryIndex => _row.CategoryIndex;
 
         public string Category
         {
-            get => _category;
-            set { _category = value; _onCategoryChanged(value); }
+            get => _row.Category;
+            set => _row.Category = value;
         }
 
         /// <summary>Indexed nullable-value array — bound by DataGridTextColumn Binding("Values[si]").</summary>
         public ObservableDoubleNullableArray Values { get; }
+
+        public ChartDataDialogCategoryEdit ToCategoryEdit()
+        {
+            return new ChartDataDialogCategoryEdit(CategoryIndex, Category);
+        }
     }
 
     /// <summary>
@@ -324,28 +318,21 @@ public sealed class ChartDataDialog : Window
     /// </summary>
     internal sealed class ObservableDoubleNullableArray
     {
-        private readonly int _count;
-        private readonly Func<int, double?> _get;
-        private readonly Action<int, double?> _set;
+        private readonly IReadOnlyList<ChartDataDialogValueCell> _values;
 
-        public ObservableDoubleNullableArray(
-            int count,
-            Func<int, double?> get,
-            Action<int, double?> set)
+        public ObservableDoubleNullableArray(IReadOnlyList<ChartDataDialogValueCell> values)
         {
-            _count = count;
-            _get = get;
-            _set = set;
+            _values = values;
         }
 
         public double? this[int index]
         {
-            get => index >= 0 && index < _count ? _get(index) : null;
+            get => index >= 0 && index < _values.Count ? _values[index].Value : null;
             set
             {
-                if (index >= 0 && index < _count)
+                if (index >= 0 && index < _values.Count)
                 {
-                    _set(index, value);
+                    _values[index].Value = value;
                 }
             }
         }
