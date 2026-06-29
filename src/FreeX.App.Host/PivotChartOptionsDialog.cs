@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -114,7 +115,7 @@ public sealed class PivotChartOptionsDialog : Window
         var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "PivotChartStyleGalleryPanel");
         itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
         _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
-        _styleGallery.SelectedItem = FindStyleOption(styleOptions, Result.ChartStyleId) ?? styleOptions[0];
+        _styleGallery.SelectedIndex = ChartStylePlanner.FindStyleOptionIndex(Result.ChartStyleId);
         _styleGallery.Height = 126;
         _styleGallery.Margin = new Thickness(0, 0, 0, 8);
         AutomationProperties.SetName(_styleGallery, UiText.Get("PivotChartOptions_PivotChartStyleGallery"));
@@ -172,7 +173,7 @@ public sealed class PivotChartOptionsDialog : Window
 
     public static PivotChartOptionsDialogResult FromChart(ChartModel chart) =>
         new(
-            NormalizeStyleId(chart.ChartStyleId),
+            ChartStylePlanner.Read(chart).StyleId,
             chart.ShowPivotChartFieldButtons,
             chart.ShowPivotChartReportFilterButtons,
             chart.ShowPivotChartAxisFieldButtons,
@@ -218,7 +219,7 @@ public sealed class PivotChartOptionsDialog : Window
         bool showHiddenData = false,
         ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap) =>
         new(
-            NormalizeStyleId(chartStyleId),
+            ChartStylePlanner.CreateResult(chartStyleId).StyleId,
             showFieldButtons,
             showReportFilterButtons,
             showAxisFieldButtons,
@@ -248,18 +249,6 @@ public sealed class PivotChartOptionsDialog : Window
         DialogResult = true;
     }
 
-    private static ChartStyleOption? FindStyleOption(IReadOnlyList<ChartStyleOption> options, int? styleId)
-    {
-        for (var index = 0; index < options.Count; index++)
-        {
-            var option = options[index];
-            if (option.StyleId == styleId)
-                return option;
-        }
-
-        return null;
-    }
-
     private void FocusInitialKeyboardTarget()
     {
         _styleGallery.Focus();
@@ -273,7 +262,7 @@ public sealed class PivotChartOptionsDialog : Window
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        return int.TryParse(text.Trim(), out var value) ? NormalizeStyleId(value) : null;
+        return ChartStylePlanner.ParseStyleId(text);
     }
 
     private static DataTemplate CreateStyleGalleryTemplate()
@@ -315,14 +304,6 @@ public sealed class PivotChartOptionsDialog : Window
         root.AppendChild(label);
 
         return new DataTemplate { VisualTree = root };
-    }
-
-    private static int? NormalizeStyleId(int? value)
-    {
-        if (value is null)
-            return null;
-
-        return Math.Clamp(value.Value, 1, 48);
     }
 }
 

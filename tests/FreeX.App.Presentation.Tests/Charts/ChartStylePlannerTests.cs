@@ -7,6 +7,39 @@ namespace FreeX.App.Presentation.Tests.Charts;
 public sealed class ChartStylePlannerTests
 {
     [Fact]
+    public void StyleOptions_ExposeAutomaticAndNumberedResourceDescriptors()
+    {
+        var options = ChartStylePlanner.GetStyleOptions();
+
+        options.Should().HaveCount(49);
+        options[0].Should().Be(new ChartStyleGalleryOptionDescriptor(
+            null,
+            "ChartStyle_AutomaticOption",
+            "ChartStyle_AutomaticPreview"));
+        options.Skip(1).Select(option => option.StyleId).Should().Equal(Enumerable.Range(1, 48).Cast<int?>());
+        options.Skip(1).Should().OnlyContain(option =>
+            option.DisplayNameResourceKey == "ChartStyle_NumberedOption" &&
+            option.PreviewLabelResourceKey == "ChartStyle_NumberedPreview" &&
+            option.ResourceValue == option.StyleId);
+    }
+
+    [Fact]
+    public void StyleResultParsingAndLookup_AreSharedWithRenderers()
+    {
+        ChartStylePlanner.CreateResult(0).Should().Be(new ChartStyleInput(1));
+        ChartStylePlanner.CreateResult(99).Should().Be(new ChartStyleInput(48));
+        ChartStylePlanner.CreateResult(null).Should().Be(new ChartStyleInput(null));
+        ChartStylePlanner.ParseStyleId(" 14 ").Should().Be(14);
+        ChartStylePlanner.ParseStyleId("not a style").Should().BeNull();
+        ChartStylePlanner.FindStyleOptionIndex(null).Should().Be(0);
+        ChartStylePlanner.FindStyleOptionIndex(48).Should().Be(48);
+        ChartStylePlanner.GetStyleOption(999).StyleId.Should().Be(48);
+        ChartStylePlanner.NextStyleId(null).Should().Be(4);
+        ChartStylePlanner.NextStyleId(44).Should().Be(48);
+        ChartStylePlanner.NextStyleId(45).Should().Be(1);
+    }
+
+    [Fact]
     public void BuildExcelSeriesPalette_UsesOfficeAccentTintRounds()
     {
         var palette = ChartStylePlanner.BuildExcelSeriesPalette(WorkbookTheme.Office);
