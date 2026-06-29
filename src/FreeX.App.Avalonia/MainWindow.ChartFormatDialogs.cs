@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 
@@ -526,10 +525,10 @@ public sealed partial class MainWindow
         int seriesCount,
         ChartSeriesFormatInput current)
     {
-        var seriesNames = Enumerable.Range(0, seriesCount).Select(i => $"Series {i + 1}").ToArray();
+        var noneText = UiText.Get("Common_NoneParenthetical");
+        var seriesNames = Enumerable.Range(0, seriesCount).Select(i => UiText.Format("SelectDataSource_SeriesNameFormat", i + 1)).ToArray();
         var seriesCombo = new ComboBox { Width = 260, ItemsSource = seriesNames };
-        AutomationProperties.SetName(seriesCombo, "Series");
-        AutomationProperties.SetAutomationId(seriesCombo, "ChartSeriesFormatSeriesCombo");
+        ApplySeriesDescriptorAutomation(seriesCombo, ChartSeriesFormatDialogFieldId.Series);
         ApplyChartComboBoxChrome(seriesCombo);
         seriesCombo.SelectedIndex = Math.Clamp(current.SeriesIndex, 0, seriesCount - 1);
 
@@ -537,37 +536,34 @@ public sealed partial class MainWindow
         // shows each series' own format. Color buttons open the shared More Colors picker.
         var state = current;
 
-        var fillButton = new Button { Content = DescribeColor(UiText.Get("ChartSeries_FillColor"),current.FillColor), Width = 260 };
-        AutomationProperties.SetAutomationId(fillButton, "ChartSeriesFormatFillButton");
-        ApplyChartButtonChrome(fillButton, 260);
-        var strokeButton = new Button { Content = DescribeColor(UiText.Get("ChartSeries_LineColor"),current.StrokeColor), Width = 260 };
-        AutomationProperties.SetAutomationId(strokeButton, "ChartSeriesFormatLineButton");
-        ApplyChartButtonChrome(strokeButton, 260);
+        var fillButton = MakeSeriesColorButton(ChartSeriesFormatDialogFieldId.FillColor, current.FillColor);
+        var strokeButton = MakeSeriesColorButton(ChartSeriesFormatDialogFieldId.StrokeColor, current.StrokeColor);
+        var strokeThicknessBox = MakeSeriesDescriptorNumberBox(
+            ChartSeriesFormatDialogFieldId.StrokeThickness,
+            FormatNullableDouble(current.StrokeThickness));
 
-        var strokeThicknessBox = new TextBox { Text = FormatNullableDouble(current.StrokeThickness), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
-        AutomationProperties.SetName(strokeThicknessBox, "Line width");
-        AutomationProperties.SetAutomationId(strokeThicknessBox, "ChartSeriesFormatLineWidthBox");
-        ApplyChartTextBoxChrome(strokeThicknessBox);
+        var dashChoices = ChartSeriesFormatPlanner.GetDashStyleChoices().Cast<object>().Prepend(noneText).ToArray();
+        var dashCombo = new ComboBox { Width = 260, ItemsSource = dashChoices };
+        ApplySeriesDescriptorAutomation(dashCombo, ChartSeriesFormatDialogFieldId.DashStyle);
+        ApplyChartComboBoxChrome(dashCombo);
 
-        var markerChoices = new List<string> { "(None)" };
-        markerChoices.AddRange(Enum.GetNames<ChartMarkerStyle>());
+        var markerChoices = ChartSeriesFormatPlanner.GetMarkerStyleChoices().Cast<object>().Prepend(noneText).ToArray();
         var markerCombo = new ComboBox { Width = 260, ItemsSource = markerChoices };
-        AutomationProperties.SetName(markerCombo, "Marker style");
-        AutomationProperties.SetAutomationId(markerCombo, "ChartSeriesFormatMarkerCombo");
+        ApplySeriesDescriptorAutomation(markerCombo, ChartSeriesFormatDialogFieldId.MarkerStyle);
         ApplyChartComboBoxChrome(markerCombo);
 
-        var markerSizeBox = new TextBox { Text = FormatNullableDouble(current.MarkerSize), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
-        AutomationProperties.SetName(markerSizeBox, "Marker size");
-        AutomationProperties.SetAutomationId(markerSizeBox, "ChartSeriesFormatMarkerSizeBox");
-        ApplyChartTextBoxChrome(markerSizeBox);
+        var markerSizeBox = MakeSeriesDescriptorNumberBox(
+            ChartSeriesFormatDialogFieldId.MarkerSize,
+            FormatNullableDouble(current.MarkerSize));
 
         void LoadState(ChartSeriesFormatInput value)
         {
             state = value;
-            fillButton.Content = DescribeColor(UiText.Get("ChartSeries_FillColor"),value.FillColor);
-            strokeButton.Content = DescribeColor(UiText.Get("ChartSeries_LineColor"),value.StrokeColor);
+            fillButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.FillColor), value.FillColor);
+            strokeButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.StrokeColor), value.StrokeColor);
             strokeThicknessBox.Text = FormatNullableDouble(value.StrokeThickness);
-            markerCombo.SelectedItem = value.MarkerStyle is { } m ? m.ToString() : "(None)";
+            dashCombo.SelectedItem = value.DashStyle is { } dash ? dash : noneText;
+            markerCombo.SelectedItem = value.MarkerStyle is { } marker ? marker : noneText;
             markerSizeBox.Text = FormatNullableDouble(value.MarkerSize);
         }
 
@@ -582,23 +578,23 @@ public sealed partial class MainWindow
         fillButton.Click += async (_, _) =>
         {
             var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartSeries_FillColorDialogTitle"),
+                SeriesFieldLabel(ChartSeriesFormatDialogFieldId.FillColor),
                 state.FillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color)
             {
                 state = state with { FillColor = color };
-                fillButton.Content = DescribeColor(UiText.Get("ChartSeries_FillColor"),color);
+                fillButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.FillColor), color);
             }
         };
         strokeButton.Click += async (_, _) =>
         {
             var chosen = await ShowMoreColorsDialogAsync(
-                UiText.Get("ChartSeries_LineColorDialogTitle"),
+                SeriesFieldLabel(ChartSeriesFormatDialogFieldId.StrokeColor),
                 state.StrokeColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color)
             {
                 state = state with { StrokeColor = color };
-                strokeButton.Content = DescribeColor(UiText.Get("ChartSeries_LineColor"),color);
+                strokeButton.Content = DescribeColor(SeriesFieldLabel(ChartSeriesFormatDialogFieldId.StrokeColor), color);
             }
         };
 
@@ -607,26 +603,58 @@ public sealed partial class MainWindow
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartSeriesFormat");
         okButton.Click += (_, _) =>
         {
-            if (!TryParseAutoDouble(strokeThicknessBox.Text, out var thickness)
-                || !TryParseAutoDouble(markerSizeBox.Text, out var markerSize))
+            if (!ChartSeriesFormatPlanner.TryParseDialogInput(
+                    Math.Max(0, seriesCombo.SelectedIndex),
+                    FormatOptionalColorText(state.FillColor),
+                    FormatOptionalColorText(state.StrokeColor),
+                    strokeThicknessBox.Text,
+                    SelectedDashStyle(),
+                    SelectedMarkerStyle(),
+                    markerSizeBox.Text,
+                    out var input,
+                    out var issue))
             {
-                RefreshShell(UiText.Get("ChartLoc_EnterNumberOrBlankAuto"));
+                RefreshShell(issue switch
+                {
+                    ChartSeriesFormatParseIssue.StrokeThickness => UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"),
+                    ChartSeriesFormatParseIssue.MarkerSize => UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"),
+                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
+                });
                 return;
             }
 
-            var marker = markerCombo.SelectedItem is string name && Enum.TryParse<ChartMarkerStyle>(name, out var parsed)
-                ? (ChartMarkerStyle?)parsed
-                : null;
-
-            dialog.Close((ChartSeriesFormatInput?)new ChartSeriesFormatInput(
-                Math.Max(0, seriesCombo.SelectedIndex),
-                state.FillColor,
-                state.StrokeColor,
-                thickness,
-                marker,
-                markerSize));
+            dialog.Close((ChartSeriesFormatInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartSeriesFormatInput?)null);
+
+        var seriesSection = ChartSeriesFormatPlanner.GetSeriesOptionsSection();
+        var seriesPanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.Series),
+                seriesCombo,
+            },
+        };
+
+        var fillLinePanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                fillButton,
+                strokeButton,
+                MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.StrokeThickness),
+                strokeThicknessBox,
+                MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.DashStyle),
+                dashCombo,
+                MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.MarkerStyle),
+                markerCombo,
+                MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId.MarkerSize),
+                markerSizeBox,
+            },
+        };
 
         dialog.Content = new StackPanel
         {
@@ -635,22 +663,76 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartSeries_SeriesLabel"), FontSize = 12 },
-                seriesCombo,
-                new TextBlock { Text = UiText.Get("ChartSeries_FillAndLineLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
-                fillButton,
-                strokeButton,
-                new TextBlock { Text = UiText.Get("ChartSeries_LineWidthLabel"), FontSize = 12 },
-                strokeThicknessBox,
-                new TextBlock { Text = UiText.Get("ChartSeries_MarkerLabel"), FontSize = 12 },
-                markerCombo,
-                new TextBlock { Text = UiText.Get("ChartSeries_MarkerSizeLabel"), FontSize = 12 },
-                markerSizeBox,
+                MakeSeriesDescriptorGroup(seriesSection, seriesPanel),
+                MakeSeriesDescriptorGroup(ChartSeriesFormatPlanner.GetFillLineSection(), fillLinePanel),
                 buttonRow,
             },
         };
 
         return await dialog.ShowDialog<ChartSeriesFormatInput?>(this);
+
+        ChartLineDashStyle? SelectedDashStyle() =>
+            dashCombo.SelectedItem is ChartLineDashStyle value ? value : null;
+
+        ChartMarkerStyle? SelectedMarkerStyle() =>
+            markerCombo.SelectedItem is ChartMarkerStyle value ? value : null;
+
+        static ChartSeriesFormatDialogFieldDescriptor SeriesField(ChartSeriesFormatDialogFieldId fieldId) =>
+            ChartSeriesFormatPlanner.GetDialogField(fieldId);
+
+        static string SeriesFieldLabel(ChartSeriesFormatDialogFieldId fieldId) =>
+            StripDisplayMnemonic(UiText.Get(SeriesField(fieldId).LabelResourceKey));
+
+        static void ApplySeriesDescriptorAutomation(Control control, ChartSeriesFormatDialogFieldId fieldId)
+        {
+            var descriptor = SeriesField(fieldId);
+            AutomationProperties.SetName(control, SeriesFieldLabel(fieldId));
+            AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
+            if (descriptor.HelpResourceKey is { } helpKey)
+                AutomationProperties.SetHelpText(control, UiText.Get(helpKey));
+        }
+
+        static TextBlock MakeSeriesDescriptorLabel(ChartSeriesFormatDialogFieldId fieldId) =>
+            new()
+            {
+                Text = SeriesFieldLabel(fieldId),
+                FontSize = 12,
+            };
+
+        TextBox MakeSeriesDescriptorNumberBox(ChartSeriesFormatDialogFieldId fieldId, string text)
+        {
+            var box = new TextBox
+            {
+                Text = text,
+                Width = 260,
+                PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder"),
+            };
+            ApplyChartTextBoxChrome(box);
+            ApplySeriesDescriptorAutomation(box, fieldId);
+            return box;
+        }
+
+        Button MakeSeriesColorButton(ChartSeriesFormatDialogFieldId fieldId, CellColor? color)
+        {
+            var label = SeriesFieldLabel(fieldId);
+            var button = new Button
+            {
+                Content = DescribeColor(label, color),
+                Width = 260,
+            };
+            ApplyChartButtonChrome(button, 260);
+            ApplySeriesDescriptorAutomation(button, fieldId);
+            return button;
+        }
+
+        static GroupBox MakeSeriesDescriptorGroup(ChartSeriesFormatDialogSectionDescriptor section, Control content) =>
+            new()
+            {
+                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
+                Content = content,
+                Padding = new Thickness(10, 8),
+                Margin = new Thickness(0, 0, 0, 8),
+            };
     }
 
     // ---- Trendline (real, SetChartLayoutCommand via ChartTrendlinePlanner) ----------------------------
@@ -681,8 +763,8 @@ public sealed partial class MainWindow
 
     private async Task<ChartTrendlineInput?> ShowChartTrendlineDialogAsync(ChartTrendlineInput current)
     {
-        var showCheck = new CheckBox { Content = UiText.Get("ChartTrendline_Show"), IsChecked = current.ShowTrendline };
-        AutomationProperties.SetAutomationId(showCheck, "ChartTrendlineShowCheck");
+        var state = current;
+        var showCheck = MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId.ShowTrendline, current.ShowTrendline);
 
         var typeChoices = ChartTrendlinePlanner.GetTypeChoices();
         var typeCombo = new ComboBox
@@ -691,54 +773,113 @@ public sealed partial class MainWindow
             ItemsSource = typeChoices,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartTrendlineTypeChoice.DisplayName)),
         };
-        AutomationProperties.SetName(typeCombo, "Trendline type");
-        AutomationProperties.SetAutomationId(typeCombo, "ChartTrendlineTypeCombo");
+        ApplyTrendlineDescriptorAutomation(typeCombo, ChartTrendlineDialogFieldId.Type);
         ApplyChartComboBoxChrome(typeCombo);
         typeCombo.SelectedItem =
             typeChoices.FirstOrDefault(c => c.Type == current.Type)
             ?? (typeChoices.Count > 0 ? typeChoices[0] : null);
 
-        var periodBox = new TextBox { Text = current.Period.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(periodBox, "Moving average period");
-        AutomationProperties.SetAutomationId(periodBox, "ChartTrendlinePeriodBox");
-        ApplyChartTextBoxChrome(periodBox);
-        var orderBox = new TextBox { Text = current.Order.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(orderBox, "Polynomial order");
-        AutomationProperties.SetAutomationId(orderBox, "ChartTrendlineOrderBox");
-        ApplyChartTextBoxChrome(orderBox);
+        var periodBox = MakeTrendlineDescriptorNumberBox(
+            ChartTrendlineDialogFieldId.Period,
+            current.Period.ToString(CultureInfo.InvariantCulture));
+        var orderBox = MakeTrendlineDescriptorNumberBox(
+            ChartTrendlineDialogFieldId.Order,
+            current.Order.ToString(CultureInfo.InvariantCulture));
 
-        var equationCheck = new CheckBox { Content = UiText.Get("ChartTrendline_ShowEquation"), IsChecked = current.ShowEquation };
-        AutomationProperties.SetAutomationId(equationCheck, "ChartTrendlineEquationCheck");
-        var rSquaredCheck = new CheckBox { Content = UiText.Get("ChartTrendline_ShowRSquared"), IsChecked = current.ShowRSquared };
-        AutomationProperties.SetAutomationId(rSquaredCheck, "ChartTrendlineRSquaredCheck");
+        var equationCheck = MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId.ShowEquation, current.ShowEquation);
+        var rSquaredCheck = MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId.ShowRSquared, current.ShowRSquared);
+
+        var colorButton = MakeTrendlineColorButton(ChartTrendlineDialogFieldId.LineColor, current.Color);
+        var thicknessBox = MakeTrendlineDescriptorNumberBox(
+            ChartTrendlineDialogFieldId.LineThickness,
+            (current.Thickness ?? 1.5).ToString(CultureInfo.InvariantCulture));
+        var dashChoices = ChartTrendlinePlanner.GetDashStyleChoices();
+        var dashCombo = new ComboBox
+        {
+            Width = 260,
+            ItemsSource = dashChoices,
+        };
+        ApplyTrendlineDescriptorAutomation(dashCombo, ChartTrendlineDialogFieldId.DashStyle);
+        ApplyChartComboBoxChrome(dashCombo);
+        dashCombo.SelectedItem = current.DashStyle ?? ChartLineDashStyle.Solid;
+
+        colorButton.Click += async (_, _) =>
+        {
+            var chosen = await ShowMoreColorsDialogAsync(
+                TrendlineFieldLabel(ChartTrendlineDialogFieldId.LineColor),
+                state.Color ?? ChartQuickFormatCycler.DefaultSeriesColor);
+            if (chosen is { } color)
+            {
+                state = state with { Color = color };
+                colorButton.Content = DescribeColor(TrendlineFieldLabel(ChartTrendlineDialogFieldId.LineColor), color);
+            }
+        };
 
         var dialog = NewChartDialog(UiText.Get("ChartTrendline_Title"), "ChartTrendlineDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartTrendline");
         okButton.Click += (_, _) =>
         {
-            if (!TryParseIntInRange(periodBox.Text, ChartTrendlinePlanner.MinPeriod, ChartTrendlinePlanner.MaxPeriod, out var period))
-            {
-                RefreshShell(UiText.Format("ChartLoc_EnterMovingAveragePeriod", ChartTrendlinePlanner.MinPeriod, ChartTrendlinePlanner.MaxPeriod));
-                return;
-            }
-
-            if (!TryParseIntInRange(orderBox.Text, ChartTrendlinePlanner.MinOrder, ChartTrendlinePlanner.MaxOrder, out var order))
-            {
-                RefreshShell(UiText.Format("ChartLoc_EnterPolynomialOrder", ChartTrendlinePlanner.MinOrder, ChartTrendlinePlanner.MaxOrder));
-                return;
-            }
-
             var type = typeCombo.SelectedItem is ChartTrendlineTypeChoice picked ? picked.Type : ChartTrendlineType.Linear;
-            dialog.Close((ChartTrendlineInput?)new ChartTrendlineInput(
-                showCheck.IsChecked == true,
-                type,
-                period,
-                order,
-                equationCheck.IsChecked == true,
-                rSquaredCheck.IsChecked == true));
+            var dashStyle = dashCombo.SelectedItem is ChartLineDashStyle selectedDashStyle
+                ? selectedDashStyle
+                : ChartLineDashStyle.Solid;
+            if (!ChartTrendlinePlanner.TryParseDialogInput(
+                    showCheck.IsChecked == true,
+                    type,
+                    periodBox.Text,
+                    orderBox.Text,
+                    equationCheck.IsChecked == true,
+                    rSquaredCheck.IsChecked == true,
+                    FormatOptionalColorText(state.Color),
+                    thicknessBox.Text,
+                    dashStyle,
+                    out var input,
+                    out var issue))
+            {
+                RefreshShell(issue switch
+                {
+                    ChartTrendlineDialogParseIssue.Order => UiText.Get("ChartTrendline_InvalidOrderMessage"),
+                    ChartTrendlineDialogParseIssue.Color => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
+                    ChartTrendlineDialogParseIssue.Thickness => UiText.Get("ChartTrendline_InvalidWidthMessage"),
+                    _ => UiText.Get("ChartTrendline_InvalidPeriodMessage"),
+                });
+                return;
+            }
+
+            dialog.Close((ChartTrendlineInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartTrendlineInput?)null);
+
+        var optionsPanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                showCheck,
+                MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.Type),
+                typeCombo,
+                MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.Period),
+                periodBox,
+                MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.Order),
+                orderBox,
+                equationCheck,
+                rSquaredCheck,
+            },
+        };
+
+        var linePanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                colorButton,
+                MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.LineThickness),
+                thicknessBox,
+                MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId.DashStyle),
+                dashCombo,
+            },
+        };
 
         dialog.Content = new StackPanel
         {
@@ -747,20 +888,80 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                showCheck,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartTrendline_TypeLabel")), FontSize = 12 },
-                typeCombo,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartTrendline_PeriodLabel")), FontSize = 12 },
-                periodBox,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartTrendline_OrderLabel")), FontSize = 12 },
-                orderBox,
-                equationCheck,
-                rSquaredCheck,
+                MakeTrendlineDescriptorGroup(ChartTrendlinePlanner.GetOptionsSection(), optionsPanel),
+                MakeTrendlineDescriptorGroup(ChartTrendlinePlanner.GetLineSection(), linePanel),
                 buttonRow,
             },
         };
 
         return await dialog.ShowDialog<ChartTrendlineInput?>(this);
+
+        static ChartTrendlineDialogFieldDescriptor TrendlineField(ChartTrendlineDialogFieldId fieldId) =>
+            ChartTrendlinePlanner.GetDialogField(fieldId);
+
+        static string TrendlineFieldLabel(ChartTrendlineDialogFieldId fieldId) =>
+            StripDisplayMnemonic(UiText.Get(TrendlineField(fieldId).LabelResourceKey));
+
+        static void ApplyTrendlineDescriptorAutomation(Control control, ChartTrendlineDialogFieldId fieldId)
+        {
+            var descriptor = TrendlineField(fieldId);
+            AutomationProperties.SetName(control, TrendlineFieldLabel(fieldId));
+            AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
+            if (descriptor.HelpResourceKey is { } helpKey)
+                AutomationProperties.SetHelpText(control, UiText.Get(helpKey));
+        }
+
+        static CheckBox MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId fieldId, bool isChecked)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = TrendlineFieldLabel(fieldId),
+                IsChecked = isChecked,
+            };
+            ApplyTrendlineDescriptorAutomation(checkBox, fieldId);
+            return checkBox;
+        }
+
+        static TextBlock MakeTrendlineDescriptorLabel(ChartTrendlineDialogFieldId fieldId) =>
+            new()
+            {
+                Text = TrendlineFieldLabel(fieldId),
+                FontSize = 12,
+            };
+
+        TextBox MakeTrendlineDescriptorNumberBox(ChartTrendlineDialogFieldId fieldId, string text)
+        {
+            var box = new TextBox
+            {
+                Text = text,
+                Width = 260,
+            };
+            ApplyChartTextBoxChrome(box);
+            ApplyTrendlineDescriptorAutomation(box, fieldId);
+            return box;
+        }
+
+        Button MakeTrendlineColorButton(ChartTrendlineDialogFieldId fieldId, CellColor? color)
+        {
+            var label = TrendlineFieldLabel(fieldId);
+            var button = new Button
+            {
+                Content = DescribeColor(label, color),
+                Width = 260,
+            };
+            ApplyChartButtonChrome(button, 260);
+            ApplyTrendlineDescriptorAutomation(button, fieldId);
+            return button;
+        }
+
+        static GroupBox MakeTrendlineDescriptorGroup(ChartTrendlineDialogSectionDescriptor section, Control content) =>
+            new()
+            {
+                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
+                Content = content,
+                Padding = new Thickness(10, 8),
+                Margin = new Thickness(0, 0, 0, 8),
+            };
     }
 
     // ---- Error Bars (real, SetChartLayoutCommand via ChartErrorBarsPlanner) ---------------------------
@@ -791,8 +992,7 @@ public sealed partial class MainWindow
 
     private async Task<ChartErrorBarsInput?> ShowChartErrorBarsDialogAsync(ChartErrorBarsInput current)
     {
-        var showCheck = new CheckBox { Content = UiText.Get("ChartErrorBars_Show"), IsChecked = current.ShowErrorBars };
-        AutomationProperties.SetAutomationId(showCheck, "ChartErrorBarsShowCheck");
+        var showCheck = MakeErrorBarsDescriptorCheck(ChartErrorBarsDialogFieldId.ShowErrorBars, current.ShowErrorBars);
 
         var kindChoices = ChartErrorBarsPlanner.GetKindChoices();
         var kindCombo = new ComboBox
@@ -801,8 +1001,7 @@ public sealed partial class MainWindow
             ItemsSource = kindChoices,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartErrorBarKindChoice.DisplayName)),
         };
-        AutomationProperties.SetName(kindCombo, "Error amount");
-        AutomationProperties.SetAutomationId(kindCombo, "ChartErrorBarsKindCombo");
+        ApplyErrorBarsDescriptorAutomation(kindCombo, ChartErrorBarsDialogFieldId.Kind);
         ApplyChartComboBoxChrome(kindCombo);
         kindCombo.SelectedItem =
             kindChoices.FirstOrDefault(c => c.Kind == current.Kind)
@@ -815,43 +1014,61 @@ public sealed partial class MainWindow
             ItemsSource = directionChoices,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartErrorBarDirectionChoice.DisplayName)),
         };
-        AutomationProperties.SetName(directionCombo, "Error bar direction");
-        AutomationProperties.SetAutomationId(directionCombo, "ChartErrorBarsDirectionCombo");
+        ApplyErrorBarsDescriptorAutomation(directionCombo, ChartErrorBarsDialogFieldId.Direction);
         ApplyChartComboBoxChrome(directionCombo);
         directionCombo.SelectedItem =
             directionChoices.FirstOrDefault(c => c.Direction == current.Direction)
             ?? (directionChoices.Count > 0 ? directionChoices[0] : null);
 
-        var valueBox = new TextBox { Text = current.Value.ToString(CultureInfo.InvariantCulture), Width = 260 };
-        AutomationProperties.SetName(valueBox, "Error bar amount");
-        AutomationProperties.SetAutomationId(valueBox, "ChartErrorBarsValueBox");
-        ApplyChartTextBoxChrome(valueBox);
+        var valueBox = MakeErrorBarsDescriptorNumberBox(
+            ChartErrorBarsDialogFieldId.Value,
+            current.Value.ToString(CultureInfo.InvariantCulture));
 
-        var endCapsCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartErrorBars_EndCaps")), IsChecked = current.EndCaps };
-        AutomationProperties.SetAutomationId(endCapsCheck, "ChartErrorBarsEndCapsCheck");
+        var endCapsCheck = MakeErrorBarsDescriptorCheck(ChartErrorBarsDialogFieldId.EndCaps, current.EndCaps);
 
         var dialog = NewChartDialog(UiText.Get("ChartErrorBars_Title"), "ChartErrorBarsDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartErrorBars");
         okButton.Click += (_, _) =>
         {
-            if (!TryParseAutoDouble(valueBox.Text, out var value) || value is not { } amount
-                || amount < ChartErrorBarsPlanner.MinValue || amount > ChartErrorBarsPlanner.MaxValue)
+            var kind = kindCombo.SelectedItem is ChartErrorBarKindChoice pickedKind ? pickedKind.Kind : ChartErrorBarKind.StandardError;
+            var direction = directionCombo.SelectedItem is ChartErrorBarDirectionChoice pickedDir ? pickedDir.Direction : ChartErrorBarDirection.Both;
+            if (!ChartErrorBarsPlanner.TryParseDialogInput(
+                    showCheck.IsChecked == true,
+                    kind,
+                    direction,
+                    valueBox.Text,
+                    endCapsCheck.IsChecked == true,
+                    out var input,
+                    out var issue))
             {
-                RefreshShell(UiText.Format("ChartLoc_EnterErrorBarAmount", ChartErrorBarsPlanner.MinValue, ChartErrorBarsPlanner.MaxValue));
+                RefreshShell(issue switch
+                {
+                    ChartErrorBarsParseIssue.Value => UiText.Get("ChartErrorBars_InvalidValueMessage"),
+                    _ => UiText.Get("ChartErrorBars_InvalidValueMessage"),
+                });
                 return;
             }
 
-            var kind = kindCombo.SelectedItem is ChartErrorBarKindChoice pickedKind ? pickedKind.Kind : ChartErrorBarKind.StandardError;
-            var direction = directionCombo.SelectedItem is ChartErrorBarDirectionChoice pickedDir ? pickedDir.Direction : ChartErrorBarDirection.Both;
-            dialog.Close((ChartErrorBarsInput?)new ChartErrorBarsInput(
-                showCheck.IsChecked == true,
-                kind,
-                direction,
-                amount,
-                endCapsCheck.IsChecked == true));
+            dialog.Close((ChartErrorBarsInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartErrorBarsInput?)null);
+
+        var amountPanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                showCheck,
+                MakeErrorBarsDescriptorLabel(ChartErrorBarsDialogFieldId.Kind),
+                kindCombo,
+                MakeErrorBarsDescriptorLabel(ChartErrorBarsDialogFieldId.Direction),
+                directionCombo,
+                MakeErrorBarsDescriptorLabel(ChartErrorBarsDialogFieldId.Value),
+                valueBox,
+                endCapsCheck,
+            },
+        };
 
         dialog.Content = new StackPanel
         {
@@ -860,19 +1077,68 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                showCheck,
-                new TextBlock { Text = UiText.Get("ChartErrorBars_KindLabel"), FontSize = 12 },
-                kindCombo,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartErrorBars_DirectionLabel")), FontSize = 12 },
-                directionCombo,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartErrorBars_ValueLabel")), FontSize = 12 },
-                valueBox,
-                endCapsCheck,
+                MakeErrorBarsDescriptorGroup(ChartErrorBarsPlanner.GetErrorAmountSection(), amountPanel),
                 buttonRow,
             },
         };
 
         return await dialog.ShowDialog<ChartErrorBarsInput?>(this);
+
+        static ChartErrorBarsDialogFieldDescriptor ErrorBarsField(ChartErrorBarsDialogFieldId fieldId) =>
+            ChartErrorBarsPlanner.GetDialogField(fieldId);
+
+        static string ErrorBarsFieldLabel(ChartErrorBarsDialogFieldId fieldId) =>
+            StripDisplayMnemonic(UiText.Get(ErrorBarsField(fieldId).LabelResourceKey));
+
+        static void ApplyErrorBarsDescriptorAutomation(Control control, ChartErrorBarsDialogFieldId fieldId)
+        {
+            var descriptor = ErrorBarsField(fieldId);
+            AutomationProperties.SetName(
+                control,
+                StripDisplayMnemonic(UiText.Get(descriptor.AutomationNameResourceKey ?? descriptor.LabelResourceKey)));
+            AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
+            if (descriptor.HelpResourceKey is { } helpKey)
+                AutomationProperties.SetHelpText(control, UiText.Get(helpKey));
+        }
+
+        static CheckBox MakeErrorBarsDescriptorCheck(ChartErrorBarsDialogFieldId fieldId, bool isChecked)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = ErrorBarsFieldLabel(fieldId),
+                IsChecked = isChecked,
+            };
+            ApplyErrorBarsDescriptorAutomation(checkBox, fieldId);
+            return checkBox;
+        }
+
+        static TextBlock MakeErrorBarsDescriptorLabel(ChartErrorBarsDialogFieldId fieldId) =>
+            new()
+            {
+                Text = ErrorBarsFieldLabel(fieldId),
+                FontSize = 12,
+            };
+
+        TextBox MakeErrorBarsDescriptorNumberBox(ChartErrorBarsDialogFieldId fieldId, string text)
+        {
+            var box = new TextBox
+            {
+                Text = text,
+                Width = 260,
+            };
+            ApplyChartTextBoxChrome(box);
+            ApplyErrorBarsDescriptorAutomation(box, fieldId);
+            return box;
+        }
+
+        static GroupBox MakeErrorBarsDescriptorGroup(ChartErrorBarsDialogSectionDescriptor section, Control content) =>
+            new()
+            {
+                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
+                Content = content,
+                Padding = new Thickness(10, 8),
+                Margin = new Thickness(0, 0, 0, 8),
+            };
     }
 
     // ---- Shared dialog plumbing -----------------------------------------------------------------------
@@ -962,21 +1228,8 @@ public sealed partial class MainWindow
             ? $"{label}: #{c.R:X2}{c.G:X2}{c.B:X2}"
             : $"{label}: (default)";
 
-    /// <summary>Parses a number, treating blank/whitespace as "auto" (null). Returns false only on bad text.</summary>
-    private static bool TryParseAutoDouble(string? text, out double? value)
-    {
-        value = null;
-        if (string.IsNullOrWhiteSpace(text))
-            return true;
-
-        if (NumericInputParser.TryParseFiniteDouble(text.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed))
-        {
-            value = parsed;
-            return true;
-        }
-
-        return false;
-    }
+    private static string FormatOptionalColorText(CellColor? color) =>
+        color is { } c ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : "none";
 
     private static bool TryParseIntInRange(string? text, int min, int max, out int value)
     {

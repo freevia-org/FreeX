@@ -49,6 +49,9 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(");
         source.Should().Contain("ChartTrendlinePlanner.GetTypeChoices()");
         source.Should().Contain("ChartTrendlinePlanner.GetDashStyleChoices()");
+        source.Should().Contain("ChartTrendlinePlanner.GetDialogField(id)");
+        source.Should().Contain("ChartTrendlinePlanner.GetOptionsSection()");
+        source.Should().Contain("ChartTrendlinePlanner.GetLineSection()");
         source.Should().Contain("ChartTrendlinePlanner.TryParseDialogInput(");
         source.Should().NotContain("ShowLinearTrendline: ShowTrendline");
         source.Should().NotContain("TryReadIntInRange(");
@@ -113,6 +116,8 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(");
         source.Should().Contain("ChartErrorBarsPlanner.GetKindChoices()");
         source.Should().Contain("ChartErrorBarsPlanner.GetDirectionChoices()");
+        source.Should().Contain("ChartErrorBarsPlanner.GetDialogField(id)");
+        source.Should().Contain("ChartErrorBarsPlanner.GetErrorAmountSection()");
         source.Should().Contain("ChartErrorBarsPlanner.TryParseDialogInput(");
         source.Should().NotContain("Enum.IsDefined");
         source.Should().NotContain("Math.Clamp");
@@ -157,7 +162,8 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
 
-        source.Should().Contain("AutomationProperties.SetName(_valueBox, UiText.Get(\"ChartErrorBars_ValueAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetName(_valueBox, AutomationNameText(ChartErrorBarsDialogFieldId.Value));");
+        source.Should().Contain("Field(id).AutomationNameResourceKey");
     }
 
     [Fact]
@@ -366,6 +372,9 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartSeriesFormatPlanner.Normalize(new ChartSeriesFormatInput(");
         source.Should().Contain("ChartSeriesFormatPlanner.GetDashStyleChoices()");
         source.Should().Contain("ChartSeriesFormatPlanner.GetMarkerStyleChoices()");
+        source.Should().Contain("ChartSeriesFormatPlanner.GetDialogField(id)");
+        source.Should().Contain("ChartSeriesFormatPlanner.GetSeriesOptionsSection()");
+        source.Should().Contain("ChartSeriesFormatPlanner.GetFillLineSection()");
         source.Should().Contain("ChartSeriesFormatPlanner.TryParseDialogInput(");
         source.Should().NotContain("IndexOfSeriesFormat");
         source.Should().NotContain("TryReadOptionalColor(");
