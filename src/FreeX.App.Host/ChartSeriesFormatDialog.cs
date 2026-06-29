@@ -5,7 +5,6 @@ using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using static FreeX.App.Host.ChartDialogInputParser;
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
@@ -64,8 +63,25 @@ public sealed class ChartSeriesFormatDialog : Window
         double? strokeThickness,
         ChartLineDashStyle? dashStyle,
         ChartMarkerStyle? markerStyle,
-        double? markerSize) =>
-        new(Math.Max(0, seriesIndex), fillColor, strokeColor, strokeThickness, dashStyle, markerStyle, markerSize);
+        double? markerSize)
+    {
+        var input = ChartSeriesFormatPlanner.Normalize(new ChartSeriesFormatInput(
+            seriesIndex,
+            fillColor,
+            strokeColor,
+            strokeThickness,
+            markerStyle,
+            markerSize,
+            dashStyle));
+        return new(
+            input.SeriesIndex,
+            input.FillColor,
+            input.StrokeColor,
+            input.StrokeThickness,
+            input.DashStyle,
+            input.MarkerStyle,
+            input.MarkerSize);
+    }
 
     private StackPanel CreateContent(int seriesCount)
     {
@@ -81,8 +97,8 @@ public sealed class ChartSeriesFormatDialog : Window
             ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartSeriesFormat_FillColorLabel"), _fillBox);
             ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartSeriesFormat_LineColorLabel"), _strokeBox);
             ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartSeriesFormat_LineWidthLabel"), _strokeThicknessBox, UiText.Get("ChartSeriesFormat_LineWidthHelpText"));
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_DashStyleLabel"), _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_MarkerLabel"), _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_DashStyleLabel"), _dashBox, ChartSeriesFormatPlanner.GetDashStyleChoices().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_MarkerLabel"), _markerBox, ChartSeriesFormatPlanner.GetMarkerStyleChoices().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
             ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartSeriesFormat_MarkerSizeLabel"), _markerSizeBox, UiText.Get("ChartSeriesFormat_MarkerSizeHelpText"));
             root.Children.Add(CreateGroupBox(UiText.Get("ChartDialog_FillLineGroup"), stack));
         }
@@ -109,39 +125,48 @@ public sealed class ChartSeriesFormatDialog : Window
 
     private void Accept()
     {
-        if (!TryReadOptionalColor(_fillBox, out var fillColor))
+        if (!ChartSeriesFormatPlanner.TryParseDialogInput(
+                _seriesBox.SelectedIndex < 0 ? 0 : _seriesBox.SelectedIndex,
+                _fillBox.Text,
+                _strokeBox.Text,
+                _strokeThicknessBox.Text,
+                SelectedDashStyle(),
+                SelectedMarkerStyle(),
+                _markerSizeBox.Text,
+                out var input,
+                out var issue))
         {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_strokeBox, out var strokeColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _strokeBox);
-            return;
-        }
-
-        if (!TryReadNullablePositiveDouble(_strokeThicknessBox, out var strokeThickness))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"), _strokeThicknessBox);
-            return;
-        }
-
-        if (!TryReadNullablePositiveDouble(_markerSizeBox, out var markerSize))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"), _markerSizeBox);
+            ShowPlannerParseWarning(issue);
             return;
         }
 
         Result = CreateResult(
-            _seriesBox.SelectedIndex < 0 ? 0 : _seriesBox.SelectedIndex,
-            fillColor,
-            strokeColor,
-            strokeThickness,
-            _dashBox.SelectedItem is ChartLineDashStyle dash ? dash : null,
-            _markerBox.SelectedItem is ChartMarkerStyle marker ? marker : null,
-            markerSize);
+            input.SeriesIndex,
+            input.FillColor,
+            input.StrokeColor,
+            input.StrokeThickness,
+            input.DashStyle,
+            input.MarkerStyle,
+            input.MarkerSize);
         DialogResult = true;
+    }
+
+    private ChartLineDashStyle? SelectedDashStyle() =>
+        _dashBox.SelectedItem is ChartLineDashStyle value ? value : null;
+
+    private ChartMarkerStyle? SelectedMarkerStyle() =>
+        _markerBox.SelectedItem is ChartMarkerStyle value ? value : null;
+
+    private void ShowPlannerParseWarning(ChartSeriesFormatParseIssue issue)
+    {
+        var (message, target) = issue switch
+        {
+            ChartSeriesFormatParseIssue.StrokeColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _strokeBox),
+            ChartSeriesFormatParseIssue.StrokeThickness => (UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"), _strokeThicknessBox),
+            ChartSeriesFormatParseIssue.MarkerSize => (UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"), _markerSizeBox),
+            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox)
+        };
+        ShowInvalidInputWarning(message, target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

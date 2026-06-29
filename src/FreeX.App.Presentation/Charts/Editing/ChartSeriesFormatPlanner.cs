@@ -1,3 +1,5 @@
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -13,6 +15,15 @@ public readonly record struct ChartSeriesFormatInput(
     double? MarkerSize,
     ChartLineDashStyle? DashStyle = null);
 
+public enum ChartSeriesFormatParseIssue
+{
+    None,
+    FillColor,
+    StrokeColor,
+    StrokeThickness,
+    MarkerSize,
+}
+
 /// <summary>
 /// Portable (no UI) planner for the "Format Series" editing dialog: per-series fill color, line (stroke)
 /// color and width, dash style, and marker style/size. Reads the chosen series' current
@@ -24,6 +35,13 @@ public readonly record struct ChartSeriesFormatInput(
 /// </summary>
 public static class ChartSeriesFormatPlanner
 {
+    private static readonly ChartLineDashStyle[] DashStyleCatalog = Enum.GetValues<ChartLineDashStyle>();
+    private static readonly ChartMarkerStyle[] MarkerStyleCatalog = Enum.GetValues<ChartMarkerStyle>();
+
+    public static IReadOnlyList<ChartLineDashStyle> GetDashStyleChoices() => DashStyleCatalog;
+
+    public static IReadOnlyList<ChartMarkerStyle> GetMarkerStyleChoices() => MarkerStyleCatalog;
+
     /// <summary>The number of data series the series picker should offer (at least one).</summary>
     public static int GetSeriesCount(ChartModel chart) => Math.Max(1, ChartTypeSupport.GetDataSeriesCount(chart));
 
@@ -61,6 +79,10 @@ public static class ChartSeriesFormatPlanner
             format?.DashStyle);
     }
 
+    /// <summary>Normalizes dialog result defaults before the host projects them back into UI result records.</summary>
+    public static ChartSeriesFormatInput Normalize(ChartSeriesFormatInput input) =>
+        input with { SeriesIndex = Math.Max(0, input.SeriesIndex) };
+
     /// <summary>
     /// Validates the edited series format. Returns null when valid, otherwise an English reason it is
     /// rejected (a non-positive line width or marker size). Null thickness/size means "inherit" and is valid.
@@ -76,6 +98,55 @@ public static class ChartSeriesFormatPlanner
         return null;
     }
 
+    public static bool TryParseDialogInput(
+        int seriesIndex,
+        string? fillColorText,
+        string? strokeColorText,
+        string? strokeThicknessText,
+        ChartLineDashStyle? selectedDashStyle,
+        ChartMarkerStyle? selectedMarkerStyle,
+        string? markerSizeText,
+        out ChartSeriesFormatInput input,
+        out ChartSeriesFormatParseIssue issue)
+    {
+        input = default;
+
+        if (!ColorInputParser.TryParseOptionalHexColor(fillColorText ?? string.Empty, out var fillColor))
+        {
+            issue = ChartSeriesFormatParseIssue.FillColor;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(strokeColorText ?? string.Empty, out var strokeColor))
+        {
+            issue = ChartSeriesFormatParseIssue.StrokeColor;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseNullablePositiveDouble(strokeThicknessText ?? string.Empty, out var strokeThickness))
+        {
+            issue = ChartSeriesFormatParseIssue.StrokeThickness;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseNullablePositiveDouble(markerSizeText ?? string.Empty, out var markerSize))
+        {
+            issue = ChartSeriesFormatParseIssue.MarkerSize;
+            return false;
+        }
+
+        input = Normalize(new ChartSeriesFormatInput(
+            seriesIndex,
+            fillColor,
+            strokeColor,
+            strokeThickness,
+            IsKnownMarkerStyle(selectedMarkerStyle) ? selectedMarkerStyle : null,
+            markerSize,
+            IsKnownDashStyle(selectedDashStyle) ? selectedDashStyle : null));
+        issue = ChartSeriesFormatParseIssue.None;
+        return true;
+    }
+
     /// <summary>
     /// Merges the edited series format into the chart's series-format list and returns the
     /// <see cref="ChartLayoutOptions"/> delta. The entry for <see cref="ChartSeriesFormatInput.SeriesIndex"/>
@@ -84,21 +155,22 @@ public static class ChartSeriesFormatPlanner
     /// </summary>
     public static ChartLayoutOptions Plan(ChartModel chart, ChartSeriesFormatInput input)
     {
-        var seriesIndex = Math.Max(0, input.SeriesIndex);
+        var normalized = Normalize(input);
+        var seriesIndex = normalized.SeriesIndex;
         var formats = new List<ChartSeriesFormat>(chart.SeriesFormats);
         var existingIndex = IndexOfSeriesFormat(formats, seriesIndex);
         var current = existingIndex >= 0 ? formats[existingIndex] : new ChartSeriesFormat(seriesIndex);
 
         var updated = current with
         {
-            FillColor = input.FillColor,
-            FillThemeColor = input.FillColor is null ? current.FillThemeColor : null,
-            StrokeColor = input.StrokeColor,
-            StrokeThemeColor = input.StrokeColor is null ? current.StrokeThemeColor : null,
-            StrokeThickness = input.StrokeThickness,
-            DashStyle = input.DashStyle,
-            MarkerStyle = input.MarkerStyle,
-            MarkerSize = input.MarkerSize,
+            FillColor = normalized.FillColor,
+            FillThemeColor = normalized.FillColor is null ? current.FillThemeColor : null,
+            StrokeColor = normalized.StrokeColor,
+            StrokeThemeColor = normalized.StrokeColor is null ? current.StrokeThemeColor : null,
+            StrokeThickness = normalized.StrokeThickness,
+            DashStyle = normalized.DashStyle,
+            MarkerStyle = normalized.MarkerStyle,
+            MarkerSize = normalized.MarkerSize,
         };
 
         if (existingIndex >= 0)
@@ -130,4 +202,10 @@ public static class ChartSeriesFormatPlanner
 
         return -1;
     }
+
+    private static bool IsKnownDashStyle(ChartLineDashStyle? dashStyle) =>
+        dashStyle is { } value && Enum.IsDefined(value);
+
+    private static bool IsKnownMarkerStyle(ChartMarkerStyle? markerStyle) =>
+        markerStyle is { } value && Enum.IsDefined(value);
 }

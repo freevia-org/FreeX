@@ -1,3 +1,5 @@
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -24,6 +26,27 @@ public readonly record struct ChartAreaFormatInput(
     double LegendBorderThickness = 0,
     double LegendFontSize = 12);
 
+public enum ChartAreaFormatParseIssue
+{
+    None,
+    ChartAreaFillColor,
+    PlotAreaFillColor,
+    PlotAreaBorderColor,
+    PlotAreaBorderThickness,
+    LegendTextColor,
+    LegendFillColor,
+    LegendBorderColor,
+    LegendBorderThickness,
+    LegendFontSize,
+}
+
+public enum ChartAreaFormatValidationIssue
+{
+    PlotAreaBorderThicknessOutOfRange,
+    LegendBorderThicknessOutOfRange,
+    LegendFontSizeOutOfRange,
+}
+
 /// <summary>
 /// Portable (no UI) planner for the "Format Chart Area" dialog: chart-area fill plus plot-area fill and
 /// border (color + width). Single-sources the read/validate/project rules and maps an edited
@@ -43,6 +66,10 @@ public static class ChartAreaFormatPlanner
     public const double MinLegendFontSize = 6;
     public const double MaxLegendFontSize = 72;
 
+    private static readonly ChartLegendPosition[] LegendPositionCatalog = Enum.GetValues<ChartLegendPosition>();
+
+    public static IReadOnlyList<ChartLegendPosition> GetLegendPositionChoices() => LegendPositionCatalog;
+
     /// <summary>
     /// Reads the chart's current chart-area / plot-area fill-and-border state plus the legend state into
     /// the dialog input shape.
@@ -50,20 +77,44 @@ public static class ChartAreaFormatPlanner
     public static ChartAreaFormatInput Read(ChartModel chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
-        return new ChartAreaFormatInput(
+        return Normalize(new ChartAreaFormatInput(
             chart.ChartAreaFillColor,
             chart.PlotAreaFillColor,
             chart.PlotAreaBorderColor,
             chart.PlotAreaBorderThickness,
             chart.ShowLegend,
-            chart.LegendPosition == ChartLegendPosition.None ? ChartLegendPosition.Right : chart.LegendPosition,
+            chart.LegendPosition,
             chart.LegendOverlay,
             chart.LegendTextColor,
             chart.LegendFillColor,
             chart.LegendBorderColor,
             chart.LegendBorderThickness,
-            chart.LegendFontSize);
+            chart.LegendFontSize));
     }
+
+    /// <summary>Normalizes dialog defaults and result values to the same ranges the WPF dialog used.</summary>
+    public static ChartAreaFormatInput Normalize(ChartAreaFormatInput input) =>
+        input with
+        {
+            PlotAreaBorderThickness = ClampFiniteOrDefault(
+                input.PlotAreaBorderThickness,
+                fallback: 1,
+                MinBorderThickness,
+                MaxBorderThickness),
+            LegendPosition = Enum.IsDefined(input.LegendPosition)
+                ? input.LegendPosition
+                : ChartLegendPosition.Right,
+            LegendBorderThickness = ClampFiniteOrDefault(
+                input.LegendBorderThickness,
+                fallback: 0,
+                MinBorderThickness,
+                MaxBorderThickness),
+            LegendFontSize = ClampFiniteOrDefault(
+                input.LegendFontSize,
+                fallback: 12,
+                MinLegendFontSize,
+                MaxLegendFontSize),
+        };
 
     /// <summary>
     /// Validates the edited input: the plot-area border width and legend border width must be finite and
@@ -72,24 +123,141 @@ public static class ChartAreaFormatPlanner
     /// </summary>
     public static string? Validate(ChartAreaFormatInput input)
     {
+        return ValidateIssue(input) switch
+        {
+            ChartAreaFormatValidationIssue.PlotAreaBorderThicknessOutOfRange => $"Enter a plot-area border width between {MinBorderThickness} and {MaxBorderThickness}.",
+            ChartAreaFormatValidationIssue.LegendBorderThicknessOutOfRange => $"Enter a legend border width between {MinBorderThickness} and {MaxBorderThickness}.",
+            ChartAreaFormatValidationIssue.LegendFontSizeOutOfRange => $"Enter a legend font size between {MinLegendFontSize} and {MaxLegendFontSize}.",
+            _ => null,
+        };
+    }
+
+    public static ChartAreaFormatValidationIssue? ValidateIssue(ChartAreaFormatInput input)
+    {
         if (!IsInBorderRange(input.PlotAreaBorderThickness))
-            return $"Enter a plot-area border width between {MinBorderThickness} and {MaxBorderThickness}.";
+            return ChartAreaFormatValidationIssue.PlotAreaBorderThicknessOutOfRange;
 
         if (!IsInBorderRange(input.LegendBorderThickness))
-            return $"Enter a legend border width between {MinBorderThickness} and {MaxBorderThickness}.";
+            return ChartAreaFormatValidationIssue.LegendBorderThicknessOutOfRange;
 
         if (!double.IsFinite(input.LegendFontSize)
             || input.LegendFontSize < MinLegendFontSize
             || input.LegendFontSize > MaxLegendFontSize)
         {
-            return $"Enter a legend font size between {MinLegendFontSize} and {MaxLegendFontSize}.";
+            return ChartAreaFormatValidationIssue.LegendFontSizeOutOfRange;
         }
 
         return null;
     }
 
+    public static bool TryParseDialogInput(
+        string? chartAreaFillColorText,
+        string? plotAreaFillColorText,
+        string? plotAreaBorderColorText,
+        string? plotAreaBorderThicknessText,
+        bool showLegend,
+        ChartLegendPosition? selectedLegendPosition,
+        bool legendOverlay,
+        string? legendTextColorText,
+        string? legendFillColorText,
+        string? legendBorderColorText,
+        string? legendBorderThicknessText,
+        string? legendFontSizeText,
+        out ChartAreaFormatInput input,
+        out ChartAreaFormatParseIssue issue)
+    {
+        input = default;
+
+        if (!ColorInputParser.TryParseOptionalHexColor(chartAreaFillColorText ?? string.Empty, out var chartAreaFillColor))
+        {
+            issue = ChartAreaFormatParseIssue.ChartAreaFillColor;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(plotAreaFillColorText ?? string.Empty, out var plotAreaFillColor))
+        {
+            issue = ChartAreaFormatParseIssue.PlotAreaFillColor;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(plotAreaBorderColorText ?? string.Empty, out var plotAreaBorderColor))
+        {
+            issue = ChartAreaFormatParseIssue.PlotAreaBorderColor;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                plotAreaBorderThicknessText ?? string.Empty,
+                MinBorderThickness,
+                MaxBorderThickness,
+                out var plotAreaBorderThickness))
+        {
+            issue = ChartAreaFormatParseIssue.PlotAreaBorderThickness;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(legendTextColorText ?? string.Empty, out var legendTextColor))
+        {
+            issue = ChartAreaFormatParseIssue.LegendTextColor;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(legendFillColorText ?? string.Empty, out var legendFillColor))
+        {
+            issue = ChartAreaFormatParseIssue.LegendFillColor;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(legendBorderColorText ?? string.Empty, out var legendBorderColor))
+        {
+            issue = ChartAreaFormatParseIssue.LegendBorderColor;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                legendBorderThicknessText ?? string.Empty,
+                MinBorderThickness,
+                MaxBorderThickness,
+                out var legendBorderThickness))
+        {
+            issue = ChartAreaFormatParseIssue.LegendBorderThickness;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                legendFontSizeText ?? string.Empty,
+                MinLegendFontSize,
+                MaxLegendFontSize,
+                out var legendFontSize))
+        {
+            issue = ChartAreaFormatParseIssue.LegendFontSize;
+            return false;
+        }
+
+        input = Normalize(new ChartAreaFormatInput(
+            chartAreaFillColor,
+            plotAreaFillColor,
+            plotAreaBorderColor,
+            plotAreaBorderThickness,
+            showLegend,
+            selectedLegendPosition is { } position && Enum.IsDefined(position)
+                ? position
+                : ChartLegendPosition.Right,
+            legendOverlay,
+            legendTextColor,
+            legendFillColor,
+            legendBorderColor,
+            legendBorderThickness,
+            legendFontSize));
+        issue = ChartAreaFormatParseIssue.None;
+        return true;
+    }
+
     private static bool IsInBorderRange(double value) =>
         double.IsFinite(value) && value >= MinBorderThickness && value <= MaxBorderThickness;
+
+    private static double ClampFiniteOrDefault(double value, double fallback, double min, double max) =>
+        Math.Clamp(double.IsFinite(value) ? value : fallback, min, max);
 
     /// <summary>
     /// Builds the <see cref="ChartLayoutOptions"/> delta for the edited chart-area / plot-area format and
@@ -97,18 +265,21 @@ public static class ChartAreaFormatPlanner
     /// plot-area border color and width are always set so a cleared/changed border round-trips. The legend
     /// fields mirror the WPF <c>ChartAreaLegendDialogResult.ToOptions()</c>.
     /// </summary>
-    public static ChartLayoutOptions Plan(ChartAreaFormatInput input) =>
-        new(
-            ChartAreaFillColor: input.ChartAreaFillColor,
-            PlotAreaFillColor: input.PlotAreaFillColor,
-            PlotAreaBorderColor: input.PlotAreaBorderColor,
-            PlotAreaBorderThickness: input.PlotAreaBorderThickness,
-            ShowLegend: input.ShowLegend,
-            LegendPosition: input.LegendPosition,
-            LegendOverlay: input.LegendOverlay,
-            LegendTextColor: input.LegendTextColor,
-            LegendFillColor: input.LegendFillColor,
-            LegendBorderColor: input.LegendBorderColor,
-            LegendBorderThickness: input.LegendBorderThickness,
-            LegendFontSize: input.LegendFontSize);
+    public static ChartLayoutOptions Plan(ChartAreaFormatInput input)
+    {
+        var normalized = Normalize(input);
+        return new(
+            ChartAreaFillColor: normalized.ChartAreaFillColor,
+            PlotAreaFillColor: normalized.PlotAreaFillColor,
+            PlotAreaBorderColor: normalized.PlotAreaBorderColor,
+            PlotAreaBorderThickness: normalized.PlotAreaBorderThickness,
+            ShowLegend: normalized.ShowLegend,
+            LegendPosition: normalized.LegendPosition,
+            LegendOverlay: normalized.LegendOverlay,
+            LegendTextColor: normalized.LegendTextColor,
+            LegendFillColor: normalized.LegendFillColor,
+            LegendBorderColor: normalized.LegendBorderColor,
+            LegendBorderThickness: normalized.LegendBorderThickness,
+            LegendFontSize: normalized.LegendFontSize);
+    }
 }
