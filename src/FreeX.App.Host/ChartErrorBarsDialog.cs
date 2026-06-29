@@ -5,7 +5,6 @@ using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using static FreeX.App.Host.ChartDialogInputParser;
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
@@ -73,8 +72,8 @@ public sealed class ChartErrorBarsDialog : Window
         var root = ChartDialogHelpers.DialogStack();
         var stack = new StackPanel();
         ChartDialogHelpers.AddCheck(stack, _showBox);
-        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartErrorBars_TypeLabel"), _kindBox, Enum.GetValues<ChartErrorBarKind>());
-        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartErrorBars_DirectionLabel"), _directionBox, Enum.GetValues<ChartErrorBarDirection>());
+        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartErrorBars_TypeLabel"), _kindBox, ChartErrorBarsPlanner.GetKindChoices().Select(choice => choice.Kind));
+        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartErrorBars_DirectionLabel"), _directionBox, ChartErrorBarsPlanner.GetDirectionChoices().Select(choice => choice.Direction));
         ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartErrorBars_ValueLabel"), _valueBox, UiText.Get("ChartErrorBars_ValueHelpText"));
         System.Windows.Automation.AutomationProperties.SetName(_valueBox, UiText.Get("ChartErrorBars_ValueAutomationName"));
         ChartDialogHelpers.AddCheck(stack, _endCapsBox);
@@ -100,19 +99,42 @@ public sealed class ChartErrorBarsDialog : Window
 
     private void Accept()
     {
-        if (!TryReadClampedDouble(_valueBox, min: 0, max: 1000, out var value))
+        if (!ChartErrorBarsPlanner.TryParseDialogInput(
+                _showBox.IsChecked == true,
+                SelectedKind(),
+                SelectedDirection(),
+                _valueBox.Text,
+                _endCapsBox.IsChecked == true,
+                out var input,
+                out var issue))
         {
-            ShowInvalidInputWarning(UiText.Get("ChartErrorBars_InvalidValueMessage"), _valueBox);
+            ShowPlannerParseWarning(issue);
             return;
         }
 
         Result = CreateResult(
-            _showBox.IsChecked == true,
-            ChartDialogHelpers.Selected(_kindBox, ChartErrorBarKind.StandardError),
-            ChartDialogHelpers.Selected(_directionBox, ChartErrorBarDirection.Both),
-            value,
-            _endCapsBox.IsChecked == true);
+            input.ShowErrorBars,
+            input.Kind,
+            input.Direction,
+            input.Value,
+            input.EndCaps);
         DialogResult = true;
+    }
+
+    private ChartErrorBarKind? SelectedKind() =>
+        _kindBox.SelectedItem is ChartErrorBarKind value ? value : null;
+
+    private ChartErrorBarDirection? SelectedDirection() =>
+        _directionBox.SelectedItem is ChartErrorBarDirection value ? value : null;
+
+    private void ShowPlannerParseWarning(ChartErrorBarsParseIssue issue)
+    {
+        var (message, target) = issue switch
+        {
+            ChartErrorBarsParseIssue.Value => (UiText.Get("ChartErrorBars_InvalidValueMessage"), _valueBox),
+            _ => (UiText.Get("ChartErrorBars_InvalidValueMessage"), _valueBox),
+        };
+        ShowInvalidInputWarning(message, target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

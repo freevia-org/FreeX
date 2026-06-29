@@ -5,7 +5,6 @@ using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using static FreeX.App.Host.ChartDialogInputParser;
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
@@ -173,8 +172,8 @@ public sealed class ChartDataLabelsDialog : Window
             ChartDialogHelpers.AddCheck(stack, _categoryBox);
             ChartDialogHelpers.AddCheck(stack, _seriesBox);
             ChartDialogHelpers.AddCheck(stack, _percentageBox);
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_SeparatorLabel"), _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_NumberFormatLabel"), _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_SeparatorLabel"), _separatorBox, ChartDataLabelsPlanner.GetSeparatorChoices());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_NumberFormatLabel"), _numberFormatBox, ChartDataLabelsPlanner.GetNumberFormatChoices());
             ChartDialogHelpers.AddCheck(stack, _calloutsBox);
             root.Children.Add(CreateGroupBox(UiText.Get("ChartDataLabels_LabelOptionsGroup"), stack));
         }
@@ -214,61 +213,29 @@ public sealed class ChartDataLabelsDialog : Window
 
     private void Accept()
     {
-        if (!TryReadOptionalColor(_fillBox, out var fillColor))
+        if (!ChartDataLabelsPlanner.TryParseDialogInput(
+                _showBox.IsChecked == true,
+                SelectedPosition(),
+                _valueBox.IsChecked == true,
+                _legendKeyBox.IsChecked == true,
+                _categoryBox.IsChecked == true,
+                _seriesBox.IsChecked == true,
+                _percentageBox.IsChecked == true,
+                SelectedSeparator(),
+                SelectedNumberFormat(),
+                _calloutsBox.IsChecked == true,
+                _fillBox.Text,
+                _borderBox.Text,
+                _textBox.Text,
+                _borderThicknessBox.Text,
+                _fontSizeBox.Text,
+                _angleBox.Text,
+                out var input,
+                out var issue))
         {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox);
+            ShowPlannerParseWarning(issue);
             return;
         }
-
-        if (!TryReadOptionalColor(_borderBox, out var borderColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _borderBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_textBox, out var textColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _textBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_borderThicknessBox, min: ChartDataLabelsPlanner.MinBorderThickness, max: ChartDataLabelsPlanner.MaxBorderThickness, out var borderThickness))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"), _borderThicknessBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_fontSizeBox, min: ChartDataLabelsPlanner.MinFontSize, max: ChartDataLabelsPlanner.MaxFontSize, out var fontSize))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidFontSizeMessage"), _fontSizeBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_angleBox, min: ChartDataLabelsPlanner.MinAngle, max: ChartDataLabelsPlanner.MaxAngle, out var angle))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidAngleMessage"), _angleBox);
-            return;
-        }
-
-        var input = new ChartDataLabelsInput(
-            _showBox.IsChecked == true,
-            ChartDialogHelpers.Selected(_positionBox, ChartDataLabelPosition.BestFit),
-            _valueBox.IsChecked == true,
-            _categoryBox.IsChecked == true,
-            _seriesBox.IsChecked == true,
-            _percentageBox.IsChecked == true,
-            _legendKeyBox.IsChecked == true,
-            ChartDialogHelpers.Selected(_separatorBox, ChartDataLabelSeparator.Comma),
-            ChartDialogHelpers.Selected(_numberFormatBox, ChartDataLabelNumberFormat.General),
-            _calloutsBox.IsChecked == true,
-            fillColor,
-            borderColor,
-            textColor,
-            borderThickness,
-            fontSize,
-            angle);
-        if (ShowPlannerValidationWarning(input))
-            return;
 
         Result = CreateResult(
             input.ShowDataLabels,
@@ -290,15 +257,27 @@ public sealed class ChartDataLabelsDialog : Window
         DialogResult = true;
     }
 
-    private bool ShowPlannerValidationWarning(ChartDataLabelsInput input)
+    private ChartDataLabelPosition? SelectedPosition() =>
+        _positionBox.SelectedItem is ChartDataLabelPosition value ? value : null;
+
+    private ChartDataLabelSeparator? SelectedSeparator() =>
+        _separatorBox.SelectedItem is ChartDataLabelSeparator value ? value : null;
+
+    private ChartDataLabelNumberFormat? SelectedNumberFormat() =>
+        _numberFormatBox.SelectedItem is ChartDataLabelNumberFormat value ? value : null;
+
+    private void ShowPlannerParseWarning(ChartDataLabelsParseIssue issue)
     {
-        return ChartDataLabelsPlanner.ValidateIssue(input) switch
+        var (message, target) = issue switch
         {
-            ChartDataLabelsValidationIssue.BorderThicknessOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"), _borderThicknessBox),
-            ChartDataLabelsValidationIssue.FontSizeOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidFontSizeMessage"), _fontSizeBox),
-            ChartDataLabelsValidationIssue.AngleOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidAngleMessage"), _angleBox),
-            _ => false,
+            ChartDataLabelsParseIssue.BorderColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _borderBox),
+            ChartDataLabelsParseIssue.TextColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _textBox),
+            ChartDataLabelsParseIssue.BorderThickness => (UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"), _borderThicknessBox),
+            ChartDataLabelsParseIssue.FontSize => (UiText.Get("ChartDataLabels_InvalidFontSizeMessage"), _fontSizeBox),
+            ChartDataLabelsParseIssue.Angle => (UiText.Get("ChartDataLabels_InvalidAngleMessage"), _angleBox),
+            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox),
         };
+        ShowInvalidInputWarning(message, target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

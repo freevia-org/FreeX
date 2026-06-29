@@ -327,6 +327,16 @@ public sealed class ChartEditingPlannerTests
             ChartDataLabelPosition.InsideEnd, ChartDataLabelPosition.Center
         });
         ChartDataLabelsPlanner.GetPositionChoices().Should().OnlyContain(c => !string.IsNullOrWhiteSpace(c.DisplayName));
+        ChartDataLabelsPlanner.GetSeparatorChoices().Should().Equal(
+            ChartDataLabelSeparator.Comma,
+            ChartDataLabelSeparator.Semicolon,
+            ChartDataLabelSeparator.NewLine,
+            ChartDataLabelSeparator.Space);
+        ChartDataLabelsPlanner.GetNumberFormatChoices().Should().Equal(
+            ChartDataLabelNumberFormat.General,
+            ChartDataLabelNumberFormat.Number,
+            ChartDataLabelNumberFormat.Currency,
+            ChartDataLabelNumberFormat.Percent);
     }
 
     [Fact]
@@ -450,6 +460,90 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void DataLabels_TryParseDialogInput_ParsesColorsNumbersAndSelections()
+    {
+        ChartDataLabelsPlanner.TryParseDialogInput(
+                showDataLabels: true,
+                selectedPosition: ChartDataLabelPosition.OutsideEnd,
+                showValue: false,
+                showLegendKey: true,
+                showCategoryName: true,
+                showSeriesName: false,
+                showPercentage: true,
+                selectedSeparator: ChartDataLabelSeparator.NewLine,
+                selectedNumberFormat: ChartDataLabelNumberFormat.Percent,
+                showCallouts: true,
+                fillColorText: "#010203",
+                borderColorText: "none",
+                textColorText: "#040506",
+                borderThicknessText: "1.5",
+                fontSizeText: "12",
+                angleText: "-45",
+                out var input,
+                out var issue)
+            .Should().BeTrue();
+
+        issue.Should().Be(ChartDataLabelsParseIssue.None);
+        input.Should().Be(new ChartDataLabelsInput(
+            ShowDataLabels: true,
+            Position: ChartDataLabelPosition.OutsideEnd,
+            ShowValue: false,
+            ShowCategoryName: true,
+            ShowSeriesName: false,
+            ShowPercentage: true,
+            ShowLegendKey: true,
+            Separator: ChartDataLabelSeparator.NewLine,
+            NumberFormat: ChartDataLabelNumberFormat.Percent,
+            ShowCallouts: true,
+            FillColor: new CellColor(1, 2, 3),
+            BorderColor: null,
+            TextColor: new CellColor(4, 5, 6),
+            BorderThickness: 1.5,
+            FontSize: 12,
+            Angle: -45));
+    }
+
+    [Theory]
+    [InlineData("bad", "none", "#000000", "1", "12", "0", ChartDataLabelsParseIssue.FillColor)]
+    [InlineData("none", "bad", "#000000", "1", "12", "0", ChartDataLabelsParseIssue.BorderColor)]
+    [InlineData("none", "none", "bad", "1", "12", "0", ChartDataLabelsParseIssue.TextColor)]
+    [InlineData("none", "none", "#000000", "11", "12", "0", ChartDataLabelsParseIssue.BorderThickness)]
+    [InlineData("none", "none", "#000000", "1", "5", "0", ChartDataLabelsParseIssue.FontSize)]
+    [InlineData("none", "none", "#000000", "1", "12", "120", ChartDataLabelsParseIssue.Angle)]
+    public void DataLabels_TryParseDialogInput_ReportsFirstInvalidField(
+        string fillColorText,
+        string borderColorText,
+        string textColorText,
+        string borderThicknessText,
+        string fontSizeText,
+        string angleText,
+        ChartDataLabelsParseIssue expectedIssue)
+    {
+        ChartDataLabelsPlanner.TryParseDialogInput(
+                showDataLabels: true,
+                selectedPosition: ChartDataLabelPosition.Center,
+                showValue: true,
+                showLegendKey: false,
+                showCategoryName: false,
+                showSeriesName: false,
+                showPercentage: false,
+                selectedSeparator: ChartDataLabelSeparator.Comma,
+                selectedNumberFormat: ChartDataLabelNumberFormat.General,
+                showCallouts: false,
+                fillColorText,
+                borderColorText,
+                textColorText,
+                borderThicknessText,
+                fontSizeText,
+                angleText,
+                out _,
+                out var issue)
+            .Should().BeFalse();
+
+        issue.Should().Be(expectedIssue);
+    }
+
+    [Fact]
     public void DataLabels_Plan_OmittedExtendedFieldsDoNotResetExistingStyle()
     {
         var options = ChartDataLabelsPlanner.Plan(new ChartDataLabelsInput(
@@ -560,6 +654,16 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void Axis_TickStyleChoices_CoverExcelStyles()
+    {
+        ChartAxisPlanner.GetTickStyleChoices().Should().Equal(
+            ChartAxisTickStyle.None,
+            ChartAxisTickStyle.Inside,
+            ChartAxisTickStyle.Outside,
+            ChartAxisTickStyle.Cross);
+    }
+
+    [Fact]
     public void Axis_Validate_RejectsMinimumNotBelowMaximum()
     {
         var input = new ChartAxisInput(true, Minimum: 10, Maximum: 5, MajorUnit: null,
@@ -655,6 +759,115 @@ public sealed class ChartEditingPlannerTests
         normalized.LabelFontSize.Should().Be(11);
         normalized.LabelAngle.Should().Be(ChartAxisPlanner.MinLabelAngle);
         normalized.LineThickness.Should().Be(ChartAxisPlanner.MinLineThickness);
+    }
+
+    [Fact]
+    public void Axis_TryParseDialogInput_ParsesTextColorsAndSelections()
+    {
+        ChartAxisPlanner.TryParseDialogInput(
+                useXAxis: false,
+                minimumText: "0",
+                maximumText: "50",
+                majorUnitText: "10",
+                minorUnitText: "5",
+                logScale: true,
+                selectedNumberFormat: ChartDataLabelNumberFormat.Currency,
+                showMajorGridlines: true,
+                showMinorGridlines: false,
+                majorGridlineColorText: "#010203",
+                minorGridlineColorText: "none",
+                gridlineThicknessText: "1.5",
+                selectedMajorTickStyle: ChartAxisTickStyle.Cross,
+                selectedMinorTickStyle: ChartAxisTickStyle.Inside,
+                showLabels: false,
+                labelTextColorText: "#040506",
+                labelFontSizeText: "13",
+                labelAngleText: "-30",
+                lineColorText: "#070809",
+                lineThicknessText: "2",
+                out var input,
+                out var issue)
+            .Should().BeTrue();
+
+        issue.Should().Be(ChartAxisFormatParseIssue.None);
+        input.Should().Be(new ChartAxisInput(
+            UseXAxis: false,
+            Minimum: 0,
+            Maximum: 50,
+            MajorUnit: 10,
+            MinorUnit: 5,
+            LogScale: true,
+            NumberFormat: ChartDataLabelNumberFormat.Currency,
+            ShowMajorGridlines: true,
+            ShowMinorGridlines: false,
+            MajorGridlineColor: new CellColor(1, 2, 3),
+            MinorGridlineColor: null,
+            GridlineThickness: 1.5,
+            MajorTickStyle: ChartAxisTickStyle.Cross,
+            MinorTickStyle: ChartAxisTickStyle.Inside,
+            ShowLabels: false,
+            LabelTextColor: new CellColor(4, 5, 6),
+            LabelFontSize: 13,
+            LabelAngle: -30,
+            LineColor: new CellColor(7, 8, 9),
+            LineThickness: 2));
+    }
+
+    [Theory]
+    [InlineData("bad", "50", "10", "5", "#000000", "#000000", "1", "#000000", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.Minimum)]
+    [InlineData("0", "bad", "10", "5", "#000000", "#000000", "1", "#000000", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.Maximum)]
+    [InlineData("50", "0", "10", "5", "#000000", "#000000", "1", "#000000", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.Maximum)]
+    [InlineData("0", "50", "0", "5", "#000000", "#000000", "1", "#000000", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.MajorUnit)]
+    [InlineData("0", "50", "10", "0", "#000000", "#000000", "1", "#000000", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.MinorUnit)]
+    [InlineData("0", "50", "10", "5", "bad", "#000000", "1", "#000000", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.MajorGridlineColor)]
+    [InlineData("0", "50", "10", "5", "#000000", "bad", "1", "#000000", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.MinorGridlineColor)]
+    [InlineData("0", "50", "10", "5", "#000000", "#000000", "0", "#000000", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.GridlineThickness)]
+    [InlineData("0", "50", "10", "5", "#000000", "#000000", "1", "bad", "12", "0", "#000000", "1", ChartAxisFormatParseIssue.LabelTextColor)]
+    [InlineData("0", "50", "10", "5", "#000000", "#000000", "1", "#000000", "5", "0", "#000000", "1", ChartAxisFormatParseIssue.LabelFontSize)]
+    [InlineData("0", "50", "10", "5", "#000000", "#000000", "1", "#000000", "12", "120", "#000000", "1", ChartAxisFormatParseIssue.LabelAngle)]
+    [InlineData("0", "50", "10", "5", "#000000", "#000000", "1", "#000000", "12", "0", "bad", "1", ChartAxisFormatParseIssue.LineColor)]
+    [InlineData("0", "50", "10", "5", "#000000", "#000000", "1", "#000000", "12", "0", "#000000", "0.1", ChartAxisFormatParseIssue.LineThickness)]
+    public void Axis_TryParseDialogInput_ReportsFirstInvalidField(
+        string minimumText,
+        string maximumText,
+        string majorUnitText,
+        string minorUnitText,
+        string majorGridlineColorText,
+        string minorGridlineColorText,
+        string gridlineThicknessText,
+        string labelTextColorText,
+        string labelFontSizeText,
+        string labelAngleText,
+        string lineColorText,
+        string lineThicknessText,
+        ChartAxisFormatParseIssue expectedIssue)
+    {
+        ChartAxisPlanner.TryParseDialogInput(
+                useXAxis: true,
+                minimumText,
+                maximumText,
+                majorUnitText,
+                minorUnitText,
+                logScale: false,
+                selectedNumberFormat: ChartDataLabelNumberFormat.General,
+                showMajorGridlines: false,
+                showMinorGridlines: false,
+                majorGridlineColorText,
+                minorGridlineColorText,
+                gridlineThicknessText,
+                selectedMajorTickStyle: ChartAxisTickStyle.Outside,
+                selectedMinorTickStyle: ChartAxisTickStyle.None,
+                showLabels: true,
+                labelTextColorText,
+                labelFontSizeText,
+                labelAngleText,
+                lineColorText,
+                lineThicknessText,
+                out _,
+                out var issue)
+            .Should().BeFalse();
+
+        issue.Should().Be(expectedIssue);
     }
 
     [Fact]
@@ -1269,6 +1482,47 @@ public sealed class ChartEditingPlannerTests
         input.Direction.Should().Be(ChartErrorBarDirection.Both);
         input.Value.Should().Be(5);
         input.EndCaps.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ErrorBars_TryParseDialogInput_ParsesValueAndSelections()
+    {
+        ChartErrorBarsPlanner.TryParseDialogInput(
+                showErrorBars: true,
+                selectedKind: ChartErrorBarKind.FixedValue,
+                selectedDirection: ChartErrorBarDirection.Minus,
+                valueText: "12.5",
+                endCaps: false,
+                out var input,
+                out var issue)
+            .Should().BeTrue();
+
+        issue.Should().Be(ChartErrorBarsParseIssue.None);
+        input.Should().Be(new ChartErrorBarsInput(
+            ShowErrorBars: true,
+            Kind: ChartErrorBarKind.FixedValue,
+            Direction: ChartErrorBarDirection.Minus,
+            Value: 12.5,
+            EndCaps: false));
+    }
+
+    [Theory]
+    [InlineData("bad")]
+    [InlineData("-1")]
+    [InlineData("1001")]
+    public void ErrorBars_TryParseDialogInput_RejectsInvalidValue(string valueText)
+    {
+        ChartErrorBarsPlanner.TryParseDialogInput(
+                showErrorBars: true,
+                selectedKind: ChartErrorBarKind.Percentage,
+                selectedDirection: ChartErrorBarDirection.Plus,
+                valueText,
+                endCaps: true,
+                out _,
+                out var issue)
+            .Should().BeFalse();
+
+        issue.Should().Be(ChartErrorBarsParseIssue.Value);
     }
 
     [Fact]

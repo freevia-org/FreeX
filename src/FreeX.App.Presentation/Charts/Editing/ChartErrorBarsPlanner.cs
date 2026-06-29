@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -20,6 +21,12 @@ public readonly record struct ChartErrorBarsInput(
     ChartErrorBarDirection Direction,
     double Value,
     bool EndCaps);
+
+public enum ChartErrorBarsParseIssue
+{
+    None,
+    Value,
+}
 
 /// <summary>
 /// Portable (no UI) planner for the "Error Bars" editing dialog (standard-error / percentage / fixed-value /
@@ -119,6 +126,33 @@ public static class ChartErrorBarsPlanner
             ErrorBarDirection: normalized.Direction,
             ErrorBarValue: normalized.Value,
             ErrorBarEndCaps: normalized.EndCaps);
+    }
+
+    public static bool TryParseDialogInput(
+        bool showErrorBars,
+        ChartErrorBarKind? selectedKind,
+        ChartErrorBarDirection? selectedDirection,
+        string? valueText,
+        bool endCaps,
+        out ChartErrorBarsInput input,
+        out ChartErrorBarsParseIssue issue)
+    {
+        input = default;
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(valueText ?? string.Empty, MinValue, MaxValue, out var value))
+        {
+            issue = ChartErrorBarsParseIssue.Value;
+            return false;
+        }
+
+        input = Normalize(new ChartErrorBarsInput(
+            showErrorBars,
+            selectedKind is { } kind && IsKnownKind(kind) ? kind : ChartErrorBarKind.StandardError,
+            selectedDirection is { } direction && IsKnownDirection(direction) ? direction : ChartErrorBarDirection.Both,
+            value,
+            endCaps));
+        issue = ChartErrorBarsParseIssue.None;
+        return true;
     }
 
     private static double ClampValue(double value) =>

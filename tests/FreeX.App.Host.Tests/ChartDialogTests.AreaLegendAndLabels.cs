@@ -172,8 +172,13 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartDataLabelsPlanner.Plan(ToInput())");
         source.Should().Contain("ChartDataLabelsPlanner.Read(chart)");
         source.Should().Contain("ChartDataLabelsPlanner.Normalize(new ChartDataLabelsInput(");
-        source.Should().Contain("ChartDataLabelsPlanner.ValidateIssue(input)");
         source.Should().Contain("ChartDataLabelsPlanner.GetPositionChoices()");
+        source.Should().Contain("ChartDataLabelsPlanner.GetSeparatorChoices()");
+        source.Should().Contain("ChartDataLabelsPlanner.GetNumberFormatChoices()");
+        source.Should().Contain("ChartDataLabelsPlanner.TryParseDialogInput(");
+        source.Should().NotContain("TryReadOptionalColor(");
+        source.Should().NotContain("TryReadClampedDouble(");
+        source.Should().NotContain("ShowPlannerValidationWarning");
         source.Should().NotContain("ShowDataLabels: ShowDataLabels");
     }
 
@@ -236,14 +241,14 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartDataLabelsDialog.cs");
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _borderBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _textBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDataLabels_InvalidBorderThicknessMessage\"), _borderThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDataLabels_InvalidFontSizeMessage\"), _fontSizeBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDataLabels_InvalidAngleMessage\"), _angleBox);");
+        source.Should().Contain("_ => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox)");
+        source.Should().Contain("ChartDataLabelsParseIssue.BorderColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _borderBox)");
+        source.Should().Contain("ChartDataLabelsParseIssue.TextColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _textBox)");
+        source.Should().Contain("ChartDataLabelsParseIssue.BorderThickness => (UiText.Get(\"ChartDataLabels_InvalidBorderThicknessMessage\"), _borderThicknessBox)");
+        source.Should().Contain("ChartDataLabelsParseIssue.FontSize => (UiText.Get(\"ChartDataLabels_InvalidFontSizeMessage\"), _fontSizeBox)");
+        source.Should().Contain("ChartDataLabelsParseIssue.Angle => (UiText.Get(\"ChartDataLabels_InvalidAngleMessage\"), _angleBox)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("private bool ShowPlannerValidationWarning(ChartDataLabelsInput input)");
+        source.Should().Contain("private void ShowPlannerParseWarning(ChartDataLabelsParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
