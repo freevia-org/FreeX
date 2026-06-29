@@ -139,23 +139,7 @@ public static class DocxReader
     /// resolved relative to the word/ folder. Returns null when no such relationship exists.
     /// </summary>
     private static string? ResolveThemePartPath(ZipArchive archive)
-    {
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return null;
-
-        foreach (var rel in relationships)
-        {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !type.EndsWith("/theme", StringComparison.Ordinal))
-                continue;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(target))
-                return "word/" + target.TrimStart('/');
-        }
-        return null;
-    }
+        => ResolveDocumentRelPartPath(archive, "/theme");
 
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
@@ -383,16 +367,10 @@ public static class DocxReader
     private static Dictionary<string, string> ReadDocumentRelationshipTypesByTarget(ZipArchive archive)
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-        foreach (var rel in relationships)
+        foreach (var rel in OpcRelationships.Load(archive, "word/_rels/document.xml.rels"))
         {
-            var target = rel.Attribute("Target")?.Value;
-            var type = rel.Attribute("Type")?.Value;
-            if (!string.IsNullOrEmpty(target) && !string.IsNullOrEmpty(type))
-                map[target] = type;
+            if (!string.IsNullOrEmpty(rel.Target) && !string.IsNullOrEmpty(rel.Type))
+                map[rel.Target] = rel.Type;
         }
         return map;
     }
@@ -448,22 +426,12 @@ public static class DocxReader
     /// Reads word/_rels/fontTable.xml.rels mapping each font relationship id to its part path (under
     /// word/). Returns an empty map when the rels part is absent.
     /// </summary>
-    private static Dictionary<string, string> ReadFontTableRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var relsXml = LoadPart(archive, "word/_rels/fontTable.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-        foreach (var rel in relationships)
-        {
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
-                map[id] = "word/" + target.TrimStart('/');
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadFontTableRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/fontTable.xml.rels",
+            relationship => OpcPathHelper.ResolveRelativeZipPath("word", relationship.Target),
+            relationship => !relationship.IsExternal);
 
     /// <summary>
     /// Finds a document-relationship target by the suffix of its Type (e.g. "/fontTable"), resolved
@@ -471,20 +439,26 @@ public static class DocxReader
     /// settings/theme resolvers.
     /// </summary>
     private static string? ResolveDocumentRelPartPath(ZipArchive archive, string typeSuffix)
+        => ResolveDocumentRelationshipPartPath(
+            archive,
+            relationship => relationship.Type.EndsWith(typeSuffix, StringComparison.Ordinal));
+
+    private static string? ResolveDocumentRelationshipPartPath(
+        ZipArchive archive,
+        Func<OpcRelationship, bool> predicate)
     {
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return null;
-        foreach (var rel in relationships)
+        foreach (var relationship in OpcRelationships.Load(archive, "word/_rels/document.xml.rels"))
         {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !type.EndsWith(typeSuffix, StringComparison.Ordinal))
+            if (relationship.IsExternal ||
+                string.IsNullOrEmpty(relationship.Target) ||
+                !predicate(relationship))
+            {
                 continue;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(target))
-                return "word/" + target.TrimStart('/');
+            }
+
+            return OpcPathHelper.ResolveRelativeZipPath("word", relationship.Target);
         }
+
         return null;
     }
 
@@ -493,23 +467,7 @@ public static class DocxReader
     /// "/settings"), resolved relative to the word/ folder. Returns null when no such relationship exists.
     /// </summary>
     private static string? ResolveSettingsPartPath(ZipArchive archive)
-    {
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return null;
-
-        foreach (var rel in relationships)
-        {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !type.EndsWith("/settings", StringComparison.Ordinal))
-                continue;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(target))
-                return "word/" + target.TrimStart('/');
-        }
-        return null;
-    }
+        => ResolveDocumentRelPartPath(archive, "/settings");
 
     /// <summary>
     /// Loads word/bibliography/sources.xml (if present) into <see cref="TextDocument.Sources"/> and
@@ -596,21 +554,9 @@ public static class DocxReader
     /// relationship exists so the caller can fall back to the conventional path.
     /// </summary>
     private static string? ResolveBibliographyPartPath(ZipArchive archive)
-    {
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return null;
-
-        foreach (var rel in relationships)
-        {
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(target)
-                && target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal))
-                return "word/" + target.TrimStart('/');
-        }
-        return null;
-    }
+        => ResolveDocumentRelationshipPartPath(
+            archive,
+            relationship => relationship.Target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal));
 
     /// <summary>
     /// Loads word/comments.xml (if present) into <see cref="TextDocument.Comments"/>, reconstructing
@@ -1029,51 +975,28 @@ public static class DocxReader
     /// </summary>
     private static Dictionary<string, string> ReadPartImageRelationships(ZipArchive archive, string partPath)
     {
-        var map = new Dictionary<string, string>();
         var dir = OpcPathHelper.GetDirectoryName(partPath);
         var relsPath = OpcPathHelper.GetRelationshipPartPath(partPath);
 
-        var relsXml = LoadPart(archive, relsPath);
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !type.EndsWith("/image", StringComparison.Ordinal))
-                continue;
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
-                continue;
-            // Targets are relative to the part's directory (e.g. "media/header3_image1.png" under word/).
-            map[id] = OpcPathHelper.ResolveRelativeZipPath(dir, target);
-        }
-        return map;
+        return OpcRelationships.LoadTargetMap(
+            archive,
+            relsPath,
+            relationship => OpcPathHelper.ResolveRelativeZipPath(dir, relationship.Target),
+            relationship =>
+                !relationship.IsExternal &&
+                relationship.Type.EndsWith("/image", StringComparison.Ordinal));
     }
 
     /// <summary>Maps relationship id → part path for header/footer relationships in document.xml.rels.</summary>
-    private static Dictionary<string, string> ReadHeaderFooterRelationships(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>();
-        var relsXml = LoadPart(archive, "word/_rels/document.xml.rels");
-        var relationships = relsXml?.Root?.Elements(Rel + "Relationship");
-        if (relationships is null)
-            return map;
-
-        foreach (var rel in relationships)
-        {
-            var type = rel.Attribute("Type")?.Value;
-            if (type is null || !(type.EndsWith("/header", StringComparison.Ordinal) || type.EndsWith("/footer", StringComparison.Ordinal)))
-                continue;
-            var id = rel.Attribute("Id")?.Value;
-            var target = rel.Attribute("Target")?.Value;
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(target))
-                map[id] = "word/" + target.TrimStart('/');
-        }
-        return map;
-    }
+    private static Dictionary<string, string> ReadHeaderFooterRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => OpcPathHelper.ResolveRelativeZipPath("word", relationship.Target),
+            relationship =>
+                !relationship.IsExternal &&
+                (relationship.Type.EndsWith("/header", StringComparison.Ordinal) ||
+                 relationship.Type.EndsWith("/footer", StringComparison.Ordinal)));
 
     private static XDocument? LoadPart(ZipArchive archive, string entryPath)
         => OpcXml.LoadXmlOrNull(archive, entryPath);
