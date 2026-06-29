@@ -27,13 +27,42 @@ internal static class FreePRibbonText
     public static string DuplicateSlideKeyTip => Get("Ribbon_Command_DuplicateSlide_KeyTip");
     public static string DeleteSlideLabel => Get("Ribbon_Command_DeleteSlide_Label");
     public static string DeleteSlideKeyTip => Get("Ribbon_Command_DeleteSlide_KeyTip");
+    public static string LayoutLabel => Get("Ribbon_Command_Layout_Label");
+    public static string LayoutKeyTip => Get("Ribbon_Command_Layout_KeyTip");
+
+    public static string ClipboardGroupLabel => Get("Ribbon_Group_Clipboard_Label");
+    public static string ClipboardGroupKeyTip => Get("Ribbon_Group_Clipboard_KeyTip");
+    public static string PasteLabel => Get("Ribbon_Command_Paste_Label");
+    public static string PasteKeyTip => Get("Ribbon_Command_Paste_KeyTip");
+    public static string CutLabel => Get("Ribbon_Command_Cut_Label");
+    public static string CutKeyTip => Get("Ribbon_Command_Cut_KeyTip");
+    public static string CopyLabel => Get("Ribbon_Command_Copy_Label");
+    public static string CopyKeyTip => Get("Ribbon_Command_Copy_KeyTip");
+    public static string FormatPainterLabel => Get("Ribbon_Command_FormatPainter_Label");
+    public static string FormatPainterKeyTip => Get("Ribbon_Command_FormatPainter_KeyTip");
+
+    public static string FontGroupLabel => Get("Ribbon_Group_Font_Label");
+    public static string FontGroupKeyTip => Get("Ribbon_Group_Font_KeyTip");
+    public static string FontFamilyLabel => Get("Ribbon_Command_FontFamily_Label");
+    public static string BoldLabel => Get("Ribbon_Command_Bold_Label");
+    public static string BoldKeyTip => Get("Ribbon_Command_Bold_KeyTip");
+    public static string ItalicLabel => Get("Ribbon_Command_Italic_Label");
+    public static string ItalicKeyTip => Get("Ribbon_Command_Italic_KeyTip");
+    public static string UnderlineLabel => Get("Ribbon_Command_Underline_Label");
+    public static string UnderlineKeyTip => Get("Ribbon_Command_Underline_KeyTip");
 
     public static string EditGroupLabel => Get("Ribbon_Group_Edit_Label");
     public static string EditGroupKeyTip => Get("Ribbon_Group_Edit_KeyTip");
+    public static string EditingGroupLabel => Get("Ribbon_Group_Editing_Label");
+    public static string EditingGroupKeyTip => Get("Ribbon_Group_Editing_KeyTip");
     public static string UndoLabel => Get("Ribbon_Command_Undo_Label");
     public static string UndoKeyTip => Get("Ribbon_Command_Undo_KeyTip");
     public static string RedoLabel => Get("Ribbon_Command_Redo_Label");
     public static string RedoKeyTip => Get("Ribbon_Command_Redo_KeyTip");
+    public static string FindLabel => Get("Ribbon_Command_Find_Label");
+    public static string FindKeyTip => Get("Ribbon_Command_Find_KeyTip");
+    public static string ReplaceLabel => Get("Ribbon_Command_Replace_Label");
+    public static string ReplaceKeyTip => Get("Ribbon_Command_Replace_KeyTip");
 
     public static string SlideShowGroupLabel => Get("Ribbon_Group_SlideShow_Label");
     public static string SlideShowGroupWpfKeyTip => Get("Ribbon_Group_SlideShow_WpfKeyTip");
