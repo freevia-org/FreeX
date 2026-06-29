@@ -1,8 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Documents;
-using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -18,53 +17,6 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class FontDialog
 {
-    // Named colour palette matching the Home > Font text-colour picker.
-    private static readonly (string Label, string? Hex)[] Colors =
-    [
-        ("Automatic",    null),
-        ("Black",        "#000000"),
-        ("Dark Red",     "#C00000"),
-        ("Red",          "#FF0000"),
-        ("Blue accent",  "#2F5496"),
-        ("Blue",         "#0070C0"),
-        ("Green",        "#00B050"),
-        ("Purple",       "#7030A0"),
-        ("Grey",         "#7F7F7F"),
-    ];
-
-    private static readonly (string Label, double Size)[] Sizes =
-    [
-        ("8", 8), ("9", 9), ("10", 10), ("11", 11), ("12", 12),
-        ("14", 14), ("16", 16), ("18", 18), ("24", 24), ("28", 28),
-        ("36", 36), ("48", 48), ("72", 72),
-    ];
-
-    private static readonly (string Label, LigatureMode Mode)[] LigatureModes =
-    [
-        ("(None)",                    LigatureMode.None),
-        ("None (explicit)",           LigatureMode.NoneExplicit),
-        ("Standard",                  LigatureMode.Standard),
-        ("Contextual",                LigatureMode.Contextual),
-        ("Standard and Contextual",   LigatureMode.StandardContextual),
-        ("Historical",                LigatureMode.Historical),
-        ("Discretional",              LigatureMode.Discretional),
-        ("All",                       LigatureMode.All),
-    ];
-
-    private static readonly (string Label, NumberForm Form)[] NumberForms =
-    [
-        ("(Default)",  NumberForm.Default),
-        ("Lining",     NumberForm.Lining),
-        ("Old-Style",  NumberForm.OldStyle),
-    ];
-
-    private static readonly (string Label, NumberSpacing Spacing)[] NumberSpacings =
-    [
-        ("(Default)",    NumberSpacing.Default),
-        ("Proportional", NumberSpacing.Proportional),
-        ("Tabular",      NumberSpacing.Tabular),
-    ];
-
     /// <summary>
     /// Show the Font dialog seeded from <paramref name="current"/>. Returns the edited
     /// <see cref="RunFormatting"/>, or null if cancelled.
@@ -72,6 +24,7 @@ internal static class FontDialog
     public static RunFormatting? Prompt(Window? owner, RunFormatting current)
     {
         RunFormatting? result = null;
+        var state = FontDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
 
         var dialog = new Window
         {
@@ -84,34 +37,31 @@ internal static class FontDialog
             ShowInTaskbar = false,
         };
 
-        // ── Font tab ────────────────────────────────────────────────────────
         var familyBox = new TextBox
         {
-            Text = current.FontFamily ?? string.Empty,
+            Text = state.FontFamilyText,
             MinWidth = 200,
             Margin = new Thickness(0, 0, 0, 8),
         };
 
         var sizeBox = new ComboBox { MinWidth = 80, IsEditable = true, Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var (lbl, _) in Sizes)
-            sizeBox.Items.Add(lbl);
-        sizeBox.Text = current.FontSizePt.HasValue
-            ? current.FontSizePt.Value.ToString("0.##", CultureInfo.CurrentCulture)
-            : string.Empty;
+        foreach (var size in FontDialogPlanner.SizeChoices)
+            sizeBox.Items.Add(size.Label);
+        sizeBox.Text = state.FontSizeText;
 
-        var boldCheck      = new CheckBox { Content = "Bold",             IsChecked = current.Bold,          Margin = new Thickness(0, 0, 12, 4) };
-        var italicCheck    = new CheckBox { Content = "Italic",           IsChecked = current.Italic,        Margin = new Thickness(0, 0, 12, 4) };
-        var underlineCheck = new CheckBox { Content = "Underline",        IsChecked = current.Underline,     Margin = new Thickness(0, 0, 12, 4) };
-        var strikeCheck    = new CheckBox { Content = "Strikethrough",    IsChecked = current.Strikethrough, Margin = new Thickness(0, 0, 12, 4) };
-        var smallCapsCheck = new CheckBox { Content = "Small Caps",       IsChecked = current.SmallCaps,     Margin = new Thickness(0, 0, 12, 4) };
-        var allCapsCheck   = new CheckBox { Content = "All Caps",         IsChecked = current.AllCaps,       Margin = new Thickness(0, 0, 12, 4) };
-        var superCheck     = new CheckBox { Content = "Superscript",      IsChecked = current.VerticalAlign == VerticalAlign.Superscript, Margin = new Thickness(0, 0, 12, 4) };
-        var subCheck       = new CheckBox { Content = "Subscript",        IsChecked = current.VerticalAlign == VerticalAlign.Subscript,   Margin = new Thickness(0, 0, 0, 4) };
+        var boldCheck      = new CheckBox { Content = "Bold",             IsChecked = state.Bold,          Margin = new Thickness(0, 0, 12, 4) };
+        var italicCheck    = new CheckBox { Content = "Italic",           IsChecked = state.Italic,        Margin = new Thickness(0, 0, 12, 4) };
+        var underlineCheck = new CheckBox { Content = "Underline",        IsChecked = state.Underline,     Margin = new Thickness(0, 0, 12, 4) };
+        var strikeCheck    = new CheckBox { Content = "Strikethrough",    IsChecked = state.Strikethrough, Margin = new Thickness(0, 0, 12, 4) };
+        var smallCapsCheck = new CheckBox { Content = "Small Caps",       IsChecked = state.SmallCaps,     Margin = new Thickness(0, 0, 12, 4) };
+        var allCapsCheck   = new CheckBox { Content = "All Caps",         IsChecked = state.AllCaps,       Margin = new Thickness(0, 0, 12, 4) };
+        var superCheck     = new CheckBox { Content = "Superscript",      IsChecked = state.Superscript,   Margin = new Thickness(0, 0, 12, 4) };
+        var subCheck       = new CheckBox { Content = "Subscript",        IsChecked = state.Subscript,     Margin = new Thickness(0, 0, 0, 4) };
 
         var colorBox = new ComboBox { MinWidth = 180, Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var (lbl, _) in Colors)
-            colorBox.Items.Add(lbl);
-        colorBox.SelectedIndex = IndexOfColor(current.ColorHex);
+        foreach (var color in FontDialogPlanner.ColorChoices)
+            colorBox.Items.Add(color.Label);
+        colorBox.SelectedIndex = state.ColorIndex;
 
         var fontPanel = new StackPanel { Margin = new Thickness(10) };
         FontRow(fontPanel, "Font family:", familyBox);
@@ -123,42 +73,37 @@ internal static class FontDialog
             effectsWrap.Children.Add(cb);
         fontPanel.Children.Add(effectsWrap);
 
-        // ── Advanced tab ─────────────────────────────────────────────────────
-        var spacingBox = NumberTextBox(current.CharacterSpacingPt);
+        var spacingBox = NumberTextBox(state.CharacterSpacingText);
         var kerningBox = new TextBox
         {
-            Text = current.KerningMinSizePt.HasValue
-                ? current.KerningMinSizePt.Value.ToString("0.##", CultureInfo.CurrentCulture)
-                : string.Empty,
+            Text = state.KerningMinSizeText,
             MinWidth = 100,
             Margin = new Thickness(0, 0, 0, 8),
         };
-        var positionBox = NumberTextBox(current.PositionPt);
+        var positionBox = NumberTextBox(state.PositionText);
 
         var ligatureBox = new ComboBox { MinWidth = 180, Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var (lbl, _) in LigatureModes)
-            ligatureBox.Items.Add(lbl);
-        ligatureBox.SelectedIndex = IndexOfLigature(current.Ligatures);
+        foreach (var ligature in FontDialogPlanner.LigatureChoices)
+            ligatureBox.Items.Add(ligature.Label);
+        ligatureBox.SelectedIndex = state.LigatureIndex;
 
         var stylisticBox = new TextBox
         {
-            Text = current.StylisticSet.HasValue
-                ? current.StylisticSet.Value.ToString(CultureInfo.CurrentCulture)
-                : string.Empty,
+            Text = state.StylisticSetText,
             MinWidth = 100,
             Margin = new Thickness(0, 0, 0, 8),
-            ToolTip = "OpenType stylistic set id (1–20), or blank for none",
+            ToolTip = FontDialogPlanner.StylisticSetToolTip,
         };
 
         var numberFormBox = new ComboBox { MinWidth = 160, Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var (lbl, _) in NumberForms)
-            numberFormBox.Items.Add(lbl);
-        numberFormBox.SelectedIndex = IndexOfNumberForm(current.NumberForm);
+        foreach (var numberForm in FontDialogPlanner.NumberFormChoices)
+            numberFormBox.Items.Add(numberForm.Label);
+        numberFormBox.SelectedIndex = state.NumberFormIndex;
 
         var numberSpacingBox = new ComboBox { MinWidth = 160, Margin = new Thickness(0, 0, 0, 8) };
-        foreach (var (lbl, _) in NumberSpacings)
-            numberSpacingBox.Items.Add(lbl);
-        numberSpacingBox.SelectedIndex = IndexOfNumberSpacing(current.NumberSpacing);
+        foreach (var numberSpacing in FontDialogPlanner.NumberSpacingChoices)
+            numberSpacingBox.Items.Add(numberSpacing.Label);
+        numberSpacingBox.SelectedIndex = state.NumberSpacingIndex;
 
         var advPanel = new StackPanel { Margin = new Thickness(10) };
         FontRow(advPanel, "Character spacing (pt):", spacingBox);
@@ -169,93 +114,43 @@ internal static class FontDialog
         FontRow(advPanel, "Number form:",            numberFormBox);
         FontRow(advPanel, "Number spacing:",         numberSpacingBox);
 
-        // ── Tab control ──────────────────────────────────────────────────────
         var tabs = new TabControl { Margin = new Thickness(0) };
         tabs.Items.Add(new TabItem { Header = "Font",     Content = new ScrollViewer { Content = fontPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
         tabs.Items.Add(new TabItem { Header = "Advanced", Content = new ScrollViewer { Content = advPanel,  VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
 
-        // ── Buttons ──────────────────────────────────────────────────────────
         void Accept()
         {
-            // Font tab parsing
-            var family = familyBox.Text.Trim();
-            double? sizePt = null;
-            var sizeText = sizeBox.Text.Trim();
-            if (sizeText.Length > 0)
-            {
-                if (!double.TryParse(sizeText, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) || parsed <= 0)
-                {
-                    DialogMessageHelper.ShowWarning(dialog, "Enter a positive font size in points.");
-                    return;
-                }
-                sizePt = parsed;
-            }
+            var input = new FontDialogInput(
+                familyBox.Text,
+                sizeBox.Text,
+                colorBox.SelectedIndex,
+                boldCheck.IsChecked == true,
+                italicCheck.IsChecked == true,
+                underlineCheck.IsChecked == true,
+                strikeCheck.IsChecked == true,
+                smallCapsCheck.IsChecked == true,
+                allCapsCheck.IsChecked == true,
+                superCheck.IsChecked == true,
+                subCheck.IsChecked == true,
+                spacingBox.Text,
+                kerningBox.Text,
+                positionBox.Text,
+                ligatureBox.SelectedIndex,
+                stylisticBox.Text,
+                numberFormBox.SelectedIndex,
+                numberSpacingBox.SelectedIndex);
 
-            var colorHex = Colors[Math.Max(0, colorBox.SelectedIndex)].Hex;
-            var vertAlign = (superCheck.IsChecked == true) ? VerticalAlign.Superscript
-                          : (subCheck.IsChecked   == true) ? VerticalAlign.Subscript
-                          : VerticalAlign.Baseline;
-
-            // Advanced tab parsing
-            if (!TryParseDouble(spacingBox.Text, out var spacingPt))
+            if (!FontDialogPlanner.TryBuildResult(
+                    input,
+                    current,
+                    CultureInfo.CurrentCulture,
+                    out result,
+                    out var errorMessage))
             {
-                DialogMessageHelper.ShowWarning(dialog, "Enter a valid character spacing in points.");
+                DialogMessageHelper.ShowWarning(dialog, errorMessage ?? FontDialogPlanner.FontSizeValidationMessage);
                 return;
             }
 
-            double? kerningPt = null;
-            if (kerningBox.Text.Trim().Length > 0)
-            {
-                if (!TryParseDouble(kerningBox.Text, out var kp) || kp < 0)
-                {
-                    DialogMessageHelper.ShowWarning(dialog, "Enter a non-negative kerning threshold in points, or leave blank.");
-                    return;
-                }
-                kerningPt = kp;
-            }
-
-            if (!TryParseDouble(positionBox.Text, out var positionPt))
-            {
-                DialogMessageHelper.ShowWarning(dialog, "Enter a valid position offset in points.");
-                return;
-            }
-
-            int? stylisticSet = null;
-            if (stylisticBox.Text.Trim().Length > 0)
-            {
-                if (!int.TryParse(stylisticBox.Text.Trim(), out var ss) || ss < 1 || ss > 20)
-                {
-                    DialogMessageHelper.ShowWarning(dialog, "Stylistic set must be a number from 1 to 20, or blank.");
-                    return;
-                }
-                stylisticSet = ss;
-            }
-
-            var ligatureMode   = LigatureModes[Math.Max(0, ligatureBox.SelectedIndex)].Mode;
-            var numberForm     = NumberForms[Math.Max(0, numberFormBox.SelectedIndex)].Form;
-            var numberSpacing  = NumberSpacings[Math.Max(0, numberSpacingBox.SelectedIndex)].Spacing;
-
-            result = current with
-            {
-                FontFamily   = family.Length > 0 ? family : null,
-                FontSizePt   = sizePt,
-                Bold         = boldCheck.IsChecked == true,
-                Italic       = italicCheck.IsChecked == true,
-                Underline    = underlineCheck.IsChecked == true,
-                Strikethrough= strikeCheck.IsChecked == true,
-                SmallCaps    = smallCapsCheck.IsChecked == true,
-                AllCaps      = allCapsCheck.IsChecked == true,
-                VerticalAlign= vertAlign,
-                ColorHex     = colorHex,
-                // Advanced
-                CharacterSpacingPt = spacingPt,
-                KerningMinSizePt   = kerningPt,
-                PositionPt         = positionPt,
-                Ligatures          = ligatureMode,
-                StylisticSet       = stylisticSet,
-                NumberForm         = numberForm,
-                NumberSpacing      = numberSpacing,
-            };
             dialog.DialogResult = true;
         }
 
@@ -282,43 +177,10 @@ internal static class FontDialog
         panel.Children.Add(control);
     }
 
-    private static TextBox NumberTextBox(double value) => new()
+    private static TextBox NumberTextBox(string text) => new()
     {
-        Text = value.ToString("0.##", CultureInfo.CurrentCulture),
+        Text = text,
         MinWidth = 100,
         Margin = new Thickness(0, 0, 0, 8),
     };
-
-    private static bool TryParseDouble(string text, out double value) =>
-        double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out value);
-
-    private static int IndexOfColor(string? hex)
-    {
-        if (hex is null) return 0;
-        for (var i = 0; i < Colors.Length; i++)
-            if (string.Equals(Colors[i].Hex, hex, StringComparison.OrdinalIgnoreCase))
-                return i;
-        return 0;
-    }
-
-    private static int IndexOfLigature(LigatureMode mode)
-    {
-        for (var i = 0; i < LigatureModes.Length; i++)
-            if (LigatureModes[i].Mode == mode) return i;
-        return 0;
-    }
-
-    private static int IndexOfNumberForm(NumberForm form)
-    {
-        for (var i = 0; i < NumberForms.Length; i++)
-            if (NumberForms[i].Form == form) return i;
-        return 0;
-    }
-
-    private static int IndexOfNumberSpacing(NumberSpacing spacing)
-    {
-        for (var i = 0; i < NumberSpacings.Length; i++)
-            if (NumberSpacings[i].Spacing == spacing) return i;
-        return 0;
-    }
 }
