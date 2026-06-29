@@ -1797,7 +1797,7 @@ public static class PptxPackageWriter
                         new XElement(A + "fillStyleLst",
                             SolidPhClr(), SolidPhClr(), SolidPhClr()),
                         new XElement(A + "lnStyleLst",
-                            LnStyle("6350"), LnStyle("12700"), LnStyle("19050")),
+                            LnStyle(0.5), LnStyle(1.0), LnStyle(1.5)),
                         new XElement(A + "effectStyleLst",
                             EffectStyle(), EffectStyle(), EffectStyle()),
                         new XElement(A + "bgFillStyleLst",
@@ -1807,8 +1807,8 @@ public static class PptxPackageWriter
     private static XElement SolidPhClr() =>
         new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
 
-    private static XElement LnStyle(string w) =>
-        new XElement(A + "ln", new XAttribute("w", w),
+    private static XElement LnStyle(double widthPt) =>
+        new XElement(A + "ln", new XAttribute("w", DrawingMlUnits.PointsToEmu(widthPt)),
             new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
             new XElement(A + "prstDash", new XAttribute("val", "solid")));
 
@@ -2511,10 +2511,10 @@ public static class PptxPackageWriter
 
         // tcPr
         var tcPr = new XElement(A + "tcPr");
-        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", (long)Math.Round(cell.InsetLeftPt.Value * 12700)));
-        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", (long)Math.Round(cell.InsetRightPt.Value * 12700)));
-        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", (long)Math.Round(cell.InsetTopPt.Value * 12700)));
-        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", (long)Math.Round(cell.InsetBottomPt.Value * 12700)));
+        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", DrawingMlUnits.PointsToEmu(cell.InsetLeftPt.Value)));
+        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", DrawingMlUnits.PointsToEmu(cell.InsetRightPt.Value)));
+        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", DrawingMlUnits.PointsToEmu(cell.InsetTopPt.Value)));
+        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", DrawingMlUnits.PointsToEmu(cell.InsetBottomPt.Value)));
         if (cell.Anchor.HasValue)
             tcPr.Add(new XAttribute("anchor", cell.Anchor.Value switch
             {
@@ -2560,7 +2560,7 @@ public static class PptxPackageWriter
         {
             var children = new List<object>
             {
-                new XAttribute("w", (long)Math.Round(v.WidthPt * 12700)),
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
                 new XElement(A + "solidFill", BuildColorEl(v.Color))
             };
             if (v.Dash != OutlineDash.Solid)
@@ -2573,7 +2573,7 @@ public static class PptxPackageWriter
         {
             var children = new List<object>
             {
-                new XAttribute("w", (long)Math.Round(gv.WidthPt * 12700)),
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
                 BuildGradFillEl(gv.Gradient)
             };
             if (gv.Dash != OutlineDash.Solid)
@@ -2705,14 +2705,14 @@ public static class PptxPackageWriter
         {
             ShapeOutline.None => new XElement(A + "ln", new XElement(A + "noFill")),
             ShapeOutline.Visible v => new XElement(A + "ln",
-                new XAttribute("w", (long)Math.Round(v.WidthPt * 12700)),
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
                 new XElement(A + "solidFill", BuildColorEl(v.Color)),
                 v.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash)))
                     : null),
             // Wave 22B: gradient outline
             ShapeOutline.GradientVisible gv => new XElement(A + "ln",
-                new XAttribute("w", (long)Math.Round(gv.WidthPt * 12700)),
+                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
                 BuildGradFillEl(gv.Gradient),
                 gv.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
@@ -2778,10 +2778,10 @@ public static class PptxPackageWriter
         }
 
         if (!body.Wrap) bodyPr.Add(new XAttribute("wrap", "none"));
-        if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", (long)Math.Round(body.InsetLeftPt.Value * 12700)));
-        if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", (long)Math.Round(body.InsetRightPt.Value * 12700)));
-        if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", (long)Math.Round(body.InsetTopPt.Value * 12700)));
-        if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", (long)Math.Round(body.InsetBottomPt.Value * 12700)));
+        if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", DrawingMlUnits.PointsToEmu(body.InsetLeftPt.Value)));
+        if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", DrawingMlUnits.PointsToEmu(body.InsetRightPt.Value)));
+        if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", DrawingMlUnits.PointsToEmu(body.InsetTopPt.Value)));
+        if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", DrawingMlUnits.PointsToEmu(body.InsetBottomPt.Value)));
         // Wave 19A: write normAutofit with cached fontScale/lnSpcReduction
         if (body.AutoFit)
         {
@@ -3005,8 +3005,8 @@ public static class PptxPackageWriter
                     new XAttribute("val", (long)Math.Round(ts.Alpha / 255.0 * 100000))));
             rPr.Add(new XElement(A + "effectLst",
                 new XElement(A + "outerShdw",
-                    new XAttribute("blurRad", (long)Math.Round(ts.BlurPt * 12700)),
-                    new XAttribute("dist",    (long)Math.Round(ts.DistPt * 12700)),
+                    new XAttribute("blurRad", DrawingMlUnits.PointsToEmu(ts.BlurPt)),
+                    new XAttribute("dist",    DrawingMlUnits.PointsToEmu(ts.DistPt)),
                     new XAttribute("dir",     (long)Math.Round(ts.DirDeg * 60000)),
                     shdwColorEl)));
         }
