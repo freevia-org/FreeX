@@ -39,4 +39,43 @@ public sealed class QuickAnalysisPreviewIconPlannerTests
 
         plan.Glyph.Should().Be(QuickAnalysisPreviewIconGlyph.VerticalBars);
     }
+
+    [Fact]
+    public void Plan_BuildsSharedDataBarsGeometry()
+    {
+        var plan = QuickAnalysisPreviewIconPlanner.Plan(QuickAnalysisPreviewVisualKind.DataBars);
+
+        plan.Width.Should().Be(34);
+        plan.Height.Should().Be(22);
+        var bars = plan.Elements.OfType<QuickAnalysisPreviewIconRectangle>().ToArray();
+        bars.Should().HaveCount(3);
+        bars.Select(bar => bar.Width).Should().Equal(14, 22, 18);
+        bars.Select(bar => bar.Fill).Should().OnlyContain(color => color == QuickAnalysisPreviewIconColor.SteelBlue);
+    }
+
+    [Fact]
+    public void Plan_BuildsSharedClearFormatGeometry()
+    {
+        var plan = QuickAnalysisPreviewIconPlanner.Plan(QuickAnalysisPreviewVisualKind.ClearFormat);
+
+        plan.Elements.OfType<QuickAnalysisPreviewIconRectangle>().Should().HaveCount(6);
+        var slash = plan.Elements.OfType<QuickAnalysisPreviewIconLine>().Should().ContainSingle().Subject;
+        slash.X1.Should().Be(6);
+        slash.Y1.Should().Be(17);
+        slash.X2.Should().Be(28);
+        slash.Y2.Should().Be(5);
+        slash.Stroke.Should().Be(QuickAnalysisPreviewIconColor.Firebrick);
+        slash.StrokeThickness.Should().Be(1.5);
+    }
+
+    [Fact]
+    public void Plan_BuildsSharedFormulaTextDescriptor()
+    {
+        var plan = QuickAnalysisPreviewIconPlanner.Plan(QuickAnalysisPreviewVisualKind.TotalFormula);
+
+        var text = plan.Elements.OfType<QuickAnalysisPreviewIconText>().Should().ContainSingle().Subject;
+        text.Text.Should().Be("fx");
+        text.FontWeight.Should().Be(QuickAnalysisPreviewIconFontWeight.SemiBold);
+        text.Foreground.Should().Be(QuickAnalysisPreviewIconColor.SteelBlue);
+    }
 }
