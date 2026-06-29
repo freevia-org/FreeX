@@ -440,13 +440,14 @@ internal sealed class BackstageView : Window
     private Control BuildAccountPane()
     {
         var version = typeof(BackstageView).Assembly.GetName().Version?.ToString() ?? "1.0.0";
-        var plan = BackstageAccountPanePlanner.Build(
-            productName: "FreeW",
-            version: version,
-            userName: SafeEnvironment(() => Environment.UserName),
-            machineName: SafeEnvironment(() => Environment.MachineName),
-            dataFolder: SafeEnvironment(() =>
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FreeW")));
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                version,
+                SafeEnvironment(() => Environment.UserName),
+                SafeEnvironment(() => Environment.MachineName),
+                SafeEnvironment(() =>
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FreeW"))));
 
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(BuildPaneHeader("Account", plan.Description));

@@ -220,6 +220,55 @@ public sealed class SharedBackstagePaneComposerTests
     }
 
     [Fact]
+    public void SisterBackstagePaneResources_ComposesKitComposerAndSpecPlanner()
+    {
+        var resources = new SisterBackstagePaneResources(
+            Color.FromRgb(0x0F, 0x6D, 0x8C),
+            tileWidth: 150,
+            tileHeight: 190,
+            SisterBackstagePaneTextSpec.FreeW);
+
+        resources.Kit.Should().NotBeNull();
+        resources.Panes.Should().NotBeNull();
+
+        var template = resources.PaneSpecs.BuildNewPaneSpec(() => { });
+        template.TileCaption.Should().Be("Blank document");
+    }
+
+    [Fact]
+    public void SisterBackstageInfoPanePlanner_BuildsCommonInfoSpec()
+    {
+        var spec = SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
+            DocumentKindLabel: "Presentation",
+            DisplayName: "Quarterly Review",
+            IsDirty: true,
+            Location: @"C:\Decks\Review.pptx",
+            CoreProperties: new BackstageCoreProperties(
+                Title: "Review",
+                Author: "Ada",
+                Subject: "",
+                Keywords: null),
+            Statistics:
+            [
+                new("Slides", "12"),
+            ],
+            EditPropertiesText: "Edit properties...",
+            EditProperties: () => { }));
+
+        spec.DocumentKindLabel.Should().Be("Presentation");
+        spec.DisplayName.Should().Be("Quarterly Review");
+        spec.IsDirty.Should().BeTrue();
+        spec.Properties.Should().Equal(
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.TitleLabel, "Review"),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.AuthorLabel, "Ada"),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.SubjectLabel, BackstageVisualKit.Or(null)),
+            new BackstageFieldRow(BackstageCorePropertiesPlanner.KeywordsLabel, BackstageVisualKit.Or(null)));
+        spec.Statistics.Should().Equal(new BackstageFieldRow("Slides", "12"));
+        spec.EditPropertiesText.Should().Be("Edit properties...");
+        spec.EditProperties.Should().NotBeNull();
+    }
+
+    [Fact]
     public void BackstageCorePropertiesPlanner_BuildsCommonPropertyRows()
     {
         var rows = BackstageCorePropertiesPlanner.Build(new BackstageCoreProperties(
@@ -310,6 +359,43 @@ public sealed class SharedBackstagePaneComposerTests
         action.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
         invoked.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void BuildAccountPane_RendersSharedAccountPlanAndRoutesOptions()
+    {
+        var openedOptions = false;
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.2.3",
+                "Ada",
+                "WORD-BOX",
+                @"C:\Users\Ada\AppData\Local\FreeW"));
+
+        var pane = _composer.BuildAccountPane(new BackstageAccountPaneSpec(
+            "Account",
+            plan.Description,
+            plan.Groups,
+            plan.OptionsText,
+            () => openedOptions = true));
+
+        Texts(pane).Should().Contain([
+            "Account",
+            "Product Information",
+            "Product",
+            "FreeW",
+            "User Information",
+            "Windows user",
+            "Ada",
+            "FreeW Options...",
+        ]);
+
+        var options = Descendants<Button>(pane)
+            .Single(button => button.Content as string == "FreeW Options...");
+        options.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        openedOptions.Should().BeTrue();
     }
 
     private static IReadOnlyList<string> Texts(DependencyObject root)

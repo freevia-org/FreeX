@@ -30,12 +30,14 @@ internal sealed class BackstageView : UserControl
 
     // Link accent sourced from the design token (BrandThemes.FreeW.Colors.Accent = #0F6D8C).
     // Byte-identical to the previous hard-coded SisterBackstageTheme.FreeW.LinkColor (#0F6D8C).
-    private static readonly BackstageVisualKit Kit = new(
+    private static readonly SisterBackstagePaneResources BackstageResources = new(
         WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent),
         Theme.TileWidth,
-        Theme.TileHeight);
-    private static readonly BackstagePaneComposer Panes = new(Kit);
-    private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(SisterBackstagePaneTextSpec.FreeW);
+        Theme.TileHeight,
+        SisterBackstagePaneTextSpec.FreeW);
+    private static BackstageVisualKit Kit => BackstageResources.Kit;
+    private static BackstagePaneComposer Panes => BackstageResources.Panes;
+    private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;
 
     private readonly DocumentView _editor;
     private readonly FileCommands _file;
@@ -96,16 +98,16 @@ internal sealed class BackstageView : UserControl
         var stats = WordCount.Of(model);
         var properties = model.Properties;
 
-        return Panes.BuildInfoPane(new BackstageInfoPaneSpec(
+        return Panes.BuildInfoPane(SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
             DocumentKindLabel: "Document",
             DisplayName: _file.DisplayName,
             IsDirty: _file.IsDirty,
             Location: _file.CurrentPath,
-            Properties: BackstageCorePropertiesPlanner.Build(new BackstageCoreProperties(
+            CoreProperties: new BackstageCoreProperties(
                 properties.Title,
                 properties.Author,
                 properties.Subject,
-                properties.Keywords)),
+                properties.Keywords),
             Statistics:
             [
                 new("Words", stats.Words.ToString()),
@@ -121,7 +123,7 @@ internal sealed class BackstageView : UserControl
                         action.Label,
                         action.Description,
                         SafetyAction(action.Kind))).ToArray()))
-                .ToArray()));
+                .ToArray())));
     }
 
     private UIElement BuildExportPane()
@@ -318,35 +320,20 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildAccountPane()
     {
-        var plan = BackstageAccountPanePlanner.Build(
-            AppProduct.Current.ProductName,
-            EntryAssemblyVersion.Resolve(),
-            Environment.UserName,
-            Environment.MachineName,
-            _actions.DataFolder());
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                AppProduct.Current.ProductName,
+                EntryAssemblyVersion.Resolve(),
+                Environment.UserName,
+                Environment.MachineName,
+                _actions.DataFolder()));
 
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Account"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = plan.Description,
-            Foreground = Kit.Muted,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-
-        foreach (var group in plan.Groups)
-        {
-            panel.Children.Add(Kit.SubHeading(group.Heading));
-            foreach (var field in group.Fields)
-                panel.Children.Add(Kit.Field(field.Label, field.Value));
-        }
-
-        var options = Kit.LinkButton(plan.OptionsText, () => { Hide(); _actions.EditOptions(); });
-        options.Margin = new Thickness(0, 18, 0, 0);
-        panel.Children.Add(options);
-
-        return Kit.Scroll(panel);
+        return Panes.BuildAccountPane(new BackstageAccountPaneSpec(
+            "Account",
+            plan.Description,
+            plan.Groups,
+            plan.OptionsText,
+            () => { Hide(); _actions.EditOptions(); }));
     }
 
     private Action SafetyAction(BackstageInfoSafetyActionKind kind) =>
