@@ -46,12 +46,12 @@ internal static class PptxColorReader
                 var shadeRaw = ReadPercentage(schemeClr.Element(A + "shade")?.Attribute("val")?.Value);
                 double shadeFraction = shadeRaw.HasValue ? shadeRaw.Value : 1.0;
 
-                var baseColor = scheme[slot];
-                var resolved = ApplyLumModOff(baseColor, lumMod, lumOff);
-                if (tintFraction < 1.0)
-                    resolved = ApplyTint(resolved, tintFraction);
-                if (shadeFraction < 1.0)
-                    resolved = ApplyShade(resolved, shadeFraction);
+                var resolved = ThemeColorTransform.Apply(
+                    scheme[slot],
+                    lumMod,
+                    lumOff,
+                    tintFraction,
+                    shadeFraction);
 
                 // Store the raw role name (val) so ThemeColorResolver can apply clrMap indirection
                 // at render time (master's clrMap may remap tx1→lt1, bg1→dk1, etc.).
@@ -301,102 +301,6 @@ internal static class PptxColorReader
             ThemeColorSlot.FolHLink => "folHlink",
             _ => "dk1"
         };
-
-    internal static SrgbColor ApplyLumModOff(SrgbColor baseColor, double lumMod, double lumOff)
-    {
-        if (lumMod == 1.0 && lumOff == 0.0) return baseColor;
-
-        // Convert to HLS, apply, convert back
-        RgbToHls(baseColor, out var h, out var l, out var s);
-
-        l = Math.Clamp(l * lumMod + lumOff, 0.0, 1.0);
-
-        return HlsToRgb(h, l, s);
-    }
-
-    /// <summary>
-    /// Apply DrawingML tint. OOXML tint val=100000 = original color (no tinting);
-    /// tint val=0 = fully white. tintFraction = val/100000 in [0,1].
-    /// Formula (in sRGB): R_new = R * tintFraction + 255 * (1 - tintFraction)
-    /// </summary>
-    internal static SrgbColor ApplyTint(SrgbColor baseColor, double tintFraction)
-    {
-        if (tintFraction >= 1.0) return baseColor;
-        if (tintFraction <= 0.0) return new SrgbColor(255, 255, 255);
-        double r = baseColor.R * tintFraction + 255.0 * (1.0 - tintFraction);
-        double g = baseColor.G * tintFraction + 255.0 * (1.0 - tintFraction);
-        double b = baseColor.B * tintFraction + 255.0 * (1.0 - tintFraction);
-        return new SrgbColor(
-            (byte)Math.Clamp(Math.Round(r), 0, 255),
-            (byte)Math.Clamp(Math.Round(g), 0, 255),
-            (byte)Math.Clamp(Math.Round(b), 0, 255));
-    }
-
-    /// <summary>
-    /// Apply DrawingML shade. OOXML shade val=100000 = original color (no shading);
-    /// shade val=0 = fully black. shadeFraction = val/100000 in [0,1].
-    /// Formula (in sRGB): R_new = R * shadeFraction
-    /// </summary>
-    internal static SrgbColor ApplyShade(SrgbColor baseColor, double shadeFraction)
-    {
-        if (shadeFraction >= 1.0) return baseColor;
-        if (shadeFraction <= 0.0) return new SrgbColor(0, 0, 0);
-        double r = baseColor.R * shadeFraction;
-        double g = baseColor.G * shadeFraction;
-        double b = baseColor.B * shadeFraction;
-        return new SrgbColor(
-            (byte)Math.Clamp(Math.Round(r), 0, 255),
-            (byte)Math.Clamp(Math.Round(g), 0, 255),
-            (byte)Math.Clamp(Math.Round(b), 0, 255));
-    }
-
-    private static void RgbToHls(SrgbColor c, out double h, out double l, out double s)
-    {
-        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
-        double max = Math.Max(r, Math.Max(g, b));
-        double min = Math.Min(r, Math.Min(g, b));
-        double delta = max - min;
-
-        l = (max + min) / 2.0;
-
-        if (delta < 1e-10) { h = 0; s = 0; return; }
-
-        s = l < 0.5 ? delta / (max + min) : delta / (2.0 - max - min);
-
-        if (max == r) h = ((g - b) / delta % 6.0) / 6.0;
-        else if (max == g) h = ((b - r) / delta + 2.0) / 6.0;
-        else h = ((r - g) / delta + 4.0) / 6.0;
-
-        if (h < 0) h += 1.0;
-    }
-
-    private static SrgbColor HlsToRgb(double h, double l, double s)
-    {
-        if (s < 1e-10)
-        {
-            var v = (byte)Math.Clamp(Math.Round(l * 255), 0, 255);
-            return new SrgbColor(v, v, v);
-        }
-
-        double q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
-        double p = 2.0 * l - q;
-
-        return new SrgbColor(
-            HueToRgb(p, q, h + 1.0 / 3.0),
-            HueToRgb(p, q, h),
-            HueToRgb(p, q, h - 1.0 / 3.0));
-    }
-
-    private static byte HueToRgb(double p, double q, double t)
-    {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        double v = t < 1.0 / 6.0 ? p + (q - p) * 6.0 * t
-            : t < 1.0 / 2.0 ? q
-            : t < 2.0 / 3.0 ? p + (q - p) * (2.0 / 3.0 - t) * 6.0
-            : p;
-        return (byte)Math.Clamp(Math.Round(v * 255), 0, 255);
-    }
 
     private static SrgbColor? ParseHexColor(string hex)
     {
