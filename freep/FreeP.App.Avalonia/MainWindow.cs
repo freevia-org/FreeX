@@ -36,7 +36,7 @@ namespace FreeP.App.Avalonia;
 /// Commands wired (v1):
 ///   File:   New, Open, Save, Save As
 ///   Slide:  New Slide, Duplicate, Delete
-///   Insert: Text Box, Rectangle, Ellipse
+///   Insert: Text Box, Table, Chart, Picture, Rectangle, Ellipse
 ///   Edit:   Undo, Redo
 ///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
 ///
@@ -51,6 +51,12 @@ public sealed class MainWindow : Window
     {
         Patterns = ["*.pptx"],
         MimeTypes = ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+    };
+
+    private static readonly FilePickerFileType PictureFileType = new("Images")
+    {
+        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg"],
+        MimeTypes = ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml"],
     };
 
     // ── Presentation model ─────────────────────────────────────────────────────
@@ -345,6 +351,7 @@ public sealed class MainWindow : Window
         {
             if (plan.RequiresPicturePayload)
             {
+                r.Register(plan.CommandId, new ActionRibbonCommand(() => _ = InsertPictureFromFileAsync()));
                 continue;
             }
 
@@ -363,6 +370,46 @@ public sealed class MainWindow : Window
             new ActionRibbonCommand(() => StartSlideShow(fromStart: false)));
 
         return r;
+    }
+
+    private async Task InsertPictureFromFileAsync()
+    {
+        if (!StorageProvider.CanOpen)
+        {
+            _statusText.Text = "Insert picture unavailable.";
+            return;
+        }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Insert Picture",
+            AllowMultiple = false,
+            FileTypeFilter = [PictureFileType],
+        });
+
+        if (files.Count == 0)
+            return;
+
+        try
+        {
+            var file = files[0];
+            await using var source = await file.OpenReadAsync();
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+
+            var payload = SlideObjectInsertionPlanner.CreatePicturePayload(memory.ToArray(), file.Name);
+            var added = SlideObjectInsertionPlanner.ApplyCommand(
+                Editor,
+                SlideObjectInsertionPlanner.PictureCommandId,
+                payload);
+
+            if (added is not null)
+                _statusText.Text = $"Inserted {file.Name}";
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = $"Insert picture failed: {ex.Message}";
+        }
     }
 
     // ── File lifecycle ─────────────────────────────────────────────────────────
