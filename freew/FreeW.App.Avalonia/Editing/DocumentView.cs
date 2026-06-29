@@ -6472,6 +6472,13 @@ public sealed class DocumentView : Control
     public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedFloatingInfo
         => _selectedFloating;
 
+    /// <summary>
+    /// Returns the selected floating shape or text box, or null when the current drawing selection is
+    /// a non-shape object such as WordArt or a group.
+    /// </summary>
+    public Shape? SelectedFloatingShape() =>
+        SelectedFloatingShapeLocation()?.Shape;
+
     /// <summary>Deselect any selected floating object. No-op when nothing is selected.</summary>
     public void DeselectFloating()
     {
@@ -6506,6 +6513,15 @@ public sealed class DocumentView : Control
         // Dummy rect; RefreshSelectedFloatingRect will update.
         _selectedFloating = (blockIndex, runIndex, kind, default);
         RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    private (int BlockIndex, int RunIndex, Shape Shape, string Kind)? SelectedFloatingShapeLocation()
+    {
+        if (_selectedFloating is not { Kind: "Shape" } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        if (para.Runs[sel.RunIndex].Shape is not { } shape) return null;
+        return (sel.BlockIndex, sel.RunIndex, shape, sel.Kind);
     }
 
     /// <summary>
@@ -6605,6 +6621,42 @@ public sealed class DocumentView : Control
     {
         if (GetSelectedFloatingSize() is not { } size || heightPt <= 0) return;
         SetFloatingSize(size.WidthPt, heightPt);
+    }
+
+    /// <summary>
+    /// Set the solid fill color of the selected floating shape/text box. Pass null to remove fill.
+    /// Undoable. No-op when the selected drawing object is not a shape.
+    /// </summary>
+    public void SetSelectedShapeFill(string? colorHex)
+    {
+        if (SelectedFloatingShapeLocation() is not { } sel) return;
+        _bus.Execute(new SetShapeFillCommand(sel.BlockIndex, sel.RunIndex, colorHex));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Set an extended fill (gradient/pattern/no-fill) on the selected floating shape/text box.
+    /// Undoable. No-op when the selected drawing object is not a shape.
+    /// </summary>
+    public void SetSelectedShapeExtendedFill(ShapeFill? fill)
+    {
+        if (SelectedFloatingShapeLocation() is not { } sel) return;
+        _bus.Execute(new SetShapeExtendedFillCommand(sel.BlockIndex, sel.RunIndex, fill));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Set the outline of the selected floating shape/text box. Pass null colorHex to remove outline.
+    /// Undoable. No-op when the selected drawing object is not a shape.
+    /// </summary>
+    public void SetSelectedShapeOutline(string? colorHex, double widthPt, string? dash = null)
+    {
+        if (SelectedFloatingShapeLocation() is not { } sel) return;
+        _bus.Execute(new SetShapeOutlineCommand(sel.BlockIndex, sel.RunIndex, colorHex, widthPt, dash));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
     /// <summary>

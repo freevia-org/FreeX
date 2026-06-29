@@ -74,6 +74,82 @@ public sealed class ObjectFormatCommandPlannerTests
                 new ObjectFormatSizeCommand($"freew.{prefix}-height", ObjectFormatSizeDimension.Height));
     }
 
+    [Fact]
+    public void ShapeFillAndOutlineCommands_ExposeWordLikeShapeStyleChoices()
+    {
+        ObjectFormatCommandPlanner.ShapeFillCommandId.Should().Be("freew.shape-fill");
+        ObjectFormatCommandPlanner.ShapeOutlineCommandId.Should().Be("freew.shape-outline");
+
+        ObjectFormatCommandPlanner.ShapeFillCommands()
+            .Should()
+            .Equal(
+                new ObjectFormatShapeFillCommand("freew.shape-fill-no-fill", ObjectFormatShapeFillKind.NoFill),
+                new ObjectFormatShapeFillCommand("freew.shape-fill-gradient-blue", ObjectFormatShapeFillKind.GradientBlue),
+                new ObjectFormatShapeFillCommand("freew.shape-fill-gradient-orange", ObjectFormatShapeFillKind.GradientOrange),
+                new ObjectFormatShapeFillCommand("freew.shape-fill-pattern-diag", ObjectFormatShapeFillKind.PatternDiagonalCross));
+
+        ObjectFormatCommandPlanner.ShapeOutlineCommands()
+            .Should()
+            .Equal(
+                new ObjectFormatShapeOutlineCommand("freew.shape-outline-no-outline", ObjectFormatShapeOutlineKind.NoOutline),
+                new ObjectFormatShapeOutlineCommand("freew.shape-outline-solid", ObjectFormatShapeOutlineKind.Solid),
+                new ObjectFormatShapeOutlineCommand("freew.shape-outline-dash", ObjectFormatShapeOutlineKind.Dash),
+                new ObjectFormatShapeOutlineCommand("freew.shape-outline-dot", ObjectFormatShapeOutlineKind.Dot));
+    }
+
+    [Theory]
+    [InlineData(ShapeKind.Rectangle, true)]
+    [InlineData(ShapeKind.RoundedRectangle, true)]
+    [InlineData(ShapeKind.Ellipse, true)]
+    [InlineData(ShapeKind.TextBox, true)]
+    public void CanFormatShapeFillOutline_EnablesShapesAndTextBoxes(ShapeKind kind, bool expected)
+    {
+        ObjectFormatCommandPlanner.CanFormatShapeFillOutline(kind).Should().Be(expected);
+    }
+
+    [Fact]
+    public void CanFormatShapeFillOutline_DisablesWhenNoShapeIsSelected()
+    {
+        ObjectFormatCommandPlanner.CanFormatShapeFillOutline(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildShapeExtendedFill_ReturnsSharedGradientAndPatternPresets()
+    {
+        var blue = ObjectFormatCommandPlanner.BuildShapeExtendedFill(ObjectFormatShapeFillKind.GradientBlue);
+        blue.Should().NotBeNull();
+        blue!.Kind.Should().Be(ShapeFillKind.Gradient);
+        blue.GradientAngle.Should().Be(5400000);
+        blue.GradientStops.Should().Equal(
+            new GradientStop(0, "#4472C4"),
+            new GradientStop(100000, "#1F4E79"));
+
+        var pattern = ObjectFormatCommandPlanner.BuildShapeExtendedFill(ObjectFormatShapeFillKind.PatternDiagonalCross);
+        pattern.Should().NotBeNull();
+        pattern!.Kind.Should().Be(ShapeFillKind.Pattern);
+        pattern.PatternPreset.Should().Be("diagCross");
+        pattern.PatternFgColorHex.Should().Be("#4472C4");
+        pattern.PatternBgColorHex.Should().Be("#FFFFFF");
+    }
+
+    [Theory]
+    [InlineData(ObjectFormatShapeOutlineKind.NoOutline, "#4472C4", 1.5, null, 0, null)]
+    [InlineData(ObjectFormatShapeOutlineKind.Solid, "#4472C4", 1.5, "#4472C4", 1.5, null)]
+    [InlineData(ObjectFormatShapeOutlineKind.Dash, null, 0, "000000", 0.75, "dash")]
+    [InlineData(ObjectFormatShapeOutlineKind.Dot, "", 0.25, "000000", 0.75, "sysDot")]
+    public void PlanShapeOutline_MatchesWpfDefaults(
+        ObjectFormatShapeOutlineKind kind,
+        string? currentColor,
+        double currentWidth,
+        string? expectedColor,
+        double expectedWidth,
+        string? expectedDash)
+    {
+        ObjectFormatCommandPlanner.PlanShapeOutline(kind, currentColor, currentWidth)
+            .Should()
+            .Be(new ObjectFormatShapeOutlinePlan(expectedColor, expectedWidth, expectedDash));
+    }
+
     [Theory]
     [InlineData("216", 216)]
     [InlineData(" 72.5 ", 72.5)]

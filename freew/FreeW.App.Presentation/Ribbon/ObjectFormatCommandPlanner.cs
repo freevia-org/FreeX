@@ -22,6 +22,22 @@ public enum ObjectFormatSizeDimension
     Height
 }
 
+public enum ObjectFormatShapeFillKind
+{
+    NoFill,
+    GradientBlue,
+    GradientOrange,
+    PatternDiagonalCross
+}
+
+public enum ObjectFormatShapeOutlineKind
+{
+    NoOutline,
+    Solid,
+    Dash,
+    Dot
+}
+
 public sealed record ObjectFormatWrapCommand(string CommandId, ImageWrapping Wrapping);
 
 public sealed record ObjectFormatTransformCommand(
@@ -33,8 +49,16 @@ public sealed record ObjectFormatZOrderCommand(string CommandId, ZOrderOperation
 
 public sealed record ObjectFormatSizeCommand(string CommandId, ObjectFormatSizeDimension Dimension);
 
+public sealed record ObjectFormatShapeFillCommand(string CommandId, ObjectFormatShapeFillKind Kind);
+
+public sealed record ObjectFormatShapeOutlineCommand(string CommandId, ObjectFormatShapeOutlineKind Kind);
+
+public sealed record ObjectFormatShapeOutlinePlan(string? ColorHex, double WidthPt, string? Dash);
+
 public static class ObjectFormatCommandPlanner
 {
+    public const double MinimumShapeOutlineWidthPt = 0.75;
+
     private static readonly IReadOnlyList<(string Suffix, ImageWrapping Wrapping)> WrapCatalog =
     [
         ("inline", ImageWrapping.Inline),
@@ -67,6 +91,22 @@ public static class ObjectFormatCommandPlanner
         ("height", ObjectFormatSizeDimension.Height),
     ];
 
+    private static readonly IReadOnlyList<(string Suffix, ObjectFormatShapeFillKind Kind)> ShapeFillCatalog =
+    [
+        ("no-fill", ObjectFormatShapeFillKind.NoFill),
+        ("gradient-blue", ObjectFormatShapeFillKind.GradientBlue),
+        ("gradient-orange", ObjectFormatShapeFillKind.GradientOrange),
+        ("pattern-diag", ObjectFormatShapeFillKind.PatternDiagonalCross),
+    ];
+
+    private static readonly IReadOnlyList<(string Suffix, ObjectFormatShapeOutlineKind Kind)> ShapeOutlineCatalog =
+    [
+        ("no-outline", ObjectFormatShapeOutlineKind.NoOutline),
+        ("solid", ObjectFormatShapeOutlineKind.Solid),
+        ("dash", ObjectFormatShapeOutlineKind.Dash),
+        ("dot", ObjectFormatShapeOutlineKind.Dot),
+    ];
+
     public static IReadOnlyList<ObjectFormatTarget> Targets { get; } =
     [
         ObjectFormatTarget.Picture,
@@ -85,6 +125,10 @@ public static class ObjectFormatCommandPlanner
 
     public static string TransformDropdownCommandId(ObjectFormatTarget target) =>
         BuildCommandId(target, "rotate");
+
+    public static string ShapeFillCommandId => BuildCommandId(ObjectFormatTarget.Shape, "fill");
+
+    public static string ShapeOutlineCommandId => BuildCommandId(ObjectFormatTarget.Shape, "outline");
 
     public static IReadOnlyList<ObjectFormatWrapCommand> WrapCommands(ObjectFormatTarget target) =>
         WrapCatalog
@@ -115,6 +159,58 @@ public static class ObjectFormatCommandPlanner
                 item.Dimension))
             .ToArray();
 
+    public static IReadOnlyList<ObjectFormatShapeFillCommand> ShapeFillCommands() =>
+        ShapeFillCatalog
+            .Select(item => new ObjectFormatShapeFillCommand(
+                BuildCommandId(ObjectFormatTarget.Shape, $"fill-{item.Suffix}"),
+                item.Kind))
+            .ToArray();
+
+    public static IReadOnlyList<ObjectFormatShapeOutlineCommand> ShapeOutlineCommands() =>
+        ShapeOutlineCatalog
+            .Select(item => new ObjectFormatShapeOutlineCommand(
+                BuildCommandId(ObjectFormatTarget.Shape, $"outline-{item.Suffix}"),
+                item.Kind))
+            .ToArray();
+
+    public static bool CanFormatShapeFillOutline(ShapeKind? selectedShapeKind) =>
+        selectedShapeKind is ShapeKind.Rectangle
+            or ShapeKind.RoundedRectangle
+            or ShapeKind.Ellipse
+            or ShapeKind.TextBox;
+
+    public static bool UsesExtendedShapeFill(ObjectFormatShapeFillKind kind) =>
+        kind is ObjectFormatShapeFillKind.GradientBlue
+            or ObjectFormatShapeFillKind.GradientOrange
+            or ObjectFormatShapeFillKind.PatternDiagonalCross;
+
+    public static ShapeFill? BuildShapeExtendedFill(ObjectFormatShapeFillKind kind) => kind switch
+    {
+        ObjectFormatShapeFillKind.NoFill => null,
+        ObjectFormatShapeFillKind.GradientBlue => ShapeFill.LinearGradient(
+            5400000,
+            new GradientStop(0, "#4472C4"),
+            new GradientStop(100000, "#1F4E79")),
+        ObjectFormatShapeFillKind.GradientOrange => ShapeFill.LinearGradient(
+            5400000,
+            new GradientStop(0, "#ED7D31"),
+            new GradientStop(100000, "#C55A11")),
+        ObjectFormatShapeFillKind.PatternDiagonalCross => ShapeFill.Patterned("diagCross", "#4472C4", "#FFFFFF"),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+    };
+
+    public static ObjectFormatShapeOutlinePlan PlanShapeOutline(
+        ObjectFormatShapeOutlineKind kind,
+        string? currentColorHex,
+        double currentWidthPt) => kind switch
+        {
+            ObjectFormatShapeOutlineKind.NoOutline => new ObjectFormatShapeOutlinePlan(null, 0, null),
+            ObjectFormatShapeOutlineKind.Solid => BuildShapeOutlinePlan(currentColorHex, currentWidthPt, null),
+            ObjectFormatShapeOutlineKind.Dash => BuildShapeOutlinePlan(currentColorHex, currentWidthPt, "dash"),
+            ObjectFormatShapeOutlineKind.Dot => BuildShapeOutlinePlan(currentColorHex, currentWidthPt, "sysDot"),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
+
     public static bool TryParseSizePoints(string? text, out double points)
     {
         var trimmed = (text ?? string.Empty).Trim();
@@ -123,6 +219,16 @@ public static class ObjectFormatCommandPlanner
             NumberStyles.Float,
             CultureInfo.InvariantCulture,
             out points) && points > 0;
+    }
+
+    private static ObjectFormatShapeOutlinePlan BuildShapeOutlinePlan(
+        string? currentColorHex,
+        double currentWidthPt,
+        string? dash)
+    {
+        var color = string.IsNullOrWhiteSpace(currentColorHex) ? "000000" : currentColorHex;
+        var width = Math.Max(MinimumShapeOutlineWidthPt, currentWidthPt);
+        return new ObjectFormatShapeOutlinePlan(color, width, dash);
     }
 
     private static string BuildCommandId(ObjectFormatTarget target, string suffix) =>
