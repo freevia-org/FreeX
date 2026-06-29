@@ -26,41 +26,22 @@ public static class RibbonAdaptiveLayoutPlanner
             return states;
 
         while (width > availableWidth &&
-               TryFallbackNextGroup(states, groups, ref width))
+               RibbonAdaptiveStateTransitions.TryFindNextFallback(
+                   states,
+                   groups,
+                   preserveFirstGroup: false,
+                   protectedGroupIndexes: null,
+                   availableWidth,
+                   widthResolver: null,
+                   out var transition))
         {
+            var currentWidth = WidthFor(groups[transition.Index], transition.PreviousState);
+            var targetWidth = WidthFor(groups[transition.Index], transition.NextState);
+            states[transition.Index] = transition.NextState;
+            width = width - currentWidth + targetWidth;
         }
 
         return states;
-    }
-
-    private static bool TryFallbackNextGroup(
-        RibbonAdaptiveGroupState[] states,
-        IReadOnlyList<RibbonAdaptiveGroup> groups,
-        ref double width)
-    {
-        for (var targetValue = (int)RibbonAdaptiveGroupState.SmallWithLabels;
-             targetValue <= (int)RibbonAdaptiveGroupState.Collapsed;
-             targetValue++)
-        {
-            var targetState = (RibbonAdaptiveGroupState)targetValue;
-            for (var index = groups.Count - 1; index >= 0; index--)
-            {
-                var currentState = states[index];
-                if ((int)currentState >= targetValue)
-                    continue;
-
-                var currentWidth = WidthFor(groups[index], currentState);
-                var targetWidth = WidthFor(groups[index], targetState);
-                if (targetWidth >= currentWidth - 0.5)
-                    continue;
-
-                states[index] = targetState;
-                width = width - currentWidth + targetWidth;
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static double WidthFor(RibbonAdaptiveGroup group, RibbonAdaptiveGroupState state) =>

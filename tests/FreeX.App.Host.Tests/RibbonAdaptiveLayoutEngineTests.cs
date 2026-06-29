@@ -510,6 +510,23 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void StateTransition_SourceDelegatesNeutralPolicyToSharedRibbon()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("RibbonAdaptiveLayoutEngine.cs");
+        var transitionSource = WorkspaceFileLocator.ReadAllText(
+            "shared",
+            "Free.Shared.Ribbon",
+            "Layout",
+            "RibbonAdaptiveStateTransitions.cs");
+
+        source.Should().Contain("RibbonAdaptiveStateTransitions.TryGetNextExpandedState(");
+        source.Should().Contain("RibbonAdaptiveStateTransitions.TryFindNextFallback(");
+        source.Should().Contain("RibbonAdaptiveStateTransitions.TryFindNextCollapse(");
+        source.Should().NotContain("stateValue <= (int)RibbonAdaptiveGroupState.IconOnly");
+        transitionSource.Should().Contain("stateValue <= (int)RibbonAdaptiveGroupState.IconOnly");
+    }
+
+    [Fact]
     public void Plan_RelaxesProtectedFallbacksWhenPriorityGroupsStillOverflow()
     {
         var groups = new[]

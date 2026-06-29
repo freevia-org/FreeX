@@ -100,9 +100,14 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             "Free.Shared.Ribbon",
             "Layout",
             "RibbonAdaptiveLayoutPlanner.cs");
+        var transitionSource = WorkspaceFileLocator.ReadAllText(
+            "shared",
+            "Free.Shared.Ribbon",
+            "Layout",
+            "RibbonAdaptiveStateTransitions.cs");
         source.Should().Contain("Array.Fill(states, RibbonAdaptiveGroupState.Full)");
-        source.Should().Contain("TryFallbackNextGroup(states, groups, ref width)");
-        source.Should().Contain("targetWidth >= currentWidth - 0.5");
+        source.Should().Contain("RibbonAdaptiveStateTransitions.TryFindNextFallback(");
+        transitionSource.Should().Contain("targetWidth >= currentWidth - MinimumUsefulWidthDelta");
         source.Should().Contain("for (var index = 0; index < groups.Count; index++)");
         source.Should().NotContain("Enumerable.Repeat");
         source.Should().NotContain(".Select(");
