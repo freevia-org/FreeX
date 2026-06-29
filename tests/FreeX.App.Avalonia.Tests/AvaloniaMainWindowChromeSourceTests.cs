@@ -673,11 +673,18 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetIndex(");
         source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(");
+        source.Should().Contain("PageSetupDialogPlanner.PlanOpen(source)");
+        source.Should().Contain("FocusOpenPlan(openPlan)");
+        source.Should().Contain("SelectValidationRoute(plan.InitialRoute)");
+        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheet.Id)");
         source.Should().Contain("SelectValidationRoute(validation.Route)");
         source.Should().Contain("ResolvePageSetupValidationIssue(validation)");
         source.Should().NotContain("PageSetupDialogModel.ChoiceIndex(");
         source.Should().NotContain("PageSetupDialogModel.ChoiceValue(");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields)");
+        source.Should().NotContain("ExecuteReviewCommand(plan.PageSetupCommand)");
+        source.Should().NotContain("ExecuteReviewCommand(plan.HeaderFooterCommand)");
+        source.Should().NotContain("private bool ApplyPrintArea(");
         source.Should().NotContain("headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().NotContain("footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().NotContain("private static int PageSetupPresetIndex");

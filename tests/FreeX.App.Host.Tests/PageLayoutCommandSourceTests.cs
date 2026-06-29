@@ -44,8 +44,7 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheetId)");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PageSetupDialogBtn_Click(")
             .Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.DialogButton);");
-        policySource.Should().Contain("PageLayoutPageSetupOpenSource.PrintTitles => PageSetupInitialFocusTarget.RepeatRows");
-        policySource.Should().Contain("PageLayoutPageSetupOpenSource.ScaleToFit => PageSetupInitialFocusTarget.ScaleToFit");
+        policySource.Should().Contain("PageSetupDialogPlanner.ResolveInitialFocusTarget(source)");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PrintAreaBtn_Click(")
             .Should().Contain("OpenRibbonContextMenu(btn, cm);");
         SourceMethodExtractor.ExtractMethodSource(source, "private void PageBreaksBtn_Click(")
@@ -72,8 +71,8 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("PageBreakDialogPlanner.PlanPageBreaks(");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan)");
         source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
-        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
-        source.Should().Contain("TryExecuteCommand(command, \"Page Setup\")");
+        source.Should().Contain("TryBuildCompositeCommandForTargets(");
+        source.Should().Contain("TryExecuteCommand(targetCommandBuild.Command!, PageSetupSubmissionPlanner.DefaultCommandLabel)");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
         source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog(this)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");

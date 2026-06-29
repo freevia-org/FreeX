@@ -630,6 +630,48 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
+    public void SubmissionPlanner_BuildsCompositeCommandForGroupedTargetsAndRoutesFollowUp()
+    {
+        var workbook = new Workbook("Book");
+        var source = workbook.AddSheet("Sheet1");
+        var target = workbook.AddSheet("Sheet2");
+        var ctx = new PageSetupTestCommandContext(workbook);
+
+        var fields = PageSetupDialogModel.FromSheet(source) with
+        {
+            Orientation = WorksheetPageOrientation.Landscape,
+            PrintAreaText = "A1:B4",
+            Header = new WorksheetHeaderFooter("", "Grouped", ""),
+        };
+
+        var submission = PageSetupSubmissionPlanner.TryBuild(source, fields, PageSetupDialogAction.Options);
+        var commandBuild = submission.Submission!.TryBuildCompositeCommandForTargets(
+            source,
+            [source.Id, target.Id]);
+
+        submission.Success.Should().BeTrue();
+        submission.Submission.FollowUpAction.Should().Be(PageSetupDialogFollowUpAction.ShowPrinterOptions);
+        PageSetupSubmissionPlanner.ResolveFollowUp(PageSetupDialogAction.PrintPreview)
+            .Should()
+            .Be(PageSetupDialogFollowUpAction.Print);
+        commandBuild.Success.Should().BeTrue(commandBuild.Validation?.Message.FallbackText);
+        commandBuild.Command!.Label.Should().Be(PageSetupSubmissionPlanner.DefaultCommandLabel);
+
+        commandBuild.Command.Apply(ctx).Success.Should().BeTrue();
+
+        source.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        target.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        source.PrintArea.Should().Be(new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 2)));
+        target.PrintArea.Should().Be(new GridRange(
+            new CellAddress(target.Id, 1, 1),
+            new CellAddress(target.Id, 4, 2)));
+        source.PageHeader.Center.Should().Be("Grouped");
+        target.PageHeader.Center.Should().Be("Grouped");
+    }
+
+    [Fact]
     public void SubmissionPlanner_InvalidFieldsReturnSharedValidationRouteAndMessageKey()
     {
         var sheet = CreateSheet();

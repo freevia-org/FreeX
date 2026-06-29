@@ -89,8 +89,8 @@ public sealed class PageSetupDialogXamlTests
         handlerSource.Should().Contain("PrintTitlesBtn_Click");
         handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.PrintTitles);");
         handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.DialogButton);");
-        handlerSource.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolvePageSetupInitialFocus(source)");
-        handlerSource.Should().Contain("initialFocusTarget) { Owner = this }");
+        handlerSource.Should().Contain("PageSetupDialogPlanner.PlanOpen(source)");
+        handlerSource.Should().Contain("openPlan.InitialFocusTarget) { Owner = this }");
     }
 
     [Fact]
@@ -107,6 +107,23 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
         handlerSource.Should().Contain("ScaleToFitBtn_Click");
         handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ScaleToFit);");
+    }
+
+    [Fact]
+    public void MarginsAndExtendedPaperSizeCommands_UseSharedPageSetupOpenPlan()
+    {
+        var source = ReadPageSetupDialogSource();
+        var handlerSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PageLayout.cs");
+
+        source.Should().Contain("PageSetupDialogPlanner.PlanOpen(_initialFocusTarget)");
+        source.Should().Contain("PageSetupInitialFocusTarget.Margins");
+        source.Should().Contain("PageSetupTabs.SelectedItem = MarginsTab;");
+        source.Should().Contain("DialogFocus.FocusAndSelect(LeftMarginBox);");
+        source.Should().Contain("PageSetupInitialFocusTarget.PaperSize");
+        source.Should().Contain("PaperSizeBox.Focus();");
+        handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.CustomMargins);");
+        handlerSource.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);");
+        handlerSource.Should().Contain("ShowPageSetupDialog(PageSetupDialogPlanner.PlanOpen(source));");
     }
 
     [Fact]
@@ -473,7 +490,8 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("PageSetupDialogAction.Options");
         source.Should().Contain("PageSetupDialogAction.PrintPreview");
         source.Should().Contain("PageSetupDialogAction.Print");
-        handlerSource.Should().Contain("PageSetupDialogAction.Options");
+        handlerSource.Should().Contain("PageSetupDialogFollowUpAction.ShowPrinterOptions");
+        handlerSource.Should().Contain("PageSetupDialogFollowUpAction.Print");
         handlerSource.Should().Contain("ShowPageSetupPrinterOptions()");
         handlerSource.Should().Contain("PrintButton_Click(this, new RoutedEventArgs())");
     }
@@ -512,7 +530,7 @@ public sealed class PageSetupDialogXamlTests
 
         source.Should().Contain("var fields = dialog.Fields");
         source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
-        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
+        source.Should().Contain("TryBuildCompositeCommandForTargets(");
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("SheetGrid.SelectedRange");
         source.Should().Contain("Header = Header");
@@ -532,7 +550,7 @@ public sealed class PageSetupDialogXamlTests
 
         source.Should().Contain("var fields = dialog.Fields");
         source.Should().Contain("PrintAreaText = PrintAreaBox.Text");
-        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
+        source.Should().Contain("TryBuildCompositeCommandForTargets(");
     }
 
     [Fact]

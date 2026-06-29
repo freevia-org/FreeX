@@ -40,7 +40,8 @@ public sealed partial class MainWindow
     private static readonly IBrush PageBreakLineBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakWatermarkBrush = Brush(60, 11, 112, 116);
 
-    private async Task ShowPageSetupDialogAsync()
+    private async Task ShowPageSetupDialogAsync(
+        PageLayoutPageSetupOpenSource source = PageLayoutPageSetupOpenSource.DialogButton)
     {
         if (_isOpening || _isSaving)
             return;
@@ -51,7 +52,9 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         var sheet = _session.ActiveSheet;
-        var fields = await ShowPageSetupDialogCoreAsync(PageSetupDialogModel.FromSheet(sheet));
+        var fields = await ShowPageSetupDialogCoreAsync(
+            PageSetupDialogModel.FromSheet(sheet),
+            PageSetupDialogPlanner.PlanOpen(source));
         if (fields is null)
             return;
 
@@ -67,48 +70,25 @@ public sealed partial class MainWindow
             return;
         }
 
-        var plan = submission.Submission!.CommandPlan;
-        var pageSetupResult = _session.ExecuteReviewCommand(plan.PageSetupCommand);
-        if (!pageSetupResult.Success)
+        var commandBuild = submission.Submission!.TryBuildCompositeCommandForTarget(sheet, sheet.Id);
+        if (!commandBuild.Success)
         {
-            ShowEditIssue(pageSetupResult.ErrorMessage ?? UiText.Get("ShellLoc_PageSetupFailed"));
+            ShowEditIssue(ResolvePageSetupValidationIssue(commandBuild.Validation!));
             return;
         }
 
-        var headerFooterResult = _session.ExecuteReviewCommand(plan.HeaderFooterCommand);
-        if (!headerFooterResult.Success)
+        var result = _session.ExecuteReviewCommand(commandBuild.Command!);
+        if (!result.Success)
         {
-            ShowEditIssue(headerFooterResult.ErrorMessage ?? UiText.Get("ShellLoc_HeaderFooterUpdateFailed"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PageSetupFailed"));
             return;
         }
-
-        if (!ApplyPrintArea(sheet, plan.PrintArea, plan.PrintAreaCommand))
-            return;
 
         RefreshShell(UiText.Get("ShellLoc_PageSetupUpdated"));
     }
 
     private static string ResolvePageSetupValidationIssue(PageSetupSubmissionValidation validation) =>
         validation.Message.Resolve(UiText.Get, "ShellLoc_PageSetupInvalid");
-
-    private bool ApplyPrintArea(Sheet sheet, GridRange? printArea, IWorkbookCommand command)
-    {
-        var current = sheet.PrintArea is { } existing && existing.Start.Sheet == sheet.Id
-            ? existing
-            : (GridRange?)null;
-
-        if (Equals(current, printArea))
-            return true;
-
-        var result = _session.ExecuteReviewCommand(command);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PrintAreaFailed"));
-            return false;
-        }
-
-        return true;
-    }
 
     private void TogglePageBreakPreview()
     {
@@ -332,7 +312,9 @@ public sealed partial class MainWindow
         radioButton.FontFamily = FormulaBarFontFamily;
     }
 
-    private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(PageSetupDialogFields initial)
+    private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(
+        PageSetupDialogFields initial,
+        PageSetupDialogOpenPlan openPlan)
     {
         PageSetupDialogFields? result = null;
         var dialog = new Window
@@ -846,6 +828,25 @@ public sealed partial class MainWindow
             };
         }
 
+        void FocusOpenPlan(PageSetupDialogOpenPlan plan)
+        {
+            SelectValidationRoute(plan.InitialRoute);
+            Control target = plan.InitialFocusTarget switch
+            {
+                PageSetupInitialFocusTarget.Margins => marginsBox,
+                PageSetupInitialFocusTarget.PaperSize => paperBox,
+                PageSetupInitialFocusTarget.ScaleToFit => fitRadio.IsChecked == true
+                    ? fitWideBox
+                    : scalePercentBox,
+                PageSetupInitialFocusTarget.RepeatRows => repeatRowsBox,
+                _ => orientationBox,
+            };
+
+            target.Focus();
+            if (target is TextBox textBox)
+                textBox.SelectAll();
+        }
+
         void Accept()
         {
             var fields = ReadFields();
@@ -881,7 +882,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(8),
             Children = { buttonRow, validationText, tabs },
         };
-        dialog.Opened += (_, _) => orientationBox.Focus();
+        dialog.Opened += (_, _) => FocusOpenPlan(openPlan);
 
         await dialog.ShowDialog(this);
         return result;

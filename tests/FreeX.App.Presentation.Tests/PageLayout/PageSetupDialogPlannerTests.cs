@@ -39,4 +39,22 @@ public sealed class PageSetupDialogPlannerTests
         PageSetupDialogPlanner.FieldMinWidth.Should().Be(220);
         PageSetupDialogPlanner.PrintPreviewButtonAutomationId.Should().Be("PageSetupPrintPreviewButton");
     }
+
+    [Theory]
+    [InlineData(PageLayoutPageSetupOpenSource.DialogButton, PageSetupInitialFocusTarget.PageOrientation, PageSetupDialogTab.Page, PageSetupDialogField.Orientation)]
+    [InlineData(PageLayoutPageSetupOpenSource.CustomMargins, PageSetupInitialFocusTarget.Margins, PageSetupDialogTab.Margins, PageSetupDialogField.Margins)]
+    [InlineData(PageLayoutPageSetupOpenSource.ExtendedPaperSize, PageSetupInitialFocusTarget.PaperSize, PageSetupDialogTab.Page, PageSetupDialogField.PaperSize)]
+    [InlineData(PageLayoutPageSetupOpenSource.ScaleToFit, PageSetupInitialFocusTarget.ScaleToFit, PageSetupDialogTab.Page, PageSetupDialogField.Scaling)]
+    [InlineData(PageLayoutPageSetupOpenSource.PrintTitles, PageSetupInitialFocusTarget.RepeatRows, PageSetupDialogTab.Sheet, PageSetupDialogField.RepeatRows)]
+    public void PlanOpen_MapsRibbonSourcesToSharedInitialFocusRoutes(
+        PageLayoutPageSetupOpenSource source,
+        PageSetupInitialFocusTarget expectedFocus,
+        PageSetupDialogTab expectedTab,
+        PageSetupDialogField expectedField)
+    {
+        var plan = PageSetupDialogPlanner.PlanOpen(source);
+
+        plan.InitialFocusTarget.Should().Be(expectedFocus);
+        plan.InitialRoute.Should().Be(new PageSetupValidationRoute(expectedTab, expectedField));
+    }
 }
