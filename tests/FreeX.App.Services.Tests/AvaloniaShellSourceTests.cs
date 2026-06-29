@@ -2012,6 +2012,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var presetSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationPresetPlanner.cs"));
+        var displayTextSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataValidationDisplayTextPlanner.cs"));
         var dialogPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Dialogs", "DataValidationDialogPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -2046,6 +2047,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("DataValidationDialogPlanner.CreateVisibilityPlan(");
         source.Should().Contain("DataValidationDialogPlanner.ValidateCriteria(");
         source.Should().Contain("DataValidationDialogPlanner.CreateRule(new DataValidationRuleEditorInput");
+        source.Should().Contain("DataValidationDisplayTextPlanner.GetAlertStyleMetadata()");
         source.Should().NotContain("CreateDefaultDataValidationRule");
         source.Should().NotContain("GetDefaultDataValidationOperator");
         source.Should().NotContain("TryValidateDataValidationCriteria");
@@ -2057,6 +2059,9 @@ public sealed class AvaloniaShellSourceTests
 
         presetSource.Should().Contain("public static IReadOnlyList<DataValidationRuleTypeMetadata> GetRuleTypeMetadata()");
         presetSource.Should().Contain("public static DataValidationSelectionSummary CreateSelectionSummary(");
+        presetSource.Should().Contain("DataValidationDisplayTextPlanner.GetRuleTypeMetadata()");
+        displayTextSource.Should().Contain("public static IReadOnlyList<DataValidationRuleTypeMetadata> GetRuleTypeMetadata()");
+        displayTextSource.Should().Contain("public static IReadOnlyList<DataValidationAlertStyleMetadata> GetAlertStyleMetadata()");
         dialogPlannerSource.Should().Contain("public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)");
         dialogPlannerSource.Should().Contain("public static DvValidationResult ValidateCriteria(");
         dialogPlannerSource.Should().Contain("public static DataValidation CreateRule(DataValidationRuleEditorInput input)");
@@ -2102,6 +2107,8 @@ public sealed class AvaloniaShellSourceTests
         plannerSource.Should().Contain("DataValidationService.GetApplicable(sheet, activeCell)");
         plannerSource.Should().Contain("DataValidationService.GetListItems(rule, sheet, workbook)");
         plannerSource.Should().Contain("DataValidationService.FormatListSourceRange");
+        plannerSource.Should().Contain("DataValidationDisplayTextPlanner.FormatAlertStyle");
+        plannerSource.Should().NotContain("private static string FormatAlertStyle");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowDataValidationPreviewDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);

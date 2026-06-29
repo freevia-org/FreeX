@@ -17304,11 +17304,9 @@ public sealed partial class MainWindow : Window
     ];
 
     private static IReadOnlyList<DataValidationAlertStyleChoice> CreateDataValidationAlertStyleChoices() =>
-    [
-        new(DvAlertStyle.Stop, "Stop"),
-        new(DvAlertStyle.Warning, "Warning"),
-        new(DvAlertStyle.Information, "Information"),
-    ];
+        DataValidationDisplayTextPlanner.GetAlertStyleMetadata()
+            .Select(metadata => new DataValidationAlertStyleChoice(metadata.Style, metadata.DisplayName))
+            .ToArray();
 
     private static DataValidationTypeChoice? FindDataValidationTypeChoice(
         IReadOnlyList<DataValidationTypeChoice> choices,
