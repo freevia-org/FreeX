@@ -82,6 +82,39 @@ public static class PptxPackageWriter
         DiagramDrawingRelType,
     };
 
+    private static readonly string[] WriterOwnedPackagePartPaths =
+    [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "docProps/core.xml",
+        "ppt/presentation.xml",
+        "ppt/_rels/presentation.xml.rels",
+        "ppt/presProps.xml",
+        "ppt/viewProps.xml",
+        "ppt/tableStyles.xml",
+        "ppt/commentAuthors.xml",
+    ];
+
+    private static readonly string[] WriterOwnedPackagePartPrefixes =
+    [
+        "ppt/slides/",
+        "ppt/slideLayouts/",
+        "ppt/slideMasters/",
+        "ppt/theme/",
+        "ppt/charts/",
+        "ppt/media/",
+        "ppt/comments/",
+        "ppt/notesSlides/",
+        "ppt/notesMasters/",
+        "ppt/embeddings/",
+        "ppt/diagrams/",
+    ];
+
+    private static readonly OpcPackageRetentionClassifier WriterOwnedPackageClassifier = new(
+        WriterOwnedPackagePartPaths,
+        WriterOwnedPackagePartPrefixes,
+        RegeneratedRelationshipTypes);
+
     // ── Content types ─────────────────────────────────────────────────────────────
     private const string PresentationCT  = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
     private const string SlideCT         = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
@@ -3913,54 +3946,14 @@ public static class PptxPackageWriter
         }
     }
 
-    private static bool IsWriterOwnedRelationship(string sourcePartPath, string type, string target, bool external)
-    {
-        if (RegeneratedRelationshipTypes.Contains(type))
-            return true;
+    private static bool IsWriterOwnedRelationship(string sourcePartPath, string type, string target, bool external) =>
+        WriterOwnedPackageClassifier.IsRegeneratedRelationship(sourcePartPath, type, target, external);
 
-        if (external)
-            return false;
-
-        var sourceDir = string.IsNullOrWhiteSpace(sourcePartPath) ? string.Empty : GetDirectory(sourcePartPath);
-        var targetPath = ResolvePackagePath(sourceDir, target);
-        return IsWriterOwnedPath(targetPath);
-    }
-
-    private static bool IsWriterOwnedPath(string path)
-    {
-        var normalized = NormalizePackagePath(path);
-
-        if (string.Equals(normalized, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "ppt/presentation.xml", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "ppt/_rels/presentation.xml.rels", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "ppt/presProps.xml", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "ppt/viewProps.xml", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "ppt/tableStyles.xml", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "ppt/commentAuthors.xml", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return normalized.StartsWith("ppt/slides/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/slideLayouts/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/slideMasters/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/theme/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/charts/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/comments/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/notesSlides/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/notesMasters/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/embeddings/", StringComparison.OrdinalIgnoreCase) ||
-               normalized.StartsWith("ppt/diagrams/", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsWriterOwnedPath(string path) =>
+        WriterOwnedPackageClassifier.IsRegeneratedPart(path);
 
     private static string NormalizePackagePath(string path) =>
         OpcPathHelper.ToZipEntryPath(path);
-
-    private static string ResolvePackagePath(string baseDir, string target)
-        => OpcPathHelper.ResolveRelativeZipPath(baseDir, target);
 
     private static string GetDirectory(string path)
         => OpcPathHelper.GetDirectoryName(path);

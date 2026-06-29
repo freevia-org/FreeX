@@ -21,6 +21,27 @@ public sealed class PptxPackageWriterSourceTests
             .And.NotContain("Attribute(\"TargetMode\")");
     }
 
+    [Fact]
+    public void PackageRetentionClassification_DelegatesToSharedOpcClassifier()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageWriter.cs"));
+
+        source.Should().Contain("OpcPackageRetentionClassifier WriterOwnedPackageClassifier");
+        ExtractMethod(source, "private static bool IsWriterOwnedRelationship(")
+            .Should()
+            .Contain("WriterOwnedPackageClassifier.IsRegeneratedRelationship")
+            .And.NotContain("RegeneratedRelationshipTypes.Contains")
+            .And.NotContain("ResolvePackagePath");
+        ExtractMethod(source, "private static bool IsWriterOwnedPath(")
+            .Should()
+            .Contain("WriterOwnedPackageClassifier.IsRegeneratedPart")
+            .And.NotContain("StartsWith(\"ppt/slides/\"");
+    }
+
     private static string ExtractMethod(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);

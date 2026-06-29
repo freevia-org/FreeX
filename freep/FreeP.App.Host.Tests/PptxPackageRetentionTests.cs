@@ -17,6 +17,8 @@ public sealed class PptxPackageRetentionTests
         "http://example.com/freep/relationships/reviewLink";
     private const string UnknownViewRelType =
         "http://example.com/freep/relationships/viewState";
+    private const string UnknownSlideMirrorRelType =
+        "http://example.com/freep/relationships/slideMirror";
 
     [Fact]
     public void CoreProperties_RoundTripThroughPptxPackage()
@@ -91,6 +93,7 @@ public sealed class PptxPackageRetentionTests
             var externalReviewRel = Relationship(rootRels, ExternalReviewRelType, "https://example.com/freep-review");
             externalReviewRel.Should().NotBeNull();
             externalReviewRel!.Attribute("TargetMode")?.Value.Should().Be("External");
+            Relationship(rootRels, UnknownSlideMirrorRelType, "ppt/slides/slide1.xml").Should().BeNull();
 
             var presRels = LoadXml(archive, "ppt/_rels/presentation.xml.rels");
             Relationship(presRels, UnknownViewRelType, "customData/viewState.bin").Should().NotBeNull();
@@ -153,6 +156,7 @@ public sealed class PptxPackageRetentionTests
             AddRelationship(rootRels, "rIdCustomProps", CustomPropsRelType, "docProps/custom.xml");
             AddRelationship(rootRels, "rIdCustomXml", CustomXmlRelType, "customXml/item1.xml");
             AddRelationship(rootRels, "rIdExternalReview", ExternalReviewRelType, "https://example.com/freep-review", external: true);
+            AddRelationship(rootRels, "rIdSlideMirror", UnknownSlideMirrorRelType, "ppt/slides/slide1.xml");
             WriteXml(archive, "_rels/.rels", rootRels);
 
             var itemRels = new XDocument(

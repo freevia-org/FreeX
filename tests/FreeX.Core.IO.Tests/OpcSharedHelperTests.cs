@@ -69,6 +69,49 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void PackageRetentionClassifier_ClassifiesRegeneratedPartsAndRelationships()
+    {
+        var classifier = new OpcPackageRetentionClassifier(
+            regeneratedPartPaths:
+            [
+                "[Content_Types].xml",
+                "ppt/presentation.xml",
+            ],
+            regeneratedPartPathPrefixes:
+            [
+                "ppt/slides",
+            ],
+            regeneratedRelationshipTypes:
+            [
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide",
+            ]);
+
+        classifier.IsRegeneratedPart("/ppt/slides/slide1.xml").Should().BeTrue();
+        classifier.IsRegeneratedPart("customXml/item1.xml").Should().BeFalse();
+        classifier.IsRegeneratedRelationship(
+                "ppt/presentation.xml",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide",
+                "customData/viewState.bin",
+                external: false)
+            .Should()
+            .BeTrue();
+        classifier.IsRegeneratedRelationship(
+                "ppt/presentation.xml",
+                "http://example.com/relationships/slide-shadow",
+                "slides/slide1.xml",
+                external: false)
+            .Should()
+            .BeTrue();
+        classifier.IsRegeneratedRelationship(
+                "ppt/presentation.xml",
+                "http://example.com/relationships/external-slide",
+                "ppt/slides/slide1.xml",
+                external: true)
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
     public void LoadByIdAndTargetMap_ReadSharedRelationshipParts()
     {
         using var stream = new MemoryStream();
