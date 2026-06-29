@@ -1,3 +1,5 @@
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -44,6 +46,23 @@ public enum ChartAxisValidationIssue
     LabelFontSizeOutOfRange,
     LabelAngleOutOfRange,
     LineThicknessOutOfRange,
+}
+
+public enum ChartAxisFormatParseIssue
+{
+    None,
+    Minimum,
+    Maximum,
+    MajorUnit,
+    MinorUnit,
+    MajorGridlineColor,
+    MinorGridlineColor,
+    GridlineThickness,
+    LabelTextColor,
+    LabelFontSize,
+    LabelAngle,
+    LineColor,
+    LineThickness,
 }
 
 public enum ChartAxisQuickCommand
@@ -105,8 +124,19 @@ public static class ChartAxisPlanner
         new(ChartDataLabelNumberFormat.Percent, "Percentage"),
     ];
 
+    private static readonly ChartAxisTickStyle[] TickStyleCatalog =
+    [
+        ChartAxisTickStyle.None,
+        ChartAxisTickStyle.Inside,
+        ChartAxisTickStyle.Outside,
+        ChartAxisTickStyle.Cross,
+    ];
+
     /// <summary>The selectable axis number formats, in display order.</summary>
     public static IReadOnlyList<ChartAxisNumberFormatChoice> GetNumberFormatChoices() => NumberFormatCatalog;
+
+    /// <summary>The selectable tick-mark styles, in display order.</summary>
+    public static IReadOnlyList<ChartAxisTickStyle> GetTickStyleChoices() => TickStyleCatalog;
 
     /// <summary>The English display label for <paramref name="numberFormat"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartDataLabelNumberFormat numberFormat)
@@ -293,6 +323,165 @@ public static class ChartAxisPlanner
                 YAxisLineColor: normalized.LineColor,
                 YAxisLineThickness: normalized.LineThickness,
                 ClearYAxisBounds: clearBounds);
+    }
+
+    public static bool TryParseDialogInput(
+        bool useXAxis,
+        string? minimumText,
+        string? maximumText,
+        string? majorUnitText,
+        string? minorUnitText,
+        bool logScale,
+        ChartDataLabelNumberFormat? selectedNumberFormat,
+        bool showMajorGridlines,
+        bool showMinorGridlines,
+        string? majorGridlineColorText,
+        string? minorGridlineColorText,
+        string? gridlineThicknessText,
+        ChartAxisTickStyle? selectedMajorTickStyle,
+        ChartAxisTickStyle? selectedMinorTickStyle,
+        bool showLabels,
+        string? labelTextColorText,
+        string? labelFontSizeText,
+        string? labelAngleText,
+        string? lineColorText,
+        string? lineThicknessText,
+        out ChartAxisInput input,
+        out ChartAxisFormatParseIssue issue)
+    {
+        input = default;
+
+        if (!ChartDialogValueParser.TryParseNullableDouble(minimumText ?? string.Empty, out var minimum))
+        {
+            issue = ChartAxisFormatParseIssue.Minimum;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseNullableDouble(maximumText ?? string.Empty, out var maximum))
+        {
+            issue = ChartAxisFormatParseIssue.Maximum;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseNullableDouble(majorUnitText ?? string.Empty, out var majorUnit))
+        {
+            issue = ChartAxisFormatParseIssue.MajorUnit;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseNullableDouble(minorUnitText ?? string.Empty, out var minorUnit))
+        {
+            issue = ChartAxisFormatParseIssue.MinorUnit;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(majorGridlineColorText ?? string.Empty, out var majorGridlineColor))
+        {
+            issue = ChartAxisFormatParseIssue.MajorGridlineColor;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(minorGridlineColorText ?? string.Empty, out var minorGridlineColor))
+        {
+            issue = ChartAxisFormatParseIssue.MinorGridlineColor;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParsePositiveDouble(gridlineThicknessText ?? string.Empty, out var gridlineThickness))
+        {
+            issue = ChartAxisFormatParseIssue.GridlineThickness;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(labelTextColorText ?? string.Empty, out var labelTextColor))
+        {
+            issue = ChartAxisFormatParseIssue.LabelTextColor;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                labelFontSizeText ?? string.Empty,
+                MinLabelFontSize,
+                MaxLabelFontSize,
+                out var labelFontSize))
+        {
+            issue = ChartAxisFormatParseIssue.LabelFontSize;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                labelAngleText ?? string.Empty,
+                MinLabelAngle,
+                MaxLabelAngle,
+                out var labelAngle))
+        {
+            issue = ChartAxisFormatParseIssue.LabelAngle;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(lineColorText ?? string.Empty, out var lineColor))
+        {
+            issue = ChartAxisFormatParseIssue.LineColor;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                lineThicknessText ?? string.Empty,
+                MinLineThickness,
+                MaxLineThickness,
+                out var lineThickness))
+        {
+            issue = ChartAxisFormatParseIssue.LineThickness;
+            return false;
+        }
+
+        input = new ChartAxisInput(
+            UseXAxis: useXAxis,
+            Minimum: minimum,
+            Maximum: maximum,
+            MajorUnit: majorUnit,
+            MinorUnit: minorUnit,
+            LogScale: logScale,
+            NumberFormat: selectedNumberFormat is { } numberFormat && IsKnownNumberFormat(numberFormat)
+                ? numberFormat
+                : ChartDataLabelNumberFormat.General,
+            ShowMajorGridlines: showMajorGridlines,
+            ShowMinorGridlines: showMinorGridlines,
+            MajorGridlineColor: majorGridlineColor,
+            MinorGridlineColor: minorGridlineColor,
+            GridlineThickness: gridlineThickness,
+            MajorTickStyle: selectedMajorTickStyle is { } majorTickStyle && IsKnownTickStyle(majorTickStyle)
+                ? majorTickStyle
+                : ChartAxisTickStyle.Outside,
+            MinorTickStyle: selectedMinorTickStyle is { } minorTickStyle && IsKnownTickStyle(minorTickStyle)
+                ? minorTickStyle
+                : ChartAxisTickStyle.None,
+            ShowLabels: showLabels,
+            LabelTextColor: labelTextColor,
+            LabelFontSize: labelFontSize,
+            LabelAngle: labelAngle,
+            LineColor: lineColor,
+            LineThickness: lineThickness);
+
+        if (ValidateIssue(input) is { } validationIssue)
+        {
+            issue = validationIssue switch
+            {
+                ChartAxisValidationIssue.MinimumNotBelowMaximum => ChartAxisFormatParseIssue.Maximum,
+                ChartAxisValidationIssue.MajorUnitNotPositive => ChartAxisFormatParseIssue.MajorUnit,
+                ChartAxisValidationIssue.MinorUnitNotPositive => ChartAxisFormatParseIssue.MinorUnit,
+                ChartAxisValidationIssue.GridlineThicknessNotPositive => ChartAxisFormatParseIssue.GridlineThickness,
+                ChartAxisValidationIssue.LabelFontSizeOutOfRange => ChartAxisFormatParseIssue.LabelFontSize,
+                ChartAxisValidationIssue.LabelAngleOutOfRange => ChartAxisFormatParseIssue.LabelAngle,
+                ChartAxisValidationIssue.LineThicknessOutOfRange => ChartAxisFormatParseIssue.LineThickness,
+                _ => ChartAxisFormatParseIssue.Maximum,
+            };
+            return false;
+        }
+
+        input = Normalize(input);
+        issue = ChartAxisFormatParseIssue.None;
+        return true;
     }
 
     public static bool CanToggleSecondaryAxis(ChartModel chart)

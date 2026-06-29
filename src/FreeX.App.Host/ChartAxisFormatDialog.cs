@@ -5,7 +5,6 @@ using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using static FreeX.App.Host.ChartDialogInputParser;
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
@@ -215,8 +214,8 @@ public sealed class ChartAxisFormatDialog : Window
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_MajorTickMarksLabel"), _majorTickBox, Enum.GetValues<ChartAxisTickStyle>());
-            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_MinorTickMarksLabel"), _minorTickBox, Enum.GetValues<ChartAxisTickStyle>());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_MajorTickMarksLabel"), _majorTickBox, ChartAxisPlanner.GetTickStyleChoices());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_MinorTickMarksLabel"), _minorTickBox, ChartAxisPlanner.GetTickStyleChoices());
             ChartDialogHelpers.AddCheck(stack, _labelsBox);
             ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartAxisFormat_LabelColorLabel"), _labelColorBox);
             ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_LabelFontSizeLabel"), _labelFontSizeBox, UiText.Get("ChartAxisFormat_LabelFontSizeHelpText"));
@@ -261,101 +260,33 @@ public sealed class ChartAxisFormatDialog : Window
 
     private void Accept()
     {
-        if (!TryReadNullableDouble(_minimumBox, out var minimum))
+        if (!ChartAxisPlanner.TryParseDialogInput(
+                _useXAxis,
+                _minimumBox.Text,
+                _maximumBox.Text,
+                _majorUnitBox.Text,
+                _minorUnitBox.Text,
+                _logBox.IsChecked == true,
+                SelectedNumberFormat(),
+                _majorGridBox.IsChecked == true,
+                _minorGridBox.IsChecked == true,
+                _majorGridColorBox.Text,
+                _minorGridColorBox.Text,
+                _gridlineThicknessBox.Text,
+                SelectedMajorTickStyle(),
+                SelectedMinorTickStyle(),
+                _labelsBox.IsChecked == true,
+                _labelColorBox.Text,
+                _labelFontSizeBox.Text,
+                _labelAngleBox.Text,
+                _lineColorBox.Text,
+                _lineThicknessBox.Text,
+                out var input,
+                out var issue))
         {
-            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMinimumMessage"), _minimumBox);
+            ShowPlannerParseWarning(issue);
             return;
         }
-
-        if (!TryReadNullableDouble(_maximumBox, out var maximum))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMaximumMessage"), _maximumBox);
-            return;
-        }
-
-        if (!TryReadNullableDouble(_majorUnitBox, out var majorUnit))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"), _majorUnitBox);
-            return;
-        }
-
-        if (!TryReadNullableDouble(_minorUnitBox, out var minorUnit))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"), _minorUnitBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_majorGridColorBox, out var majorGridColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _majorGridColorBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_minorGridColorBox, out var minorGridColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _minorGridColorBox);
-            return;
-        }
-
-        if (!TryReadPositiveDouble(_gridlineThicknessBox, out var gridlineThickness))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"), _gridlineThicknessBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_labelColorBox, out var labelColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _labelColorBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_labelFontSizeBox, min: ChartAxisPlanner.MinLabelFontSize, max: ChartAxisPlanner.MaxLabelFontSize, out var labelFontSize))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"), _labelFontSizeBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_labelAngleBox, min: ChartAxisPlanner.MinLabelAngle, max: ChartAxisPlanner.MaxLabelAngle, out var labelAngle))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"), _labelAngleBox);
-            return;
-        }
-
-        if (!TryReadOptionalColor(_lineColorBox, out var lineColor))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _lineColorBox);
-            return;
-        }
-
-        if (!TryReadClampedDouble(_lineThicknessBox, min: ChartAxisPlanner.MinLineThickness, max: ChartAxisPlanner.MaxLineThickness, out var lineThickness))
-        {
-            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"), _lineThicknessBox);
-            return;
-        }
-
-        var input = new ChartAxisInput(
-            UseXAxis: _useXAxis,
-            Minimum: minimum,
-            Maximum: maximum,
-            MajorUnit: majorUnit,
-            MinorUnit: minorUnit,
-            LogScale: _logBox.IsChecked == true,
-            NumberFormat: ChartDialogHelpers.Selected(_numberFormatBox, ChartDataLabelNumberFormat.General),
-            ShowMajorGridlines: _majorGridBox.IsChecked == true,
-            ShowMinorGridlines: _minorGridBox.IsChecked == true,
-            MajorGridlineColor: majorGridColor,
-            MinorGridlineColor: minorGridColor,
-            GridlineThickness: gridlineThickness,
-            MajorTickStyle: ChartDialogHelpers.Selected(_majorTickBox, ChartAxisTickStyle.Outside),
-            MinorTickStyle: ChartDialogHelpers.Selected(_minorTickBox, ChartAxisTickStyle.None),
-            ShowLabels: _labelsBox.IsChecked == true,
-            LabelTextColor: labelColor,
-            LabelFontSize: labelFontSize,
-            LabelAngle: labelAngle,
-            LineColor: lineColor,
-            LineThickness: lineThickness);
-        if (ShowPlannerValidationWarning(input))
-            return;
 
         Result = CreateResult(
             input.UseXAxis,
@@ -381,19 +312,33 @@ public sealed class ChartAxisFormatDialog : Window
         DialogResult = true;
     }
 
-    private bool ShowPlannerValidationWarning(ChartAxisInput input)
+    private ChartDataLabelNumberFormat? SelectedNumberFormat() =>
+        _numberFormatBox.SelectedItem is ChartDataLabelNumberFormat value ? value : null;
+
+    private ChartAxisTickStyle? SelectedMajorTickStyle() =>
+        _majorTickBox.SelectedItem is ChartAxisTickStyle value ? value : null;
+
+    private ChartAxisTickStyle? SelectedMinorTickStyle() =>
+        _minorTickBox.SelectedItem is ChartAxisTickStyle value ? value : null;
+
+    private void ShowPlannerParseWarning(ChartAxisFormatParseIssue issue)
     {
-        return ChartAxisPlanner.ValidateIssue(input) switch
+        var (message, target) = issue switch
         {
-            ChartAxisValidationIssue.MinimumNotBelowMaximum => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMaximumMessage"), _maximumBox),
-            ChartAxisValidationIssue.MajorUnitNotPositive => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"), _majorUnitBox),
-            ChartAxisValidationIssue.MinorUnitNotPositive => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"), _minorUnitBox),
-            ChartAxisValidationIssue.GridlineThicknessNotPositive => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"), _gridlineThicknessBox),
-            ChartAxisValidationIssue.LabelFontSizeOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"), _labelFontSizeBox),
-            ChartAxisValidationIssue.LabelAngleOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"), _labelAngleBox),
-            ChartAxisValidationIssue.LineThicknessOutOfRange => ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"), _lineThicknessBox),
-            _ => false,
+            ChartAxisFormatParseIssue.Maximum => (UiText.Get("ChartAxisFormat_InvalidMaximumMessage"), _maximumBox),
+            ChartAxisFormatParseIssue.MajorUnit => (UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"), _majorUnitBox),
+            ChartAxisFormatParseIssue.MinorUnit => (UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"), _minorUnitBox),
+            ChartAxisFormatParseIssue.MajorGridlineColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _majorGridColorBox),
+            ChartAxisFormatParseIssue.MinorGridlineColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _minorGridColorBox),
+            ChartAxisFormatParseIssue.GridlineThickness => (UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"), _gridlineThicknessBox),
+            ChartAxisFormatParseIssue.LabelTextColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _labelColorBox),
+            ChartAxisFormatParseIssue.LabelFontSize => (UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"), _labelFontSizeBox),
+            ChartAxisFormatParseIssue.LabelAngle => (UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"), _labelAngleBox),
+            ChartAxisFormatParseIssue.LineColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _lineColorBox),
+            ChartAxisFormatParseIssue.LineThickness => (UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"), _lineThicknessBox),
+            _ => (UiText.Get("ChartAxisFormat_InvalidMinimumMessage"), _minimumBox),
         };
+        ShowInvalidInputWarning(message, target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

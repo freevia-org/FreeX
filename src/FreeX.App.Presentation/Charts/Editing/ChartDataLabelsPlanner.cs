@@ -1,3 +1,5 @@
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -36,6 +38,17 @@ public enum ChartDataLabelsValidationIssue
     BorderThicknessOutOfRange,
     FontSizeOutOfRange,
     AngleOutOfRange,
+}
+
+public enum ChartDataLabelsParseIssue
+{
+    None,
+    FillColor,
+    BorderColor,
+    TextColor,
+    BorderThickness,
+    FontSize,
+    Angle,
 }
 
 /// <summary>
@@ -81,6 +94,10 @@ public static class ChartDataLabelsPlanner
 
     /// <summary>The selectable data-label positions, in display order.</summary>
     public static IReadOnlyList<ChartDataLabelPositionChoice> GetPositionChoices() => PositionCatalog;
+
+    public static IReadOnlyList<ChartDataLabelSeparator> GetSeparatorChoices() => SeparatorCatalog;
+
+    public static IReadOnlyList<ChartDataLabelNumberFormat> GetNumberFormatChoices() => NumberFormatCatalog;
 
     /// <summary>The English display label for <paramref name="position"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartDataLabelPosition position)
@@ -193,6 +210,117 @@ public static class ChartDataLabelsPlanner
             DataLabelBorderThickness: normalized.BorderThickness,
             DataLabelFontSize: normalized.FontSize,
             DataLabelAngle: normalized.Angle);
+    }
+
+    public static bool TryParseDialogInput(
+        bool showDataLabels,
+        ChartDataLabelPosition? selectedPosition,
+        bool showValue,
+        bool showLegendKey,
+        bool showCategoryName,
+        bool showSeriesName,
+        bool showPercentage,
+        ChartDataLabelSeparator? selectedSeparator,
+        ChartDataLabelNumberFormat? selectedNumberFormat,
+        bool showCallouts,
+        string? fillColorText,
+        string? borderColorText,
+        string? textColorText,
+        string? borderThicknessText,
+        string? fontSizeText,
+        string? angleText,
+        out ChartDataLabelsInput input,
+        out ChartDataLabelsParseIssue issue)
+    {
+        input = default;
+
+        if (!ColorInputParser.TryParseOptionalHexColor(fillColorText ?? string.Empty, out var fillColor))
+        {
+            issue = ChartDataLabelsParseIssue.FillColor;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(borderColorText ?? string.Empty, out var borderColor))
+        {
+            issue = ChartDataLabelsParseIssue.BorderColor;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(textColorText ?? string.Empty, out var textColor))
+        {
+            issue = ChartDataLabelsParseIssue.TextColor;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                borderThicknessText ?? string.Empty,
+                MinBorderThickness,
+                MaxBorderThickness,
+                out var borderThickness))
+        {
+            issue = ChartDataLabelsParseIssue.BorderThickness;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                fontSizeText ?? string.Empty,
+                MinFontSize,
+                MaxFontSize,
+                out var fontSize))
+        {
+            issue = ChartDataLabelsParseIssue.FontSize;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                angleText ?? string.Empty,
+                MinAngle,
+                MaxAngle,
+                out var angle))
+        {
+            issue = ChartDataLabelsParseIssue.Angle;
+            return false;
+        }
+
+        input = new ChartDataLabelsInput(
+            showDataLabels,
+            selectedPosition is { } position && IsSelectablePosition(position)
+                ? position
+                : ChartDataLabelPosition.BestFit,
+            showValue,
+            showCategoryName,
+            showSeriesName,
+            showPercentage,
+            showLegendKey,
+            selectedSeparator is { } separator && IsKnownSeparator(separator)
+                ? separator
+                : ChartDataLabelSeparator.Comma,
+            selectedNumberFormat is { } numberFormat && IsKnownNumberFormat(numberFormat)
+                ? numberFormat
+                : ChartDataLabelNumberFormat.General,
+            showCallouts,
+            fillColor,
+            borderColor,
+            textColor,
+            borderThickness,
+            fontSize,
+            angle);
+
+        if (ValidateIssue(input) is { } validationIssue)
+        {
+            issue = validationIssue switch
+            {
+                ChartDataLabelsValidationIssue.BorderThicknessOutOfRange => ChartDataLabelsParseIssue.BorderThickness,
+                ChartDataLabelsValidationIssue.FontSizeOutOfRange => ChartDataLabelsParseIssue.FontSize,
+                ChartDataLabelsValidationIssue.AngleOutOfRange => ChartDataLabelsParseIssue.Angle,
+                _ => ChartDataLabelsParseIssue.BorderThickness,
+            };
+            return false;
+        }
+
+        input = Normalize(input);
+        issue = ChartDataLabelsParseIssue.None;
+        return true;
     }
 
     private static ChartDataLabelSeparator? NormalizeSeparator(ChartDataLabelSeparator? separator) =>
