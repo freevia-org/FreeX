@@ -2923,9 +2923,10 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(_cellAddressText, "Cell address");
         AutomationProperties.SetHelpText(_cellAddressText, "Shows the active cell address.");
 
+        var collapsedFormulaBarPlan = FormulaBarChromePlanner.BuildExpansion(expanded: false);
         _formulaBox.MinWidth = 320;
-        _formulaBox.Height = 30;
-        _formulaBox.MinHeight = 30;
+        _formulaBox.Height = collapsedFormulaBarPlan.EditorHeight;
+        _formulaBox.MinHeight = collapsedFormulaBarPlan.EditorHeight;
         _formulaBox.FontFamily = FormulaBarFontFamily;
         _formulaBox.FontSize = 15;
         _formulaBox.Padding = new Thickness(6, 4, 6, 2);
@@ -3032,7 +3033,7 @@ public sealed partial class MainWindow : Window
         _formulaBarHost.Background = Brushes.White;
         _formulaBarHost.BorderBrush = ToolbarBorder;
         _formulaBarHost.BorderThickness = new Thickness(0, 0, 0, 1);
-        _formulaBarHost.Height = 40;
+        _formulaBarHost.Height = collapsedFormulaBarPlan.HostHeight;
         _formulaBarHost.Child = formulaDock;
         ApplyFormulaBarExpansion();
         AutomationProperties.SetAutomationId(_formulaBarHost, "FormulaBarRow");
@@ -3124,23 +3125,25 @@ public sealed partial class MainWindow : Window
             _formulaBarExpanded = !_formulaBarExpanded;
             ApplyFormulaBarExpansion();
         };
-        AutomationProperties.SetAutomationId(_formulaExpandButton, FormulaBarChromePlanner.ExpandButton.AutomationId);
-        ApplyFormulaBarExpandAutomation();
+        var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
+        AutomationProperties.SetAutomationId(_formulaExpandButton, plan.Button.AutomationId);
+        ApplyFormulaBarExpandAutomation(plan.Button);
     }
 
     private void ApplyFormulaBarExpansion()
     {
-        _formulaBox.AcceptsReturn = _formulaBarExpanded;
-        _formulaBox.Height = _formulaBarExpanded ? 84 : 30;
-        _formulaBox.MinHeight = _formulaBarExpanded ? 84 : 30;
-        _formulaBarHost.Height = _formulaBarExpanded ? 94 : 40;
-        _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: _formulaBarExpanded);
-        ApplyFormulaBarExpandAutomation();
+        var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
+
+        _formulaBox.AcceptsReturn = plan.AcceptsReturn;
+        _formulaBox.Height = plan.EditorHeight;
+        _formulaBox.MinHeight = plan.EditorHeight;
+        _formulaBarHost.Height = plan.HostHeight;
+        _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp);
+        ApplyFormulaBarExpandAutomation(plan.Button);
     }
 
-    private void ApplyFormulaBarExpandAutomation()
+    private void ApplyFormulaBarExpandAutomation(FormulaBarChromeElementPlan plan)
     {
-        var plan = FormulaBarChromePlanner.ExpansionButton(_formulaBarExpanded);
         AutomationProperties.SetName(_formulaExpandButton, FormulaBarText(plan.AutomationNameResourceKey));
         AutomationProperties.SetHelpText(_formulaExpandButton, FormulaBarText(plan.HelpTextResourceKey));
     }

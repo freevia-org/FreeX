@@ -64,21 +64,34 @@ public sealed class FormulaBarChromePlannerTests
     }
 
     [Theory]
-    [InlineData(false, FormulaBarChromeElement.ExpandButton, "MainWindow_AutomationName_ExpandFormulaBar", "MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor")]
-    [InlineData(true, FormulaBarChromeElement.CollapseButton, "MainWindow_AutomationName_CollapseFormulaBar", "MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor")]
-    public void ExpansionButton_ChoosesStateSpecificAutomationPlan(
+    [InlineData(false, FormulaBarChromeElement.ExpandButton, "MainWindow_AutomationName_ExpandFormulaBar", "MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor", 30, 40, false, "MainWindow_TooltipTitle_ExpandFormulaBar", "MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor")]
+    [InlineData(true, FormulaBarChromeElement.CollapseButton, "MainWindow_AutomationName_CollapseFormulaBar", "MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor", 84, 94, true, "MainWindow_TooltipTitle_CollapseFormulaBar", "MainWindow_TooltipDescription_CollapseTheFormulaBarToASingleLineEditor")]
+    public void BuildExpansion_ChoosesStateSpecificEditorChromePlan(
         bool expanded,
         FormulaBarChromeElement expectedElement,
         string expectedNameKey,
-        string expectedHelpKey)
+        string expectedHelpKey,
+        double expectedEditorHeight,
+        double expectedHostHeight,
+        bool expectedChevronPointsUp,
+        string expectedTooltipTitleKey,
+        string expectedTooltipDescriptionKey)
     {
-        var plan = FormulaBarChromePlanner.ExpansionButton(expanded);
+        var plan = FormulaBarChromePlanner.BuildExpansion(expanded);
 
-        plan.Element.Should().Be(expectedElement);
-        plan.AutomationId.Should().Be("FormulaBarExpandBtn");
-        plan.AutomationNameResourceKey.Should().Be(expectedNameKey);
-        plan.HelpTextResourceKey.Should().Be(expectedHelpKey);
-        plan.KeyTip.Should().Be("BX");
+        plan.Expanded.Should().Be(expanded);
+        plan.AcceptsReturn.Should().Be(expanded);
+        plan.EditorHeight.Should().Be(expectedEditorHeight);
+        plan.HostHeight.Should().Be(expectedHostHeight);
+        plan.ChevronPointsUp.Should().Be(expectedChevronPointsUp);
+        plan.TooltipTitleResourceKey.Should().Be(expectedTooltipTitleKey);
+        plan.TooltipDescriptionResourceKey.Should().Be(expectedTooltipDescriptionKey);
+        plan.Button.Element.Should().Be(expectedElement);
+        plan.Button.AutomationId.Should().Be("FormulaBarExpandBtn");
+        plan.Button.AutomationNameResourceKey.Should().Be(expectedNameKey);
+        plan.Button.HelpTextResourceKey.Should().Be(expectedHelpKey);
+        plan.Button.KeyTip.Should().Be("BX");
+        FormulaBarChromePlanner.ExpansionButton(expanded).Should().Be(plan.Button);
     }
 
     private static string FindRepositoryFile(params string[] relativeParts)

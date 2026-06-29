@@ -32,8 +32,23 @@ public readonly record struct FormulaBarChromeElementPlan(
     string ContentResourceKey = "",
     bool IsItalic = false);
 
+public readonly record struct FormulaBarExpansionPlan(
+    bool Expanded,
+    bool AcceptsReturn,
+    double EditorHeight,
+    double HostHeight,
+    bool ChevronPointsUp,
+    FormulaBarChromeElementPlan Button,
+    string TooltipTitleResourceKey,
+    string TooltipDescriptionResourceKey);
+
 public static class FormulaBarChromePlanner
 {
+    public const double CollapsedEditorHeight = 30;
+    public const double ExpandedEditorHeight = 84;
+    public const double CollapsedHostHeight = 40;
+    public const double ExpandedHostHeight = 94;
+
     public static FormulaBarChromeElementPlan NameBox { get; } = new(
         FormulaBarChromeElement.NameBox,
         "CellAddressBox",
@@ -116,5 +131,26 @@ public static class FormulaBarChromePlanner
     ];
 
     public static FormulaBarChromeElementPlan ExpansionButton(bool expanded) =>
-        expanded ? CollapseButton : ExpandButton;
+        BuildExpansion(expanded).Button;
+
+    public static FormulaBarExpansionPlan BuildExpansion(bool expanded) =>
+        expanded
+            ? new FormulaBarExpansionPlan(
+                Expanded: true,
+                AcceptsReturn: true,
+                EditorHeight: ExpandedEditorHeight,
+                HostHeight: ExpandedHostHeight,
+                ChevronPointsUp: true,
+                Button: CollapseButton,
+                TooltipTitleResourceKey: "MainWindow_TooltipTitle_CollapseFormulaBar",
+                TooltipDescriptionResourceKey: "MainWindow_TooltipDescription_CollapseTheFormulaBarToASingleLineEditor")
+            : new FormulaBarExpansionPlan(
+                Expanded: false,
+                AcceptsReturn: false,
+                EditorHeight: CollapsedEditorHeight,
+                HostHeight: CollapsedHostHeight,
+                ChevronPointsUp: false,
+                Button: ExpandButton,
+                TooltipTitleResourceKey: "MainWindow_TooltipTitle_ExpandFormulaBar",
+                TooltipDescriptionResourceKey: "MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor");
 }

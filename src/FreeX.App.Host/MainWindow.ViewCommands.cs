@@ -564,26 +564,15 @@ public partial class MainWindow
 
     private void ApplyFormulaBarExpansion()
     {
-        if (_formulaBarExpanded)
-        {
-            FormulaBar.Height       = 84;
-            FormulaBar.AcceptsReturn = true;
-            FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: true);
-            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationName_CollapseFormulaBar"));
-            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor"));
-            RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipTitle_CollapseFormulaBar"));
-            RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipDescription_CollapseTheFormulaBarToASingleLineEditor"));
-        }
-        else
-        {
-            FormulaBar.Height       = 30;
-            FormulaBar.AcceptsReturn = false;
-            FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: false);
-            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
-            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor"));
-            RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipTitle_ExpandFormulaBar"));
-            RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor"));
-        }
+        var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
+
+        FormulaBar.Height = plan.EditorHeight;
+        FormulaBar.AcceptsReturn = plan.AcceptsReturn;
+        FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp);
+        AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get(plan.Button.AutomationNameResourceKey));
+        AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get(plan.Button.HelpTextResourceKey));
+        RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get(plan.TooltipTitleResourceKey));
+        RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get(plan.TooltipDescriptionResourceKey));
     }
 
     private static FrameworkElement CreateFormulaBarChevron(bool pointsUp) =>

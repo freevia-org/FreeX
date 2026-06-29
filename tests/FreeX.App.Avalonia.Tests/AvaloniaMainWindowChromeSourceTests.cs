@@ -210,7 +210,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         mainSource.Should().Contain("FormulaBarChromePlanner.CancelEditButton");
         mainSource.Should().Contain("FormulaBarChromePlanner.EnterEditButton");
         mainSource.Should().Contain("FormulaBarChromePlanner.InsertFunctionButton");
-        mainSource.Should().Contain("FormulaBarChromePlanner.ExpansionButton(_formulaBarExpanded)");
+        mainSource.Should().Contain("FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded)");
+        mainSource.Should().Contain("_formulaBox.Height = plan.EditorHeight;");
+        mainSource.Should().Contain("_formulaBarHost.Height = plan.HostHeight;");
+        mainSource.Should().Contain("ApplyFormulaBarExpandAutomation(plan.Button)");
         mainSource.Should().Contain("AutomationProperties.SetAutomationId(_formulaBarHost, \"FormulaBarRow\");");
         toggleSource.Should().Contain("_formulaBarHost.IsVisible = visible;");
     }
