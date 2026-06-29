@@ -9,6 +9,7 @@ using Avalonia.Platform.Storage;
 
 using FreeX.App.Presentation.Import;
 using FreeX.App.Services;
+using Free.Shared.Shell.Avalonia;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -283,7 +284,7 @@ public sealed partial class MainWindow
             {
                 Title = UiText.Get("GetData_FilePickerTitle"),
                 AllowMultiple = false,
-                FileTypeFilter = CreateFilePickerFileTypes(pickerPlan.FileTypes),
+                FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes),
             });
 
             IStorageFile? file = null;

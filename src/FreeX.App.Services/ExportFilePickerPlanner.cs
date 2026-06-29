@@ -1,5 +1,5 @@
-using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 
 namespace FreeX.App.Services;
 
@@ -9,7 +9,7 @@ public sealed record ExportSaveDialogPlan(
     int DefaultFilterIndex);
 
 public sealed record ExportSavePickerPlan(
-    IReadOnlyList<FilePickerTypeDescriptor> FileTypes,
+    IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes,
     string SuggestedFileName,
     string DefaultExtensionWithoutDot);
 
@@ -69,7 +69,7 @@ public static class ExportFilePickerPlanner
         ExportFileFormat format) =>
         BuildSuggestedExportBaseName(sourceName, fallbackDisplayName) + ExtensionFor(format);
 
-    public static FilePickerTypeDescriptor BuildPickerType(ExportFileFormat format) =>
+    public static FileDialogPickerTypeDescriptor BuildPickerType(ExportFileFormat format) =>
         new(DisplayNameFor(format), ["*" + ExtensionFor(format)]);
 
     private static string BuildSuggestedExportBaseName(string? sourceName, string fallbackDisplayName)

@@ -11,7 +11,7 @@ public sealed class SheetBackgroundPickerSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs"));
 
         source.Should().Contain("SheetBackgroundPickerPlanner.BuildOpenPickerPlan()");
-        source.Should().Contain("CreateFilePickerFileTypes(pickerPlan.FileTypes)");
+        source.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes)");
         source.Should().Contain("SheetBackgroundPickerPlanner.IsSupportedImagePath(file.Name)");
         source.Should().Contain("SheetBackgroundPickerPlanner.TryBuildBackgroundImage(imageBytes, file.Name, out var background)");
         source.Should().NotContain("FileTypeFilter = [PictureFileType]");

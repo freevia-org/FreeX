@@ -20571,7 +20571,7 @@ public sealed partial class MainWindow : Window
         }
 
         var openPlan = WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats);
-        var fileTypes = CreateFilePickerFileTypes(openPlan.FileTypes);
+        var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(openPlan.FileTypes);
         if (fileTypes.Count == 0)
         {
             ShowOpenIssue("No open formats are available.");
@@ -20971,7 +20971,7 @@ public sealed partial class MainWindow : Window
                 _session.Workbook.Name,
                 _session.DisplayName,
                 NativeWorkbookExtension);
-            var fileTypes = CreateFilePickerFileTypes(savePlan.FileTypes);
+            var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(savePlan.FileTypes);
             if (fileTypes.Count == 0)
             {
                 ShowSaveIssue("No save formats are available.");
@@ -21432,7 +21432,7 @@ public sealed partial class MainWindow : Window
     private async Task<IStorageFile?> ShowPortablePdfSavePickerAsync(string title)
     {
         var pickerPlan = ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle);
-        var fileTypes = CreateFilePickerFileTypes(pickerPlan.FileTypes);
+        var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes);
         return await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = title,
@@ -21484,16 +21484,6 @@ public sealed partial class MainWindow : Window
             UpdateSaveButton();
         }
     }
-
-    private static IReadOnlyList<FilePickerFileType> CreateFilePickerFileTypes(
-        IEnumerable<FilePickerTypeDescriptor> descriptors) =>
-        descriptors.Select(CreateFilePickerFileType).ToList();
-
-    private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor) =>
-        new(descriptor.DisplayName)
-        {
-            Patterns = descriptor.Patterns.ToList(),
-        };
 
     private void ShowSaveIssue(string message)
     {

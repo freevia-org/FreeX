@@ -1,7 +1,7 @@
 using FreeX.Core.IO;
 using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
 using FileDialogRequestPlanner = Free.Shared.IO.FileDialogRequestPlanner;
-using SharedFileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
+using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 
 namespace FreeX.App.Services;
 
@@ -13,10 +13,10 @@ public sealed record WorkbookSaveDialogPlan(
     string DefaultExtensionWithDot,
     int FilterIndex);
 
-public sealed record WorkbookOpenPickerPlan(IReadOnlyList<FilePickerTypeDescriptor> FileTypes);
+public sealed record WorkbookOpenPickerPlan(IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes);
 
 public sealed record WorkbookSavePickerPlan(
-    IReadOnlyList<FilePickerTypeDescriptor> FileTypes,
+    IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes,
     string SuggestedFileName,
     string DefaultExtensionWithoutDot);
 
@@ -63,7 +63,7 @@ public static class WorkbookFilePickerPlanner
         var plan = FileDialogRequestPlanner.BuildOpenPickerPlan(
             FileFormatDialogDescriptorAdapter.ToDialogDescriptors(openFormats),
             AllSupportedWorkbooksName);
-        return new WorkbookOpenPickerPlan(MapPickerTypes(plan.FileTypes));
+        return new WorkbookOpenPickerPlan(plan.FileTypes);
     }
 
     public static WorkbookSavePickerPlan BuildSavePickerPlan(
@@ -80,7 +80,7 @@ public static class WorkbookFilePickerPlanner
             normalizedExtension,
             preferredFirstExtension: normalizedExtension);
         return new WorkbookSavePickerPlan(
-            MapPickerTypes(plan.FileTypes),
+            plan.FileTypes,
             plan.SuggestedFileName,
             plan.DefaultExtensionWithoutDot);
     }
@@ -113,10 +113,4 @@ public static class WorkbookFilePickerPlanner
 
     private static List<FileFormatDescriptor> GetFormats(IEnumerable<IFileAdapter> adapters) =>
         adapters.SelectMany(adapter => adapter.Formats).ToList();
-
-    private static IReadOnlyList<FilePickerTypeDescriptor> MapPickerTypes(
-        IEnumerable<SharedFileDialogPickerTypeDescriptor> descriptors) =>
-        descriptors
-            .Select(descriptor => new FilePickerTypeDescriptor(descriptor.DisplayName, descriptor.Patterns))
-            .ToList();
 }

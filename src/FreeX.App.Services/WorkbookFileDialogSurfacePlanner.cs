@@ -1,4 +1,4 @@
-using FreeX.Core.IO;
+using Free.Shared.IO;
 
 namespace FreeX.App.Services;
 
@@ -57,7 +57,7 @@ public static class WorkbookFileDialogSurfacePlanner
             DefaultExtension: pickerPlan.DefaultExtensionWithoutDot,
             FileTypes: ToRows(pickerPlan.FileTypes));
 
-    private static IReadOnlyList<WorkbookFileDialogTypeRow> ToRows(IReadOnlyList<FilePickerTypeDescriptor> fileTypes) =>
+    private static IReadOnlyList<WorkbookFileDialogTypeRow> ToRows(IReadOnlyList<FileDialogPickerTypeDescriptor> fileTypes) =>
         fileTypes
             .Select(type => new WorkbookFileDialogTypeRow(type.DisplayName, type.Patterns))
             .ToArray();

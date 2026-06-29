@@ -1,5 +1,6 @@
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
 
 namespace FreeX.App.Services;
 
@@ -8,7 +9,7 @@ public sealed record SheetBackgroundOpenDialogPlan(
     bool Multiselect);
 
 public sealed record SheetBackgroundOpenPickerPlan(
-    IReadOnlyList<FilePickerTypeDescriptor> FileTypes);
+    IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes);
 
 /// <summary>
 /// UI-free sheet-background image picker policy shared by native shells.
@@ -34,7 +35,7 @@ public static class SheetBackgroundPickerPlanner
     public static SheetBackgroundOpenPickerPlan BuildOpenPickerPlan() =>
         new([BuildPickerType()]);
 
-    public static FilePickerTypeDescriptor BuildPickerType() =>
+    public static FileDialogPickerTypeDescriptor BuildPickerType() =>
         new(ImagePickerDisplayName, SupportedImagePatterns);
 
     public static bool IsSupportedImagePath(string path) =>

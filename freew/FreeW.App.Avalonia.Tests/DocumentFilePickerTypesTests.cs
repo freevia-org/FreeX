@@ -1,5 +1,7 @@
 using System.Linq;
 using Avalonia.Platform.Storage;
+using Free.Shared.IO;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.Core.IO;
 
@@ -75,6 +77,19 @@ public class DocumentFilePickerTypesTests
 
         types.Select(t => t.Name).Should().BeEquivalentTo(expectedNames);
         AllPatterns(types).Should().Contain("*.docx");
+    }
+
+    [Fact]
+    public void Shared_adapter_preserves_descriptor_labels_and_patterns()
+    {
+        var descriptor = new FileDialogPickerTypeDescriptor(
+            "Exact Label",
+            ["*.docx", "*.txt", "*.docx"]);
+
+        var type = AvaloniaFilePickerTypeAdapter.ToFileType(descriptor);
+
+        type.Name.Should().Be("Exact Label");
+        type.Patterns.Should().Equal("*.docx", "*.txt", "*.docx");
     }
 
     private static List<string> AllPatterns(IEnumerable<FilePickerFileType> types) =>
