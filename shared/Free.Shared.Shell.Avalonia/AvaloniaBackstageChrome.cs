@@ -56,12 +56,76 @@ public sealed record AvaloniaBackstageDialogLayoutSpec(Control Content, Control 
     public Thickness ContentMargin { get; init; } = new(0, 0, 0, 12);
 }
 
+public sealed record AvaloniaBackstagePaneSpec(IReadOnlyList<AvaloniaBackstagePaneElementSpec> Elements)
+{
+    public double Spacing { get; init; } = 14;
+}
+
+public abstract record AvaloniaBackstagePaneElementSpec;
+
+public sealed record AvaloniaBackstageHeadingElementSpec(string Text) : AvaloniaBackstagePaneElementSpec;
+
+public sealed record AvaloniaBackstageSectionHeaderElementSpec(string Text) : AvaloniaBackstagePaneElementSpec;
+
+public sealed record AvaloniaBackstageNoteElementSpec(string Text, string AutomationId) : AvaloniaBackstagePaneElementSpec;
+
+public sealed record AvaloniaBackstageDetailRowsElementSpec(IReadOnlyList<AvaloniaBackstageDetailRowSpec> Rows)
+    : AvaloniaBackstagePaneElementSpec;
+
+public sealed record AvaloniaBackstageDetailRowSpec(string Label, string Value, string ValueAutomationId);
+
+public sealed record AvaloniaBackstageActionRowElementSpec(IReadOnlyList<AvaloniaBackstageActionButtonSpec> Actions)
+    : AvaloniaBackstagePaneElementSpec
+{
+    public Orientation Orientation { get; init; } = Orientation.Horizontal;
+    public double Spacing { get; init; } = 8;
+}
+
+public sealed record AvaloniaBackstageRadioGroupElementSpec(
+    string GroupName,
+    IReadOnlyList<AvaloniaBackstageRadioOptionSpec> Options)
+    : AvaloniaBackstagePaneElementSpec;
+
+public sealed record AvaloniaBackstageRadioOptionSpec(
+    string Text,
+    string AutomationId,
+    Action Select)
+{
+    public bool IsEnabled { get; init; } = true;
+    public bool IsChecked { get; init; }
+    public Thickness Margin { get; init; } = new(0, 2);
+}
+
 /// <summary>
 /// Shared chrome builders for Avalonia Backstage panes. Apps supply pane plans, text, callbacks,
 /// sizing, and app colors; this class only centralizes common visual construction.
 /// </summary>
 public static class AvaloniaBackstageChrome
 {
+    public static StackPanel CreatePane(AvaloniaBackstagePaneSpec spec, AvaloniaBackstageChromeStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentNullException.ThrowIfNull(spec.Elements);
+        ArgumentNullException.ThrowIfNull(style);
+
+        var pane = new StackPanel { Spacing = spec.Spacing };
+        foreach (var element in spec.Elements)
+        {
+            pane.Children.Add(element switch
+            {
+                AvaloniaBackstageHeadingElementSpec heading => CreateHeading(heading.Text, style),
+                AvaloniaBackstageSectionHeaderElementSpec section => CreateSectionHeader(section.Text, style),
+                AvaloniaBackstageNoteElementSpec note => CreateNote(note.Text, style, note.AutomationId),
+                AvaloniaBackstageDetailRowsElementSpec details => CreateDetailRows(details, style),
+                AvaloniaBackstageActionRowElementSpec actions => CreateActionRow(actions),
+                AvaloniaBackstageRadioGroupElementSpec group => CreateRadioGroup(group),
+                _ => throw new ArgumentOutOfRangeException(nameof(element), element, null),
+            });
+        }
+
+        return pane;
+    }
+
     public static Border CreateContentArea(AvaloniaBackstageContentAreaSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -221,6 +285,23 @@ public static class AvaloniaBackstageChrome
         grid.Children.Add(valueBlock);
     }
 
+    public static Grid CreateDetailRows(
+        AvaloniaBackstageDetailRowsElementSpec spec,
+        AvaloniaBackstageChromeStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentNullException.ThrowIfNull(spec.Rows);
+        ArgumentNullException.ThrowIfNull(style);
+
+        var grid = CreateDetailGrid();
+        foreach (var row in spec.Rows)
+        {
+            AddDetailRow(grid, row.Label, row.Value, row.ValueAutomationId, style);
+        }
+
+        return grid;
+    }
+
     public static Button CreateActionButton(AvaloniaBackstageActionButtonSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -241,6 +322,54 @@ public static class AvaloniaBackstageChrome
         AutomationProperties.SetAutomationId(button, spec.AutomationId);
         button.Click += (_, _) => spec.Action();
         return button;
+    }
+
+    public static StackPanel CreateActionRow(AvaloniaBackstageActionRowElementSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentNullException.ThrowIfNull(spec.Actions);
+
+        var row = new StackPanel
+        {
+            Orientation = spec.Orientation,
+            Spacing = spec.Spacing,
+        };
+        foreach (var action in spec.Actions)
+        {
+            row.Children.Add(CreateActionButton(action));
+        }
+
+        return row;
+    }
+
+    public static StackPanel CreateRadioGroup(AvaloniaBackstageRadioGroupElementSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentNullException.ThrowIfNull(spec.Options);
+
+        var group = new StackPanel();
+        foreach (var option in spec.Options)
+        {
+            ArgumentNullException.ThrowIfNull(option.Select);
+
+            var radio = new RadioButton
+            {
+                GroupName = spec.GroupName,
+                Content = option.Text,
+                IsEnabled = option.IsEnabled,
+                IsChecked = option.IsChecked,
+                Margin = option.Margin,
+            };
+            AutomationProperties.SetAutomationId(radio, option.AutomationId);
+            radio.IsCheckedChanged += (_, _) =>
+            {
+                if (radio.IsChecked == true)
+                    option.Select();
+            };
+            group.Children.Add(radio);
+        }
+
+        return group;
     }
 
     public static Button CreateStackedActionButton(
