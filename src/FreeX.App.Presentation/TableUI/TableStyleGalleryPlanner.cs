@@ -13,6 +13,33 @@ public sealed record TableStyleGalleryOption(
     string StyleName,
     StructuredTableStyleBanding Banding);
 
+/// <summary>One renderable item in the shared table-style gallery surface.</summary>
+public sealed record TableStyleGallerySurfaceItem(
+    int Index,
+    string Family,
+    int FamilyIndex,
+    string Label,
+    string KeyTip,
+    TableStyleGalleryOption Option)
+{
+    public string StyleName => Option.StyleName;
+
+    public StructuredTableStyleBanding Banding => Option.Banding;
+}
+
+/// <summary>One Light / Medium / Dark section in the shared table-style gallery surface.</summary>
+public sealed record TableStyleGallerySurfaceSection(
+    string Family,
+    IReadOnlyList<TableStyleGallerySurfaceItem> Items);
+
+/// <summary>
+/// Shared, UI-neutral descriptor for shells that render the table-style gallery. <see cref="Groups"/> preserves
+/// the section order and <see cref="Items"/> preserves the flat selection order used by list-based shells.
+/// </summary>
+public sealed record TableStyleGallerySurfaceDescriptor(
+    IReadOnlyList<TableStyleGallerySurfaceSection> Groups,
+    IReadOnlyList<TableStyleGallerySurfaceItem> Items);
+
 /// <summary>
 /// Portable, UI-free planning for the structured-table "Table Styles" gallery: the built-in style catalog Excel
 /// ships (21 Light / 28 Medium / 11 Dark names) in gallery order, with the banding colors resolved by the shared
@@ -40,12 +67,30 @@ public static class TableStyleGalleryPlanner
     public static IReadOnlyList<TableStyleGalleryOption> GetOptions(WorkbookTheme theme)
     {
         ArgumentNullException.ThrowIfNull(theme);
-        return
-        [
-            ..CreateStyleGroup("Light", LightCount, theme),
-            ..CreateStyleGroup("Medium", MediumCount, theme),
-            ..CreateStyleGroup("Dark", DarkCount, theme),
-        ];
+        return GetSurface(theme)
+            .Items
+            .Select(item => item.Option)
+            .ToArray();
+    }
+
+    /// <summary>The shared gallery surface descriptor resolved for the default theme.</summary>
+    public static TableStyleGallerySurfaceDescriptor GetSurface() =>
+        GetSurface(WorkbookTheme.Office);
+
+    /// <summary>The shared gallery surface descriptor resolved for <paramref name="theme"/>.</summary>
+    public static TableStyleGallerySurfaceDescriptor GetSurface(WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+
+        var items = new List<TableStyleGallerySurfaceItem>(LightCount + MediumCount + DarkCount);
+        var groups = new List<TableStyleGallerySurfaceSection>(3)
+        {
+            CreateStyleGroup("Light", LightCount, theme, items),
+            CreateStyleGroup("Medium", MediumCount, theme, items),
+            CreateStyleGroup("Dark", DarkCount, theme, items),
+        };
+
+        return new TableStyleGallerySurfaceDescriptor(groups, items);
     }
 
     /// <summary>The option at <paramref name="index"/>, clamped into range, for the default theme.</summary>
@@ -82,6 +127,34 @@ public static class TableStyleGalleryPlanner
         return 0;
     }
 
+    /// <summary>
+    /// The index of the table's current style within <paramref name="surface"/>, defaulting to the first item.
+    /// </summary>
+    public static int FindSurfaceItemIndex(TableStyleGallerySurfaceDescriptor surface, string? currentStyleName)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+        if (string.IsNullOrWhiteSpace(currentStyleName))
+            return 0;
+
+        for (var index = 0; index < surface.Items.Count; index++)
+        {
+            if (string.Equals(surface.Items[index].StyleName, currentStyleName, StringComparison.OrdinalIgnoreCase))
+                return index;
+        }
+
+        return 0;
+    }
+
+    /// <summary>The surface item at <paramref name="index"/>, clamped into range.</summary>
+    public static TableStyleGallerySurfaceItem GetSurfaceItem(TableStyleGallerySurfaceDescriptor surface, int index)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+        if (surface.Items.Count == 0)
+            throw new ArgumentException("The table-style gallery surface must contain at least one item.", nameof(surface));
+
+        return surface.Items[Math.Clamp(index, 0, surface.Items.Count - 1)];
+    }
+
     /// <summary>Finds the option for <paramref name="styleName"/> (false when it is blank or not built-in).</summary>
     public static bool TryGetOption(string? styleName, out TableStyleGalleryOption option) =>
         TryGetOption(styleName, WorkbookTheme.Office, out option);
@@ -105,13 +178,29 @@ public static class TableStyleGalleryPlanner
         return option is not null;
     }
 
-    private static IEnumerable<TableStyleGalleryOption> CreateStyleGroup(string family, int count, WorkbookTheme theme)
+    private static TableStyleGallerySurfaceSection CreateStyleGroup(
+        string family,
+        int count,
+        WorkbookTheme theme,
+        List<TableStyleGallerySurfaceItem> allItems)
     {
+        var groupItems = new List<TableStyleGallerySurfaceItem>(count);
         for (var index = 1; index <= count; index++)
         {
             var styleName = $"TableStyle{family}{index}";
             var banding = StructuredTableStyleBandingResolver.Resolve(styleName, theme);
-            yield return new TableStyleGalleryOption($"{family} {index}", styleName, banding);
+            var option = new TableStyleGalleryOption($"{family} {index}", styleName, banding);
+            var item = new TableStyleGallerySurfaceItem(
+                allItems.Count,
+                family,
+                index,
+                option.Label,
+                $"{family[0]}{index}",
+                option);
+            groupItems.Add(item);
+            allItems.Add(item);
         }
+
+        return new TableStyleGallerySurfaceSection(family, groupItems);
     }
 }

@@ -1283,7 +1283,7 @@ public sealed partial class MainWindowSourceHygieneTests
 
         source.Should().Contain("new CreateTableDialog");
         source.Should().Contain("TableCreationPlanner.BuildStyledCommand(");
-        source.Should().Contain("TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme)");
+        source.Should().Contain("ApplyTableFormat(item.Option);");
         source.Should().NotContain("new CreateStructuredTableCommand(");
         source.Should().NotContain("new CreateStyledStructuredTableCommand(");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId)");

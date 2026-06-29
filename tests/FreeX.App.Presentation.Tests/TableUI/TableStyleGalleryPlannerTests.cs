@@ -38,6 +38,50 @@ public sealed class TableStyleGalleryPlannerTests
     }
 
     [Fact]
+    public void GetSurface_ExposesSharedDescriptorGroupsItemsAndKeyTipsInOrder()
+    {
+        var surface = TableStyleGalleryPlanner.GetSurface();
+
+        surface.Groups.Select(group => (group.Family, group.Items.Count))
+            .Should()
+            .Equal(("Light", 21), ("Medium", 28), ("Dark", 11));
+        surface.Items.Should().HaveCount(60);
+        surface.Groups.SelectMany(group => group.Items).Should().Equal(surface.Items);
+
+        surface.Items[0].Should().BeEquivalentTo(new
+        {
+            Index = 0,
+            Family = "Light",
+            FamilyIndex = 1,
+            Label = "Light 1",
+            KeyTip = "L1",
+            StyleName = "TableStyleLight1"
+        });
+        surface.Items[21].Should().BeEquivalentTo(new
+        {
+            Index = 21,
+            Family = "Medium",
+            FamilyIndex = 1,
+            Label = "Medium 1",
+            KeyTip = "M1",
+            StyleName = "TableStyleMedium1"
+        });
+        surface.Items[59].Should().BeEquivalentTo(new
+        {
+            Index = 59,
+            Family = "Dark",
+            FamilyIndex = 11,
+            Label = "Dark 11",
+            KeyTip = "D11",
+            StyleName = "TableStyleDark11"
+        });
+
+        surface.Items.Select(item => item.Option)
+            .Should()
+            .Equal(TableStyleGalleryPlanner.GetOptions());
+    }
+
+    [Fact]
     public void GetOption_ClampsOutOfRangeIndexes()
     {
         TableStyleGalleryPlanner.GetOption(-10).StyleName.Should().Be("TableStyleLight1");
@@ -61,6 +105,20 @@ public sealed class TableStyleGalleryPlannerTests
 
         TableStyleGalleryPlanner.FindStyleIndex(options, "CustomStyle").Should().Be(0);
         TableStyleGalleryPlanner.FindStyleIndex(options, null).Should().Be(0);
+    }
+
+    [Fact]
+    public void SurfaceSelectionHelpers_LocateAndClampSharedItems()
+    {
+        var surface = TableStyleGalleryPlanner.GetSurface();
+
+        var medium2 = TableStyleGalleryPlanner.FindSurfaceItemIndex(surface, "tablestylemedium2");
+        surface.Items[medium2].StyleName.Should().Be("TableStyleMedium2");
+        TableStyleGalleryPlanner.FindSurfaceItemIndex(surface, "CustomStyle").Should().Be(0);
+        TableStyleGalleryPlanner.FindSurfaceItemIndex(surface, null).Should().Be(0);
+
+        TableStyleGalleryPlanner.GetSurfaceItem(surface, -1).StyleName.Should().Be("TableStyleLight1");
+        TableStyleGalleryPlanner.GetSurfaceItem(surface, 999).StyleName.Should().Be("TableStyleDark11");
     }
 
     [Fact]
