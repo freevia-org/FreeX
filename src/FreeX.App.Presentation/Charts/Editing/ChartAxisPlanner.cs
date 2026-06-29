@@ -8,6 +8,49 @@ namespace FreeX.App.Presentation.Charts.Editing;
 /// <summary>A number-format choice for the "Format Axis" dialog: the value plus its English label.</summary>
 public sealed record ChartAxisNumberFormatChoice(ChartDataLabelNumberFormat NumberFormat, string DisplayName);
 
+public enum ChartAxisDialogControlKind
+{
+    CheckBox,
+    ComboBox,
+    Color,
+    Number,
+}
+
+public enum ChartAxisDialogFieldId
+{
+    Minimum,
+    Maximum,
+    MajorUnit,
+    MinorUnit,
+    LogScale,
+    NumberFormat,
+    MajorGridlines,
+    MinorGridlines,
+    MajorGridlineColor,
+    MinorGridlineColor,
+    GridlineThickness,
+    MajorTickMarks,
+    MinorTickMarks,
+    ShowLabels,
+    LabelTextColor,
+    LabelFontSize,
+    LabelAngle,
+    LineColor,
+    LineThickness,
+}
+
+public sealed record ChartAxisDialogFieldDescriptor(
+    ChartAxisDialogFieldId Id,
+    ChartAxisDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartAxisDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartAxisDialogFieldDescriptor> Fields,
+    string? HelpResourceKey = null);
+
 /// <summary>
 /// The axis bounds / number-format / gridline state read from a chart and edited back through the dialog.
 /// A null <see cref="Minimum"/> / <see cref="Maximum"/> means "auto" (let the renderer pick). The first
@@ -132,11 +175,71 @@ public static class ChartAxisPlanner
         ChartAxisTickStyle.Cross,
     ];
 
+    private static readonly ChartAxisDialogFieldDescriptor[] AxisOptionFields =
+    [
+        new(ChartAxisDialogFieldId.Minimum, ChartAxisDialogControlKind.Number, "ChartAxisFormat_MinimumLabel", "ChartAxisMinimumBox", "ChartAxisFormat_MinimumHelpText"),
+        new(ChartAxisDialogFieldId.Maximum, ChartAxisDialogControlKind.Number, "ChartAxisFormat_MaximumLabel", "ChartAxisMaximumBox", "ChartAxisFormat_MaximumHelpText"),
+        new(ChartAxisDialogFieldId.MajorUnit, ChartAxisDialogControlKind.Number, "ChartAxisFormat_MajorUnitLabel", "ChartAxisMajorUnitBox", "ChartAxisFormat_MajorUnitHelpText"),
+        new(ChartAxisDialogFieldId.MinorUnit, ChartAxisDialogControlKind.Number, "ChartAxisFormat_MinorUnitLabel", "ChartAxisMinorUnitBox", "ChartAxisFormat_MinorUnitHelpText"),
+        new(ChartAxisDialogFieldId.LogScale, ChartAxisDialogControlKind.CheckBox, "ChartAxisFormat_LogScale", "ChartAxisLogScaleCheck"),
+        new(ChartAxisDialogFieldId.NumberFormat, ChartAxisDialogControlKind.ComboBox, "ChartAxisFormat_NumberFormatLabel", "ChartAxisNumberFormatCombo"),
+    ];
+
+    private static readonly ChartAxisDialogFieldDescriptor[] GridlineFields =
+    [
+        new(ChartAxisDialogFieldId.MajorGridlines, ChartAxisDialogControlKind.CheckBox, "ChartAxisFormat_MajorGridlines", "ChartAxisMajorGridlinesCheck"),
+        new(ChartAxisDialogFieldId.MinorGridlines, ChartAxisDialogControlKind.CheckBox, "ChartAxisFormat_MinorGridlines", "ChartAxisMinorGridlinesCheck"),
+        new(ChartAxisDialogFieldId.MajorGridlineColor, ChartAxisDialogControlKind.Color, "ChartAxisFormat_MajorGridlineColorLabel", "ChartAxisMajorGridlineColorBox"),
+        new(ChartAxisDialogFieldId.MinorGridlineColor, ChartAxisDialogControlKind.Color, "ChartAxisFormat_MinorGridlineColorLabel", "ChartAxisMinorGridlineColorBox"),
+        new(ChartAxisDialogFieldId.GridlineThickness, ChartAxisDialogControlKind.Number, "ChartAxisFormat_GridlineWidthLabel", "ChartAxisGridlineWidthBox", "ChartAxisFormat_GridlineWidthHelpText"),
+    ];
+
+    private static readonly ChartAxisDialogFieldDescriptor[] TickMarkFields =
+    [
+        new(ChartAxisDialogFieldId.MajorTickMarks, ChartAxisDialogControlKind.ComboBox, "ChartAxisFormat_MajorTickMarksLabel", "ChartAxisMajorTickMarksCombo"),
+        new(ChartAxisDialogFieldId.MinorTickMarks, ChartAxisDialogControlKind.ComboBox, "ChartAxisFormat_MinorTickMarksLabel", "ChartAxisMinorTickMarksCombo"),
+        new(ChartAxisDialogFieldId.ShowLabels, ChartAxisDialogControlKind.CheckBox, "ChartAxisFormat_ShowLabels", "ChartAxisLabelsCheck"),
+        new(ChartAxisDialogFieldId.LabelTextColor, ChartAxisDialogControlKind.Color, "ChartAxisFormat_LabelColorLabel", "ChartAxisLabelColorBox"),
+        new(ChartAxisDialogFieldId.LabelFontSize, ChartAxisDialogControlKind.Number, "ChartAxisFormat_LabelFontSizeLabel", "ChartAxisLabelFontSizeBox", "ChartAxisFormat_LabelFontSizeHelpText"),
+        new(ChartAxisDialogFieldId.LabelAngle, ChartAxisDialogControlKind.Number, "ChartAxisFormat_LabelAngleLabel", "ChartAxisLabelAngleBox", "ChartAxisFormat_LabelAngleHelpText"),
+        new(ChartAxisDialogFieldId.LineColor, ChartAxisDialogControlKind.Color, "ChartAxisFormat_AxisLineColorLabel", "ChartAxisLineColorBox"),
+        new(ChartAxisDialogFieldId.LineThickness, ChartAxisDialogControlKind.Number, "ChartAxisFormat_AxisLineWidthLabel", "ChartAxisLineWidthBox", "ChartAxisFormat_AxisLineWidthHelpText"),
+    ];
+
+    private static readonly ChartAxisDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartAxisFormat_AxisOptionsGroup", AxisOptionFields, "ChartAxisFormat_BoundsHelpText"),
+        new("ChartAxisFormat_GridlinesGroup", GridlineFields),
+        new("ChartAxisFormat_TickMarksGroup", TickMarkFields),
+    ];
+
     /// <summary>The selectable axis number formats, in display order.</summary>
     public static IReadOnlyList<ChartAxisNumberFormatChoice> GetNumberFormatChoices() => NumberFormatCatalog;
 
     /// <summary>The selectable tick-mark styles, in display order.</summary>
     public static IReadOnlyList<ChartAxisTickStyle> GetTickStyleChoices() => TickStyleCatalog;
+
+    public static IReadOnlyList<ChartAxisDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartAxisDialogSectionDescriptor GetAxisOptionsSection() => DialogSections[0];
+
+    public static ChartAxisDialogSectionDescriptor GetGridlinesSection() => DialogSections[1];
+
+    public static ChartAxisDialogSectionDescriptor GetTickMarksSection() => DialogSections[2];
+
+    public static ChartAxisDialogFieldDescriptor GetDialogField(ChartAxisDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
 
     /// <summary>The English display label for <paramref name="numberFormat"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartDataLabelNumberFormat numberFormat)
@@ -323,6 +426,66 @@ public static class ChartAxisPlanner
                 YAxisLineColor: normalized.LineColor,
                 YAxisLineThickness: normalized.LineThickness,
                 ClearYAxisBounds: clearBounds);
+    }
+
+    public static bool TryParseDialogInput(
+        bool useXAxis,
+        string? minimumText,
+        string? maximumText,
+        string? majorUnitText,
+        bool logScale,
+        ChartDataLabelNumberFormat? selectedNumberFormat,
+        bool showMajorGridlines,
+        bool showMinorGridlines,
+        out ChartAxisInput input,
+        out ChartAxisFormatParseIssue issue)
+    {
+        input = default;
+
+        if (!ChartDialogValueParser.TryParseNullableDouble(minimumText ?? string.Empty, out var minimum))
+        {
+            issue = ChartAxisFormatParseIssue.Minimum;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseNullableDouble(maximumText ?? string.Empty, out var maximum))
+        {
+            issue = ChartAxisFormatParseIssue.Maximum;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseNullableDouble(majorUnitText ?? string.Empty, out var majorUnit))
+        {
+            issue = ChartAxisFormatParseIssue.MajorUnit;
+            return false;
+        }
+
+        input = new ChartAxisInput(
+            UseXAxis: useXAxis,
+            Minimum: minimum,
+            Maximum: maximum,
+            MajorUnit: majorUnit,
+            LogScale: logScale,
+            NumberFormat: selectedNumberFormat is { } numberFormat && IsKnownNumberFormat(numberFormat)
+                ? numberFormat
+                : ChartDataLabelNumberFormat.General,
+            ShowMajorGridlines: showMajorGridlines,
+            ShowMinorGridlines: showMinorGridlines);
+
+        if (ValidateIssue(input) is { } validationIssue)
+        {
+            issue = validationIssue switch
+            {
+                ChartAxisValidationIssue.MinimumNotBelowMaximum => ChartAxisFormatParseIssue.Maximum,
+                ChartAxisValidationIssue.MajorUnitNotPositive => ChartAxisFormatParseIssue.MajorUnit,
+                _ => ChartAxisFormatParseIssue.Minimum,
+            };
+            return false;
+        }
+
+        input = Normalize(input);
+        issue = ChartAxisFormatParseIssue.None;
+        return true;
     }
 
     public static bool TryParseDialogInput(

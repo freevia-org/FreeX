@@ -699,6 +699,51 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void Axis_DialogDescriptor_CoversBoundsGridlinesTicksAndLineFields()
+    {
+        var sections = ChartAxisPlanner.GetDialogSections();
+        var fields = sections.SelectMany(section => section.Fields).ToList();
+
+        sections.Select(section => section.HeaderResourceKey)
+            .Should().Equal(
+                "ChartAxisFormat_AxisOptionsGroup",
+                "ChartAxisFormat_GridlinesGroup",
+                "ChartAxisFormat_TickMarksGroup");
+        ChartAxisPlanner.GetAxisOptionsSection().HelpResourceKey
+            .Should().Be("ChartAxisFormat_BoundsHelpText");
+        fields.Select(field => field.Id).Should().Equal(
+            ChartAxisDialogFieldId.Minimum,
+            ChartAxisDialogFieldId.Maximum,
+            ChartAxisDialogFieldId.MajorUnit,
+            ChartAxisDialogFieldId.MinorUnit,
+            ChartAxisDialogFieldId.LogScale,
+            ChartAxisDialogFieldId.NumberFormat,
+            ChartAxisDialogFieldId.MajorGridlines,
+            ChartAxisDialogFieldId.MinorGridlines,
+            ChartAxisDialogFieldId.MajorGridlineColor,
+            ChartAxisDialogFieldId.MinorGridlineColor,
+            ChartAxisDialogFieldId.GridlineThickness,
+            ChartAxisDialogFieldId.MajorTickMarks,
+            ChartAxisDialogFieldId.MinorTickMarks,
+            ChartAxisDialogFieldId.ShowLabels,
+            ChartAxisDialogFieldId.LabelTextColor,
+            ChartAxisDialogFieldId.LabelFontSize,
+            ChartAxisDialogFieldId.LabelAngle,
+            ChartAxisDialogFieldId.LineColor,
+            ChartAxisDialogFieldId.LineThickness);
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.LabelResourceKey));
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        ChartAxisPlanner.GetDialogField(ChartAxisDialogFieldId.Minimum)
+            .HelpResourceKey.Should().Be("ChartAxisFormat_MinimumHelpText");
+        ChartAxisPlanner.GetDialogField(ChartAxisDialogFieldId.GridlineThickness)
+            .HelpResourceKey.Should().Be("ChartAxisFormat_GridlineWidthHelpText");
+        ChartAxisPlanner.GetDialogField(ChartAxisDialogFieldId.LabelAngle)
+            .HelpResourceKey.Should().Be("ChartAxisFormat_LabelAngleHelpText");
+        ChartAxisPlanner.GetDialogField(ChartAxisDialogFieldId.LineThickness)
+            .HelpResourceKey.Should().Be("ChartAxisFormat_AxisLineWidthHelpText");
+    }
+
+    [Fact]
     public void Axis_Validate_RejectsMinimumNotBelowMaximum()
     {
         var input = new ChartAxisInput(true, Minimum: 10, Maximum: 5, MajorUnit: null,

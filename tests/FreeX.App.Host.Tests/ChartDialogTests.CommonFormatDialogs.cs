@@ -25,13 +25,14 @@ public sealed partial class ChartDialogTests
             "ChartAreaLegend_PlotAreaFillColorLabel",
             "ChartAreaLegend_LegendTextColorLabel",
             "ChartSeriesFormat_FillColorLabel",
-            "ChartTrendline_LineColorLabel",
-            "ChartAxisFormat_MajorGridlineColorLabel",
-            "ChartAxisFormat_AxisLineColorLabel"
+            "ChartTrendline_LineColorLabel"
         })
         {
             source.Should().Contain($"AddColorText(stack, UiText.Get(\"{key}\")");
         }
+
+        source.Should().Contain("AddColorText(stack, LabelText(ChartAxisDialogFieldId.MajorGridlineColor)");
+        source.Should().Contain("AddColorText(stack, LabelText(ChartAxisDialogFieldId.LineColor)");
     }
 
     [Fact]
@@ -44,9 +45,10 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAreaLegend_LegendGroup\")");
         source.Should().Contain("ChartDataLabelsPlanner.GetLabelOptionsSection()");
         source.Should().Contain("ChartDataLabelsPlanner.GetStyleSection()");
+        source.Should().Contain("ChartAxisPlanner.GetAxisOptionsSection()");
+        source.Should().Contain("ChartAxisPlanner.GetGridlinesSection()");
+        source.Should().Contain("ChartAxisPlanner.GetTickMarksSection()");
         source.Should().Contain("CreateGroupBox(UiText.Get(section.HeaderResourceKey)");
-        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAxisFormat_AxisOptionsGroup\")");
-        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAxisFormat_TickMarksGroup\")");
         source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartSeriesFormat_SeriesOptionsGroup\")");
         source.Should().Contain("CreateInlineHelp(");
         source.Should().Contain("AddNumericText");
@@ -69,11 +71,7 @@ public sealed partial class ChartDialogTests
             "ChartTrendline_DisplayEquation",
             "ChartTrendline_DisplayRSquared",
             "ChartErrorBars_ShowErrorBars",
-            "ChartErrorBars_EndCaps",
-            "ChartAxisFormat_LogScale",
-            "ChartAxisFormat_MajorGridlines",
-            "ChartAxisFormat_MinorGridlines",
-            "ChartAxisFormat_ShowLabels"
+            "ChartErrorBars_EndCaps"
         })
         {
             source.Should().Contain($"UiText.Get(\"{key}\")");
@@ -87,10 +85,6 @@ public sealed partial class ChartDialogTests
             "ChartAreaLegend_LegendPositionLabel",
             "ChartAreaLegend_LegendTextColorLabel",
             "ChartAreaLegend_LegendFontSizeLabel",
-            "ChartAxisFormat_MinimumLabel",
-            "ChartAxisFormat_MaximumLabel",
-            "ChartAxisFormat_MajorTickMarksLabel",
-            "ChartAxisFormat_MinorTickMarksLabel",
             "ChartSeriesFormat_SeriesLabel",
             "ChartSeriesFormat_DashStyleLabel",
             "ChartSeriesFormat_MarkerLabel",
@@ -104,6 +98,32 @@ public sealed partial class ChartDialogTests
         })
         {
             source.Should().Contain($"UiText.Get(\"{key}\")");
+        }
+
+        foreach (var fieldId in new[]
+        {
+            "Minimum",
+            "Maximum",
+            "MajorUnit",
+            "MinorUnit",
+            "LogScale",
+            "NumberFormat",
+            "MajorGridlines",
+            "MinorGridlines",
+            "MajorGridlineColor",
+            "MinorGridlineColor",
+            "GridlineThickness",
+            "MajorTickMarks",
+            "MinorTickMarks",
+            "ShowLabels",
+            "LabelTextColor",
+            "LabelFontSize",
+            "LabelAngle",
+            "LineColor",
+            "LineThickness"
+        })
+        {
+            source.Should().Contain($"LabelText(ChartAxisDialogFieldId.{fieldId})");
         }
 
         foreach (var fieldId in new[]

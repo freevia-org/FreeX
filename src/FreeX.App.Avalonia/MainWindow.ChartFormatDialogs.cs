@@ -358,21 +358,14 @@ public sealed partial class MainWindow
 
     private async Task<ChartAxisInput?> ShowChartAxisFormatDialogAsync(ChartAxisInput current, string commandLabel)
     {
-        var minimumBox = new TextBox { Text = FormatNullableDouble(current.Minimum), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
-        AutomationProperties.SetName(minimumBox, "Axis minimum");
-        AutomationProperties.SetAutomationId(minimumBox, "ChartAxisMinimumBox");
-        ApplyChartTextBoxChrome(minimumBox);
-        var maximumBox = new TextBox { Text = FormatNullableDouble(current.Maximum), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
-        AutomationProperties.SetName(maximumBox, "Axis maximum");
-        AutomationProperties.SetAutomationId(maximumBox, "ChartAxisMaximumBox");
-        ApplyChartTextBoxChrome(maximumBox);
-        var majorUnitBox = new TextBox { Text = FormatNullableDouble(current.MajorUnit), Width = 260, PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder") };
-        AutomationProperties.SetName(majorUnitBox, "Axis major unit");
-        AutomationProperties.SetAutomationId(majorUnitBox, "ChartAxisMajorUnitBox");
-        ApplyChartTextBoxChrome(majorUnitBox);
+        var minimumBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.Minimum, FormatNullableDouble(current.Minimum));
+        minimumBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
+        var maximumBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.Maximum, FormatNullableDouble(current.Maximum));
+        maximumBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
+        var majorUnitBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.MajorUnit, FormatNullableDouble(current.MajorUnit));
+        majorUnitBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
 
-        var logCheck = new CheckBox { Content = UiText.Get("ChartAxis_LogScale"), IsChecked = current.LogScale };
-        AutomationProperties.SetAutomationId(logCheck, "ChartAxisLogScaleCheck");
+        var logCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.LogScale, current.LogScale);
 
         var numberFormatChoices = ChartAxisPlanner.GetNumberFormatChoices();
         var numberFormatCombo = new ComboBox
@@ -381,43 +374,45 @@ public sealed partial class MainWindow
             ItemsSource = numberFormatChoices,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartAxisNumberFormatChoice.DisplayName)),
         };
-        AutomationProperties.SetName(numberFormatCombo, "Axis number format");
-        AutomationProperties.SetAutomationId(numberFormatCombo, "ChartAxisNumberFormatCombo");
+        ApplyAxisDescriptorAutomation(numberFormatCombo, ChartAxisDialogFieldId.NumberFormat);
         ApplyChartComboBoxChrome(numberFormatCombo);
         numberFormatCombo.SelectedItem =
             numberFormatChoices.FirstOrDefault(c => c.NumberFormat == current.NumberFormat)
             ?? (numberFormatChoices.Count > 0 ? numberFormatChoices[0] : null);
 
-        var majorGridCheck = new CheckBox { Content = UiText.Get("ChartAxis_ShowMajorGridlines"), IsChecked = current.ShowMajorGridlines };
-        AutomationProperties.SetAutomationId(majorGridCheck, "ChartAxisMajorGridlinesCheck");
-        var minorGridCheck = new CheckBox { Content = UiText.Get("ChartAxis_ShowMinorGridlines"), IsChecked = current.ShowMinorGridlines };
-        AutomationProperties.SetAutomationId(minorGridCheck, "ChartAxisMinorGridlinesCheck");
+        var majorGridCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.MajorGridlines, current.ShowMajorGridlines);
+        var minorGridCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.MinorGridlines, current.ShowMinorGridlines);
 
         var dialog = NewChartDialog($"Format {commandLabel}", "ChartAxisFormatDialog");
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartAxisFormat");
         okButton.Click += (_, _) =>
         {
-            if (!TryParseAutoDouble(minimumBox.Text, out var minimum)
-                || !TryParseAutoDouble(maximumBox.Text, out var maximum)
-                || !TryParseAutoDouble(majorUnitBox.Text, out var majorUnit))
-            {
-                RefreshShell(UiText.Get("ChartLoc_EnterNumberOrBlankAuto"));
-                return;
-            }
-
             var numberFormat = numberFormatCombo.SelectedItem is ChartAxisNumberFormatChoice picked
                 ? picked.NumberFormat
                 : ChartDataLabelNumberFormat.General;
-            dialog.Close((ChartAxisInput?)new ChartAxisInput(
-                current.UseXAxis,
-                minimum,
-                maximum,
-                majorUnit,
-                logCheck.IsChecked == true,
-                numberFormat,
-                majorGridCheck.IsChecked == true,
-                minorGridCheck.IsChecked == true));
+            if (!ChartAxisPlanner.TryParseDialogInput(
+                    current.UseXAxis,
+                    minimumBox.Text,
+                    maximumBox.Text,
+                    majorUnitBox.Text,
+                    logCheck.IsChecked == true,
+                    numberFormat,
+                    majorGridCheck.IsChecked == true,
+                    minorGridCheck.IsChecked == true,
+                    out var input,
+                    out var issue))
+            {
+                RefreshShell(issue switch
+                {
+                    ChartAxisFormatParseIssue.Maximum => UiText.Get("ChartAxisFormat_InvalidMaximumMessage"),
+                    ChartAxisFormatParseIssue.MajorUnit => UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"),
+                    _ => UiText.Get("ChartAxisFormat_InvalidMinimumMessage"),
+                });
+                return;
+            }
+
+            dialog.Close((ChartAxisInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartAxisInput?)null);
 
@@ -428,14 +423,14 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartAxis_MinimumLabel"), FontSize = 12 },
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.Minimum),
                 minimumBox,
-                new TextBlock { Text = UiText.Get("ChartAxis_MaximumLabel"), FontSize = 12 },
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.Maximum),
                 maximumBox,
-                new TextBlock { Text = UiText.Get("ChartAxis_MajorUnitLabel"), FontSize = 12 },
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MajorUnit),
                 majorUnitBox,
                 logCheck,
-                new TextBlock { Text = UiText.Get("ChartAxis_NumberFormatLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.NumberFormat, new Thickness(0, 6, 0, 0)),
                 numberFormatCombo,
                 majorGridCheck,
                 minorGridCheck,
@@ -444,6 +439,52 @@ public sealed partial class MainWindow
         };
 
         return await dialog.ShowDialog<ChartAxisInput?>(this);
+
+        ChartAxisDialogFieldDescriptor AxisField(ChartAxisDialogFieldId fieldId) =>
+            ChartAxisPlanner.GetDialogField(fieldId);
+
+        string AxisFieldLabel(ChartAxisDialogFieldId fieldId) =>
+            StripDisplayMnemonic(UiText.Get(AxisField(fieldId).LabelResourceKey));
+
+        void ApplyAxisDescriptorAutomation(Control control, ChartAxisDialogFieldId fieldId)
+        {
+            var descriptor = AxisField(fieldId);
+            AutomationProperties.SetName(control, AxisFieldLabel(fieldId));
+            AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
+            if (descriptor.HelpResourceKey is { } helpKey)
+                AutomationProperties.SetHelpText(control, UiText.Get(helpKey));
+        }
+
+        CheckBox MakeAxisDescriptorCheck(ChartAxisDialogFieldId fieldId, bool isChecked)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = AxisFieldLabel(fieldId),
+                IsChecked = isChecked,
+            };
+            ApplyAxisDescriptorAutomation(checkBox, fieldId);
+            return checkBox;
+        }
+
+        TextBlock MakeAxisDescriptorLabel(ChartAxisDialogFieldId fieldId, Thickness? margin = null) =>
+            new()
+            {
+                Text = AxisFieldLabel(fieldId),
+                FontSize = 12,
+                Margin = margin ?? default,
+            };
+
+        TextBox MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId fieldId, string text)
+        {
+            var box = new TextBox
+            {
+                Text = text,
+                Width = 260,
+            };
+            ApplyChartTextBoxChrome(box);
+            ApplyAxisDescriptorAutomation(box, fieldId);
+            return box;
+        }
     }
 
     // ---- Format Series (real, SetChartLayoutCommand via ChartSeriesFormatPlanner) ---------------------
