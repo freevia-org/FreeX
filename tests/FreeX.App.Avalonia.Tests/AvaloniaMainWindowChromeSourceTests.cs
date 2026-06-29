@@ -636,7 +636,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var tableStyleSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableStyleGallery.cs"));
 
         tableTabSource.Should().Contain("TableDesignCommandPlanner.TryGetActiveStructuredTable(");
-        tableTabSource.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangeCommand(");
+        tableTabSource.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangePlan(");
+        tableTabSource.Should().Contain("plan.TableDisplayName");
         tableTabSource.Should().Contain("TableDesignCommandPlanner.BuildStyleOptionsCommand(");
         tableTabSource.Should().Contain("TableDesignCommandPlanner.GetDisplayName(table)");
         tableNameSource.Should().Contain("TableDesignCommandPlanner.BuildRenameCommand(");

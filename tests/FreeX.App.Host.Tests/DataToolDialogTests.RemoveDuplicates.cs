@@ -240,10 +240,11 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         mainWindowSource.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
-        mainWindowSource.Should().Contain("var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);");
-        mainWindowSource.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(");
-        mainWindowSource.Should().Contain("activeRange,");
-        mainWindowSource.Should().Contain("new RemoveDuplicateRowsCommand(");
+        mainWindowSource.Should().Contain("RemoveDuplicatesPlanner.CreatePlan(");
+        mainWindowSource.Should().Contain("dialog.Result.SelectedColumnOffsets");
+        mainWindowSource.Should().Contain("var command = plan.CreateCommand(sheetId);");
+        mainWindowSource.Should().NotContain("var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);");
+        mainWindowSource.Should().NotContain("new RemoveDuplicateRowsCommand(");
         mainWindowSource.Should().Contain("UiText.Format(\"MainWindowMessage_RemoveDuplicatesRemovedRows\", activeSheetCommand?.RemovedRowCount ?? 0)");
     }
 

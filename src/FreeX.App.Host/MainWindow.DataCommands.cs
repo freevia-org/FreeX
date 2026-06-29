@@ -201,20 +201,28 @@ public partial class MainWindow
         var dialog = new RemoveDuplicatesDialog(columns, genericColumns, hasHeaders) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
+        var currentRange = SheetGrid.SelectedRange ?? range;
+        var planResult = RemoveDuplicatesPlanner.CreatePlan(
+            currentRange,
+            dialog.Result.HasHeaders,
+            dialog.Result.SelectedColumnOffsets);
+        if (!planResult.IsReady || planResult.Plan is null)
+        {
+            ShowOwnedMessage(
+                planResult.StatusText,
+                UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var plan = planResult.Plan;
         RemoveDuplicateRowsCommand? activeSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Remove Duplicates",
                 sheetId =>
                 {
-                    var currentRange = SheetGrid.SelectedRange ?? range;
-                    var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);
-                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(
-                        activeRange,
-                        sheetId);
-                    var command = new RemoveDuplicateRowsCommand(
-                        sheetId,
-                        sheetRange,
-                        dialog.Result.SelectedColumnOffsets);
+                    var command = plan.CreateCommand(sheetId);
                     if (sheetId == _currentSheetId)
                         activeSheetCommand = command;
                     return command;

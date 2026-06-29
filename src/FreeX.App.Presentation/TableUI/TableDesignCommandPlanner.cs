@@ -3,6 +3,10 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.TableUI;
 
+public sealed record TableConvertToRangePlan(
+    string TableDisplayName,
+    ConvertStructuredTableToRangeCommand Command);
+
 /// <summary>
 /// UI-free command planning for the contextual Table Design surface. Desktop shells still own dialogs,
 /// confirmations, status text, and renderer state; this planner owns the shared model lookup and command
@@ -81,6 +85,16 @@ public static class TableDesignCommandPlanner
     {
         ArgumentNullException.ThrowIfNull(table);
         return new ConvertStructuredTableToRangeCommand(sheetId, table.Id);
+    }
+
+    public static TableConvertToRangePlan BuildConvertToRangePlan(
+        SheetId sheetId,
+        StructuredTableModel table)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        return new TableConvertToRangePlan(
+            GetDisplayName(table),
+            BuildConvertToRangeCommand(sheetId, table));
     }
 
     public static IWorkbookCommand BuildApplyStyleCommand(
