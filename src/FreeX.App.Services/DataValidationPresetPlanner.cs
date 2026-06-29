@@ -12,14 +12,6 @@ public enum DataValidationSelectionState
     TooLargeToSummarize
 }
 
-public sealed record DataValidationRuleTypeMetadata(
-    DvType Type,
-    string DisplayName,
-    bool ShowsOperator,
-    bool ShowsDropdown,
-    bool RequiresFormula1,
-    bool RequiresFormula2);
-
 public sealed record DataValidationSelectionSummary(
     DataValidationSelectionState State,
     string ActiveCellReference,
@@ -37,27 +29,14 @@ public static class DataValidationPresetPlanner
 {
     public const int DefaultSelectionScanLimit = 4096;
 
-    private static readonly IReadOnlyList<DataValidationRuleTypeMetadata> RuleTypeMetadata =
-    [
-        new(DvType.Any, "Any value", ShowsOperator: false, ShowsDropdown: false, RequiresFormula1: false, RequiresFormula2: false),
-        new(DvType.WholeNumber, "Whole number", ShowsOperator: true, ShowsDropdown: false, RequiresFormula1: true, RequiresFormula2: true),
-        new(DvType.Decimal, "Decimal", ShowsOperator: true, ShowsDropdown: false, RequiresFormula1: true, RequiresFormula2: true),
-        new(DvType.List, "List", ShowsOperator: false, ShowsDropdown: true, RequiresFormula1: true, RequiresFormula2: false),
-        new(DvType.Date, "Date", ShowsOperator: true, ShowsDropdown: false, RequiresFormula1: true, RequiresFormula2: true),
-        new(DvType.Time, "Time", ShowsOperator: true, ShowsDropdown: false, RequiresFormula1: true, RequiresFormula2: true),
-        new(DvType.TextLength, "Text length", ShowsOperator: true, ShowsDropdown: false, RequiresFormula1: true, RequiresFormula2: true),
-        new(DvType.Custom, "Custom", ShowsOperator: false, ShowsDropdown: false, RequiresFormula1: true, RequiresFormula2: false)
-    ];
-
     public static IReadOnlyList<DataValidationRuleTypeMetadata> GetRuleTypeMetadata() =>
-        RuleTypeMetadata;
+        DataValidationDisplayTextPlanner.GetRuleTypeMetadata();
 
     public static string GetDisplayName(DvType type) =>
-        FindRuleTypeMetadata(type)?.DisplayName ?? type.ToString();
+        DataValidationDisplayTextPlanner.GetRuleTypeDisplayName(type);
 
     public static bool RequiresSecondFormula(DvType type, DvOperator op) =>
-        type is not DvType.Any and not DvType.List and not DvType.Custom &&
-        op is DvOperator.Between or DvOperator.NotBetween;
+        DataValidationDisplayTextPlanner.RequiresSecondFormula(type, op);
 
     public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)
     {
@@ -95,8 +74,8 @@ public static class DataValidationPresetPlanner
 
         var activeRule = activeCell.Sheet == sheet.Id ? GetFirstApplicableRule(sheet, activeCell) : null;
         var activeRuleClone = activeRule is null ? null : CloneRule(activeRule);
-        var activeCellReference = FormatCellReference(activeCell);
-        var selectionReference = FormatRangeReference(selectedRange);
+        var activeCellReference = DataValidationDisplayTextPlanner.FormatCellReference(activeCell);
+        var selectionReference = DataValidationDisplayTextPlanner.FormatRangeReference(selectedRange);
 
         if (selectedRange.Start.Sheet != sheet.Id)
         {
@@ -169,17 +148,6 @@ public static class DataValidationPresetPlanner
         return cellsWithRule == scannedCellCount
             ? DataValidationSelectionState.Uniform
             : DataValidationSelectionState.Partial;
-    }
-
-    private static DataValidationRuleTypeMetadata? FindRuleTypeMetadata(DvType type)
-    {
-        foreach (var item in RuleTypeMetadata)
-        {
-            if (item.Type == type)
-                return item;
-        }
-
-        return null;
     }
 
     private static DataValidation? GetFirstApplicableRule(Sheet sheet, CellAddress address)
@@ -294,15 +262,4 @@ public static class DataValidationPresetPlanner
         return true;
     }
 
-    private static string FormatCellReference(CellAddress address) =>
-        CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-    private static string FormatRangeReference(GridRange range)
-    {
-        var start = FormatCellReference(range.Start);
-        var end = FormatCellReference(range.End);
-        return string.Equals(start, end, StringComparison.Ordinal)
-            ? start
-            : $"{start}:{end}";
-    }
 }

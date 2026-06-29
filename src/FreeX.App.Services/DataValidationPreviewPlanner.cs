@@ -20,8 +20,8 @@ public static class DataValidationPreviewPlanner
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
 
-        var cellReference = FormatCellReference(activeCell);
-        var selectionReference = FormatRangeReference(selectedRange);
+        var cellReference = DataValidationDisplayTextPlanner.FormatCellReference(activeCell);
+        var selectionReference = DataValidationDisplayTextPlanner.FormatRangeReference(selectedRange);
         var lines = new List<string>
         {
             $"Cell: {cellReference}",
@@ -63,7 +63,7 @@ public static class DataValidationPreviewPlanner
     private static void AddListPreview(List<string> lines, DataValidation rule, Sheet sheet, Workbook workbook)
     {
         if (!string.IsNullOrWhiteSpace(rule.Formula1))
-            lines.Add($"Source: {FormatPreviewValue(rule.Formula1)}");
+            lines.Add($"Source: {DataValidationDisplayTextPlanner.FormatPreviewValue(rule.Formula1)}");
 
         lines.Add($"In-cell dropdown: {(rule.ShowDropdown ? "Shown" : "Hidden")}");
 
@@ -78,7 +78,7 @@ public static class DataValidationPreviewPlanner
         if (!rule.ShowInputMessage)
             return;
 
-        var prompt = FormatTitleAndMessage(rule.PromptTitle, rule.PromptMessage);
+        var prompt = DataValidationDisplayTextPlanner.FormatTitleAndMessage(rule.PromptTitle, rule.PromptMessage);
         if (prompt.Length > 0)
             lines.Add($"Input message: {prompt}");
     }
@@ -91,10 +91,10 @@ public static class DataValidationPreviewPlanner
             return;
         }
 
-        var message = FormatTitleAndMessage(rule.ErrorTitle, rule.ErrorMessage);
+        var message = DataValidationDisplayTextPlanner.FormatTitleAndMessage(rule.ErrorTitle, rule.ErrorMessage);
         lines.Add(message.Length == 0
-            ? $"Error alert: {FormatAlertStyle(rule.AlertStyle)}"
-            : $"Error alert: {FormatAlertStyle(rule.AlertStyle)} - {message}");
+            ? $"Error alert: {DataValidationDisplayTextPlanner.FormatAlertStyle(rule.AlertStyle)}"
+            : $"Error alert: {DataValidationDisplayTextPlanner.FormatAlertStyle(rule.AlertStyle)} - {message}");
     }
 
     private static string FormatRuleRanges(DataValidation rule, string sheetName)
@@ -116,16 +116,16 @@ public static class DataValidationPreviewPlanner
             DvType.List => "List",
             DvType.Custom => string.IsNullOrWhiteSpace(rule.Formula1)
                 ? "Custom formula"
-                : $"Custom formula {FormatPreviewValue(rule.Formula1)}",
+                : $"Custom formula {DataValidationDisplayTextPlanner.FormatPreviewValue(rule.Formula1)}",
             _ => FormatScalarCriteria(rule),
         };
 
     private static string FormatScalarCriteria(DataValidation rule)
     {
-        var type = FormatType(rule.Type);
+        var type = DataValidationDisplayTextPlanner.GetRuleTypeDisplayName(rule.Type);
         var comparison = FormatOperator(rule.Operator);
-        var first = FormatPreviewValue(rule.Formula1);
-        var second = FormatPreviewValue(rule.Formula2);
+        var first = DataValidationDisplayTextPlanner.FormatPreviewValue(rule.Formula1);
+        var second = DataValidationDisplayTextPlanner.FormatPreviewValue(rule.Formula2);
 
         if (rule.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
@@ -143,7 +143,7 @@ public static class DataValidationPreviewPlanner
     {
         var visibleItems = items
             .Take(MaxPreviewListItems)
-            .Select(FormatPreviewValue)
+            .Select(DataValidationDisplayTextPlanner.FormatPreviewValue)
             .ToArray();
         var suffix = items.Count > MaxPreviewListItems
             ? $" (and {items.Count - MaxPreviewListItems} more)"
@@ -151,58 +151,8 @@ public static class DataValidationPreviewPlanner
         return string.Join(", ", visibleItems) + suffix;
     }
 
-    private static string FormatTitleAndMessage(string? title, string? message)
-    {
-        var cleanTitle = FormatOptionalText(title);
-        var cleanMessage = FormatOptionalText(message);
-        return (cleanTitle.Length, cleanMessage.Length) switch
-        {
-            (> 0, > 0) => $"{cleanTitle} - {cleanMessage}",
-            (> 0, _) => cleanTitle,
-            (_, > 0) => cleanMessage,
-            _ => ""
-        };
-    }
-
-    private static string FormatOptionalText(string? value)
-    {
-        var text = value?.Trim() ?? "";
-        return text
-            .Replace("\r", " ", StringComparison.Ordinal)
-            .Replace("\n", " ", StringComparison.Ordinal);
-    }
-
-    private static string FormatPreviewValue(string? value)
-    {
-        var text = FormatOptionalText(value);
-        return text.Length == 0 ? "(blank)" : text;
-    }
-
-    private static string FormatCellReference(CellAddress address) =>
-        CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-    private static string FormatRangeReference(GridRange range)
-    {
-        var start = FormatCellReference(range.Start);
-        var end = FormatCellReference(range.End);
-        return string.Equals(start, end, StringComparison.Ordinal)
-            ? start
-            : $"{start}:{end}";
-    }
-
     private static string FormatType(DvType type) =>
-        type switch
-        {
-            DvType.Any => "Any value",
-            DvType.WholeNumber => "Whole number",
-            DvType.Decimal => "Decimal",
-            DvType.List => "List",
-            DvType.Date => "Date",
-            DvType.Time => "Time",
-            DvType.TextLength => "Text length",
-            DvType.Custom => "Custom",
-            _ => type.ToString()
-        };
+        DataValidationDisplayTextPlanner.GetRuleTypeDisplayName(type);
 
     private static string FormatOperator(DvOperator op) =>
         op switch
@@ -216,15 +166,6 @@ public static class DataValidationPreviewPlanner
             DvOperator.GreaterThanOrEqual => "greater than or equal to",
             DvOperator.LessThanOrEqual => "less than or equal to",
             _ => op.ToString()
-        };
-
-    private static string FormatAlertStyle(DvAlertStyle style) =>
-        style switch
-        {
-            DvAlertStyle.Stop => "Stop",
-            DvAlertStyle.Warning => "Warning",
-            DvAlertStyle.Information => "Information",
-            _ => style.ToString()
         };
 
     private static string FormatYesNo(bool value) =>
