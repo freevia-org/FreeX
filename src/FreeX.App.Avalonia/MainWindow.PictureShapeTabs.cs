@@ -142,6 +142,33 @@ public sealed partial class MainWindow
         return null;
     }
 
+    private DrawingObjectFormatTarget? ResolveSelectedFormatTarget()
+    {
+        var result = DrawingObjectFormatCommandPolicy.ResolveSelectedFormatTarget(
+            _session.ActiveSheet,
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId);
+        if (result.Target is { } target)
+            return target;
+
+        RefreshShell(UiText.Get(result.Failure == DrawingObjectSelectionFailure.MissingSelection
+            ? "Drawing_SelectObjectFirst"
+            : "Drawing_ObjectNoLongerAvailable"));
+        return null;
+    }
+
+    private DrawingObjectFormatTarget? ResolveSelectedFillOutlineTarget()
+    {
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return null;
+
+        if (DrawingObjectFormatCommandPolicy.SupportsFillAndOutline(target.Kind))
+            return target;
+
+        RefreshShell(UiText.Get("Drawing_SelectObjectFirst"));
+        return null;
+    }
+
     /// <summary>Runs a drawing-object command and reports success/failure on the status bar.</summary>
     private void RunDrawingObjectCommand(IWorkbookCommand command, string successStatus, string failurePrefix)
     {
@@ -156,37 +183,17 @@ public sealed partial class MainWindow
     }
 
     // -------------------------------------------------------------------------------------------------------
-    // Shape z-order (shared drawing-object command planner)
+    // Drawing-object z-order (shared target policy + command planner)
     // -------------------------------------------------------------------------------------------------------
 
     private void BringSelectedShapeForward()
     {
-        if (ResolveSelectedShape() is not { } shape)
-            return;
-
-        RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildZOrderCommand(
-                _session.ActiveSheet.Id,
-                SelectionPaneObjectKind.Shape,
-                shape.Id,
-                forward: true),
-            UiText.Get("InsertLoc_BroughtShapeForward"),
-            UiText.Get("InsertLoc_BringForwardLabel"));
+        ReorderSelectedDrawingObject(forward: true);
     }
 
     private void SendSelectedShapeBackward()
     {
-        if (ResolveSelectedShape() is not { } shape)
-            return;
-
-        RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildZOrderCommand(
-                _session.ActiveSheet.Id,
-                SelectionPaneObjectKind.Shape,
-                shape.Id,
-                forward: false),
-            UiText.Get("InsertLoc_SentShapeBackward"),
-            UiText.Get("InsertLoc_SendBackwardLabel"));
+        ReorderSelectedDrawingObject(forward: false);
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -196,33 +203,33 @@ public sealed partial class MainWindow
 
     private void BringSelectedPictureForward()
     {
-        if (ResolveSelectedPicture() is not { } picture)
-            return;
-
-        RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildZOrderCommand(
-                _session.ActiveSheet.Id,
-                SelectionPaneObjectKind.Picture,
-                picture.Id,
-                forward: true),
-            UiText.Get("Drawing_PictureBroughtForward"),
-            UiText.Get("Drawing_BringForwardLabel"));
+        ReorderSelectedDrawingObject(forward: true);
     }
 
     private void SendSelectedPictureBackward()
     {
-        if (ResolveSelectedPicture() is not { } picture)
+        ReorderSelectedDrawingObject(forward: false);
+    }
+
+    private void ReorderSelectedDrawingObject(bool forward)
+    {
+        if (ResolveSelectedFormatTarget() is not { } target)
             return;
 
         RunDrawingObjectCommand(
             DrawingObjectCommandPlanner.BuildZOrderCommand(
                 _session.ActiveSheet.Id,
-                SelectionPaneObjectKind.Picture,
-                picture.Id,
-                forward: false),
-            UiText.Get("Drawing_PictureSentBackward"),
-            UiText.Get("Drawing_SendBackwardLabel"));
+                DrawingObjectCommandPlanner.ToSelectionPaneObjectKind(target.Kind),
+                target.Id,
+                forward),
+            ResolveZOrderSuccessStatus(target.Kind, forward),
+            forward ? UiText.Get("Drawing_BringForwardLabel") : UiText.Get("Drawing_SendBackwardLabel"));
     }
+
+    private static string ResolveZOrderSuccessStatus(DrawingObjectTargetKind kind, bool forward) =>
+        kind == DrawingObjectTargetKind.Picture
+            ? UiText.Get(forward ? "Drawing_PictureBroughtForward" : "Drawing_PictureSentBackward")
+            : UiText.Get(forward ? "InsertLoc_BroughtShapeForward" : "InsertLoc_SentShapeBackward");
 
     // -------------------------------------------------------------------------------------------------------
     // Shape fill / outline / gradient / effects (real)
@@ -232,20 +239,22 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
-        if (ResolveSelectedShape() is not { } shape)
+        if (ResolveSelectedFillOutlineTarget() is not { } target)
             return;
 
-        var initial = shape.FillColor ?? DrawingShapeModel.DefaultFillColor;
+        var initial =
+            DrawingObjectFormatCommandPolicy.ResolveFillColor(target.Target, _session.Workbook.Theme) ??
+            DrawingShapeModel.ResolveDefaultFillColor(_session.Workbook.Theme);
         var color = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_ShapeFillTitle"), initial);
         if (color is not { } chosen)
             return;
-        if (ResolveSelectedShape() is not { } current)
+        if (ResolveSelectedFillOutlineTarget() is not { } current)
             return;
 
         RunDrawingObjectCommand(
             DrawingObjectCommandPlanner.BuildFillColorCommand(
                 _session.ActiveSheet.Id,
-                DrawingObjectTargetKind.Shape,
+                current.Kind,
                 current.Id,
                 chosen),
             UiText.Format("InsertLoc_ShapeFillSet", FormatHex(chosen)),
@@ -256,20 +265,20 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
-        if (ResolveSelectedShape() is not { } shape)
+        if (ResolveSelectedFillOutlineTarget() is not { } target)
             return;
 
-        var initial = shape.OutlineColor ?? DrawingShapeModel.DefaultOutlineColor;
+        var initial = DrawingObjectFormatCommandPolicy.ResolveOutlineColor(target.Target, _session.Workbook.Theme);
         var color = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_ShapeOutlineTitle"), initial);
         if (color is not { } chosen)
             return;
-        if (ResolveSelectedShape() is not { } current)
+        if (ResolveSelectedFillOutlineTarget() is not { } current)
             return;
 
         RunDrawingObjectCommand(
             DrawingObjectCommandPlanner.BuildOutlineColorCommand(
                 _session.ActiveSheet.Id,
-                DrawingObjectTargetKind.Shape,
+                current.Kind,
                 current.Id,
                 chosen),
             UiText.Format("InsertLoc_ShapeOutlineSet", FormatHex(chosen)),
@@ -336,31 +345,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
-
-        double current;
-        SelectionPaneObjectKind kind;
-        Guid id;
-        switch (_selectedDrawingObjectKind)
-        {
-            case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
-                current = picture.RotationDegrees;
-                kind = SelectionPaneObjectKind.Picture;
-                id = picture.Id;
-                break;
-            case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
-                current = shape.RotationDegrees;
-                kind = SelectionPaneObjectKind.Shape;
-                id = shape.Id;
-                break;
-            default:
-                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
-                return;
-        }
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return;
 
         var input = await ShowSingleValueDialogAsync(
             UiText.Get("InsertLoc_RotateObjectTitle"),
             UiText.Get("InsertLoc_RotationDegreesPrompt"),
-            current.ToString("0.##", CultureInfo.CurrentCulture));
+            target.Values.RotationDegrees.ToString("0.##", CultureInfo.CurrentCulture));
         if (input is null)
             return;
         if (!double.TryParse(input, NumberStyles.Float, CultureInfo.CurrentCulture, out var degrees))
@@ -370,7 +361,7 @@ public sealed partial class MainWindow
         }
 
         RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildRotateCommand(_session.ActiveSheet.Id, kind, id, degrees),
+            DrawingObjectCommandPlanner.BuildRotateCommand(_session.ActiveSheet.Id, target.Kind, target.Id, degrees),
             UiText.Format("InsertLoc_RotatedObject", degrees),
             UiText.Get("InsertLoc_RotateObjectTitle"));
     }
@@ -383,45 +374,18 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return;
 
-        double width;
-        double height;
-        SelectionPaneObjectKind kind;
-        Guid id;
-
-        switch (_selectedDrawingObjectKind)
-        {
-            case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
-                width = picture.Width;
-                height = picture.Height;
-                kind = SelectionPaneObjectKind.Picture;
-                id = picture.Id;
-                break;
-            case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
-                width = shape.Width;
-                height = shape.Height;
-                kind = SelectionPaneObjectKind.Shape;
-                id = shape.Id;
-                break;
-            default:
-                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
-                return;
-        }
-
-        var size = await ShowSizeDialogAsync(width, height);
+        var size = await ShowSizeDialogAsync(target.Values.Width, target.Values.Height);
         if (size is not { } chosen)
             return;
-        if (_selectedDrawingObjectId is null)
-        {
-            RefreshShell(UiText.Get("InsertLoc_ObjectNoLongerAvailable"));
-            return;
-        }
 
         RunDrawingObjectCommand(
             DrawingObjectCommandPlanner.BuildResizeCommand(
                 _session.ActiveSheet.Id,
-                kind,
-                id,
+                target.Kind,
+                target.Id,
                 chosen.Width,
                 chosen.Height),
             UiText.Format("InsertLoc_ResizedObject", chosen.Width, chosen.Height),
@@ -436,43 +400,19 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving)
             return;
-
-        string? current;
-        SelectionPaneObjectKind kind;
-        Guid id;
-
-        switch (_selectedDrawingObjectKind)
-        {
-            case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
-                current = picture.AltText;
-                kind = SelectionPaneObjectKind.Picture;
-                id = picture.Id;
-                break;
-            case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
-                current = shape.AltText;
-                kind = SelectionPaneObjectKind.Shape;
-                id = shape.Id;
-                break;
-            default:
-                RefreshShell(UiText.Get("InsertLoc_SelectPictureOrShapeFirst"));
-                return;
-        }
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return;
 
         var input = await ShowSingleValueDialogAsync(
             UiText.Get("InsertLoc_AltTextTitle"),
             UiText.Get("InsertLoc_AltTextPrompt"),
-            current ?? string.Empty,
+            target.Values.AltText,
             multiline: true);
         if (input is null)
             return;
-        if (_selectedDrawingObjectId is null)
-        {
-            RefreshShell(UiText.Get("InsertLoc_ObjectNoLongerAvailable"));
-            return;
-        }
 
         RunDrawingObjectCommand(
-            DrawingObjectCommandPlanner.BuildAltTextCommand(_session.ActiveSheet.Id, kind, id, input),
+            DrawingObjectCommandPlanner.BuildAltTextCommand(_session.ActiveSheet.Id, target.Kind, target.Id, input),
             string.IsNullOrWhiteSpace(input) ? UiText.Get("InsertLoc_AltTextCleared") : UiText.Get("InsertLoc_AltTextUpdated"),
             UiText.Get("InsertLoc_AltTextTitle"));
     }

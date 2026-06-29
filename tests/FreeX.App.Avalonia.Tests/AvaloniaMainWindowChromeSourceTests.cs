@@ -539,14 +539,17 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveSelectedFormatTarget(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.SupportsFillAndOutline(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveFillColor(");
+        contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveOutlineColor(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedDrawingShape(");
-        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
-        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
-        formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        formatDialogSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildFormatCommands(");
 
         contextualTabsSource.Should().NotContain("_session.ActiveSheet.Pictures.FirstOrDefault(");
         contextualTabsSource.Should().NotContain("_session.ActiveSheet.DrawingShapes.FirstOrDefault(");
+        contextualTabsSource.Should().NotContain("switch (_selectedDrawingObjectKind)");
         contextualTabsSource.Should().NotContain("new MoveSelectionPaneObjectCommand(");
         contextualTabsSource.Should().NotContain("new BringDrawingShapeForwardCommand(");
         contextualTabsSource.Should().NotContain("new SendDrawingShapeBackwardCommand(");
@@ -559,8 +562,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         formatDialogSource.Should().NotContain("new SetDrawingObjectRotationCommand(");
         formatDialogSource.Should().NotContain("new ResizePictureCommand(");
         formatDialogSource.Should().NotContain("new ResizeDrawingShapeCommand(");
+        formatDialogSource.Should().NotContain("new SetPictureLockAspectRatioCommand(");
         formatDialogSource.Should().NotContain("new SetPictureAltTextCommand(");
         formatDialogSource.Should().NotContain("new SetDrawingShapeAltTextCommand(");
+        formatDialogSource.Should().NotContain("DrawingObjectCommandPlanner.BuildResizeCommand(");
+        formatDialogSource.Should().NotContain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        formatDialogSource.Should().NotContain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
     }
 
     [Fact]

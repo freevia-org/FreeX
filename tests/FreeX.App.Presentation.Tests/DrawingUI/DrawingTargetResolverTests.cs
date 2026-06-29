@@ -435,6 +435,24 @@ public sealed class DrawingTargetResolverTests
     }
 
     [Fact]
+    public void ResolveSelectedTextBox_ReturnsSelectedVisibleTextBoxById()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var expected = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 2, 3) };
+        sheet.TextBoxes.Add(new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1) });
+        sheet.TextBoxes.Add(expected);
+
+        var result = DrawingTargetResolver.ResolveSelectedTextBox(
+            sheet,
+            SelectionPaneObjectKind.TextBox,
+            expected.Id);
+
+        result.HasTarget.Should().BeTrue();
+        result.Target.Should().BeSameAs(expected);
+        result.Failure.Should().Be(DrawingObjectSelectionFailure.None);
+    }
+
+    [Fact]
     public void ResolverScansVisibleItemsWithoutAllocatingFilteredLists()
     {
         var source = File.ReadAllText(FindRepositoryFile("src", "FreeX.App.Presentation", "DrawingUI", "DrawingTargetResolver.cs"));

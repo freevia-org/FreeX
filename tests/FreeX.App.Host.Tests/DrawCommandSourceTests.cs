@@ -16,6 +16,7 @@ public sealed class DrawCommandSourceTests
         insertSource.Should().Contain("private void ShapesBtn_Click(object sender, RoutedEventArgs e) => DrawRectBtn_Click(sender, e);");
         source.Should().Contain("private async void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.BuildFormatCommands(");
         source.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
         source.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
@@ -48,6 +49,7 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("DrawingObjectKindMapper.ToDrawingObjectTargetKind(kind)");
         contextualSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualSource.Should().NotContain("foreach (var picture in sheet.Pictures)");
+        source.Should().NotContain("new SetPictureLockAspectRatioCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildMoveCommand(");
@@ -86,10 +88,12 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("hasFill ? \"Object Fill\" : \"Object No Fill\"");
         source.Should().Contain("RememberCurrentShapeFill(target.Kind, selectedColor);");
         source.Should().Contain("RememberCurrentShapeColor(target.Kind, isFill, color);");
-        source.Should().Contain("target.FillThemeColor?.Resolve(_workbook.Theme)");
-        source.Should().Contain("target.OutlineThemeColor?.Resolve(_workbook.Theme)");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveFillColor(");
+        source.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveOutlineColor(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
+        source.Should().NotContain("target.FillThemeColor?.Resolve(_workbook.Theme)");
+        source.Should().NotContain("target.OutlineThemeColor?.Resolve(_workbook.Theme)");
         source.Should().NotContain("hasFill: hasFill");
         source.Should().NotContain("updateFill: isFill");
         source.Should().NotContain("updateOutline: !isFill");

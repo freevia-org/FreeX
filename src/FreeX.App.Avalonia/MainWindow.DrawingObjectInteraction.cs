@@ -160,9 +160,8 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Bring Forward for the selected shape (real shape z-order command) or picture (cross-kind
-    /// <see cref="FreeX.Core.Commands.MoveSelectionPaneObjectCommand"/>), matching the contextual tab
-    /// handlers. Text boxes are drawing shapes, so they use the shape path.
+    /// Bring Forward for the selected drawing object, matching the contextual tab handlers and the
+    /// cross-kind <see cref="FreeX.Core.Commands.MoveSelectionPaneObjectCommand"/> path.
     /// </summary>
     private void BringSelectedDrawingObjectForward()
     {
