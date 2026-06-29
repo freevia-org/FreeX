@@ -834,12 +834,16 @@ public sealed class MainWindow : Window
     /// </summary>
     internal void OpenHyperlinkDialog()
     {
-        var slides   = (IReadOnlyList<Slide>)Editor.Presentation.Slides;
-        var current  = Editor.SelectedShapeHyperlink;
-        var dialog   = new HyperlinkDialog(slides, current);
+        var request = HyperlinkDialogPlanner.BuildDialogRequest(
+            Editor.Presentation.Slides,
+            Editor.SelectedShapeHyperlink);
+        var dialog = new HyperlinkDialog(request);
         if (IsVisible) dialog.Owner = this;
-        if (dialog.ShowDialog() == true && dialog.Result is not null)
-            Editor.SetShapeHyperlink(dialog.Result.Url, dialog.Result.TargetSlideId, dialog.Result.Tooltip);
+        var applyPlan = dialog.ShowDialog() == true
+            ? HyperlinkDialogPlanner.BuildApplyPlan(dialog.Result)
+            : HyperlinkDialogPlanner.BuildApplyPlan(null);
+        if (applyPlan.ShouldApply)
+            Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
     }
 
     // ── Find & Replace dialog (Wave 12B) ──────────────────────────────────────────

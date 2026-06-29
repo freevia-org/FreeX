@@ -42,7 +42,14 @@ public sealed class HyperlinkDialog : Window
     /// <param name="slides">All slides in the presentation (for the internal jump list).</param>
     /// <param name="current">The existing hyperlink to pre-fill, or null for a new link.</param>
     public HyperlinkDialog(IReadOnlyList<Slide> slides, Hyperlink? current = null)
+        : this(HyperlinkDialogPlanner.BuildDialogRequest(slides, current))
     {
+    }
+
+    public HyperlinkDialog(HyperlinkDialogRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
         Title                 = "Insert Hyperlink";
         Width                 = 420;
         SizeToContent         = SizeToContent.Height;
@@ -86,13 +93,11 @@ public sealed class HyperlinkDialog : Window
         grid.Children.Add(slideLabel);
 
         _slideCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 4), VerticalAlignment = VerticalAlignment.Center };
-        for (int i = 0; i < slides.Count; i++)
+        foreach (var option in request.SlideOptions)
         {
-            var slide = slides[i];
-            var title = !string.IsNullOrWhiteSpace(slide.Title) ? slide.Title : $"Slide {i + 1}";
-            _slideCombo.Items.Add(new SlideItem(slide.Id, $"{i + 1}. {title}"));
+            _slideCombo.Items.Add(option);
         }
-        if (_slideCombo.Items.Count > 0) _slideCombo.SelectedIndex = 0;
+        _slideCombo.SelectedIndex = request.SelectedSlideIndex;
         Grid.SetRow(_slideCombo, 2); Grid.SetColumn(_slideCombo, 1);
         grid.Children.Add(_slideCombo);
 
@@ -126,12 +131,11 @@ public sealed class HyperlinkDialog : Window
 
         // ── Pre-fill from current hyperlink ─────────────────────────────────────
 
-        var initial = HyperlinkDialogPlanner.BuildInitialState(current);
+        var initial = request.InitialState;
         _urlRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Url;
         _slideRadio.IsChecked = initial.TargetKind == HyperlinkDialogTargetKind.Slide;
         _urlBox.Text = initial.UrlText;
         _tooltipBox.Text = initial.TooltipText;
-        SelectSlide(initial.TargetSlideId);
 
         UpdateEnabled();
     }
@@ -152,7 +156,7 @@ public sealed class HyperlinkDialog : Window
         var targetKind = _urlRadio.IsChecked == true
             ? HyperlinkDialogTargetKind.Url
             : HyperlinkDialogTargetKind.Slide;
-        var selectedSlideId = (_slideCombo.SelectedItem as SlideItem)?.Id;
+        var selectedSlideId = (_slideCombo.SelectedItem as HyperlinkDialogSlideOption)?.Id;
         var plan = HyperlinkDialogPlanner.BuildResult(
             targetKind,
             _urlBox.Text,
@@ -176,21 +180,6 @@ public sealed class HyperlinkDialog : Window
         DialogResult = true;
     }
 
-    private void SelectSlide(string? slideId)
-    {
-        if (string.IsNullOrWhiteSpace(slideId))
-            return;
-
-        for (int i = 0; i < _slideCombo.Items.Count; i++)
-        {
-            if (_slideCombo.Items[i] is SlideItem si && si.Id == slideId)
-            {
-                _slideCombo.SelectedIndex = i;
-                return;
-            }
-        }
-    }
-
     private void FocusField(HyperlinkDialogField field)
     {
         if (field == HyperlinkDialogField.Url)
@@ -201,9 +190,4 @@ public sealed class HyperlinkDialog : Window
 
     // ── Helper record ─────────────────────────────────────────────────────────────
 
-    private sealed class SlideItem(string id, string display)
-    {
-        public string Id      { get; } = id;
-        public override string ToString() => display;
-    }
 }
