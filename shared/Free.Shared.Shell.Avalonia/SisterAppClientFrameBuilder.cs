@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Free.Shared.AppServices;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -7,7 +8,20 @@ public sealed record SisterAppClientFrameSpec(
     Control WorkArea,
     Control StatusBar,
     IReadOnlyList<Control>? BottomPanelsAboveStatus = null,
-    IReadOnlyList<Control>? TopPanelsBelowRibbon = null);
+    IReadOnlyList<Control>? TopPanelsBelowRibbon = null)
+{
+    public Control Chrome => Ribbon;
+
+    public IReadOnlyList<Control>? TopPanelsBelowChrome => TopPanelsBelowRibbon;
+
+    public static SisterAppClientFrameSpec ForWorkArea(
+        Control chrome,
+        Control workArea,
+        Control statusBar,
+        IReadOnlyList<Control>? bottomPanelsAboveStatus = null,
+        IReadOnlyList<Control>? topPanelsBelowChrome = null) =>
+        new(chrome, workArea, statusBar, bottomPanelsAboveStatus, topPanelsBelowChrome);
+}
 
 public sealed record SisterAppClientFrameBuildResult(
     DockPanel Root);
@@ -25,30 +39,42 @@ public static class SisterAppClientFrameBuilder
         ArgumentNullException.ThrowIfNull(spec.WorkArea);
         ArgumentNullException.ThrowIfNull(spec.StatusBar);
 
+        var topPanelsBelowChrome = spec.TopPanelsBelowChrome ?? [];
+        var bottomPanelsAboveStatus = spec.BottomPanelsAboveStatus ?? [];
+        var contract = SisterAppClientFrameContractPlanner.Plan(
+            topPanelsBelowChrome.Count,
+            bottomPanelsAboveStatus.Count);
+
         var root = new DockPanel { LastChildFill = true };
 
-        DockPanel.SetDock(spec.Ribbon, Dock.Top);
-        root.Children.Add(spec.Ribbon);
-
-        foreach (var panel in spec.TopPanelsBelowRibbon ?? [])
+        foreach (var slot in contract.Slots)
         {
-            ArgumentNullException.ThrowIfNull(panel);
-            DockPanel.SetDock(panel, Dock.Top);
-            root.Children.Add(panel);
+            switch (slot.Role)
+            {
+                case SisterAppClientFrameSlotRole.Chrome:
+                    AddDocked(root, spec.Chrome, Dock.Top);
+                    break;
+                case SisterAppClientFrameSlotRole.TopPanelBelowChrome:
+                    AddDocked(root, topPanelsBelowChrome[slot.Index], Dock.Top);
+                    break;
+            }
         }
 
-        DockPanel.SetDock(spec.StatusBar, Dock.Bottom);
-        root.Children.Add(spec.StatusBar);
+        AddDocked(root, spec.StatusBar, Dock.Bottom);
 
-        foreach (var panel in spec.BottomPanelsAboveStatus ?? [])
-        {
-            ArgumentNullException.ThrowIfNull(panel);
-            DockPanel.SetDock(panel, Dock.Bottom);
-            root.Children.Add(panel);
-        }
+        foreach (var panel in bottomPanelsAboveStatus)
+            AddDocked(root, panel, Dock.Bottom);
 
         root.Children.Add(spec.WorkArea);
 
         return new SisterAppClientFrameBuildResult(root);
+    }
+
+    private static void AddDocked(DockPanel root, Control child, Dock dock)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+
+        DockPanel.SetDock(child, dock);
+        root.Children.Add(child);
     }
 }
