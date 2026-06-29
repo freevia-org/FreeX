@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -2778,7 +2779,9 @@ internal static class FreeWRibbonCommands
             }
 
             var (table, rowIndex, columnIndex) = location.Value;
-            var formula = TableFormulaDialog.Prompt(owner, DefaultFormula(table, rowIndex, columnIndex));
+            var formula = TableFormulaDialog.Prompt(
+                owner,
+                TableFormulaDialogPlanner.BuildInitialState(table, rowIndex, columnIndex));
             if (formula is null)
                 return; // cancelled — leave the model untouched
 
@@ -2786,40 +2789,6 @@ internal static class FreeWRibbonCommands
             editor.InsertTableFormula(formula);
         }
 
-        // Word's default: =SUM(ABOVE) when numeric cells sit above the formula cell; otherwise =SUM(LEFT)
-        // when numbers sit to the left; falling back to =SUM(ABOVE).
-        private static string DefaultFormula(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
-        {
-            if (HasNumberAbove(table, rowIndex, columnIndex))
-                return "=SUM(ABOVE)";
-            if (HasNumberLeft(table, rowIndex, columnIndex))
-                return "=SUM(LEFT)";
-            return "=SUM(ABOVE)";
-        }
-
-        private static bool HasNumberAbove(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
-        {
-            for (var r = rowIndex - 1; r >= 0; r--)
-            {
-                var cells = table.Rows[r].Cells;
-                if (columnIndex < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[columnIndex].PlainText, out _))
-                    return true;
-            }
-            return false;
-        }
-
-        private static bool HasNumberLeft(FreeW.Core.Model.Table table, int rowIndex, int columnIndex)
-        {
-            if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-                return false;
-            var cells = table.Rows[rowIndex].Cells;
-            for (var c = columnIndex - 1; c >= 0; c--)
-            {
-                if (c < cells.Count && TableFormulaEvaluator.TryParseCellNumber(cells[c].PlainText, out _))
-                    return true;
-            }
-            return false;
-        }
     }
 
     // Table Tools — Layout > Properties (Word's Table Properties dialog). Requires the caret to be inside a
