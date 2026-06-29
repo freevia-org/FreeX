@@ -231,6 +231,10 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartAxisPlanner.Normalize(new ChartAxisInput(");
         source.Should().Contain("ChartAxisPlanner.GetNumberFormatChoices()");
         source.Should().Contain("ChartAxisPlanner.GetTickStyleChoices()");
+        source.Should().Contain("ChartAxisPlanner.GetDialogField(id)");
+        source.Should().Contain("ChartAxisPlanner.GetAxisOptionsSection()");
+        source.Should().Contain("ChartAxisPlanner.GetGridlinesSection()");
+        source.Should().Contain("ChartAxisPlanner.GetTickMarksSection()");
         source.Should().Contain("ChartAxisPlanner.TryParseDialogInput(");
         source.Should().NotContain("TryReadNullableDouble(");
         source.Should().NotContain("TryReadOptionalColor(");
