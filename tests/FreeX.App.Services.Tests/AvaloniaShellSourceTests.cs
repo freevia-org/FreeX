@@ -4776,8 +4776,8 @@ public sealed class AvaloniaShellSourceTests
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("AutomationProperties.SetAutomationId(_formulaBox, \"FormulaBox\");");
-        source.Should().Contain("AutomationProperties.SetName(_formulaBox, \"Formula bar\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_formulaBox, \"Edit the active cell value or formula.\");");
+        source.Should().Contain("AutomationProperties.SetName(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_statusText, \"StatusText\");");
         source.Should().Contain("AutomationProperties.SetName(_statusText, \"Status\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_statusText, \"Shows the current workbook status.\");");

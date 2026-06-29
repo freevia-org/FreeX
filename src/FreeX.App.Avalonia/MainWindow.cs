@@ -2937,8 +2937,8 @@ public sealed partial class MainWindow : Window
         _formulaBox.KeyDown += FormulaBox_KeyDown;
         _formulaBox.TextChanged += FormulaBox_TextChanged;
         AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
-        AutomationProperties.SetName(_formulaBox, "Formula bar");
-        AutomationProperties.SetHelpText(_formulaBox, "Edit the active cell value or formula.");
+        AutomationProperties.SetName(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey));
+        AutomationProperties.SetHelpText(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey));
 
         var cellAddressChrome = new DockPanel { LastChildFill = true };
         var cellAddressChevron = new TextBlock
@@ -2973,14 +2973,27 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 2, 0),
         };
-        formulaButtons.Children.Add(CreateFormulaBarPathButton("M4,4 L12,12 M12,4 L4,12", Brush(192, 0, 0), 1.55, "Cancel formula edit", () =>
+        formulaButtons.Children.Add(CreateFormulaBarPathButton(
+            FormulaBarChromePlanner.CancelEditButton,
+            "M4,4 L12,12 M12,4 L4,12",
+            Brush(192, 0, 0),
+            1.55,
+            () =>
         {
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
             RefreshShell("Ready");
         }));
-        formulaButtons.Children.Add(CreateFormulaBarPathButton("M3,8 L6,11 L13,4", Brush(0, 128, 0), 1.65, "Enter formula edit", () => CommitFormulaBox()));
-        formulaButtons.Children.Add(CreateFormulaBarTextButton("fx", Brush(68, 68, 68), "Insert Function", InsertFunction, FontStyle.Italic));
+        formulaButtons.Children.Add(CreateFormulaBarPathButton(
+            FormulaBarChromePlanner.EnterEditButton,
+            "M3,8 L6,11 L13,4",
+            Brush(0, 128, 0),
+            1.65,
+            () => CommitFormulaBox()));
+        formulaButtons.Children.Add(CreateFormulaBarTextButton(
+            FormulaBarChromePlanner.InsertFunctionButton,
+            Brush(68, 68, 68),
+            InsertFunction));
         DockPanel.SetDock(formulaButtons, Dock.Left);
 
         ConfigureFormulaExpandButton();
@@ -3023,15 +3036,16 @@ public sealed partial class MainWindow : Window
         _formulaBarHost.Child = formulaDock;
         ApplyFormulaBarExpansion();
         AutomationProperties.SetAutomationId(_formulaBarHost, "FormulaBarRow");
-        AutomationProperties.SetName(_formulaBarHost, "Formula bar row");
+        AutomationProperties.SetName(_formulaBarHost, FormulaBarText(FormulaBarChromePlanner.Row.AutomationNameResourceKey));
+        AutomationProperties.SetHelpText(_formulaBarHost, FormulaBarText(FormulaBarChromePlanner.Row.HelpTextResourceKey));
         return _formulaBarHost;
     }
 
     private Button CreateFormulaBarPathButton(
+        FormulaBarChromeElementPlan plan,
         string pathData,
         IBrush stroke,
         double strokeThickness,
-        string automationName,
         Action action)
     {
         var path = new global::Avalonia.Controls.Shapes.Path
@@ -3047,34 +3061,32 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
-        return CreateFormulaBarChromeButton(path, width: 22, height: 22, automationName, action);
+        return CreateFormulaBarChromeButton(path, width: 22, height: 22, plan, action);
     }
 
     private Button CreateFormulaBarTextButton(
-        string content,
+        FormulaBarChromeElementPlan plan,
         IBrush foreground,
-        string automationName,
-        Action action,
-        FontStyle fontStyle = FontStyle.Normal)
+        Action action)
     {
         var text = new TextBlock
         {
-            Text = content,
+            Text = FormulaBarText(plan.ContentResourceKey),
             FontSize = 12,
             FontWeight = FontWeight.Bold,
-            FontStyle = fontStyle,
+            FontStyle = plan.IsItalic ? FontStyle.Italic : FontStyle.Normal,
             Foreground = foreground,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
-        return CreateFormulaBarChromeButton(text, width: 24, height: 22, automationName, action);
+        return CreateFormulaBarChromeButton(text, width: 24, height: 22, plan, action);
     }
 
     private static Button CreateFormulaBarChromeButton(
         Control content,
         double width,
         double height,
-        string automationName,
+        FormulaBarChromeElementPlan plan,
         Action action)
     {
         var button = new Button
@@ -3090,8 +3102,9 @@ public sealed partial class MainWindow : Window
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         button.Click += (_, _) => action();
-        AutomationProperties.SetName(button, automationName);
-        AutomationProperties.SetHelpText(button, automationName);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        AutomationProperties.SetName(button, FormulaBarText(plan.AutomationNameResourceKey));
+        AutomationProperties.SetHelpText(button, FormulaBarText(plan.HelpTextResourceKey));
         return button;
     }
 
@@ -3111,8 +3124,8 @@ public sealed partial class MainWindow : Window
             _formulaBarExpanded = !_formulaBarExpanded;
             ApplyFormulaBarExpansion();
         };
-        AutomationProperties.SetName(_formulaExpandButton, "Expand formula bar");
-        AutomationProperties.SetHelpText(_formulaExpandButton, "Expands or collapses the formula bar.");
+        AutomationProperties.SetAutomationId(_formulaExpandButton, FormulaBarChromePlanner.ExpandButton.AutomationId);
+        ApplyFormulaBarExpandAutomation();
     }
 
     private void ApplyFormulaBarExpansion()
@@ -3122,8 +3135,18 @@ public sealed partial class MainWindow : Window
         _formulaBox.MinHeight = _formulaBarExpanded ? 84 : 30;
         _formulaBarHost.Height = _formulaBarExpanded ? 94 : 40;
         _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: _formulaBarExpanded);
-        AutomationProperties.SetName(_formulaExpandButton, _formulaBarExpanded ? "Collapse formula bar" : "Expand formula bar");
+        ApplyFormulaBarExpandAutomation();
     }
+
+    private void ApplyFormulaBarExpandAutomation()
+    {
+        var plan = FormulaBarChromePlanner.ExpansionButton(_formulaBarExpanded);
+        AutomationProperties.SetName(_formulaExpandButton, FormulaBarText(plan.AutomationNameResourceKey));
+        AutomationProperties.SetHelpText(_formulaExpandButton, FormulaBarText(plan.HelpTextResourceKey));
+    }
+
+    private static string FormulaBarText(string resourceKey) =>
+        string.IsNullOrEmpty(resourceKey) ? string.Empty : UiText.Get(resourceKey);
 
     private static Control CreateFormulaBarChevron(bool pointsUp)
     {

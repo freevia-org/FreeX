@@ -2935,8 +2935,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     MergeCellsContentWarningDialog
                     HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center";
                     AutomationProperties.SetAutomationId(_formulaBox, "FormulaBox");
-                    AutomationProperties.SetName(_formulaBox, "Formula bar");
-                    AutomationProperties.SetHelpText(_formulaBox, "Edit the active cell value or formula.");
+                    AutomationProperties.SetName(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey));
+                    AutomationProperties.SetHelpText(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey));
                     AutomationProperties.SetAutomationId(_statusText, "StatusText");
                     AutomationProperties.SetName(_statusText, "Status");
                     AutomationProperties.SetHelpText(_statusText, "Shows the current workbook status.");
