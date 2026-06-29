@@ -1,5 +1,6 @@
 using FreeW.Core.IO;
 using FreeW.Core.Model;
+using Free.Shared.AppServices;
 
 namespace FreeW.App.Avalonia.Smoke;
 
@@ -10,12 +11,10 @@ namespace FreeW.App.Avalonia.Smoke;
 /// </summary>
 internal static class PackagingSmoke
 {
-    public const string Argument = "--packaging-smoke";
-
     public static bool TryRun(IReadOnlyList<string> args, TextWriter output, TextWriter error, out int exitCode)
     {
         ArgumentNullException.ThrowIfNull(args);
-        if (!args.Any(a => string.Equals(a, Argument, StringComparison.OrdinalIgnoreCase)))
+        if (!SisterAppPackagingSmoke.HasArgument(args))
         {
             exitCode = 0;
             return false;
@@ -45,16 +44,19 @@ internal static class PackagingSmoke
                 && reopened.PlainText.Contains("Round-trip marker.", StringComparison.Ordinal);
             var blocksPreserved = reopened.Blocks.Count == doc.Blocks.Count;
 
-            output.WriteLine("=== FreeW packaging smoke ===");
-            output.WriteLine($"sample_blocks={doc.Blocks.Count}");
-            output.WriteLine($"command_bus_undo_redo={undoOk.ToString().ToLowerInvariant()}");
-            output.WriteLine($"docx_bytes_written={writtenBytes}");
-            output.WriteLine($"reopened_blocks={reopened.Blocks.Count}");
-            output.WriteLine($"text_preserved={textPreserved.ToString().ToLowerInvariant()}");
-            output.WriteLine($"blocks_preserved={blocksPreserved.ToString().ToLowerInvariant()}");
-
             var passed = undoOk && writtenBytes > 0 && textPreserved && blocksPreserved;
-            output.WriteLine($"freew_packaging_smoke={(passed ? "passed" : "failed")}");
+            var report =
+                "=== FreeW packaging smoke ===\n" +
+                $"sample_blocks={doc.Blocks.Count}\n" +
+                $"command_bus_undo_redo={undoOk.ToString().ToLowerInvariant()}\n" +
+                $"docx_bytes_written={writtenBytes}\n" +
+                $"reopened_blocks={reopened.Blocks.Count}\n" +
+                $"text_preserved={textPreserved.ToString().ToLowerInvariant()}\n" +
+                $"blocks_preserved={blocksPreserved.ToString().ToLowerInvariant()}\n" +
+                $"freew_packaging_smoke={(passed ? "passed" : "failed")}\n";
+
+            output.Write(report);
+            output.Flush();
             exitCode = passed ? 0 : 1;
         }
         catch (Exception ex)
