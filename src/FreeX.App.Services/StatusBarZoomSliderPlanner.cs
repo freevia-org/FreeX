@@ -91,7 +91,7 @@ public static class StatusBarZoomSliderPlanner
         (int)Math.Round(ZoomLevelMapper.ClampZoomPercent(zoomPercent));
 
     public static string FormatZoomPercent(int zoomPercent) =>
-        $"{ClampZoomPercent(zoomPercent)}%";
+        ZoomLevelMapper.FormatZoomPercent(zoomPercent);
 
     public static double SnapSliderValue(double sliderValue, out bool snappedToDefault)
     {
