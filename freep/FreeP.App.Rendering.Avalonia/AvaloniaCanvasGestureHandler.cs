@@ -155,20 +155,20 @@ public sealed class AvaloniaCanvasGestureHandler
             if (selRect.HasValue)
             {
                 var hitHandle = _adorner.HitTestHandle(selRect.Value, pt);
-                if (hitHandle == SelectionAdornerLayer.HandleKind.Rotate)
+                if (hitHandle == CanvasGestureHandleKind.Rotate)
                 {
                     StartRotate(selId, slide, xf, pt, e.Pointer);
                     e.Handled = true;
                     return;
                 }
-                if (hitHandle != SelectionAdornerLayer.HandleKind.None &&
-                    hitHandle != SelectionAdornerLayer.HandleKind.Body)
+                if (hitHandle != CanvasGestureHandleKind.None &&
+                    hitHandle != CanvasGestureHandleKind.Body)
                 {
                     StartResize(selId, slide, hitHandle, pt, e.Pointer);
                     e.Handled = true;
                     return;
                 }
-                if (hitHandle == SelectionAdornerLayer.HandleKind.Body)
+                if (hitHandle == CanvasGestureHandleKind.Body)
                 {
                     StartMove(slide, xf, pt, e.Pointer);
                     e.Handled = true;
@@ -406,7 +406,7 @@ public sealed class AvaloniaCanvasGestureHandler
 
     // ── Resize gesture ─────────────────────────────────────────────────────────
 
-    private void StartResize(uint shapeId, Slide slide, SelectionAdornerLayer.HandleKind handle, Point screenPt, IPointer pointer)
+    private void StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle, Point screenPt, IPointer pointer)
     {
         var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
         if (s is null) return;
@@ -419,7 +419,7 @@ public sealed class AvaloniaCanvasGestureHandler
         _resizeOrigCx           = s.ExtentCxEmu;
         _resizeOrigCy           = s.ExtentCyEmu;
         _resizeOrigRotationDeg  = s.RotationDeg;
-        _resizeHandle           = ToCanvasGestureHandle(handle);
+        _resizeHandle           = handle;
         pointer.Capture(_canvas);
     }
 
@@ -587,16 +587,16 @@ public sealed class AvaloniaCanvasGestureHandler
                 var handle = _adorner.HitTestHandle(selRect.Value, screenPt);
                 _canvas.Cursor = handle switch
                 {
-                    SelectionAdornerLayer.HandleKind.Rotate              => new Cursor(StandardCursorType.Cross),
-                    SelectionAdornerLayer.HandleKind.ResizeN or
-                    SelectionAdornerLayer.HandleKind.ResizeS             => new Cursor(StandardCursorType.SizeNorthSouth),
-                    SelectionAdornerLayer.HandleKind.ResizeE or
-                    SelectionAdornerLayer.HandleKind.ResizeW             => new Cursor(StandardCursorType.SizeWestEast),
-                    SelectionAdornerLayer.HandleKind.ResizeNE or
-                    SelectionAdornerLayer.HandleKind.ResizeSW            => new Cursor(StandardCursorType.TopRightCorner),
-                    SelectionAdornerLayer.HandleKind.ResizeNW or
-                    SelectionAdornerLayer.HandleKind.ResizeSE            => new Cursor(StandardCursorType.TopLeftCorner),
-                    SelectionAdornerLayer.HandleKind.Body                => new Cursor(StandardCursorType.SizeAll),
+                    CanvasGestureHandleKind.Rotate              => new Cursor(StandardCursorType.Cross),
+                    CanvasGestureHandleKind.ResizeN or
+                    CanvasGestureHandleKind.ResizeS             => new Cursor(StandardCursorType.SizeNorthSouth),
+                    CanvasGestureHandleKind.ResizeE or
+                    CanvasGestureHandleKind.ResizeW             => new Cursor(StandardCursorType.SizeWestEast),
+                    CanvasGestureHandleKind.ResizeNE or
+                    CanvasGestureHandleKind.ResizeSW            => new Cursor(StandardCursorType.TopRightCorner),
+                    CanvasGestureHandleKind.ResizeNW or
+                    CanvasGestureHandleKind.ResizeSE            => new Cursor(StandardCursorType.TopLeftCorner),
+                    CanvasGestureHandleKind.Body                => new Cursor(StandardCursorType.SizeAll),
                     _                                                    => Cursor.Default
                 };
                 return;
@@ -651,7 +651,7 @@ public sealed class AvaloniaCanvasGestureHandler
     /// <see cref="ComputeResizeBounds"/> can be exercised in unit tests
     /// without requiring live pointer events.
     /// </summary>
-    internal void SeedResizeState(Point startScreen, SlideShape shape, SelectionAdornerLayer.HandleKind handle)
+    internal void SeedResizeState(Point startScreen, SlideShape shape, CanvasGestureHandleKind handle)
     {
         _dragStartScreen       = startScreen;
         _dragStarted           = true;
@@ -661,7 +661,7 @@ public sealed class AvaloniaCanvasGestureHandler
         _resizeOrigCx          = shape.ExtentCxEmu;
         _resizeOrigCy          = shape.ExtentCyEmu;
         _resizeOrigRotationDeg = shape.RotationDeg;
-        _resizeHandle          = ToCanvasGestureHandle(handle);
+        _resizeHandle          = handle;
         _gesture               = GestureKind.Resize;
     }
 
@@ -669,23 +669,6 @@ public sealed class AvaloniaCanvasGestureHandler
 
     private static CanvasGesturePoint ToGesturePoint(Point point)
         => new(point.X, point.Y);
-
-    private static CanvasGestureHandleKind ToCanvasGestureHandle(SelectionAdornerLayer.HandleKind handle)
-        => handle switch
-        {
-            SelectionAdornerLayer.HandleKind.None => CanvasGestureHandleKind.None,
-            SelectionAdornerLayer.HandleKind.Body => CanvasGestureHandleKind.Body,
-            SelectionAdornerLayer.HandleKind.ResizeN => CanvasGestureHandleKind.ResizeN,
-            SelectionAdornerLayer.HandleKind.ResizeNE => CanvasGestureHandleKind.ResizeNE,
-            SelectionAdornerLayer.HandleKind.ResizeE => CanvasGestureHandleKind.ResizeE,
-            SelectionAdornerLayer.HandleKind.ResizeSE => CanvasGestureHandleKind.ResizeSE,
-            SelectionAdornerLayer.HandleKind.ResizeS => CanvasGestureHandleKind.ResizeS,
-            SelectionAdornerLayer.HandleKind.ResizeSW => CanvasGestureHandleKind.ResizeSW,
-            SelectionAdornerLayer.HandleKind.ResizeW => CanvasGestureHandleKind.ResizeW,
-            SelectionAdornerLayer.HandleKind.ResizeNW => CanvasGestureHandleKind.ResizeNW,
-            SelectionAdornerLayer.HandleKind.Rotate => CanvasGestureHandleKind.Rotate,
-            _ => CanvasGestureHandleKind.None
-        };
 
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransformCore xf)
     {

@@ -117,20 +117,20 @@ public sealed class CanvasGestureHandler
                 if (selRect.HasValue)
                 {
                     var hitHandle = _adorner.HitTestHandle(selRect.Value, pt);
-                    if (hitHandle == SelectionAdorner.HandleKind.Rotate)
+                    if (hitHandle == CanvasGestureHandleKind.Rotate)
                     {
                         StartRotate(selId, slide, xf, pt);
                         e.Handled = true;
                         return;
                     }
-                    if (hitHandle != SelectionAdorner.HandleKind.None &&
-                        hitHandle != SelectionAdorner.HandleKind.Body)
+                    if (hitHandle != CanvasGestureHandleKind.None &&
+                        hitHandle != CanvasGestureHandleKind.Body)
                     {
                         StartResize(selId, slide, hitHandle, pt);
                         e.Handled = true;
                         return;
                     }
-                    if (hitHandle == SelectionAdorner.HandleKind.Body)
+                    if (hitHandle == CanvasGestureHandleKind.Body)
                     {
                         // Body of already-selected shape: start move
                         StartMove(slide, xf, pt);
@@ -404,7 +404,7 @@ public sealed class CanvasGestureHandler
 
     // ── Resize gesture ────────────────────────────────────────────────────────────────────────
 
-    private void StartResize(uint shapeId, Slide slide, SelectionAdorner.HandleKind handle, Point screenPt)
+    private void StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle, Point screenPt)
     {
         var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
         if (s is null) return;
@@ -417,7 +417,7 @@ public sealed class CanvasGestureHandler
         _resizeOrigCx          = s.ExtentCxEmu;
         _resizeOrigCy          = s.ExtentCyEmu;
         _resizeOrigRotationDeg = s.RotationDeg;
-        _resizeHandle          = ToCanvasGestureHandle(handle);
+        _resizeHandle          = handle;
         _canvas.CaptureMouse();
     }
 
@@ -613,16 +613,16 @@ public sealed class CanvasGestureHandler
                 var handle = _adorner.HitTestHandle(selRect.Value, screenPt);
                 _canvas.Cursor = handle switch
                 {
-                    SelectionAdorner.HandleKind.Rotate              => Cursors.Cross,
-                    SelectionAdorner.HandleKind.ResizeN or
-                    SelectionAdorner.HandleKind.ResizeS             => Cursors.SizeNS,
-                    SelectionAdorner.HandleKind.ResizeE or
-                    SelectionAdorner.HandleKind.ResizeW             => Cursors.SizeWE,
-                    SelectionAdorner.HandleKind.ResizeNE or
-                    SelectionAdorner.HandleKind.ResizeSW            => Cursors.SizeNESW,
-                    SelectionAdorner.HandleKind.ResizeNW or
-                    SelectionAdorner.HandleKind.ResizeSE            => Cursors.SizeNWSE,
-                    SelectionAdorner.HandleKind.Body                => Cursors.SizeAll,
+                    CanvasGestureHandleKind.Rotate              => Cursors.Cross,
+                    CanvasGestureHandleKind.ResizeN or
+                    CanvasGestureHandleKind.ResizeS             => Cursors.SizeNS,
+                    CanvasGestureHandleKind.ResizeE or
+                    CanvasGestureHandleKind.ResizeW             => Cursors.SizeWE,
+                    CanvasGestureHandleKind.ResizeNE or
+                    CanvasGestureHandleKind.ResizeSW            => Cursors.SizeNESW,
+                    CanvasGestureHandleKind.ResizeNW or
+                    CanvasGestureHandleKind.ResizeSE            => Cursors.SizeNWSE,
+                    CanvasGestureHandleKind.Body                => Cursors.SizeAll,
                     _                                               => Cursors.Arrow
                 };
                 return;
@@ -678,23 +678,6 @@ public sealed class CanvasGestureHandler
 
     private static SlideTransformCore ToCoreTransform(SlideTransform xf)
         => new(xf.Scale, xf.OffsetX, xf.OffsetY, xf.SlideWidthDip, xf.SlideHeightDip);
-
-    private static CanvasGestureHandleKind ToCanvasGestureHandle(SelectionAdorner.HandleKind handle)
-        => handle switch
-        {
-            SelectionAdorner.HandleKind.None => CanvasGestureHandleKind.None,
-            SelectionAdorner.HandleKind.Body => CanvasGestureHandleKind.Body,
-            SelectionAdorner.HandleKind.ResizeN => CanvasGestureHandleKind.ResizeN,
-            SelectionAdorner.HandleKind.ResizeNE => CanvasGestureHandleKind.ResizeNE,
-            SelectionAdorner.HandleKind.ResizeE => CanvasGestureHandleKind.ResizeE,
-            SelectionAdorner.HandleKind.ResizeSE => CanvasGestureHandleKind.ResizeSE,
-            SelectionAdorner.HandleKind.ResizeS => CanvasGestureHandleKind.ResizeS,
-            SelectionAdorner.HandleKind.ResizeSW => CanvasGestureHandleKind.ResizeSW,
-            SelectionAdorner.HandleKind.ResizeW => CanvasGestureHandleKind.ResizeW,
-            SelectionAdorner.HandleKind.ResizeNW => CanvasGestureHandleKind.ResizeNW,
-            SelectionAdorner.HandleKind.Rotate => CanvasGestureHandleKind.Rotate,
-            _ => CanvasGestureHandleKind.None
-        };
 
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransform xf)
     {

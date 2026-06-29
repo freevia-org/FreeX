@@ -209,22 +209,14 @@ public sealed class SelectionAdornerLayer : Control
 
     // ── Hit-test helpers ────────────────────────────────────────────────────────
 
-    public enum HandleKind
-    {
-        None,
-        Body,
-        ResizeN, ResizeNE, ResizeE, ResizeSE, ResizeS, ResizeSW, ResizeW, ResizeNW,
-        Rotate
-    }
-
     /// <summary>
     /// Returns which part of the selection a screen-space point hits (for a single selected shape).
     /// </summary>
-    public HandleKind HitTestHandle(Rect selectionRect, Point screenPt)
+    public CanvasGestureHandleKind HitTestHandle(Rect selectionRect, Point screenPt)
     {
-        return ToHandleKind(SelectionAdornerGeometry.HitTestHandle(
+        return SelectionAdornerGeometry.HitTestHandle(
             ToSelectionAdornerRect(selectionRect),
-            ToCanvasPoint(screenPt)));
+            ToCanvasPoint(screenPt));
     }
 
     private static SelectionAdornerRect ToSelectionAdornerRect(Rect rect)
@@ -235,22 +227,6 @@ public sealed class SelectionAdornerLayer : Control
 
     private static CanvasGesturePoint ToCanvasPoint(Point point)
         => new(point.X, point.Y);
-
-    private static HandleKind ToHandleKind(CanvasGestureHandleKind handle)
-        => handle switch
-        {
-            CanvasGestureHandleKind.Body => HandleKind.Body,
-            CanvasGestureHandleKind.ResizeN => HandleKind.ResizeN,
-            CanvasGestureHandleKind.ResizeNE => HandleKind.ResizeNE,
-            CanvasGestureHandleKind.ResizeE => HandleKind.ResizeE,
-            CanvasGestureHandleKind.ResizeSE => HandleKind.ResizeSE,
-            CanvasGestureHandleKind.ResizeS => HandleKind.ResizeS,
-            CanvasGestureHandleKind.ResizeSW => HandleKind.ResizeSW,
-            CanvasGestureHandleKind.ResizeW => HandleKind.ResizeW,
-            CanvasGestureHandleKind.ResizeNW => HandleKind.ResizeNW,
-            CanvasGestureHandleKind.Rotate => HandleKind.Rotate,
-            _ => HandleKind.None
-        };
 
     /// <summary>Selection rects accessible to the gesture handler for external queries.</summary>
     public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects => _selectionRects;

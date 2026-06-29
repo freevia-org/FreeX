@@ -60,12 +60,18 @@ public sealed class SelectionAdornerGeometryTests
         wpf.Should().Contain("SelectionAdornerGeometry.GetHandleCenters");
         wpf.Should().Contain("SelectionAdornerGeometry.GetRotateHandleCenter");
         wpf.Should().Contain("SelectionAdornerGeometry.HitTestHandle");
+        wpf.Should().Contain("public CanvasGestureHandleKind HitTestHandle");
+        wpf.Should().NotContain("public enum HandleKind");
+        wpf.Should().NotContain("ToHandleKind");
         wpf.Should().NotContain("Math.Sqrt");
         wpf.Should().NotContain("HandleHitRadius");
 
         avalonia.Should().Contain("SelectionAdornerGeometry.GetHandleCenters");
         avalonia.Should().Contain("SelectionAdornerGeometry.GetRotateHandleCenter");
         avalonia.Should().Contain("SelectionAdornerGeometry.HitTestHandle");
+        avalonia.Should().Contain("public CanvasGestureHandleKind HitTestHandle");
+        avalonia.Should().NotContain("public enum HandleKind");
+        avalonia.Should().NotContain("ToHandleKind");
         avalonia.Should().NotContain("Math.Sqrt");
         avalonia.Should().NotContain("HandleHitRadius");
     }
