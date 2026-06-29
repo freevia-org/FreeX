@@ -1,6 +1,4 @@
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Threading;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Smoke;
 
@@ -10,9 +8,10 @@ namespace FreeW.App.Avalonia.Smoke;
 /// is shown under Xvfb, a snapshot is captured, written to the report path, and the app exits.
 /// </summary>
 internal sealed record LaunchSmokeOptions(string ReportPath, string? DiagnosticsDirectory)
+    : SisterAppLaunchSmokeOptions(ReportPath, DiagnosticsDirectory)
 {
-    public const string Argument = "--launch-smoke";
-    public const string DiagnosticsDirectoryArgument = "--launch-smoke-diagnostics-dir";
+    public new const string Argument = SisterAppLaunchSmokeOptions.Argument;
+    public new const string DiagnosticsDirectoryArgument = SisterAppLaunchSmokeOptions.DiagnosticsDirectoryArgument;
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -20,50 +19,17 @@ internal sealed record LaunchSmokeOptions(string ReportPath, string? Diagnostics
         out string[] startupArguments,
         out string error)
     {
-        ArgumentNullException.ThrowIfNull(args);
+        var result = SisterAppLaunchSmokeOptions.TryParse(
+            args,
+            out var sharedOptions,
+            out startupArguments,
+            out error);
         options = null;
-        error = "";
-        var filtered = new List<string>();
-        string? reportPath = null;
-        string? diagnosticsDirectory = null;
 
-        for (var i = 0; i < args.Count; i++)
-        {
-            var arg = args[i];
-            if (string.Equals(arg, Argument, StringComparison.OrdinalIgnoreCase))
-            {
-                if (i + 1 >= args.Count)
-                {
-                    startupArguments = [];
-                    error = $"{Argument} requires a report path.";
-                    return false;
-                }
+        if (sharedOptions is not null)
+            options = new LaunchSmokeOptions(sharedOptions.ReportPath, sharedOptions.DiagnosticsDirectory);
 
-                reportPath = args[++i];
-                continue;
-            }
-
-            if (string.Equals(arg, DiagnosticsDirectoryArgument, StringComparison.OrdinalIgnoreCase))
-            {
-                if (i + 1 >= args.Count)
-                {
-                    startupArguments = [];
-                    error = $"{DiagnosticsDirectoryArgument} requires a directory path.";
-                    return false;
-                }
-
-                diagnosticsDirectory = args[++i];
-                continue;
-            }
-
-            filtered.Add(arg);
-        }
-
-        if (reportPath is not null)
-            options = new LaunchSmokeOptions(reportPath, diagnosticsDirectory);
-
-        startupArguments = filtered.ToArray();
-        return true;
+        return result;
     }
 }
 
@@ -95,22 +61,16 @@ internal static class LaunchSmokeCoordinator
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(options);
 
-        window.Opened += (_, _) =>
-        {
-            var attempts = 0;
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(PollMilliseconds) };
-            timer.Tick += (_, _) =>
+        SisterAppLaunchSmokeCoordinator.Start(
+            window,
+            options,
+            mainWindow =>
             {
-                attempts++;
-                var snapshot = Capture(window);
-                if (snapshot.IsPassed || attempts >= MaxAttempts)
-                {
-                    timer.Stop();
-                    Finish(snapshot, options);
-                }
-            };
-            timer.Start();
-        };
+                var snapshot = Capture(mainWindow);
+                return new SisterAppLaunchSmokeReport(snapshot.IsPassed, snapshot.ToReport());
+            },
+            MaxAttempts,
+            PollMilliseconds);
     }
 
     private static LaunchSmokeSnapshot Capture(MainWindow window) => new(
@@ -119,29 +79,4 @@ internal static class LaunchSmokeCoordinator
         BlockCount: window.Editor.BlockCount,
         ParagraphCount: window.Editor.ParagraphCount,
         PlacedGlyphCount: window.Editor.PlacedGlyphCount);
-
-    private static void Finish(LaunchSmokeSnapshot snapshot, LaunchSmokeOptions options)
-    {
-        var report = snapshot.ToReport();
-        try
-        {
-            var directory = Path.GetDirectoryName(options.ReportPath);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-            File.WriteAllText(options.ReportPath, report);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"launch-smoke: failed to write report: {ex.Message}");
-        }
-
-        Console.Out.Write(report);
-        Console.Out.Flush();
-
-        var exitCode = snapshot.IsPassed ? 0 : 1;
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.Shutdown(exitCode);
-        else
-            Environment.Exit(exitCode);
-    }
 }

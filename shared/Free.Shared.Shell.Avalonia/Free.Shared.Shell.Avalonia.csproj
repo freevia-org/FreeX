@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
   </ItemGroup>
 
 </Project>
