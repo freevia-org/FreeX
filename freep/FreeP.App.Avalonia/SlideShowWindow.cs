@@ -97,8 +97,11 @@ public sealed class SlideShowWindow : Window
         _controller   = new SlideShowController(presentation.Slides, startIndex);
 
         // Pre-compute slide DIP dimensions.
-        _slideDipW = presentation.SlideSizeCxEmu / 9525.0;
-        _slideDipH = presentation.SlideSizeCyEmu / 9525.0;
+        var metrics = SlideShowHostPlanner.BuildSlideMetrics(
+            presentation.SlideSizeCxEmu,
+            presentation.SlideSizeCyEmu);
+        _slideDipW = metrics.WidthDip;
+        _slideDipH = metrics.HeightDip;
 
         // Window chrome — fullscreen borderless.
         WindowState        = WindowState.FullScreen;
@@ -172,29 +175,17 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     public AdvanceResult ExecuteAdvance()
     {
-        var result = _controller.Advance();
-        switch (result)
-        {
-            case AdvanceResult.PlayStep ps:
-                PlayAnimationStep(ps.Step);
-                break;
-            case AdvanceResult.NavigateToSlide nav:
-                NavigateToSlide(nav.Slide, nav.SlideIndex);
-                break;
-            case AdvanceResult.AtEnd:
-                CloseSlideShow();
-                break;
-        }
-        return result;
+        var command = SlideShowHostPlanner.PlanAdvance(_controller);
+        ApplyHostCommand(command);
+        return command.AdvanceResult!;
     }
 
     /// <summary>Execute a logical back step and return what happened.</summary>
     public BackResult ExecuteBack()
     {
-        var result = _controller.Back();
-        if (result is BackResult.NavigateToSlide nav)
-            NavigateToSlide(nav.Slide, nav.SlideIndex);
-        return result;
+        var command = SlideShowHostPlanner.PlanBack(_controller);
+        ApplyHostCommand(command);
+        return command.BackResult!;
     }
 
     /// <summary>The underlying state machine (for test assertions).</summary>
@@ -207,42 +198,9 @@ public sealed class SlideShowWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        switch (e.Key)
-        {
-            case Key.Escape:
-                CloseSlideShow();
-                e.Handled = true;
-                break;
-
-            case Key.Right:
-            case Key.Space:
-            case Key.PageDown:
-            case Key.Enter:
-                DoAdvance();
-                e.Handled = true;
-                break;
-
-            case Key.Left:
-            case Key.PageUp:
-            case Key.Back:
-                DoBack();
-                e.Handled = true;
-                break;
-
-            case Key.Home:
-                _autoAdvanceTimer.Stop();
-                _controller.GoToSlide(0);
-                DisplayCurrentSlide(animated: false);
-                e.Handled = true;
-                break;
-
-            case Key.End:
-                _autoAdvanceTimer.Stop();
-                _controller.GoToSlide(_presentation.Slides.Count - 1);
-                DisplayCurrentSlide(animated: false);
-                e.Handled = true;
-                break;
-        }
+        var command = SlideShowHostPlanner.PlanKey(e.Key.ToString(), _controller, _presentation.Slides);
+        ApplyHostCommand(command);
+        e.Handled = command.IsHandled;
     }
 
     // ── Pointer navigation ────────────────────────────────────────────────────────
@@ -301,55 +259,13 @@ public sealed class SlideShowWindow : Window
     /// </summary>
     internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
     {
-        double slideX = CanvasToSlideX(canvasX);
-        double slideY = CanvasToSlideY(canvasY);
-        return HitTestHyperlinkInShapes(slide.Shapes, slideX, slideY);
-    }
-
-    private static Hyperlink? HitTestHyperlinkInShapes(
-        IReadOnlyList<SlideShape> shapes, double slideX, double slideY)
-    {
-        foreach (var shape in shapes)
-        {
-            if (!HitTestShape(shape, slideX, slideY)) continue;
-
-            if (shape.Hyperlink is not null) return shape.Hyperlink;
-
-            if (shape.Children.Count > 0)
-            {
-                var groupResult = HitTestHyperlinkInShapes(shape.Children, slideX, slideY);
-                if (groupResult is not null) return groupResult;
-            }
-
-            if (shape.TextBody is not null)
-            {
-                foreach (var para in shape.TextBody.Paragraphs)
-                    foreach (var run in para.Runs)
-                        if (run.Hyperlink is not null) return run.Hyperlink;
-            }
-        }
-        return null;
-    }
-
-    private static bool HitTestShape(SlideShape shape, double slideX, double slideY)
-    {
-        double sx  = shape.OffsetXEmu / 9525.0;
-        double sy  = shape.OffsetYEmu / 9525.0;
-        double scx = shape.ExtentCxEmu / 9525.0;
-        double scy = shape.ExtentCyEmu / 9525.0;
-        return slideX >= sx && slideX <= sx + scx && slideY >= sy && slideY <= sy + scy;
-    }
-
-    private double CanvasToSlideX(double canvasX)
-    {
-        double cw = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
-        return canvasX * (_slideDipW / cw);
-    }
-
-    private double CanvasToSlideY(double canvasY)
-    {
-        double ch = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
-        return canvasY * (_slideDipH / ch);
+        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
+            canvasX,
+            canvasY,
+            _slideCanvas.Bounds.Width,
+            _slideCanvas.Bounds.Height,
+            CurrentSlideMetrics());
+        return SlideShowHostPlanner.HitTestHyperlink(slide, slidePoint);
     }
 
     /// <summary>
@@ -364,14 +280,10 @@ public sealed class SlideShowWindow : Window
         }
         else if (hlink.TargetSlideId is not null)
         {
-            var targetIdx = _presentation.Slides
-                .FindIndex(s => s.Id == hlink.TargetSlideId);
-            if (targetIdx >= 0)
-            {
-                _autoAdvanceTimer.Stop();
-                _controller.GoToSlide(targetIdx);
-                DisplayCurrentSlide(animated: false);
-            }
+            ApplyHostCommand(SlideShowHostPlanner.PlanInternalSlideJump(
+                _controller,
+                _presentation.Slides,
+                hlink.TargetSlideId));
         }
     }
 
@@ -398,50 +310,30 @@ public sealed class SlideShowWindow : Window
 
     private uint? HitTestTriggerShape(Slide slide, double canvasX, double canvasY)
     {
-        double cw     = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : _slideDipW;
-        double ch     = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
-        double slideX = canvasX * (_slideDipW / cw);
-        double slideY = canvasY * (_slideDipH / ch);
-
-        var triggerShapeIds = slide.Animations
-            .Where(a => a.TriggerShapeId is not null)
-            .Select(a => a.TriggerShapeId!.Value)
-            .Distinct();
-
-        foreach (var spid in triggerShapeIds)
-        {
-            var shape = slide.Shapes.FirstOrDefault(s => s.Id == spid);
-            if (shape is null) continue;
-            double shapeX  = shape.OffsetXEmu / 9525.0;
-            double shapeY  = shape.OffsetYEmu / 9525.0;
-            double shapeCx = shape.ExtentCxEmu / 9525.0;
-            double shapeCy = shape.ExtentCyEmu / 9525.0;
-            if (slideX >= shapeX && slideX <= shapeX + shapeCx &&
-                slideY >= shapeY && slideY <= shapeY + shapeCy)
-                return spid;
-        }
-        return null;
+        var slidePoint = SlideShowHostPlanner.MapCanvasPointToSlide(
+            canvasX,
+            canvasY,
+            _slideCanvas.Bounds.Width,
+            _slideCanvas.Bounds.Height,
+            CurrentSlideMetrics());
+        return SlideShowHostPlanner.HitTestTriggerShape(slide, slidePoint);
     }
 
     private void PlayTriggerGroup(uint triggerShapeId)
     {
-        var step = _controller.AdvanceTrigger(triggerShapeId);
-        if (step is not null)
-            PlayAnimationStep(step);
+        ApplyHostCommand(SlideShowHostPlanner.PlanTrigger(_controller, triggerShapeId));
     }
 
     // ── Navigation helpers ────────────────────────────────────────────────────────
 
     private void DoAdvance()
     {
-        _autoAdvanceTimer.Stop();
-        ExecuteAdvance();
+        ApplyHostCommand(SlideShowHostPlanner.PlanAdvance(_controller, stopAutoAdvance: true));
     }
 
     private void DoBack()
     {
-        _autoAdvanceTimer.Stop();
-        ExecuteBack();
+        ApplyHostCommand(SlideShowHostPlanner.PlanBack(_controller, stopAutoAdvance: true));
     }
 
     private void CloseSlideShow()
@@ -450,22 +342,42 @@ public sealed class SlideShowWindow : Window
         Close();
     }
 
-    private void NavigateToSlide(Slide slide, int index)
+    private void NavigateToSlide(Slide slide, int index, bool animated)
     {
         _ = slide;
         _ = index;
-        DisplayCurrentSlide(animated: true);
+        DisplayCurrentSlide(animated);
+    }
+
+    private void ApplyHostCommand(SlideShowHostCommand command)
+    {
+        if (command.StopAutoAdvance)
+            _autoAdvanceTimer.Stop();
+
+        switch (command.Kind)
+        {
+            case SlideShowHostCommandKind.Close:
+                CloseSlideShow();
+                break;
+            case SlideShowHostCommandKind.PlayAnimationStep when command.Step is not null:
+                PlayAnimationStep(command.Step);
+                break;
+            case SlideShowHostCommandKind.NavigateToSlide when command.Slide is not null:
+                NavigateToSlide(command.Slide, command.SlideIndex, command.AnimateSlide);
+                break;
+        }
     }
 
     // ── Slide display + transitions ───────────────────────────────────────────────
 
     private void DisplayCurrentSlide(bool animated)
     {
-        var slide = _controller.CurrentSlide;
-        if (slide is null) return;
+        var plan = SlideShowHostPlanner.BuildDisplayPlan(_presentation, _controller, animated);
+        _slideDipW = plan.Metrics.WidthDip;
+        _slideDipH = plan.Metrics.HeightDip;
 
-        _slideDipW = _presentation.SlideSizeCxEmu / 9525.0;
-        _slideDipH = _presentation.SlideSizeCyEmu / 9525.0;
+        var slide = plan.Slide;
+        if (slide is null) return;
 
         // DA2: cancel any in-flight transition/animation timers from the PREVIOUS slide so
         // their stale onComplete callbacks don't clobber the new slide's visual state.
@@ -473,19 +385,21 @@ public sealed class SlideShowWindow : Window
 
         PrepareAnimationOverlay(slide);
 
-        if (animated && slide.Transition is { Kind: not TransitionKind.None } t)
+        if (plan.Transition is { } t)
             PlayTransition(slide, t);
         else
             ShowSlideInstant(slide);
 
         // Wire auto-advance timer.
         _autoAdvanceTimer.Stop();
-        if (slide.Transition?.AdvanceAfterMs is int advMs && advMs > 0)
+        if (plan.AutoAdvanceAfterMs is int advMs)
         {
             _autoAdvanceTimer.Interval = TimeSpan.FromMilliseconds(advMs);
             _autoAdvanceTimer.Start();
         }
     }
+
+    private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
 
     private void ShowSlideInstant(Slide slide)
     {
