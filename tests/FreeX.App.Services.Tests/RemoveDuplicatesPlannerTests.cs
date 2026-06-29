@@ -93,9 +93,33 @@ public sealed class RemoveDuplicatesPlannerTests
         result.Plan.ActiveRange.Should().Be(Range(sheet, 2, 1, 5, 3));
         result.Plan.HasHeaders.Should().BeTrue();
         result.Plan.SelectedColumnOffsets.Should().Equal(0u, 2u);
+        result.Plan.ActiveRangeForSheet(SheetId.New()).Start.Row.Should().Be(2);
         result.Plan.CreateCommand(sheet.Id, result.Plan.ActiveRange)
             .Should()
             .BeOfType<RemoveDuplicateRowsCommand>();
+        result.Plan.CreateCommand(sheet.Id)
+            .Should()
+            .BeOfType<RemoveDuplicateRowsCommand>();
+    }
+
+    [Fact]
+    public void CreatePlan_CanUseSelectedOffsetsFromHostDialog()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var sourceRange = Range(sheet, 1, 1, 5, 3);
+
+        var result = RemoveDuplicatesPlanner.CreatePlan(
+            sourceRange,
+            hasHeaders: true,
+            selectedColumnOffsets: [0u, 2u]);
+
+        result.IsReady.Should().BeTrue();
+        result.Plan.Should().NotBeNull();
+        result.Plan!.ActiveRange.Should().Be(Range(sheet, 2, 1, 5, 3));
+        result.Plan.SelectedColumnOffsets.Should().Equal(0u, 2u);
+        result.Plan.ActiveRangeForSheet(SheetId.New()).Start.Row.Should().Be(2);
+        result.Plan.CreateCommand(SheetId.New()).Should().BeOfType<RemoveDuplicateRowsCommand>();
     }
 
     [Fact]

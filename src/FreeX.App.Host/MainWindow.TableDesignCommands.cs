@@ -219,13 +219,14 @@ public partial class MainWindow
         if (!TryGetActiveStructuredTable(out _, out var table))
             return;
 
+        var plan = TableDesignCommandPlanner.BuildConvertToRangePlan(_currentSheetId, table);
         if (!_messageService.AskYesNo(
                 UiText.Get("TableDesign_ConvertToRangeConfirmation"),
                 UiText.Get("MainWindow_TooltipTitle_ConvertToRange")))
             return;
 
         if (!TryExecuteCommand(
-                TableDesignCommandPlanner.BuildConvertToRangeCommand(_currentSheetId, table),
+                plan.Command,
                 "Convert to Range"))
             return;
 

@@ -54,7 +54,8 @@ public sealed class TableDesignCommandSourceTests
         source.Should().Contain("PivotCreatePlanner.BuildNewWorksheetCommand(");
         source.Should().Contain("ActivateNewWorksheetAtA1(createdSheetId)");
         source.Should().Contain("PivotCreatePlanner.BuildInPlaceCommand(");
-        source.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangeCommand(");
+        source.Should().Contain("TableDesignCommandPlanner.BuildConvertToRangePlan(");
+        source.Should().Contain("plan.Command");
         source.Should().Contain("_messageService.AskYesNo(");
     }
 

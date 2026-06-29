@@ -3026,12 +3026,13 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("public WorkbookRemoveDuplicatesResult ExecuteRemoveDuplicatesPlan(RemoveDuplicatesPlan plan)");
         sessionSource.Should().Contain("CreateGroupedSheetCommand(");
         sessionSource.Should().Contain("\"Remove Duplicates\"");
-        sessionSource.Should().Contain("var sheetRange = RemapRangeToSheet(plan.ActiveRange, sheetId);");
-        sessionSource.Should().Contain("plan.CreateCommand(sheetId, sheetRange)");
+        sessionSource.Should().Contain("plan.CreateCommand(sheetId)");
         sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, plan.SourceRange);");
         plannerSource.Should().Contain("public static bool GuessHasHeaders(Sheet sheet, GridRange range)");
         plannerSource.Should().Contain("public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)");
+        plannerSource.Should().Contain("public GridRange ActiveRangeForSheet(SheetId sheetId)");
         plannerSource.Should().Contain("public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId, GridRange activeRange)");
+        plannerSource.Should().Contain("public RemoveDuplicateRowsCommand CreateCommand(SheetId sheetId)");
         parityCaptureSource.Should().Contain("(\"dialog.RemoveDuplicates\", () => ShowRemoveDuplicatesParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private async Task ShowRemoveDuplicatesParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowRemoveDuplicatesInputDialogAsync(forceHasHeaders: true);");

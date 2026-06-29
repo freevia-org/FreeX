@@ -626,8 +626,7 @@ public sealed class WorkbookSession
             "Remove Duplicates",
             sheetId =>
             {
-                var sheetRange = RemapRangeToSheet(plan.ActiveRange, sheetId);
-                var removeCommand = plan.CreateCommand(sheetId, sheetRange);
+                var removeCommand = plan.CreateCommand(sheetId);
                 if (sheetId == ActiveSheet.Id)
                     activeSheetCommand = removeCommand;
 
