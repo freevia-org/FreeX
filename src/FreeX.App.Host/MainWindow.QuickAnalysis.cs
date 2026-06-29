@@ -18,31 +18,18 @@ public partial class MainWindow
 
     private void ShowQuickAnalysisMenu()
     {
-        if (SheetGrid.SelectedRange is not { } range)
-        {
-            ShowQuickAnalysisUnsupportedSelectionStatus();
-            return;
-        }
-
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
+        var request = QuickAnalysisShellRequestPlanner.Build(
+            sheet,
+            SheetGrid.SelectedRange,
+            QuickAnalysisShellCapabilities.DialogBacked);
+        if (!request.CanOpen || request.Selection is not { } range)
         {
             ShowQuickAnalysisUnsupportedSelectionStatus();
             return;
         }
 
-        var description = QuickAnalysisSelectionReader.Describe(sheet, range);
-        var displayModel = QuickAnalysisModelBuilder.Build(description).ToDisplayModel();
-        if (displayModel.IsEmpty)
-        {
-            ShowQuickAnalysisUnsupportedSelectionStatus();
-            return;
-        }
-
-        var shellPlan = QuickAnalysisShellPlanner.BuildMenuPlan(
-            displayModel,
-            QuickAnalysisShellCapabilities.DialogBacked,
-            range);
+        var shellPlan = request.ShellPlan;
         _preserveQuickAnalysisUnsupportedStatus = false;
         CloseQuickAnalysisMenu();
         var menu = new ContextMenu
@@ -163,21 +150,10 @@ public partial class MainWindow
             case QuickAnalysisHostOperationKind.OpenChartPicker:
                 InsertChartPickerBtn_Click(sender, e);
                 break;
-            case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula
-                when !string.IsNullOrWhiteSpace(operation.TotalFunction):
-                InsertQuickAnalysisTotalFormulas(
-                    range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, operation.TotalFunction),
-                    operation.TotalCommandTitle ?? "Quick Analysis Total");
-                break;
+            case QuickAnalysisHostOperationKind.InsertAggregateTotalFormula:
             case QuickAnalysisHostOperationKind.InsertPercentTotalFormula:
-                InsertQuickAnalysisTotalFormulas(
-                    QuickAnalysisTotalsPlanner.BuildPercentTotalEdits,
-                    operation.TotalCommandTitle ?? "Quick Analysis % Total");
-                break;
             case QuickAnalysisHostOperationKind.InsertRunningTotalFormula:
-                InsertQuickAnalysisTotalFormulas(
-                    QuickAnalysisTotalsPlanner.BuildRunningTotalEdits,
-                    operation.TotalCommandTitle ?? "Quick Analysis Running Total");
+                InsertQuickAnalysisTotalFormulas(operation);
                 break;
             case QuickAnalysisHostOperationKind.CreateTable:
                 TableBtn_Click(sender, e);
@@ -199,14 +175,15 @@ public partial class MainWindow
         InsertSparkline(dialogKind);
     }
 
-    private void InsertQuickAnalysisTotalFormulas(
-        Func<GridRange, IReadOnlyList<(CellAddress Address, Cell NewCell)>> buildEdits,
-        string title)
+    private void InsertQuickAnalysisTotalFormulas(QuickAnalysisHostOperation operation)
     {
         if (SheetGrid.SelectedRange is not { } range)
             return;
 
-        var edits = buildEdits(range);
+        if (!QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits))
+            return;
+
+        var title = operation.TotalCommandTitle ?? "Quick Analysis Total";
         var outcome = _commandBus.ExecuteRepeatable(
             _workbook.Id,
             () => new EditCellsCommand(_currentSheetId, edits));

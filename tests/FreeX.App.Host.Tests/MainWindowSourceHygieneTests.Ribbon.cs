@@ -1039,17 +1039,21 @@ public sealed partial class MainWindowSourceHygieneTests
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
+        var requestPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellRequestPlanner.cs");
         var planner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisPlanner.cs");
         var shellPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
-        source.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(");
+        source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
         source.Should().Contain("ToolTip = item.ToolTip");
-        source.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
-        source.Should().Contain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
+        source.Should().NotContain("QuickAnalysisSelectionReader.Describe(sheet, range)");
+        source.Should().NotContain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         source.Should().NotContain("QuickAnalysisPlanner.BuildDisplayModel(range)");
         source.Should().Contain("Header = group.TitleFallback");
         source.Should().Contain("foreach (var group in shellPlan.Groups)");
         source.Should().NotContain("foreach (var group in displayModel.Groups)");
+        requestPlanner.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
+        requestPlanner.Should().Contain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
+        requestPlanner.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(displayModel, capabilities, range)");
         planner.Should().Contain("QuickAnalysisPreviewKind");
         shellPlanner.Should().Contain("public static QuickAnalysisShellPlan BuildMenuPlan(");
         shellPlanner.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
@@ -1175,8 +1179,9 @@ public sealed partial class MainWindowSourceHygieneTests
 
         hostSource.Should().Contain("QuickAnalysisHostOperationKind.InsertPercentTotalFormula");
         hostSource.Should().Contain("QuickAnalysisHostOperationKind.InsertRunningTotalFormula");
-        hostSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
-        hostSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
+        hostSource.Should().Contain("QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits)");
+        hostSource.Should().NotContain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
+        hostSource.Should().NotContain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
         catalogSource.Should().Contain("QuickAnalysisCommand.PercentTotal");
         catalogSource.Should().Contain("QuickAnalysisTotalFunction.PercentTotal");
         catalogSource.Should().Contain("TotalFormulaKind: QuickAnalysisTotalFormulaKind.PercentTotal");
@@ -1187,6 +1192,8 @@ public sealed partial class MainWindowSourceHygieneTests
         actionPlannerSource.Should().Contain("QuickAnalysisShellActionKind.InsertRunningTotalFormula");
         operationPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis % Total\"");
         operationPlannerSource.Should().Contain("TotalCommandTitle: \"Quick Analysis Running Total\"");
+        operationPlannerSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits(range)");
+        operationPlannerSource.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits(range)");
     }
 
     [Fact]

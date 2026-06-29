@@ -15,12 +15,18 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             "FreeX.App.Presentation",
             "QuickAnalysis",
             "QuickAnalysisShellPlanner.cs"));
+        var requestPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellRequestPlanner.cs"));
 
-        source.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(");
+        source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
         source.Should().Contain("Text = UiText.Get(group.TitleResourceKey)");
         source.Should().Contain("foreach (var group in shellPlan.Groups)");
         source.Should().NotContain("foreach (var group in displayModel.Groups)");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, item.AutomationId)");
+        requestPlannerSource.Should().Contain("QuickAnalysisShellPlanner.BuildMenuPlan(displayModel, capabilities, range)");
         plannerSource.Should().Contain("GroupTitleResourceKey(group.Group)");
         plannerSource.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
         source.Should().NotContain("QuickAnalysisGroupTitle(");

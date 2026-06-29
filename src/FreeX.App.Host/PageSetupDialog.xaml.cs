@@ -5,13 +5,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public enum PageSetupInitialFocusTarget
-{
-    PageOrientation,
-    RepeatRows,
-    ScaleToFit
-}
-
 public sealed record PageSetupRangeSelectionRequest(
     PageSetupRangeSelectionTarget Target,
     string CurrentText,
