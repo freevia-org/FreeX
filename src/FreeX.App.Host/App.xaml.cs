@@ -60,8 +60,15 @@ public partial class App : Application
         var options = FreeXOptions.Load();
         AppLocalization.ApplyAppLanguage(options.AppLanguage);
         AppLocalization.ApplyCurrentCultureToWpf();
-        ShellStrings.Current = new FreeXShellStrings();
-        BackstageStrings.Current = new FreeXBackstageStrings();
+        ShellStrings.Current = new ResourceShellStrings(
+            () => UiText.Ok,
+            () => UiText.Cancel,
+            () => UiText.ErrorTitle,
+            () => UiText.WarningTitle,
+            () => UiText.InformationTitle,
+            () => UiText.ConfirmTitle,
+            UiText.CreateAutomationName);
+        BackstageStrings.Current = new ResourceBackstageStrings(UiText.Get, UiText.Format);
         DialogSizing.RegisterAppDialogSizing();
 
         // Let the SHARED ribbon-icon factory (used by shared chrome — the BackstageFrame rail, QAT, …)

@@ -31,8 +31,8 @@ public sealed class CommonMessageTextTests
     {
         // DialogButtonRowFactory was extracted into Free.Shared.Shell, where it resolves its
         // localized button labels and accessibility text through ShellStrings.Current. In FreeX,
-        // ShellStrings.Current is FreeXShellStrings, which simply delegates to the host's UiText
-        // catalog, so the localized text still originates from UiText.
+        // ShellStrings.Current is a ResourceShellStrings adapter over the host's UiText catalog,
+        // so the localized text still originates from UiText.
         var source = DialogSourceTestSupport.ReadShellSources("DialogButtonRowFactory.cs");
 
         source.Should().Contain("ResolveDefaultAcceptContent(acceptContent)");
