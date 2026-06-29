@@ -5302,6 +5302,9 @@ public sealed class AvaloniaShellSourceTests
 
         // The dialog gathers options and previews via the portable ImportDataPlanner.
         getDataSource.Should().Contain("private void GetDataFromText() => _ = ShowGetDataDialogAsync();");
+        getDataSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
+        getDataSource.Should().Contain("FileTypeFilter = CreateFilePickerFileTypes(pickerPlan.FileTypes)");
+        getDataSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
         getDataSource.Should().Contain("ImportDataPlanner.DecodeBytes(bytes, encodingKind)");
         getDataSource.Should().Contain("ImportDataPlanner.PreviewText(decodedText, options");
         getDataSource.Should().Contain("ImportDataPlanner.ResolveDelimiter(options, decodedText)");
