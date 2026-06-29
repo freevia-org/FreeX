@@ -340,6 +340,41 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void DataLabels_DialogDescriptor_CoversSharedOptionAndStyleFields()
+    {
+        var sections = ChartDataLabelsPlanner.GetDialogSections();
+        var fields = sections.SelectMany(section => section.Fields).ToList();
+
+        sections.Select(section => section.HeaderResourceKey)
+            .Should().Equal("ChartDataLabels_LabelOptionsGroup", "ChartDialog_FillLineGroup");
+        fields.Select(field => field.Id).Should().Equal(
+            ChartDataLabelsDialogFieldId.ShowDataLabels,
+            ChartDataLabelsDialogFieldId.Position,
+            ChartDataLabelsDialogFieldId.Value,
+            ChartDataLabelsDialogFieldId.LegendKey,
+            ChartDataLabelsDialogFieldId.CategoryName,
+            ChartDataLabelsDialogFieldId.SeriesName,
+            ChartDataLabelsDialogFieldId.Percentage,
+            ChartDataLabelsDialogFieldId.Separator,
+            ChartDataLabelsDialogFieldId.NumberFormat,
+            ChartDataLabelsDialogFieldId.Callouts,
+            ChartDataLabelsDialogFieldId.FillColor,
+            ChartDataLabelsDialogFieldId.BorderColor,
+            ChartDataLabelsDialogFieldId.TextColor,
+            ChartDataLabelsDialogFieldId.BorderThickness,
+            ChartDataLabelsDialogFieldId.FontSize,
+            ChartDataLabelsDialogFieldId.TextAngle);
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.LabelResourceKey));
+        fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        ChartDataLabelsPlanner.GetDialogField(ChartDataLabelsDialogFieldId.BorderThickness)
+            .HelpResourceKey.Should().Be("ChartDataLabels_BorderThicknessHelpText");
+        ChartDataLabelsPlanner.GetDialogField(ChartDataLabelsDialogFieldId.FontSize)
+            .HelpResourceKey.Should().Be("ChartDataLabels_FontSizeHelpText");
+        ChartDataLabelsPlanner.GetDialogField(ChartDataLabelsDialogFieldId.TextAngle)
+            .HelpResourceKey.Should().Be("ChartDataLabels_TextAngleHelpText");
+    }
+
+    [Fact]
     public void DataLabels_Read_ProjectsModelState()
     {
         var chart = new ChartModel

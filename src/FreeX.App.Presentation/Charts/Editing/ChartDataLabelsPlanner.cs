@@ -8,6 +8,45 @@ namespace FreeX.App.Presentation.Charts.Editing;
 /// <summary>A data-label position choice for the "Data Labels" dialog: the value plus its English label.</summary>
 public sealed record ChartDataLabelPositionChoice(ChartDataLabelPosition Position, string DisplayName);
 
+public enum ChartDataLabelsDialogControlKind
+{
+    CheckBox,
+    ComboBox,
+    Color,
+    Number,
+}
+
+public enum ChartDataLabelsDialogFieldId
+{
+    ShowDataLabels,
+    Position,
+    Value,
+    LegendKey,
+    CategoryName,
+    SeriesName,
+    Percentage,
+    Separator,
+    NumberFormat,
+    Callouts,
+    FillColor,
+    BorderColor,
+    TextColor,
+    BorderThickness,
+    FontSize,
+    TextAngle,
+}
+
+public sealed record ChartDataLabelsDialogFieldDescriptor(
+    ChartDataLabelsDialogFieldId Id,
+    ChartDataLabelsDialogControlKind ControlKind,
+    string LabelResourceKey,
+    string AutomationId,
+    string? HelpResourceKey = null);
+
+public sealed record ChartDataLabelsDialogSectionDescriptor(
+    string HeaderResourceKey,
+    IReadOnlyList<ChartDataLabelsDialogFieldDescriptor> Fields);
+
 /// <summary>
 /// The data-label show/position/which-values state read from a chart and edited back through the dialog.
 /// The first parameters are the original cross-platform data-label dialog surface; the optional tail carries
@@ -92,12 +131,62 @@ public static class ChartDataLabelsPlanner
         ChartDataLabelNumberFormat.Percent,
     ];
 
+    private static readonly ChartDataLabelsDialogFieldDescriptor[] LabelOptionFields =
+    [
+        new(ChartDataLabelsDialogFieldId.ShowDataLabels, ChartDataLabelsDialogControlKind.CheckBox, "ChartDataLabels_ShowDataLabels", "ChartDataLabelsShowCheck"),
+        new(ChartDataLabelsDialogFieldId.Position, ChartDataLabelsDialogControlKind.ComboBox, "ChartDataLabels_PositionLabel", "ChartDataLabelsPositionCombo"),
+        new(ChartDataLabelsDialogFieldId.Value, ChartDataLabelsDialogControlKind.CheckBox, "ChartDataLabels_Value", "ChartDataLabelsValueCheck"),
+        new(ChartDataLabelsDialogFieldId.LegendKey, ChartDataLabelsDialogControlKind.CheckBox, "ChartDataLabels_LegendKey", "ChartDataLabelsLegendKeyCheck"),
+        new(ChartDataLabelsDialogFieldId.CategoryName, ChartDataLabelsDialogControlKind.CheckBox, "ChartDataLabels_CategoryName", "ChartDataLabelsCategoryCheck"),
+        new(ChartDataLabelsDialogFieldId.SeriesName, ChartDataLabelsDialogControlKind.CheckBox, "ChartDataLabels_SeriesName", "ChartDataLabelsSeriesCheck"),
+        new(ChartDataLabelsDialogFieldId.Percentage, ChartDataLabelsDialogControlKind.CheckBox, "ChartDataLabels_Percentage", "ChartDataLabelsPercentageCheck"),
+        new(ChartDataLabelsDialogFieldId.Separator, ChartDataLabelsDialogControlKind.ComboBox, "ChartDataLabels_SeparatorLabel", "ChartDataLabelsSeparatorCombo"),
+        new(ChartDataLabelsDialogFieldId.NumberFormat, ChartDataLabelsDialogControlKind.ComboBox, "ChartDataLabels_NumberFormatLabel", "ChartDataLabelsNumberFormatCombo"),
+        new(ChartDataLabelsDialogFieldId.Callouts, ChartDataLabelsDialogControlKind.CheckBox, "ChartDataLabels_Callouts", "ChartDataLabelsCalloutsCheck"),
+    ];
+
+    private static readonly ChartDataLabelsDialogFieldDescriptor[] StyleFields =
+    [
+        new(ChartDataLabelsDialogFieldId.FillColor, ChartDataLabelsDialogControlKind.Color, "ChartDataLabels_FillColorLabel", "ChartDataLabelsFillColorButton"),
+        new(ChartDataLabelsDialogFieldId.BorderColor, ChartDataLabelsDialogControlKind.Color, "ChartDataLabels_BorderColorLabel", "ChartDataLabelsBorderColorButton"),
+        new(ChartDataLabelsDialogFieldId.TextColor, ChartDataLabelsDialogControlKind.Color, "ChartDataLabels_TextColorLabel", "ChartDataLabelsTextColorButton"),
+        new(ChartDataLabelsDialogFieldId.BorderThickness, ChartDataLabelsDialogControlKind.Number, "ChartDataLabels_BorderThicknessLabel", "ChartDataLabelsBorderThicknessBox", "ChartDataLabels_BorderThicknessHelpText"),
+        new(ChartDataLabelsDialogFieldId.FontSize, ChartDataLabelsDialogControlKind.Number, "ChartDataLabels_FontSizeLabel", "ChartDataLabelsFontSizeBox", "ChartDataLabels_FontSizeHelpText"),
+        new(ChartDataLabelsDialogFieldId.TextAngle, ChartDataLabelsDialogControlKind.Number, "ChartDataLabels_TextAngleLabel", "ChartDataLabelsAngleBox", "ChartDataLabels_TextAngleHelpText"),
+    ];
+
+    private static readonly ChartDataLabelsDialogSectionDescriptor[] DialogSections =
+    [
+        new("ChartDataLabels_LabelOptionsGroup", LabelOptionFields),
+        new("ChartDialog_FillLineGroup", StyleFields),
+    ];
+
     /// <summary>The selectable data-label positions, in display order.</summary>
     public static IReadOnlyList<ChartDataLabelPositionChoice> GetPositionChoices() => PositionCatalog;
 
     public static IReadOnlyList<ChartDataLabelSeparator> GetSeparatorChoices() => SeparatorCatalog;
 
     public static IReadOnlyList<ChartDataLabelNumberFormat> GetNumberFormatChoices() => NumberFormatCatalog;
+
+    public static IReadOnlyList<ChartDataLabelsDialogSectionDescriptor> GetDialogSections() => DialogSections;
+
+    public static ChartDataLabelsDialogSectionDescriptor GetLabelOptionsSection() => DialogSections[0];
+
+    public static ChartDataLabelsDialogSectionDescriptor GetStyleSection() => DialogSections[1];
+
+    public static ChartDataLabelsDialogFieldDescriptor GetDialogField(ChartDataLabelsDialogFieldId id)
+    {
+        foreach (var section in DialogSections)
+        {
+            foreach (var field in section.Fields)
+            {
+                if (field.Id == id)
+                    return field;
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(id), id, null);
+    }
 
     /// <summary>The English display label for <paramref name="position"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartDataLabelPosition position)

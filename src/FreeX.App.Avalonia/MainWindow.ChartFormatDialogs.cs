@@ -53,8 +53,7 @@ public sealed partial class MainWindow
 
     private async Task<ChartDataLabelsInput?> ShowChartDataLabelsDialogAsync(ChartDataLabelsInput current)
     {
-        var showCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_Show"), IsChecked = current.ShowDataLabels };
-        AutomationProperties.SetAutomationId(showCheck, "ChartDataLabelsShowCheck");
+        var state = ChartDataLabelsPlanner.Normalize(current);
 
         var positionChoices = ChartDataLabelsPlanner.GetPositionChoices();
         var positionCombo = new ComboBox
@@ -63,23 +62,82 @@ public sealed partial class MainWindow
             ItemsSource = positionChoices,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartDataLabelPositionChoice.DisplayName)),
         };
-        AutomationProperties.SetName(positionCombo, "Data label position");
-        AutomationProperties.SetAutomationId(positionCombo, "ChartDataLabelsPositionCombo");
+        ApplyDescriptorAutomation(positionCombo, ChartDataLabelsDialogFieldId.Position);
         ApplyChartComboBoxChrome(positionCombo);
         positionCombo.SelectedItem =
-            positionChoices.FirstOrDefault(c => c.Position == current.Position)
+            positionChoices.FirstOrDefault(c => c.Position == state.Position)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
 
-        var valueCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_Value")), IsChecked = current.ShowValue };
-        AutomationProperties.SetAutomationId(valueCheck, "ChartDataLabelsValueCheck");
-        var categoryCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_CategoryName")), IsChecked = current.ShowCategoryName };
-        AutomationProperties.SetAutomationId(categoryCheck, "ChartDataLabelsCategoryCheck");
-        var seriesCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_SeriesName")), IsChecked = current.ShowSeriesName };
-        AutomationProperties.SetAutomationId(seriesCheck, "ChartDataLabelsSeriesCheck");
-        var percentCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_Percentage")), IsChecked = current.ShowPercentage };
-        AutomationProperties.SetAutomationId(percentCheck, "ChartDataLabelsPercentageCheck");
-        var legendKeyCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_LegendKey")), IsChecked = current.ShowLegendKey };
-        AutomationProperties.SetAutomationId(legendKeyCheck, "ChartDataLabelsLegendKeyCheck");
+        var separatorChoices = ChartDataLabelsPlanner.GetSeparatorChoices();
+        var separatorCombo = new ComboBox
+        {
+            Width = 260,
+            ItemsSource = separatorChoices,
+        };
+        ApplyDescriptorAutomation(separatorCombo, ChartDataLabelsDialogFieldId.Separator);
+        ApplyChartComboBoxChrome(separatorCombo);
+        separatorCombo.SelectedItem = state.Separator ?? ChartDataLabelSeparator.Comma;
+
+        var numberFormatChoices = ChartDataLabelsPlanner.GetNumberFormatChoices();
+        var numberFormatCombo = new ComboBox
+        {
+            Width = 260,
+            ItemsSource = numberFormatChoices,
+        };
+        ApplyDescriptorAutomation(numberFormatCombo, ChartDataLabelsDialogFieldId.NumberFormat);
+        ApplyChartComboBoxChrome(numberFormatCombo);
+        numberFormatCombo.SelectedItem = state.NumberFormat ?? ChartDataLabelNumberFormat.General;
+
+        var showCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.ShowDataLabels, state.ShowDataLabels);
+        var valueCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.Value, state.ShowValue);
+        var legendKeyCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.LegendKey, state.ShowLegendKey);
+        var categoryCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.CategoryName, state.ShowCategoryName);
+        var seriesCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.SeriesName, state.ShowSeriesName);
+        var percentCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.Percentage, state.ShowPercentage);
+        var calloutsCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.Callouts, state.ShowCallouts ?? false);
+
+        var fillButton = MakeColorButton(ChartDataLabelsDialogFieldId.FillColor, state.FillColor);
+        var borderButton = MakeColorButton(ChartDataLabelsDialogFieldId.BorderColor, state.BorderColor);
+        var textButton = MakeColorButton(ChartDataLabelsDialogFieldId.TextColor, state.TextColor);
+
+        var borderThicknessBox = MakeDescriptorNumberBox(
+            ChartDataLabelsDialogFieldId.BorderThickness,
+            (state.BorderThickness ?? 0).ToString(CultureInfo.InvariantCulture));
+        var fontSizeBox = MakeDescriptorNumberBox(
+            ChartDataLabelsDialogFieldId.FontSize,
+            (state.FontSize ?? 11).ToString(CultureInfo.InvariantCulture));
+        var angleBox = MakeDescriptorNumberBox(
+            ChartDataLabelsDialogFieldId.TextAngle,
+            (state.Angle ?? 0).ToString(CultureInfo.InvariantCulture));
+
+        async Task PickColor(ChartDataLabelsDialogFieldId fieldId, Func<CellColor?> getColor, Action<CellColor> setColor, Button button)
+        {
+            var label = FieldLabel(fieldId);
+            var chosen = await ShowMoreColorsDialogAsync(
+                label,
+                getColor() ?? ChartQuickFormatCycler.DefaultSeriesColor);
+            if (chosen is { } color)
+            {
+                setColor(color);
+                button.Content = DescribeColor(label, color);
+            }
+        }
+
+        fillButton.Click += async (_, _) => await PickColor(
+            ChartDataLabelsDialogFieldId.FillColor,
+            () => state.FillColor,
+            color => state = state with { FillColor = color },
+            fillButton);
+        borderButton.Click += async (_, _) => await PickColor(
+            ChartDataLabelsDialogFieldId.BorderColor,
+            () => state.BorderColor,
+            color => state = state with { BorderColor = color },
+            borderButton);
+        textButton.Click += async (_, _) => await PickColor(
+            ChartDataLabelsDialogFieldId.TextColor,
+            () => state.TextColor,
+            color => state = state with { TextColor = color },
+            textButton);
 
         var dialog = NewChartDialog(UiText.Get("ChartDataLabels_Title"), "ChartDataLabelsDialog");
 
@@ -89,38 +147,176 @@ public sealed partial class MainWindow
             var position = positionCombo.SelectedItem is ChartDataLabelPositionChoice picked
                 ? picked.Position
                 : ChartDataLabelPosition.BestFit;
-            dialog.Close((ChartDataLabelsInput?)new ChartDataLabelsInput(
-                showCheck.IsChecked == true,
-                position,
-                valueCheck.IsChecked == true,
-                categoryCheck.IsChecked == true,
-                seriesCheck.IsChecked == true,
-                percentCheck.IsChecked == true,
-                legendKeyCheck.IsChecked == true));
+            var separator = separatorCombo.SelectedItem is ChartDataLabelSeparator selectedSeparator
+                ? selectedSeparator
+                : ChartDataLabelSeparator.Comma;
+            var numberFormat = numberFormatCombo.SelectedItem is ChartDataLabelNumberFormat selectedNumberFormat
+                ? selectedNumberFormat
+                : ChartDataLabelNumberFormat.General;
+
+            if (!ChartDataLabelsPlanner.TryParseDialogInput(
+                    showCheck.IsChecked == true,
+                    position,
+                    valueCheck.IsChecked == true,
+                    legendKeyCheck.IsChecked == true,
+                    categoryCheck.IsChecked == true,
+                    seriesCheck.IsChecked == true,
+                    percentCheck.IsChecked == true,
+                    separator,
+                    numberFormat,
+                    calloutsCheck.IsChecked == true,
+                    ColorText(state.FillColor),
+                    ColorText(state.BorderColor),
+                    ColorText(state.TextColor),
+                    borderThicknessBox.Text,
+                    fontSizeBox.Text,
+                    angleBox.Text,
+                    out var input,
+                    out var issue))
+            {
+                RefreshShell(issue switch
+                {
+                    ChartDataLabelsParseIssue.BorderThickness => UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"),
+                    ChartDataLabelsParseIssue.FontSize => UiText.Get("ChartDataLabels_InvalidFontSizeMessage"),
+                    ChartDataLabelsParseIssue.Angle => UiText.Get("ChartDataLabels_InvalidAngleMessage"),
+                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
+                });
+                return;
+            }
+
+            dialog.Close((ChartDataLabelsInput?)input);
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartDataLabelsInput?)null);
 
-        dialog.Content = new StackPanel
+        var labelOptionPanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                showCheck,
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.Position),
+                positionCombo,
+                valueCheck,
+                legendKeyCheck,
+                categoryCheck,
+                seriesCheck,
+                percentCheck,
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.Separator),
+                separatorCombo,
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.NumberFormat),
+                numberFormatCombo,
+                calloutsCheck,
+            },
+        };
+
+        var stylePanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                fillButton,
+                borderButton,
+                textButton,
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.BorderThickness),
+                borderThicknessBox,
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.FontSize),
+                fontSizeBox,
+                MakeDescriptorLabel(ChartDataLabelsDialogFieldId.TextAngle),
+                angleBox,
+            },
+        };
+
+        var content = new StackPanel
         {
             Margin = new Thickness(16),
             Spacing = 8,
             MinWidth = 300,
             Children =
             {
-                showCheck,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartDataLabels_PositionLabel")), FontSize = 12 },
-                positionCombo,
-                new TextBlock { Text = UiText.Get("ChartDataLabels_ContainsLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
-                valueCheck,
-                categoryCheck,
-                seriesCheck,
-                percentCheck,
-                legendKeyCheck,
+                MakeDescriptorGroup(ChartDataLabelsPlanner.GetLabelOptionsSection(), labelOptionPanel),
+                MakeDescriptorGroup(ChartDataLabelsPlanner.GetStyleSection(), stylePanel),
                 buttonRow,
             },
         };
 
+        dialog.Content = new ScrollViewer
+        {
+            MaxHeight = 640,
+            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = content,
+        };
+
         return await dialog.ShowDialog<ChartDataLabelsInput?>(this);
+
+        static string ColorText(CellColor? color) =>
+            color is { } c ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : "none";
+
+        static ChartDataLabelsDialogFieldDescriptor Field(ChartDataLabelsDialogFieldId fieldId) =>
+            ChartDataLabelsPlanner.GetDialogField(fieldId);
+
+        static string FieldLabel(ChartDataLabelsDialogFieldId fieldId) =>
+            StripDisplayMnemonic(UiText.Get(Field(fieldId).LabelResourceKey));
+
+        static void ApplyDescriptorAutomation(Control control, ChartDataLabelsDialogFieldId fieldId)
+        {
+            var descriptor = Field(fieldId);
+            AutomationProperties.SetName(control, FieldLabel(fieldId));
+            AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
+            if (descriptor.HelpResourceKey is { } helpKey)
+                AutomationProperties.SetHelpText(control, UiText.Get(helpKey));
+        }
+
+        static CheckBox MakeDescriptorCheck(ChartDataLabelsDialogFieldId fieldId, bool isChecked)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = FieldLabel(fieldId),
+                IsChecked = isChecked,
+            };
+            ApplyDescriptorAutomation(checkBox, fieldId);
+            return checkBox;
+        }
+
+        static TextBlock MakeDescriptorLabel(ChartDataLabelsDialogFieldId fieldId) =>
+            new()
+            {
+                Text = FieldLabel(fieldId),
+                FontSize = 12,
+            };
+
+        TextBox MakeDescriptorNumberBox(ChartDataLabelsDialogFieldId fieldId, string text)
+        {
+            var box = new TextBox
+            {
+                Text = text,
+                Width = 260,
+            };
+            ApplyChartTextBoxChrome(box);
+            ApplyDescriptorAutomation(box, fieldId);
+            return box;
+        }
+
+        Button MakeColorButton(ChartDataLabelsDialogFieldId fieldId, CellColor? color)
+        {
+            var label = FieldLabel(fieldId);
+            var button = new Button
+            {
+                Content = DescribeColor(label, color),
+                Width = 260,
+            };
+            ApplyChartButtonChrome(button, 260);
+            ApplyDescriptorAutomation(button, fieldId);
+            return button;
+        }
+
+        static GroupBox MakeDescriptorGroup(ChartDataLabelsDialogSectionDescriptor section, Control content) =>
+            new()
+            {
+                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
+                Content = content,
+                Padding = new Thickness(10, 8),
+                Margin = new Thickness(0, 0, 0, 8),
+            };
     }
 
     // ---- Format Axis (real, SetChartLayoutCommand via ChartAxisPlanner) -------------------------------

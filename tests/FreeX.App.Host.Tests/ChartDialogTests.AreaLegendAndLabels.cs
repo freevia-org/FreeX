@@ -175,6 +175,9 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartDataLabelsPlanner.GetPositionChoices()");
         source.Should().Contain("ChartDataLabelsPlanner.GetSeparatorChoices()");
         source.Should().Contain("ChartDataLabelsPlanner.GetNumberFormatChoices()");
+        source.Should().Contain("ChartDataLabelsPlanner.GetDialogField(id)");
+        source.Should().Contain("ChartDataLabelsPlanner.GetLabelOptionsSection()");
+        source.Should().Contain("ChartDataLabelsPlanner.GetStyleSection()");
         source.Should().Contain("ChartDataLabelsPlanner.TryParseDialogInput(");
         source.Should().NotContain("TryReadOptionalColor(");
         source.Should().NotContain("TryReadClampedDouble(");
