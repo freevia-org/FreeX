@@ -1480,11 +1480,8 @@ internal static class FreeWRibbonCommands
 
         // Insert > Quick Parts > Document Property: insert a live field run that renders the matching
         // document-property value. Uses RunFieldKind so it round-trips as w:fldSimple in docx.
-        registry.Register("freew.docprop-title",    new InsertDocPropFieldCommand(editor, RunFieldKind.Title));
-        registry.Register("freew.docprop-subject",  new InsertDocPropFieldCommand(editor, RunFieldKind.Subject));
-        registry.Register("freew.docprop-author",   new InsertDocPropFieldCommand(editor, RunFieldKind.Author));
-        registry.Register("freew.docprop-keywords", new InsertDocPropFieldCommand(editor, RunFieldKind.Keywords));
-        registry.Register("freew.docprop-comments", new InsertDocPropFieldCommand(editor, RunFieldKind.DocComments));
+        foreach (var plan in DocumentPropertyFieldPlanner.CommandPlans)
+            registry.Register(plan.CommandId, new InsertDocPropFieldCommand(editor, plan.Kind));
 
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
@@ -7280,28 +7277,7 @@ internal static class FreeWRibbonCommands
             if (text is null)
                 return; // cancelled — leave the model untouched
 
-            var hadPageNumber = existing?.Paragraphs.SelectMany(p => p.Runs)
-                .Any(r => r.FieldKind == RunFieldKind.PageNumber) ?? false;
-
-            HeaderFooter? value;
-            if (text.Length == 0 && !hadPageNumber)
-            {
-                value = null;
-            }
-            else
-            {
-                value = new HeaderFooter();
-                var paragraph = new FreeW.Core.Model.Paragraph();
-                if (text.Length > 0)
-                    paragraph.Runs.Add(new FreeW.Core.Model.Run(text));
-                if (hadPageNumber)
-                {
-                    if (paragraph.Runs.Count > 0)
-                        paragraph.Runs.Add(new FreeW.Core.Model.Run("  "));
-                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                }
-                value.Paragraphs.Add(paragraph);
-            }
+            var value = HeaderFooterDialogPlanner.BuildPlainTextHeaderFooter(text, existing);
 
             if (isFooter)
                 model.Footer = value;
@@ -7329,39 +7305,18 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            var hf = editor.Model.FinalSectionHeadersFooters;
             var page = editor.Model.Page;
-
-            // Warn if the slot requires a toggle that is currently off (same guard as EditHeaderSlotCommand).
-            var label = slotName switch
+            var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slotName, page);
+            if (plan.Kind != HeaderFooterSlotActivationKind.Active)
             {
-                "header"       => "Default Header",
-                "footer"       => "Default Footer",
-                "even-header"  => "Even-Page Header",
-                "even-footer"  => "Even-Page Footer",
-                "first-header" => "First-Page Header",
-                "first-footer" => "First-Page Footer",
-                _              => slotName
-            };
-
-            if (slotName is "even-header" or "even-footer" && !page.DifferentOddEvenPages)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    $"'{label}' is only active when 'Different Odd & Even Pages' is turned on.\n" +
-                    "Enable that option in Header & Footer Design, then try again.",
-                    "Edit Header / Footer");
-                return;
-            }
-            if (slotName is "first-header" or "first-footer" && !page.DifferentFirstPage)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    $"'{label}' is only active when 'Different First Page' is turned on.\n" +
-                    "Enable that option in Header & Footer Design, then try again.",
-                    "Edit Header / Footer");
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    plan.Message ?? string.Empty,
+                    HeaderFooterDialogPlanner.EditCaption);
                 return;
             }
 
-            openPane(slotName);
+            openPane(plan.SlotName);
         }
     }
 
@@ -7374,62 +7329,23 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var hf = editor.Model.FinalSectionHeadersFooters;
             var page = editor.Model.Page;
+            var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slotName, page);
 
-            // Resolve the current slot value by name.
-            var current = slotName switch
+            if (plan.Kind != HeaderFooterSlotActivationKind.Active)
             {
-                "header"       => hf.Header,
-                "footer"       => hf.Footer,
-                "even-header"  => hf.EvenHeader,
-                "even-footer"  => hf.EvenFooter,
-                "first-header" => hf.FirstHeader,
-                "first-footer" => hf.FirstFooter,
-                _              => null
-            };
-
-            var label = slotName switch
-            {
-                "header"       => "Default Header",
-                "footer"       => "Default Footer",
-                "even-header"  => "Even-Page Header",
-                "even-footer"  => "Even-Page Footer",
-                "first-header" => "First-Page Header",
-                "first-footer" => "First-Page Footer",
-                _              => slotName
-            };
-
-            // Warn if the slot requires a toggle that is currently off.
-            if (slotName is "even-header" or "even-footer" && !page.DifferentOddEvenPages)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    $"'{label}' is only active when 'Different Odd & Even Pages' is turned on.\n" +
-                    "Enable that option in Header & Footer Design, then try again.",
-                    "Edit Header / Footer");
-                return;
-            }
-            if (slotName is "first-header" or "first-footer" && !page.DifferentFirstPage)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    $"'{label}' is only active when 'Different First Page' is turned on.\n" +
-                    "Enable that option in Header & Footer Design, then try again.",
-                    "Edit Header / Footer");
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    plan.Message ?? string.Empty,
+                    HeaderFooterDialogPlanner.EditCaption);
                 return;
             }
 
-            var result = HeaderFooterSlotDialog.Prompt(Window.GetWindow(editor), label, current);
-            if (result is null)
+            var current = HeaderFooterDialogPlanner.GetSlot(hf, plan.Slot);
+            var result = HeaderFooterSlotDialog.Prompt(Window.GetWindow(editor), plan.Label, current);
+            if (!result.Accepted)
                 return; // cancelled
 
-            // Write back to the correct slot.
-            switch (slotName)
-            {
-                case "header":       hf.Header      = result; break;
-                case "footer":       hf.Footer      = result; break;
-                case "even-header":  hf.EvenHeader  = result; break;
-                case "even-footer":  hf.EvenFooter  = result; break;
-                case "first-header": hf.FirstHeader = result; break;
-                case "first-footer": hf.FirstFooter = result; break;
-            }
+            HeaderFooterDialogPlanner.SetSlot(hf, plan.Slot, result.Value);
 
             editor.Focus();
         }
@@ -7492,12 +7408,12 @@ internal static class FreeWRibbonCommands
         {
             if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
                 return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+            if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
                 editor.ApplyPageSettings(page => page.HeaderDistancePt = pt);
         }
 
         public RibbonCommandState GetState() =>
-            new(Value: editor.Model.Page.HeaderDistancePt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            new(Value: HeaderFooterDialogPlanner.FormatDistance(editor.Model.Page.HeaderDistancePt));
     }
 
     private sealed class FooterFromBottomCommand(DocumentView editor) : IRibbonStatefulCommand
@@ -7506,12 +7422,12 @@ internal static class FreeWRibbonCommands
         {
             if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
                 return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+            if (HeaderFooterDialogPlanner.TryParseDistance(value, out var pt))
                 editor.ApplyPageSettings(page => page.FooterDistancePt = pt);
         }
 
         public RibbonCommandState GetState() =>
-            new(Value: editor.Model.Page.FooterDistancePt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            new(Value: HeaderFooterDialogPlanner.FormatDistance(editor.Model.Page.FooterDistancePt));
     }
 
     // Insert into header/footer: insert page number, date/time, or a document-info field into the
@@ -7524,39 +7440,22 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var model = editor.Model;
             var hf = isFooter ? model.Footer : model.Header;
-            var slot = hf ?? new HeaderFooter();
+            var slot = hf;
 
             switch (kind)
             {
                 case InsertSlotKind.PageNumber:
-                {
-                    var alreadyPresent = slot.Paragraphs.SelectMany(p => p.Runs)
-                        .Any(r => r.FieldKind == RunFieldKind.PageNumber);
-                    if (!alreadyPresent)
-                    {
-                        var para = new FreeW.Core.Model.Paragraph
-                        {
-                            Formatting = ParagraphFormatting.Default with
-                            {
-                                Alignment = FreeW.Core.Model.TextAlignment.Center
-                            }
-                        };
-                        para.Runs.Add(new FreeW.Core.Model.Run("Page "));
-                        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                        slot.Paragraphs.Add(para);
-                    }
+                    slot = HeaderFooterDialogPlanner.AddPageNumberToSlot(slot);
                     break;
-                }
                 case InsertSlotKind.DateTime:
                 {
                     var dtResult = DateTimeDialog.Prompt(Window.GetWindow(editor));
                     if (dtResult is null)
                         return;
-                    var para = EnsureDefaultParagraph(slot);
                     if (dtResult.IsField && dtResult.FieldInstruction is { Length: > 0 } dtInstr)
-                        para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(" " + dtInstr.Trim() + " "));
+                        slot = HeaderFooterDialogPlanner.AppendFieldDateTimeToSlot(slot, dtInstr);
                     else if (!string.IsNullOrEmpty(dtResult.Text))
-                        para.Runs.Add(new FreeW.Core.Model.Run(dtResult.Text));
+                        slot = HeaderFooterDialogPlanner.AppendPlainDateTimeToSlot(slot, dtResult.Text);
                     break;
                 }
                 case InsertSlotKind.DocumentInfo:
@@ -7564,8 +7463,7 @@ internal static class FreeWRibbonCommands
                     var instruction = FieldPickerDialog.Ask(Window.GetWindow(editor));
                     if (instruction is null)
                         return;
-                    var para = EnsureDefaultParagraph(slot);
-                    para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(instruction));
+                    slot = HeaderFooterDialogPlanner.AppendComplexFieldToSlot(slot, instruction);
                     break;
                 }
             }
@@ -7577,16 +7475,11 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
         }
-
-        private static FreeW.Core.Model.Paragraph EnsureDefaultParagraph(HeaderFooter hf)
-        {
-            if (hf.Paragraphs.Count == 0)
-                hf.Paragraphs.Add(new FreeW.Core.Model.Paragraph());
-            return hf.Paragraphs[^1];
-        }
     }
 
     private enum InsertSlotKind { PageNumber, DateTime, DocumentInfo }
+
+    private sealed record HeaderFooterSlotDialogResult(bool Accepted, HeaderFooter? Value);
 
     // A focused per-slot header/footer editor dialog. Shows the slot's current plain text, lets the
     // user edit it freely, and provides "Insert Page Number", "Insert Date & Time", and "Insert Field"
@@ -7600,23 +7493,19 @@ internal static class FreeWRibbonCommands
         /// (possibly null to clear the slot), or returns <paramref name="current"/> unchanged when the
         /// user cancels.
         /// </summary>
-        public static HeaderFooter? Prompt(Window? owner, string slotLabel, HeaderFooter? current)
+        public static HeaderFooterSlotDialogResult Prompt(Window? owner, string slotLabel, HeaderFooter? current)
         {
             // Seed the text box with the slot's plain text (if any).
-            var seed = current?.PlainText ?? string.Empty;
-            var hadPageNumber = current?.Paragraphs.SelectMany(p => p.Runs)
-                .Any(r => r.FieldKind == RunFieldKind.PageNumber) ?? false;
-            var hadComplexField = current?.Paragraphs.SelectMany(p => p.Runs)
-                .Any(r => r.ComplexField is not null) ?? false;
+            var state = HeaderFooterDialogPlanner.BuildSlotDialogState(current);
 
             // Track whether the user wants to append a page-number or date/time.
-            bool appendPageNumber = hadPageNumber;
+            bool appendPageNumber = state.HasPageNumber;
             string? appendDateTime = null;
             string? appendFieldInstruction = null;
 
             var box = new System.Windows.Controls.TextBox
             {
-                Text = seed,
+                Text = state.Text,
                 MinWidth = 400,
                 MaxHeight = 100,
                 TextWrapping = System.Windows.TextWrapping.Wrap,
@@ -7644,7 +7533,7 @@ internal static class FreeWRibbonCommands
                 Content = "Insert Page Number",
                 MinWidth = 140,
                 Margin = new Thickness(0, 0, 8, 8),
-                IsEnabled = !appendPageNumber
+                IsEnabled = state.CanInsertPageNumber
             };
             var btnDateTime = new System.Windows.Controls.Button
             {
@@ -7683,39 +7572,11 @@ internal static class FreeWRibbonCommands
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var text = box.Text;
-                HeaderFooter? hf;
-                if (text.Length == 0 && !appendPageNumber && appendDateTime is null && appendFieldInstruction is null)
-                {
-                    hf = null; // clear slot
-                }
-                else
-                {
-                    hf = new HeaderFooter();
-                    var para = new FreeW.Core.Model.Paragraph();
-                    if (text.Length > 0)
-                        para.Runs.Add(new FreeW.Core.Model.Run(text));
-                    if (appendDateTime is { } dt)
-                    {
-                        if (para.Runs.Count > 0)
-                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
-                        para.Runs.Add(new FreeW.Core.Model.Run(dt));
-                    }
-                    if (appendFieldInstruction is { } instr)
-                    {
-                        if (para.Runs.Count > 0)
-                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
-                        para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(instr));
-                    }
-                    if (appendPageNumber)
-                    {
-                        if (para.Runs.Count > 0)
-                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
-                        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                    }
-                    hf.Paragraphs.Add(para);
-                }
-                result = hf;
+                result = HeaderFooterDialogPlanner.BuildSlotDialogResult(
+                    box.Text,
+                    appendPageNumber,
+                    appendDateTime,
+                    appendFieldInstruction);
                 dialog.DialogResult = true;
             };
 
@@ -7748,7 +7609,9 @@ internal static class FreeWRibbonCommands
             dialog.Content = panel;
 
             box.Focus();
-            return dialog.ShowDialog() == true ? result : current; // Cancel = unchanged
+            return dialog.ShowDialog() == true
+                ? new HeaderFooterSlotDialogResult(Accepted: true, result)
+                : new HeaderFooterSlotDialogResult(Accepted: false, current);
         }
     }
 
@@ -7911,37 +7774,11 @@ internal static class FreeWRibbonCommands
 
             if (position == PageNumberPosition.Top)
             {
-                var header = model.Header ?? new HeaderFooter();
-                var alreadyPresent = header.Paragraphs.SelectMany(p => p.Runs)
-                    .Any(r => r.FieldKind == RunFieldKind.PageNumber);
-                if (!alreadyPresent)
-                {
-                    var paragraph = new FreeW.Core.Model.Paragraph
-                    {
-                        Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
-                    };
-                    paragraph.Runs.Add(new FreeW.Core.Model.Run("Page "));
-                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                    header.Paragraphs.Add(paragraph);
-                }
-                model.Header = header;
+                model.Header = HeaderFooterDialogPlanner.AddPageNumberToSlot(model.Header);
             }
             else
             {
-                var footer = model.Footer ?? new HeaderFooter();
-                var alreadyPresent = footer.Paragraphs.SelectMany(p => p.Runs)
-                    .Any(r => r.FieldKind == RunFieldKind.PageNumber);
-                if (!alreadyPresent)
-                {
-                    var paragraph = new FreeW.Core.Model.Paragraph
-                    {
-                        Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
-                    };
-                    paragraph.Runs.Add(new FreeW.Core.Model.Run("Page "));
-                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                    footer.Paragraphs.Add(paragraph);
-                }
-                model.Footer = footer;
+                model.Footer = HeaderFooterDialogPlanner.AddPageNumberToSlot(model.Footer);
             }
         }
     }
@@ -7996,39 +7833,17 @@ internal static class FreeWRibbonCommands
     // field-name browser.
     private static class FieldPickerDialog
     {
-        private sealed record Choice(string Category, string Label, string Instruction);
-
         public static string? Ask(Window? owner)
         {
-            var choices = new[]
-            {
-                // Date and Time
-                new Choice("Date and Time", "Date (DATE)",                              @" DATE \@ ""M/d/yyyy"" "),
-                new Choice("Date and Time", "Time (TIME)",                              @" TIME \@ ""h:mm am/pm"" "),
-                // Document Information
-                new Choice("Document Information", "Author (AUTHOR)",                   " AUTHOR "),
-                new Choice("Document Information", "File Name (FILENAME)",              " FILENAME "),
-                new Choice("Document Information", "Title (TITLE)",                     " TITLE "),
-                new Choice("Document Information", "Subject (SUBJECT)",                 " SUBJECT "),
-                new Choice("Document Information", "Keywords (KEYWORDS)",               " KEYWORDS "),
-                new Choice("Document Information", "Comments (COMMENTS)",               " COMMENTS "),
-                // Numbering
-                new Choice("Numbering", "Page Number (PAGE)",                           " PAGE "),
-                new Choice("Numbering", "Number of Pages (NUMPAGES)",                  " NUMPAGES "),
-                // References (cross-reference / sequence)
-                new Choice("References", "StyleRef — heading style ref (STYLEREF)",    " STYLEREF 1 "),
-                new Choice("References", "Sequence number (SEQ Figure)",               " SEQ Figure \\* ARABIC "),
-            };
 
             // Category listbox on the left; field listbox on the right — a two-pane layout
             // matching the spirit of Word's Field dialog without requiring full XAML.
-            var categories = choices.Select(c => c.Category).Distinct().ToList();
             var catList = new System.Windows.Controls.ListBox
             {
                 MinWidth = 160,
                 Margin = new Thickness(0, 0, 8, 0)
             };
-            foreach (var cat in categories)
+            foreach (var cat in FieldPickerDialogPlanner.Categories)
                 catList.Items.Add(cat);
 
             var fieldList = new System.Windows.Controls.ListBox { MinWidth = 220 };
@@ -8037,7 +7852,7 @@ internal static class FreeWRibbonCommands
             {
                 var cat = catList.SelectedItem as string;
                 fieldList.Items.Clear();
-                foreach (var c in choices.Where(c => c.Category == cat))
+                foreach (var c in FieldPickerDialogPlanner.ChoicesForCategory(cat))
                     fieldList.Items.Add(c.Label);
                 if (fieldList.Items.Count > 0)
                     fieldList.SelectedIndex = 0;
@@ -8070,9 +7885,8 @@ internal static class FreeWRibbonCommands
             {
                 var cat = catList.SelectedItem as string;
                 var label = fieldList.SelectedItem as string;
-                var chosen = choices.FirstOrDefault(c => c.Category == cat && c.Label == label);
-                if (chosen is not null)
-                    result = chosen.Instruction;
+                if (FieldPickerDialogPlanner.TryGetInstruction(cat, label, out var instruction))
+                    result = instruction;
                 dialog.DialogResult = true;
             }
             ok.Click += (_, _) => Commit();
