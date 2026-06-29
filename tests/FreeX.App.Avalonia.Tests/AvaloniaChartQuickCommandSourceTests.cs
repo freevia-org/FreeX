@@ -1,0 +1,44 @@
+using System.IO;
+
+using FluentAssertions;
+
+namespace FreeX.App.Avalonia.Tests;
+
+public sealed class AvaloniaChartQuickCommandSourceTests
+{
+    [Fact]
+    public void ChartFormatTextTabQuickCommands_UseSharedCatalogAndPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
+
+        source.Should().Contain("ChartQuickCommandCatalog.ComboSeries");
+        source.Should().Contain("ChartQuickCommandCatalog.ChartTitleColor");
+        source.Should().Contain("ChartQuickCommandCatalog.DataLabelTextColor");
+        source.Should().Contain("ChartQuickCommandCatalog.SeriesDash");
+        source.Should().Contain("ChartQuickCommandCatalog.SeriesMarkerSize");
+        source.Should().Contain("private void ExecuteChartQuickCommand(");
+        source.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
+        source.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
+        source.Should().Contain("UiText.Get(\"ChartLoc_ComboChartsNeed\")");
+        source.Should().Contain("UiText.Get(\"ChartLoc_NoDataSeriesToFormat\")");
+        source.Should().Contain("UiText.Get(\"ChartLoc_MarkersAvailableOn\")");
+
+        source.Should().NotContain("ChartQuickFormatCycler.");
+        source.Should().NotContain("new ChartLayoutOptions(");
+        source.Should().NotContain("\"Chart Title Color\"");
+        source.Should().NotContain("\"Combo Chart Series\"");
+        source.Should().NotContain("\"Series Dash\"");
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+
+        if (directory is null)
+            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
+
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+    }
+}

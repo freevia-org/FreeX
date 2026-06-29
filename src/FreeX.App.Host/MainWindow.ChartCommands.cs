@@ -363,29 +363,17 @@ public partial class MainWindow
 
     private void ChartFirstSliceAngleBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "First Slice Angle",
-            UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForFirstSliceAngle"),
-            ChartQuickCommand.FirstSliceAngle,
-            UiText.Get("MainWindowMessage_ChartFirstSliceAngleUnsupported"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.FirstSliceAngle);
     }
 
     private void ChartDoughnutHoleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Doughnut Hole Size",
-            UiText.Get("MainWindowMessage_ChartSelectDoughnutForHoleSize"),
-            ChartQuickCommand.DoughnutHoleSize,
-            UiText.Get("MainWindowMessage_ChartDoughnutHoleSizeUnsupported"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DoughnutHoleSize);
     }
 
     private void ChartExplodedSliceBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Explode Slice",
-            UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForExplode"),
-            ChartQuickCommand.ExplodedSlice,
-            UiText.Get("MainWindowMessage_ChartExplodedSliceUnsupported"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ExplodedSlice);
     }
 
     private void ChartBarFormatBtn_Click(object sender, RoutedEventArgs e)
@@ -504,115 +492,72 @@ public partial class MainWindow
 
     private void ChartDataLabelCategoryBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Category Name",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelCategoryName);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelCategoryName);
     }
 
     private void ChartDataLabelSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Series Name",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelSeriesName);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelSeriesName);
     }
 
     private void ChartDataLabelPercentageBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Percentage",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelPercentage);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelPercentage);
     }
 
     private void ChartDataLabelSeparatorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Label Separator",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelSeparator);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelSeparator);
     }
 
     private void ChartDataLabelNumberFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Label Number Format",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelNumberFormat);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelNumberFormat);
     }
 
     private void ChartDataLabelCalloutBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Data Callout",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelCallout);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelCallout);
     }
 
     private void ChartDataLabelFillBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Data Label Fill",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelFill);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelFill);
     }
 
     private void ChartDataLabelTextBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Data Label Text",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelTextColor);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelTextColor);
     }
 
     private void ChartDataLabelBorderBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Data Label Border",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelBorder);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelBorder);
     }
 
     private void ChartDataLabelSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Data Label Size",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelFontSize);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelFontSize);
     }
 
     private void ChartDataLabelAngleBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Data Label Angle",
-            UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
-            ChartQuickCommand.DataLabelAngle);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelAngle);
     }
 
     private void ChartPointDataLabelBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Format Data Point Label",
-            UiText.Get("MainWindowMessage_ChartSelectForPointDataLabel"),
-            ChartQuickCommand.PointDataLabel,
-            UiText.Get("MainWindowMessage_ChartPointDataLabelNeedsDataPoints"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.PointDataLabel);
     }
 
     private void ChartAreaFillBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Chart Area Fill",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.ChartAreaFill);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ChartAreaFill);
     }
 
     private void ChartTitleColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Chart Title Color",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.ChartTitleColor);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ChartTitleColor);
     }
 
     private void ChartTitlesBtn_Click(object sender, RoutedEventArgs e)
@@ -630,82 +575,52 @@ public partial class MainWindow
 
     private void ChartTitleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Chart Title Size",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.ChartTitleFontSize);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ChartTitleFontSize);
     }
 
     private void ChartAxisTitleColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Axis Title Color",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.AxisTitleColor);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.AxisTitleColor);
     }
 
     private void ChartAxisTitleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Axis Title Size",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.AxisTitleFontSize);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.AxisTitleFontSize);
     }
 
     private void ChartPlotAreaFillBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Plot Area Fill",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.PlotAreaFill);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.PlotAreaFill);
     }
 
     private void ChartPlotAreaBorderBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Plot Area Border",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.PlotAreaBorder);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.PlotAreaBorder);
     }
 
     private void ChartLegendTextBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Legend Text",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.LegendTextColor);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendTextColor);
     }
 
     private void ChartLegendFillBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Legend Fill",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.LegendFill);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendFill);
     }
 
     private void ChartLegendBorderBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Legend Border",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.LegendBorder);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendBorder);
     }
 
     private void ChartLegendSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Legend Font Size",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.LegendFontSize);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendFontSize);
     }
 
     private void ChartLegendOverlayBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Legend Overlay",
-            UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
-            ChartQuickCommand.LegendOverlay);
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.LegendOverlay);
     }
 
     private void ChartTrendlineBtn_Click(object sender, RoutedEventArgs e)
@@ -738,65 +653,37 @@ public partial class MainWindow
 
     private void ChartTrendlinePeriodBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Moving Average Period",
-            UiText.Get("MainWindowMessage_ChartSelectForMovingAveragePeriod"),
-            ChartQuickCommand.TrendlineMovingAveragePeriod,
-            UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineMovingAveragePeriod);
     }
 
     private void ChartTrendlineOrderBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Polynomial Order",
-            UiText.Get("MainWindowMessage_ChartSelectForPolynomialOrder"),
-            ChartQuickCommand.TrendlinePolynomialOrder,
-            UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlinePolynomialOrder);
     }
 
     private void ChartTrendlineEquationBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Trendline Equation",
-            UiText.Get("MainWindowMessage_ChartSelectForTrendlineInformation"),
-            ChartQuickCommand.TrendlineEquation,
-            UiText.Get("MainWindowMessage_ChartTrendlineInformationSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineEquation);
     }
 
     private void ChartTrendlineRSquaredBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "R-squared",
-            UiText.Get("MainWindowMessage_ChartSelectForTrendlineInformation"),
-            ChartQuickCommand.TrendlineRSquared,
-            UiText.Get("MainWindowMessage_ChartTrendlineInformationSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineRSquared);
     }
 
     private void ChartTrendlineColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Trendline Color",
-            UiText.Get("MainWindowMessage_ChartSelectForTrendlineInformation"),
-            ChartQuickCommand.TrendlineColor,
-            UiText.Get("MainWindowMessage_ChartTrendlineInformationSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineColor);
     }
 
     private void ChartTrendlineDashBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Trendline Dash",
-            UiText.Get("MainWindowMessage_ChartSelectForTrendlineInformation"),
-            ChartQuickCommand.TrendlineDash,
-            UiText.Get("MainWindowMessage_ChartTrendlineInformationSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineDash);
     }
 
     private void ChartTrendlineWidthBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Trendline Width",
-            UiText.Get("MainWindowMessage_ChartSelectForTrendlineInformation"),
-            ChartQuickCommand.TrendlineThickness,
-            UiText.Get("MainWindowMessage_ChartTrendlineInformationSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineThickness);
     }
 
     private void ChartErrorBarsBtn_Click(object sender, RoutedEventArgs e)
@@ -816,29 +703,17 @@ public partial class MainWindow
 
     private void ChartSecondaryAxisSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Secondary Axis Series",
-            UiText.Get("MainWindowMessage_ChartSelectForSecondaryAxisSeries"),
-            ChartQuickCommand.SecondaryAxisSeries,
-            UiText.Get("MainWindowMessage_ChartSecondaryAxisUnsupported"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.SecondaryAxisSeries);
     }
 
     private void ChartComboBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Combo Chart",
-            UiText.Get("MainWindowMessage_ChartSelectForComboOptions"),
-            ChartQuickCommand.ComboToggle,
-            UiText.Get("MainWindowMessage_ChartComboUnsupported"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ComboToggle);
     }
 
     private void ChartComboSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Combo Chart Series",
-            UiText.Get("MainWindowMessage_ChartSelectForComboSeries"),
-            ChartQuickCommand.ComboSeries,
-            UiText.Get("MainWindowMessage_ChartComboUnsupported"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.ComboSeries);
     }
 
     private void ChartSeriesColorBtn_Click(object sender, RoutedEventArgs e)
@@ -848,20 +723,12 @@ public partial class MainWindow
 
     private void ChartSeriesWidthBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Series Width",
-            UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"),
-            ChartQuickCommand.SeriesWidth,
-            UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.SeriesWidth);
     }
 
     private void ChartSeriesDashBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Series Dash",
-            UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"),
-            ChartQuickCommand.SeriesDash,
-            UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.SeriesDash);
     }
 
     private void ChartSeriesMarkerBtn_Click(object sender, RoutedEventArgs e)
@@ -890,25 +757,20 @@ public partial class MainWindow
 
     private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteChartQuickCommand(
-            "Marker Size",
-            UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"),
-            ChartQuickCommand.SeriesMarkerSize,
-            UiText.Get("MainWindowMessage_ChartSeriesMarkersSupportedTypes"));
+        ExecuteChartQuickCommand(ChartQuickCommandCatalog.SeriesMarkerSize);
     }
 
-    private void ExecuteChartQuickCommand(
-        string caption,
-        string missingMessage,
-        ChartQuickCommand command,
-        string? unsupportedMessage = null)
+    private void ExecuteChartQuickCommand(ChartQuickCommandDescriptor command)
     {
+        var unsupportedMessage = command.HostUnsupportedMessageResourceKey is null
+            ? null
+            : UiText.Get(command.HostUnsupportedMessageResourceKey);
         if (!TryExecuteRepeatableChartLayout(
-                caption,
-                missingMessage,
-                chart => ChartQuickCommandPlanner.CanApply(chart, command),
+                command.Label,
+                UiText.Get(command.HostMissingSelectionMessageResourceKey),
+                chart => ChartQuickCommandPlanner.CanApply(chart, command.Command),
                 unsupportedMessage,
-                chart => ChartQuickCommandPlanner.Plan(chart, command)))
+                chart => ChartQuickCommandPlanner.Plan(chart, command.Command)))
             return;
 
         UpdateViewport();

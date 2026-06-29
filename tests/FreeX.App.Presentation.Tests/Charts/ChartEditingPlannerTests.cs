@@ -81,6 +81,39 @@ public sealed class ChartEditingPlannerTests
             .Should().BeSameAs(ChartWorkflowCommandCatalog.FormatChartArea);
     }
 
+    [Fact]
+    public void QuickCommandCatalog_SharesQuickLabelsAndHostMessages()
+    {
+        ChartQuickCommandCatalog.All.Select(command => command.Command)
+            .Should().Equal(Enum.GetValues<ChartQuickCommand>());
+
+        ChartQuickCommandCatalog.All.Should().OnlyContain(command => !string.IsNullOrWhiteSpace(command.Label));
+        ChartQuickCommandCatalog.All.Should().OnlyContain(command =>
+            !string.IsNullOrWhiteSpace(command.HostMissingSelectionMessageResourceKey));
+
+        ChartQuickCommandCatalog.FirstSliceAngle.Label.Should().Be("First Slice Angle");
+        ChartQuickCommandCatalog.FirstSliceAngle.HostMissingSelectionMessageResourceKey
+            .Should().Be("MainWindowMessage_ChartSelectPieDoughnutForFirstSliceAngle");
+        ChartQuickCommandCatalog.FirstSliceAngle.HostUnsupportedMessageResourceKey
+            .Should().Be("MainWindowMessage_ChartFirstSliceAngleUnsupported");
+
+        ChartQuickCommandCatalog.DataLabelFill.HostMissingSelectionMessageResourceKey
+            .Should().Be(ChartQuickCommandCatalog.DataLabelOptionsHostMissingSelectionMessageResourceKey);
+        ChartQuickCommandCatalog.DataLabelFill.HostUnsupportedMessageResourceKey.Should().BeNull();
+        ChartQuickCommandCatalog.ChartTitleFontSize.Label.Should().Be("Chart Title Size");
+        ChartQuickCommandCatalog.ChartTitleFontSize.HostMissingSelectionMessageResourceKey
+            .Should().Be(ChartQuickCommandCatalog.ChartAreaFormattingHostMissingSelectionMessageResourceKey);
+        ChartQuickCommandCatalog.ComboSeries.Label.Should().Be("Combo Chart Series");
+        ChartQuickCommandCatalog.ComboSeries.HostUnsupportedMessageResourceKey
+            .Should().Be("MainWindowMessage_ChartComboUnsupported");
+        ChartQuickCommandCatalog.SeriesMarkerSize.Label.Should().Be("Marker Size");
+        ChartQuickCommandCatalog.SeriesMarkerSize.HostUnsupportedMessageResourceKey
+            .Should().Be("MainWindowMessage_ChartSeriesMarkersSupportedTypes");
+
+        ChartQuickCommandCatalog.Get(ChartQuickCommand.ComboSeries)
+            .Should().BeSameAs(ChartQuickCommandCatalog.ComboSeries);
+    }
+
     // ---- ChartTypeChangePlanner ----------------------------------------------------------------------
 
     [Fact]

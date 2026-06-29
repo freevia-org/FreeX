@@ -89,21 +89,35 @@ public sealed class ChartCommandSourceTests
         var cyclerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartOptionCycler.cs");
         var axisPlannerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartAxisPlanner.cs");
         var quickPlannerSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartQuickCommandPlanner.cs");
+        var quickCatalogSource = DialogSourceTestSupport.ReadPresentationSources("Charts", "Editing", "ChartQuickCommandCatalog.cs");
 
-        chartSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command)");
-        chartSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command)");
-        chartSource.Should().Contain("ChartQuickCommand.DataLabelCategoryName");
-        chartSource.Should().Contain("ChartQuickCommand.TrendlineMovingAveragePeriod");
-        chartSource.Should().Contain("ChartQuickCommand.ComboSeries");
-        chartSource.Should().Contain("ChartQuickCommand.SeriesMarkerSize");
+        chartSource.Should().Contain("ExecuteChartQuickCommand(ChartQuickCommandCatalog.DataLabelCategoryName)");
+        chartSource.Should().Contain("ExecuteChartQuickCommand(ChartQuickCommandCatalog.TrendlineMovingAveragePeriod)");
+        chartSource.Should().Contain("ExecuteChartQuickCommand(ChartQuickCommandCatalog.ComboSeries)");
+        chartSource.Should().Contain("ExecuteChartQuickCommand(ChartQuickCommandCatalog.SeriesMarkerSize)");
+        chartSource.Should().Contain("private void ExecuteChartQuickCommand(ChartQuickCommandDescriptor command)");
+        chartSource.Should().Contain("UiText.Get(command.HostMissingSelectionMessageResourceKey)");
+        chartSource.Should().Contain("command.HostUnsupportedMessageResourceKey is null");
+        chartSource.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
+        chartSource.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
         chartSource.Should().NotContain("ChartQuickFormatCycler.");
         chartSource.Should().NotContain("ChartOptionCycler.GetNextSecondaryAxisSeries(");
         chartSource.Should().NotContain("IndexOfSeriesFormat");
         chartSource.Should().NotContain("IndexOfPointDataLabelFormat");
         chartSource.Should().NotContain("Func<ChartModel, ChartLayoutOptions>");
+        chartSource.Should().NotContain("\"First Slice Angle\"");
+        chartSource.Should().NotContain("\"Combo Chart Series\"");
+        chartSource.Should().NotContain("\"MainWindowMessage_ChartSelectForDataLabelOptions\"");
         chartSource.Should().NotContain("PlotAreaBorderThickness: chart.PlotAreaBorderThickness >= 3");
         chartSource.Should().NotContain("LegendBorderThickness: chart.LegendBorderThickness >= 3");
         chartSource.Should().NotContain("TrendlineThickness: chart.TrendlineThickness >= 3");
+
+        quickCatalogSource.Should().Contain("public static class ChartQuickCommandCatalog");
+        quickCatalogSource.Should().Contain("public sealed record ChartQuickCommandDescriptor");
+        quickCatalogSource.Should().Contain("\"First Slice Angle\"");
+        quickCatalogSource.Should().Contain("\"MainWindowMessage_ChartSelectForDataLabelOptions\"");
+        quickCatalogSource.Should().Contain("\"Combo Chart Series\"");
+        quickCatalogSource.Should().Contain("\"MainWindowMessage_ChartComboUnsupported\"");
 
         quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
         quickPlannerSource.Should().Contain("ChartQuickFormatCycler.NextChartTitleFontSize(");
