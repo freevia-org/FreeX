@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -12,20 +13,6 @@ public partial class FormatCellsDialog
         styleBox.ItemsSource = Enum.GetNames(typeof(BorderStyle));
         styleBox.SelectedItem = border.Style.ToString();
         colorBox.Text = ColorInputParser.FormatRgbColor(border.Color);
-    }
-
-    private static CellBorder ParseBorder(ComboBox styleBox, TextBox colorBox, CellBorder current)
-    {
-        var style = current.Style;
-        if (styleBox.SelectedItem is string selectedStyle
-            && Enum.TryParse(selectedStyle, out BorderStyle parsedStyle)
-            && Enum.IsDefined(parsedStyle))
-        {
-            style = parsedStyle;
-        }
-
-        var color = TryParseColor(colorBox.Text) ?? current.Color;
-        return new CellBorder(style, color);
     }
 
     private void DlgBorderLineColorPickerButton_Click(object sender, RoutedEventArgs e) =>
@@ -103,9 +90,9 @@ public partial class FormatCellsDialog
 
     private void ApplyBorderSide(ComboBox styleBox, TextBox colorBox)
     {
-        var nextStyle = BorderSideNeedsColor(styleBox)
-            ? BorderStyle.None
-            : SelectedBorderLineStyle();
+        var nextStyle = FormatCellsDialogPlanner.NextBorderSideStyle(
+            styleBox.SelectedItem as string,
+            DlgBorderLineStyleList.SelectedItem as string ?? DlgBorderLineStyleBox.SelectedItem as string);
         SetBorderSide(styleBox, colorBox, nextStyle);
         UpdateBorderPreview();
     }
@@ -117,58 +104,10 @@ public partial class FormatCellsDialog
             colorBox.Text = DlgBorderLineColorBox.Text;
     }
 
-    private BorderStyle SelectedBorderLineStyle()
-        => (DlgBorderLineStyleList.SelectedItem as string ?? DlgBorderLineStyleBox.SelectedItem as string) is string selectedStyle
-            && Enum.TryParse(selectedStyle, out BorderStyle parsedStyle)
-            && Enum.IsDefined(parsedStyle)
-                ? parsedStyle
-                : BorderStyle.Thin;
-
     private CellBorder SelectedBorderLine() =>
-        new(SelectedBorderLineStyle(), TryParseColor(DlgBorderLineColorBox.Text) ?? CellColor.Black);
-
-    private bool ValidateBorderInputs()
-    {
-        if (!TryParseRequiredColor(DlgBorderLineColorBox.Text, out _))
-        {
-            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidBorderColorMessage"), DlgBorderLineColorBox);
-            return false;
-        }
-
-        if (BorderSideNeedsColor(DlgBorderTopStyleBox) && !TryParseRequiredColor(DlgBorderTopColorBox.Text, out _))
-        {
-            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidTopBorderColorMessage"), DlgBorderTopColorBox);
-            return false;
-        }
-
-        if (BorderSideNeedsColor(DlgBorderRightStyleBox) && !TryParseRequiredColor(DlgBorderRightColorBox.Text, out _))
-        {
-            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidRightBorderColorMessage"), DlgBorderRightColorBox);
-            return false;
-        }
-
-        if (BorderSideNeedsColor(DlgBorderBottomStyleBox) && !TryParseRequiredColor(DlgBorderBottomColorBox.Text, out _))
-        {
-            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidBottomBorderColorMessage"), DlgBorderBottomColorBox);
-            return false;
-        }
-
-        if (BorderSideNeedsColor(DlgBorderLeftStyleBox) && !TryParseRequiredColor(DlgBorderLeftColorBox.Text, out _))
-        {
-            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidLeftBorderColorMessage"), DlgBorderLeftColorBox);
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool BorderSideNeedsColor(ComboBox styleBox) =>
-        !string.Equals(styleBox.SelectedItem as string, nameof(BorderStyle.None), StringComparison.Ordinal);
+        FormatCellsDialogPlanner.CreateSelectedBorderLine(
+            DlgBorderLineStyleList.SelectedItem as string ?? DlgBorderLineStyleBox.SelectedItem as string,
+            DlgBorderLineColorBox.Text);
 
     private void UpdateBorderPreview()
     {

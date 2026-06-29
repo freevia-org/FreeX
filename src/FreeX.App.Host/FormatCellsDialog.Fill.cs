@@ -1,40 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public partial class FormatCellsDialog
 {
-    private sealed record FillPatternOption(CellFillPatternStyle Style, string ResourceKey)
-    {
-        public string Label => UiText.Get(ResourceKey);
-    }
-
-    private static readonly FillPatternOption[] FillPatternOptions =
-    [
-        new(CellFillPatternStyle.None, "FormatCells_FillPatternNone"),
-        new(CellFillPatternStyle.Solid, "FormatCells_FillPatternSolid"),
-        new(CellFillPatternStyle.Gray0625, "FormatCells_FillPatternGray0625"),
-        new(CellFillPatternStyle.Gray125, "FormatCells_FillPatternGray125"),
-        new(CellFillPatternStyle.LightGray, "FormatCells_FillPatternLightGray"),
-        new(CellFillPatternStyle.MediumGray, "FormatCells_FillPatternMediumGray"),
-        new(CellFillPatternStyle.DarkGray, "FormatCells_FillPatternDarkGray"),
-        new(CellFillPatternStyle.LightHorizontal, "FormatCells_FillPatternLightHorizontal"),
-        new(CellFillPatternStyle.LightVertical, "FormatCells_FillPatternLightVertical"),
-        new(CellFillPatternStyle.LightDown, "FormatCells_FillPatternLightDown"),
-        new(CellFillPatternStyle.LightUp, "FormatCells_FillPatternLightUp"),
-        new(CellFillPatternStyle.LightGrid, "FormatCells_FillPatternLightGrid"),
-        new(CellFillPatternStyle.LightTrellis, "FormatCells_FillPatternLightTrellis"),
-        new(CellFillPatternStyle.DarkHorizontal, "FormatCells_FillPatternDarkHorizontal"),
-        new(CellFillPatternStyle.DarkVertical, "FormatCells_FillPatternDarkVertical"),
-        new(CellFillPatternStyle.DarkDown, "FormatCells_FillPatternDarkDown"),
-        new(CellFillPatternStyle.DarkUp, "FormatCells_FillPatternDarkUp"),
-        new(CellFillPatternStyle.DarkGrid, "FormatCells_FillPatternDarkGrid"),
-        new(CellFillPatternStyle.DarkTrellis, "FormatCells_FillPatternDarkTrellis")
-    ];
-
     private void DlgFontColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgFontColorBox, allowNoColor: false, UiText.Get("FormatCells_FontColorTitle"));
 
@@ -111,61 +84,19 @@ public partial class FormatCellsDialog
             : null;
     }
 
-    private static bool TryParseRequiredColor(string text, out CellColor color) =>
-        ColorInputParser.TryParseColorText(text, out color);
-
-    private static bool TryParseOptionalColor(string text, out CellColor? color)
-    {
-        color = null;
-        if (string.IsNullOrWhiteSpace(text))
-            return true;
-
-        if (!ColorInputParser.TryParseColorText(text, out var parsed))
-            return false;
-
-        color = parsed;
-        return true;
-    }
-
     private static Brush BrushForColor(CellColor? color, Brush fallback)
         => color is { } rgb
             ? new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B))
             : fallback;
 
-    private CellFillPatternStyle SelectedFillPatternStyle()
-    {
-        if (DlgFillPatternStyleBox?.SelectedItem is string label
-            && FindFillPatternOptionByLabel(label) is { } option)
-        {
-            return option.Style;
-        }
+    private CellFillPatternStyle SelectedFillPatternStyle() =>
+        FormatCellsDialogPlanner.ResolveFillPatternStyle(
+            DlgFillPatternStyleBox?.SelectedItem as string,
+            FillPatternDisplayChoices());
 
-        return CellFillPatternStyle.None;
-    }
-
-    private static FillPatternOption? FindFillPatternOptionByLabel(string label)
-    {
-        foreach (var option in FillPatternOptions)
-        {
-            if (option.Label == label)
-                return option;
-        }
-
-        return null;
-    }
-
-    private static FillPatternOption? FindFillPatternOptionByStyle(CellFillPatternStyle style)
-    {
-        foreach (var option in FillPatternOptions)
-        {
-            if (option.Style == style)
-                return option;
-        }
-
-        return null;
-    }
+    private static IReadOnlyList<FormatCellsDialogFillPatternDisplayChoice> FillPatternDisplayChoices() =>
+        FormatCellsDialogPlanner.CreateFillPatternDisplayChoices(UiText.Get);
 
     private static string FillPatternLabel(CellFillPatternStyle style) =>
-        FindFillPatternOptionByStyle(style)?.Label
-            ?? UiText.Get("FormatCells_FillPatternNone");
+        UiText.Get(FormatCellsDialogPlanner.GetFillPatternResourceKey(style));
 }

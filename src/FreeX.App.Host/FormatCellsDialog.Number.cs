@@ -1,4 +1,3 @@
-using FreeX.App.Presentation.FormatCells;
 using FreeX.App.Services;
 
 namespace FreeX.App.Host;
@@ -88,28 +87,4 @@ public partial class FormatCellsDialog
         NumberDecimalPlacesBox.Text = DecimalPlacesForFormat(selectedFormat).ToString();
         _syncingNumberControls = false;
     }
-
-    private bool ValidateNumberInputs()
-    {
-        if (NumberDecimalPlacesBox.IsEnabled
-            && (!int.TryParse(NumberDecimalPlacesBox.Text.Trim(), out var decimals) || decimals is < 0 or > 30))
-        {
-            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
-            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidDecimalPlacesMessage"), NumberDecimalPlacesBox);
-            return false;
-        }
-
-        if (!IsGeneratedNumberFormatCategory(NumberCategoryList.SelectedItem as string)
-            && !FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text))
-        {
-            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
-            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidCustomNumberFormatMessage"), NumberFormatCombo);
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool IsGeneratedNumberFormatCategory(string? category) =>
-        FormatCellsNumberControlPlanner.Plan(category).GeneratesFormat;
 }

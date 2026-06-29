@@ -37,7 +37,8 @@ public sealed partial class FormatCellsDialogXamlTests
                 "FormatCellsDialog.Border.cs"),
             // The number-format/control planners are now portable types in FreeX.App.Services.
             DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberControlPlanner.cs"),
-            DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberFormatPlanner.cs"));
+            DialogSourceTestSupport.ReadAppServicesSource("FormatCellsNumberFormatPlanner.cs"),
+            DialogSourceTestSupport.ReadAppServicesSource("FormatCellsDialogPlanner.cs"));
     }
 
     private static T GetControl<T>(FormatCellsDialog dialog, string name)
