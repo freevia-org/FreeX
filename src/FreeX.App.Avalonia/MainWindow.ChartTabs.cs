@@ -10,6 +10,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Presentation.Charts;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -926,7 +927,7 @@ public sealed partial class MainWindow
 
         // Chart styles are 1..48 (SetChartStyleCommand clamps). Step in fours like Excel's gallery rows;
         // wrap back to 1 after 48.
-        var next = ChartQuickFormatCycler.NextChartStyleId(chart.ChartStyleId);
+        var next = ChartStylePlanner.NextStyleId(chart.ChartStyleId);
         var result = _session.ExecuteReviewCommand(new SetChartStyleCommand(_session.ActiveSheet.Id, chart.Id, next));
         RefreshShell(result.Success
             ? UiText.Format("ChartLoc_AppliedChartStyle", next)

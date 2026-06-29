@@ -75,7 +75,10 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("_styleGallery");
         source.Should().Contain("UiText.Get(\"PivotChartOptions_PivotChartStyleGallery\")");
         source.Should().Contain("ChartStyleDialog.GetStyleOptions()");
+        source.Should().Contain("ChartStylePlanner.Read(chart).StyleId");
+        source.Should().Contain("ChartStylePlanner.ParseStyleId(text)");
         source.Should().NotContain("Chart _style ID");
+        source.Should().NotContain("Math.Clamp(value.Value, 1, 48)");
         source.Should().Contain("UiText.Get(\"PivotChartOptions_FieldButtonsGroup\")");
         source.Should().Contain("UiText.Get(\"PivotChartOptions_ShowFieldButtonsOnChart\")");
         source.Should().Contain("UiText.Get(\"PivotChartOptions_ReportFilterButtons\")");

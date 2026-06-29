@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using static FreeX.App.Host.ChartDialogHelpers;
@@ -102,7 +103,7 @@ public sealed class ChartStyleDialog : Window
         var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "ChartStyleGalleryPanel");
         itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
         _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
-        _styleGallery.SelectedItem = FindStyleOption(options, Result.ChartStyleId) ?? options[0];
+        _styleGallery.SelectedIndex = ChartStylePlanner.FindStyleOptionIndex(Result.ChartStyleId);
         _styleGallery.Margin = new Thickness(0, 0, 0, 16);
         _styleGallery.Height = 230;
         AutomationProperties.SetName(_styleGallery, UiText.Get("ChartStyle_GalleryAutomationName"));
@@ -116,14 +117,14 @@ public sealed class ChartStyleDialog : Window
     }
 
     public static ChartStyleDialogResult FromChart(ChartModel chart) =>
-        new(NormalizeStyleId(chart.ChartStyleId));
+        new(ChartStylePlanner.Read(chart).StyleId);
 
     public static ChartStyleDialogResult CreateResult(int? chartStyleId) =>
-        new(NormalizeStyleId(chartStyleId));
+        new(ChartStylePlanner.CreateResult(chartStyleId).StyleId);
 
     public static IReadOnlyList<ChartStyleOption> GetStyleOptions() =>
-        new[] { new ChartStyleOption(null, UiText.Get("ChartStyle_AutomaticOption"), UiText.Get("ChartStyle_AutomaticPreview")) }
-            .Concat(Enumerable.Range(1, 48).Select(index => new ChartStyleOption(index, UiText.Format("ChartStyle_NumberedOption", index), UiText.Format("ChartStyle_NumberedPreview", index))))
+        ChartStylePlanner.GetStyleOptions()
+            .Select(CreateStyleOption)
             .ToList();
 
     private void Accept()
@@ -134,16 +135,15 @@ public sealed class ChartStyleDialog : Window
         DialogResult = true;
     }
 
-    private static ChartStyleOption? FindStyleOption(IReadOnlyList<ChartStyleOption> options, int? styleId)
+    private static ChartStyleOption CreateStyleOption(ChartStyleGalleryOptionDescriptor descriptor)
     {
-        for (var index = 0; index < options.Count; index++)
-        {
-            var option = options[index];
-            if (option.StyleId == styleId)
-                return option;
-        }
-
-        return null;
+        var displayName = descriptor.ResourceValue is { } displayValue
+            ? UiText.Format(descriptor.DisplayNameResourceKey, displayValue)
+            : UiText.Get(descriptor.DisplayNameResourceKey);
+        var previewLabel = descriptor.ResourceValue is { } previewValue
+            ? UiText.Format(descriptor.PreviewLabelResourceKey, previewValue)
+            : UiText.Get(descriptor.PreviewLabelResourceKey);
+        return new ChartStyleOption(descriptor.StyleId, displayName, previewLabel);
     }
 
     private void FocusInitialKeyboardTarget()
@@ -202,14 +202,6 @@ public sealed class ChartStyleDialog : Window
 
         border.AppendChild(bars);
         return border;
-    }
-
-    private static int? NormalizeStyleId(int? value)
-    {
-        if (value is null)
-            return null;
-
-        return Math.Clamp(value.Value, 1, 48);
     }
 }
 

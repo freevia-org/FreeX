@@ -72,6 +72,12 @@ public sealed partial class ChartDialogTests
         options[0].Should().Be(new ChartStyleOption(null, "Automatic", "Use current chart formatting"));
         options.Skip(1).Select(option => option.StyleId).Should().Equal(Enumerable.Range(1, 48).Cast<int?>());
         options.Skip(1).Should().OnlyContain(option => !string.IsNullOrWhiteSpace(option.PreviewLabel));
+
+        var source = ReadChartDialogSource();
+        source.Should().Contain("ChartStylePlanner.GetStyleOptions()");
+        source.Should().Contain("ChartStylePlanner.CreateResult(chartStyleId)");
+        source.Should().NotContain("Enumerable.Range(1, 48).Select");
+        source.Should().NotContain("Math.Clamp(value.Value, 1, 48)");
     }
 
     [Fact]

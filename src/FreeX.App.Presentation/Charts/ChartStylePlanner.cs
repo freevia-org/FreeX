@@ -10,12 +10,23 @@ public readonly record struct ChartBarPaint(CellColor? FillColor, CellColor? Str
     public bool HasStroke => StrokeColor is not null && StrokeThickness > 0;
 }
 
+public readonly record struct ChartStyleInput(int? StyleId);
+
+public sealed record ChartStyleGalleryOptionDescriptor(
+    int? StyleId,
+    string DisplayNameResourceKey,
+    string PreviewLabelResourceKey,
+    int? ResourceValue = null);
+
 /// <summary>
 /// UI-free style decisions shared by chart renderers. Hosts convert the returned colors into
 /// their drawing primitives, but palette ordering and format precedence stay in one place.
 /// </summary>
 public static class ChartStylePlanner
 {
+    public const int MinStyleId = 1;
+    public const int MaxStyleId = 48;
+
     private static readonly double[] AccentTintSchedule = [0.0, 0.4, -0.25, 0.6, -0.5];
 
     private static readonly WorkbookThemeColorSlot[] AccentSlots =
@@ -27,6 +38,55 @@ public static class ChartStylePlanner
         WorkbookThemeColorSlot.Accent5,
         WorkbookThemeColorSlot.Accent6,
     ];
+
+    private static readonly ChartStyleGalleryOptionDescriptor[] StyleOptions = CreateStyleOptions();
+
+    public static IReadOnlyList<ChartStyleGalleryOptionDescriptor> GetStyleOptions() => StyleOptions;
+
+    public static ChartStyleInput Read(ChartModel chart)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        return CreateResult(chart.ChartStyleId);
+    }
+
+    public static ChartStyleInput CreateResult(int? styleId) => new(NormalizeStyleId(styleId));
+
+    public static int? NormalizeStyleId(int? styleId)
+    {
+        if (styleId is null)
+            return null;
+
+        return Math.Clamp(styleId.Value, MinStyleId, MaxStyleId);
+    }
+
+    public static int? ParseStyleId(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return int.TryParse(text.Trim(), out var value) ? NormalizeStyleId(value) : null;
+    }
+
+    public static int NextStyleId(int? current)
+    {
+        var style = current ?? 0;
+        return style >= 45 ? MinStyleId : style + 4;
+    }
+
+    public static int FindStyleOptionIndex(int? styleId)
+    {
+        var normalized = NormalizeStyleId(styleId);
+        for (var index = 0; index < StyleOptions.Length; index++)
+        {
+            if (StyleOptions[index].StyleId == normalized)
+                return index;
+        }
+
+        return 0;
+    }
+
+    public static ChartStyleGalleryOptionDescriptor GetStyleOption(int index) =>
+        StyleOptions[Math.Clamp(index, 0, StyleOptions.Length - 1)];
 
     public static CellColor[] BuildExcelSeriesPalette(WorkbookTheme theme)
     {
@@ -143,5 +203,25 @@ public static class ChartStylePlanner
         return format.StrokeColor is not null
             || format.StrokeThemeColor is not null
             || format.StrokeThickness is not null;
+    }
+
+    private static ChartStyleGalleryOptionDescriptor[] CreateStyleOptions()
+    {
+        var options = new ChartStyleGalleryOptionDescriptor[MaxStyleId + 1];
+        options[0] = new ChartStyleGalleryOptionDescriptor(
+            null,
+            "ChartStyle_AutomaticOption",
+            "ChartStyle_AutomaticPreview");
+
+        for (var styleId = MinStyleId; styleId <= MaxStyleId; styleId++)
+        {
+            options[styleId] = new ChartStyleGalleryOptionDescriptor(
+                styleId,
+                "ChartStyle_NumberedOption",
+                "ChartStyle_NumberedPreview",
+                styleId);
+        }
+
+        return options;
     }
 }
