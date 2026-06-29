@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.Core.IO;
 
 namespace FreeX.App.Services.Tests;
@@ -12,7 +13,7 @@ public sealed class WorkbookFileDialogSurfacePlannerTests
 
         var plan = WorkbookFileDialogSurfacePlanner.CreateOpenPlan(pickerPlan);
 
-        plan.Kind.Should().Be(WorkbookFileDialogSurfaceKind.Open);
+        plan.Kind.Should().Be(FileDialogSurfaceKind.Open);
         plan.Title.Should().Be("Open Workbook");
         plan.PrimaryCommandText.Should().Be("Open");
         plan.DialogAutomationId.Should().Be(WorkbookFileDialogSurfacePlanner.OpenDialogAutomationId);
@@ -30,12 +31,33 @@ public sealed class WorkbookFileDialogSurfacePlannerTests
 
         var plan = WorkbookFileDialogSurfacePlanner.CreateSaveAsPlan(pickerPlan);
 
-        plan.Kind.Should().Be(WorkbookFileDialogSurfaceKind.SaveAs);
+        plan.Kind.Should().Be(FileDialogSurfaceKind.SaveAs);
         plan.Title.Should().Be("Save Workbook");
         plan.PrimaryCommandText.Should().Be("Save");
         plan.FileName.Should().Be("Quarterly Budget.fxl");
         plan.DefaultExtension.Should().Be("fxl");
         plan.DialogAutomationId.Should().Be(WorkbookFileDialogSurfacePlanner.SaveAsDialogAutomationId);
+    }
+
+    [Fact]
+    public void WorkbookPlanner_DelegatesNeutralSurfaceConceptsToSharedPlanner()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileDialogSurfacePlanner.cs"));
+        var sharedSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared",
+            "Free.Shared.AppServices",
+            "FileDialogSurfacePlanner.cs"));
+
+        source.Should().Contain("FileDialogSurfacePlanner.CreateOpenPlan");
+        source.Should().Contain("FileDialogSurfacePlanner.CreateSaveAsPlan");
+        source.Should().NotContain("public enum WorkbookFileDialogSurfaceKind");
+        source.Should().NotContain("public sealed record WorkbookFileDialogTypeRow");
+        sharedSource.Should().Contain("public enum FileDialogSurfaceKind");
+        sharedSource.Should().Contain("public sealed record FileDialogSurfaceTypeRow");
+        sharedSource.Should().Contain("public sealed record FileDialogSurfaceAutomationIds");
     }
 
     private static IReadOnlyList<FileFormatDescriptor> Formats(Func<FileFormatDescriptor, bool> predicate) =>
