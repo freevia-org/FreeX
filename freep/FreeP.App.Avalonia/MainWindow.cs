@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -47,6 +48,7 @@ namespace FreeP.App.Avalonia;
 public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
+    private const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
 
     private static readonly FilePickerFileType PictureFileType = new("Images")
     {
@@ -57,8 +59,7 @@ public sealed class MainWindow : Window
     // ── Presentation model ─────────────────────────────────────────────────────
 
     private Presentation _presentation = Presentation.CreateEmpty();
-    private string? _currentPath;
-    private bool _isDirty;
+    private readonly FileCommandWorkflow _fileWorkflow;
 
     // ── Editing session ────────────────────────────────────────────────────────
 
@@ -91,6 +92,12 @@ public sealed class MainWindow : Window
     /// <summary>Current slide index (0-based) — read by the launch-smoke coordinator.</summary>
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
 
+    internal bool IsDirty => _fileWorkflow.IsDirty;
+
+    internal string? CurrentPath => _fileWorkflow.CurrentPath;
+
+    internal IReadOnlyList<RecentFileEntry> RecentEntries => _fileWorkflow.RecentEntries;
+
     // ── Constructors ───────────────────────────────────────────────────────────
 
     public MainWindow()
@@ -99,6 +106,13 @@ public sealed class MainWindow : Window
     }
 
     public MainWindow(IReadOnlyList<string> startupArguments)
+        : this(startupArguments, loadRecentFilesStore: null)
+    {
+    }
+
+    internal MainWindow(
+        IReadOnlyList<string> startupArguments,
+        Func<RecentFilesStore>? loadRecentFilesStore)
     {
         Title = DefaultTitle;
         Width = 1280;
@@ -143,6 +157,12 @@ public sealed class MainWindow : Window
         _notesBox.TextChanged += OnNotesTextChanged;
 
         _statusText = SisterAppStatusBarChrome.CreateInfoText(foreground: Brushes.White, margin: new Thickness(8, 0));
+        _fileWorkflow = new FileCommandWorkflow(
+            maxRecentEntries: () => DefaultRecentFilesCap,
+            onChanged: UpdateTitle,
+            promptSaveChanges: PromptSaveChangesSync,
+            save: () => FileSaveAsync().GetAwaiter().GetResult(),
+            loadRecentFilesStore: loadRecentFilesStore);
 
         // ── Root layout ───────────────────────────────────────────────────────
 
@@ -167,7 +187,7 @@ public sealed class MainWindow : Window
         if (startupPresentation is not null)
             TryLoadPresentationFile(startupPresentation);
         else
-            LoadPresentation(_presentation, path: null);
+            LoadPresentationAsSaved(_presentation, path: null);
 
         Content = frame.Root;
         UpdateStatus();
@@ -408,14 +428,71 @@ public sealed class MainWindow : Window
 
     // ── File lifecycle ─────────────────────────────────────────────────────────
 
-    private void FileNew()
+    private SaveChangesPrompt PromptSaveChangesSync(string action) =>
+        ShowSaveChangesPromptAsync(_fileWorkflow.DisplayName, action).GetAwaiter().GetResult();
+
+    private async Task<SaveChangesPrompt> ShowSaveChangesPromptAsync(string displayName, string action)
     {
-        // v1: proceed without a save-changes dialog (dirty gate is tracked; modal dialog in 14C).
-        LoadPresentation(Presentation.CreateEmpty(), path: null);
+        var dialog = new Window
+        {
+            Title = DefaultTitle,
+            Width = 420,
+            Height = 170,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+
+        var message = new TextBlock
+        {
+            Text = $"Do you want to save changes to \"{displayName}\" before {action}?",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 20),
+        };
+
+        var save = new Button { Content = "Save", MinWidth = 82, IsDefault = true };
+        save.Click += (_, _) => dialog.Close(SaveChangesPrompt.Save);
+
+        var dontSave = new Button { Content = "Don't save", MinWidth = 82, Margin = new Thickness(8, 0, 0, 0) };
+        dontSave.Click += (_, _) => dialog.Close(SaveChangesPrompt.DontSave);
+
+        var cancel = new Button { Content = "Cancel", MinWidth = 82, IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
+        cancel.Click += (_, _) => dialog.Close(SaveChangesPrompt.Cancel);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 16),
+            Children = { save, dontSave, cancel },
+        };
+
+        dialog.Content = new StackPanel { Children = { message, buttons } };
+
+        var result = await dialog.ShowDialog<object?>(this);
+        return result is SaveChangesPrompt prompt ? prompt : SaveChangesPrompt.Cancel;
     }
 
-    private async Task FileOpenAsync()
+    private void FileNew()
     {
+        _fileWorkflow.New(
+            "creating a new presentation",
+            () => LoadPresentationContent(Presentation.CreateEmpty()));
+    }
+
+    private Task<bool> FileOpenAsync() =>
+        _fileWorkflow.OpenAsync(
+            "opening another presentation",
+            PromptOpenPathAsync,
+            path => Task.FromResult(TryLoadPresentationFile(path)));
+
+    private async Task<string?> PromptOpenPathAsync()
+    {
+        if (!StorageProvider.CanOpen)
+        {
+            _statusText.Text = "Open unavailable.";
+            return null;
+        }
+
         var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -425,24 +502,29 @@ public sealed class MainWindow : Window
         });
 
         if (files.Count == 0)
-            return;
+            return null;
 
         var path = files[0].TryGetLocalPath();
-        if (path is not null)
-            TryLoadPresentationFile(path);
+        if (path is null)
+            _statusText.Text = "Open failed: selected file is not available as a local path.";
+
+        return path;
     }
 
-    private async Task FileSaveAsync()
-    {
-        if (_currentPath is not null)
-            TrySavePresentationFile(_currentPath);
-        else
-            await FileSaveAsAsync();
-    }
+    private Task<bool> FileSaveAsync() =>
+        _fileWorkflow.SaveAsync(
+            path => Task.FromResult(TrySavePresentationFile(path)),
+            FileSaveAsAsync);
 
-    private async Task FileSaveAsAsync()
+    private async Task<bool> FileSaveAsAsync()
     {
-        var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(SourceFileName(_currentPath));
+        if (!StorageProvider.CanSave)
+        {
+            _statusText.Text = "Save unavailable.";
+            return false;
+        }
+
+        var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(SourceFileName(_fileWorkflow.CurrentPath));
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
@@ -453,26 +535,36 @@ public sealed class MainWindow : Window
         });
 
         var path = file?.TryGetLocalPath();
-        if (path is not null)
-            TrySavePresentationFile(path);
+        if (path is null)
+        {
+            if (file is not null)
+                _statusText.Text = "Save failed: selected file is not available as a local path.";
+
+            return false;
+        }
+
+        return TrySavePresentationFile(path);
     }
 
-    private void TryLoadPresentationFile(string path)
+    private bool TryLoadPresentationFile(string path)
     {
         try
         {
             var presentation = PresentationFileDialogPlanner.IsLegacyPresentationPath(path)
                 ? FxpFormat.Read(path)
                 : PptxPackageReader.Read(path);
-            LoadPresentation(presentation, path);
+            LoadPresentationAsSaved(presentation, path);
+            _statusText.Text = $"Opened {Path.GetFileName(path)}";
+            return true;
         }
         catch (Exception ex)
         {
             _statusText.Text = $"Open failed: {ex.Message}";
+            return false;
         }
     }
 
-    private void TrySavePresentationFile(string path)
+    private bool TrySavePresentationFile(string path)
     {
         try
         {
@@ -486,14 +578,14 @@ public sealed class MainWindow : Window
                 PptxPackageWriter.Write(_presentation, stream);
             }
 
-            _currentPath = path;
-            _isDirty     = false;
-            UpdateTitle();
+            _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
             _statusText.Text = $"Saved {Path.GetFileName(path)}";
+            return true;
         }
         catch (Exception ex)
         {
             _statusText.Text = $"Save failed: {ex.Message}";
+            return false;
         }
     }
 
@@ -521,17 +613,24 @@ public sealed class MainWindow : Window
 
     // ── Presentation load ──────────────────────────────────────────────────────
 
-    private void LoadPresentation(Presentation presentation, string? path)
+    private void LoadPresentationAsSaved(Presentation presentation, string? path)
+    {
+        LoadPresentationContent(presentation);
+
+        if (path is null)
+            _fileWorkflow.MarkSavedWithoutPath();
+        else
+            _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
+    }
+
+    private void LoadPresentationContent(Presentation presentation)
     {
         _presentation = presentation;
-        _currentPath  = path;
-        _isDirty      = false;
 
         RebuildEditorAndRewireInteraction();
         RefreshSlidePane();
         RefreshCanvas();
         RefreshNotesPane();
-        UpdateTitle();
         UpdateStatus();
     }
 
@@ -641,10 +740,9 @@ public sealed class MainWindow : Window
 
     private void OnEditorChanged()
     {
-        _isDirty = true;
+        _fileWorkflow.MarkDirty();
         RefreshSlidePane();
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
-        UpdateTitle();
         UpdateStatus();
     }
 
@@ -664,8 +762,8 @@ public sealed class MainWindow : Window
 
     private void UpdateTitle()
     {
-        var filename = _currentPath is not null ? Path.GetFileName(_currentPath) : "Untitled";
-        var dirty    = _isDirty ? " *" : string.Empty;
+        var filename = _fileWorkflow.CurrentPath is not null ? Path.GetFileName(_fileWorkflow.CurrentPath) : "Untitled";
+        var dirty    = _fileWorkflow.IsDirty ? " *" : string.Empty;
         Title = $"FreeP — {filename}{dirty}";
     }
 
