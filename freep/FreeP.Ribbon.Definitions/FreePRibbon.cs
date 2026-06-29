@@ -26,27 +26,27 @@ public static class FreePRibbon
                     g.Large("freep.new-slide", FreePRibbonText.NewSlideLabel, RibbonCommandIconKind.Insert, FreePRibbonText.NewSlideKeyTip);
                     g.Medium("freep.duplicate-slide", FreePRibbonText.DuplicateSlideLabel, RibbonCommandIconKind.Copy, FreePRibbonText.DuplicateSlideKeyTip);
                     g.Medium("freep.delete-slide", FreePRibbonText.DeleteSlideLabel, RibbonCommandIconKind.Delete, FreePRibbonText.DeleteSlideKeyTip);
-                    g.Medium("freep.layout", "Layout", RibbonCommandIconKind.Grid, "L");
+                    g.Medium("freep.layout", FreePRibbonText.LayoutLabel, RibbonCommandIconKind.Grid, FreePRibbonText.LayoutKeyTip);
                 });
-                tab.Group("clipboard", "Clipboard", "C", 90, g =>
+                tab.Group("clipboard", FreePRibbonText.ClipboardGroupLabel, FreePRibbonText.ClipboardGroupKeyTip, 90, g =>
                 {
-                    g.Large("freep.paste", "Paste", RibbonCommandIconKind.Paste, "V");
-                    g.Medium("freep.cut", "Cut", RibbonCommandIconKind.Cut, "T");
-                    g.Medium("freep.copy", "Copy", RibbonCommandIconKind.Copy, "C");
+                    g.Large("freep.paste", FreePRibbonText.PasteLabel, RibbonCommandIconKind.Paste, FreePRibbonText.PasteKeyTip);
+                    g.Medium("freep.cut", FreePRibbonText.CutLabel, RibbonCommandIconKind.Cut, FreePRibbonText.CutKeyTip);
+                    g.Medium("freep.copy", FreePRibbonText.CopyLabel, RibbonCommandIconKind.Copy, FreePRibbonText.CopyKeyTip);
                     // Wave 5B: Format Painter — copies formatting from first selected shape to rest of selection.
-                    g.Medium("freep.format-painter", "Format Painter", RibbonCommandIconKind.FormatPainter, "F");
+                    g.Medium("freep.format-painter", FreePRibbonText.FormatPainterLabel, RibbonCommandIconKind.FormatPainter, FreePRibbonText.FormatPainterKeyTip);
                 });
-                tab.Group("font", "Font", "F", 80, g =>
+                tab.Group("font", FreePRibbonText.FontGroupLabel, FreePRibbonText.FontGroupKeyTip, 80, g =>
                 {
-                    g.ComboBox("freep.font-family", "Font", c => c with
+                    g.ComboBox("freep.font-family", FreePRibbonText.FontFamilyLabel, c => c with
                     {
                         Items = FreePRibbonDefinitionData.FontFamilies,
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
                         Width = 140
                     });
-                    g.IconToggle("freep.bold", "Bold", RibbonCommandIconKind.Bold, "1");
-                    g.IconToggle("freep.italic", "Italic", RibbonCommandIconKind.Italic, "2");
-                    g.IconToggle("freep.underline", "Underline", RibbonCommandIconKind.Underline, "3");
+                    g.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
+                    g.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
+                    g.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline, FreePRibbonText.UnderlineKeyTip);
                 });
                 // ── Wave 12A: Arrange group ───────────────────────────────────────────────
                 tab.Group("arrange", "Arrange", "R", 70, g =>
@@ -74,10 +74,10 @@ public static class FreePRibbon
                     g.Medium("freep.arrange.distribute-v",    "Distribute Vert.",  RibbonCommandIconKind.Align,       "V");
                 });
                 // Wave 12B: Editing group — Find & Replace.
-                tab.Group("editing", "Editing", "E", 70, g =>
+                tab.Group("editing", FreePRibbonText.EditingGroupLabel, FreePRibbonText.EditingGroupKeyTip, 70, g =>
                 {
-                    g.Large("freep.find",    "Find",    RibbonCommandIconKind.Search,  "F");
-                    g.Medium("freep.replace", "Replace", RibbonCommandIconKind.Refresh, "H");
+                    g.Large("freep.find", FreePRibbonText.FindLabel, RibbonCommandIconKind.Search, FreePRibbonText.FindKeyTip);
+                    g.Medium("freep.replace", FreePRibbonText.ReplaceLabel, RibbonCommandIconKind.Refresh, FreePRibbonText.ReplaceKeyTip);
                 });
             })
             .Tab("insert", FreePRibbonText.InsertTabLabel, FreePRibbonText.InsertTabKeyTip, tab =>

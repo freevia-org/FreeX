@@ -55,6 +55,33 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredControl(wpf, "freep.new-slide").KeyTip!,
                 RequiredControl(wpf, "freep.duplicate-slide").Label,
                 RequiredControl(wpf, "freep.delete-slide").Label,
+                RequiredControl(wpf, "freep.layout").Label,
+                RequiredControl(wpf, "freep.layout").KeyTip!,
+                RequiredGroup(wpf, "home", "clipboard").Header,
+                RequiredGroup(wpf, "home", "clipboard").KeyTip!,
+                RequiredControl(wpf, "freep.paste").Label,
+                RequiredControl(wpf, "freep.paste").KeyTip!,
+                RequiredControl(wpf, "freep.cut").Label,
+                RequiredControl(wpf, "freep.cut").KeyTip!,
+                RequiredControl(wpf, "freep.copy").Label,
+                RequiredControl(wpf, "freep.copy").KeyTip!,
+                RequiredControl(wpf, "freep.format-painter").Label,
+                RequiredControl(wpf, "freep.format-painter").KeyTip!,
+                RequiredGroup(wpf, "home", "font").Header,
+                RequiredGroup(wpf, "home", "font").KeyTip!,
+                RequiredControl(wpf, "freep.font-family").Label,
+                RequiredControl(wpf, "freep.bold").Label,
+                RequiredControl(wpf, "freep.bold").KeyTip!,
+                RequiredControl(wpf, "freep.italic").Label,
+                RequiredControl(wpf, "freep.italic").KeyTip!,
+                RequiredControl(wpf, "freep.underline").Label,
+                RequiredControl(wpf, "freep.underline").KeyTip!,
+                RequiredGroup(wpf, "home", "editing").Header,
+                RequiredGroup(wpf, "home", "editing").KeyTip!,
+                RequiredControl(wpf, "freep.find").Label,
+                RequiredControl(wpf, "freep.find").KeyTip!,
+                RequiredControl(wpf, "freep.replace").Label,
+                RequiredControl(wpf, "freep.replace").KeyTip!,
                 RequiredGroup(wpf, "transitions", "slideshow-from-transitions").Header,
                 RequiredControl(wpf, "freep.slideshow.from-beginning").Label,
                 RequiredControl(wpf, "freep.slideshow.from-current-slide").Label,
@@ -195,6 +222,26 @@ public sealed class FreePRibbonDefinitionProfileTests
             File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreePAvaloniaRibbonDefinition.cs")));
 
         source.Should().Contain("FreePRibbonText");
+        source.Should().NotContain("g.Medium(\"freep.layout\", \"Layout\"");
+        source.Should().NotContain("tab.Group(\"clipboard\", \"Clipboard\"");
+        source.Should().NotContain("g.Large(\"freep.paste\", \"Paste\"");
+        source.Should().NotContain("g.Medium(\"freep.cut\", \"Cut\"");
+        source.Should().NotContain("g.Medium(\"freep.copy\", \"Copy\"");
+        source.Should().NotContain("g.Medium(\"freep.format-painter\", \"Format Painter\"");
+        source.Should().NotContain("tab.Group(\"font\", \"Font\"");
+        source.Should().NotContain("g.ComboBox(\"freep.font-family\", \"Font\"");
+        source.Should().NotContain("g.IconToggle(\"freep.bold\", \"Bold\"");
+        source.Should().NotContain("g.IconToggle(\"freep.italic\", \"Italic\"");
+        source.Should().NotContain("g.IconToggle(\"freep.underline\", \"Underline\"");
+        source.Should().NotContain("tab.Group(\"editing\", \"Editing\"");
+        source.Should().NotContain("g.Large(\"freep.find\",    \"Find\"");
+        source.Should().NotContain("g.Medium(\"freep.replace\", \"Replace\"");
+        source.Should().Contain("FreePRibbonText.LayoutLabel");
+        source.Should().Contain("FreePRibbonText.ClipboardGroupLabel");
+        source.Should().Contain("FreePRibbonText.PasteLabel");
+        source.Should().Contain("FreePRibbonText.FontGroupLabel");
+        source.Should().Contain("FreePRibbonText.EditingGroupLabel");
+        source.Should().Contain("FreePRibbonText.FindLabel");
         foreach (var literal in new[]
                  {
                      "\"Home\"",
