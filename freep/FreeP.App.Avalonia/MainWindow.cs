@@ -340,10 +340,17 @@ public sealed class MainWindow : Window
         r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
         r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
 
-        // Insert shapes/text
-        r.Register("freep.text-box",        new ActionRibbonCommand(() => Editor.InsertDefaultTextBox()));
-        r.Register("freep.shape-rectangle", new ActionRibbonCommand(() => Editor.InsertDefaultRectangle()));
-        r.Register("freep.shape-ellipse",   new ActionRibbonCommand(() => Editor.InsertDefaultEllipse()));
+        // Insert objects/text
+        foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
+        {
+            if (plan.RequiresPicturePayload)
+            {
+                continue;
+            }
+
+            r.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                SlideObjectInsertionPlanner.Apply(Editor, plan)));
+        }
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));

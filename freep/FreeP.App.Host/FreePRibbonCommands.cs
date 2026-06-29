@@ -88,46 +88,7 @@ internal static class FreePRibbonCommands
 
         // ── Insert shapes ────────────────────────────────────────────────────────
 
-        registry.Register("freep.text-box",
-            new ActionRibbonCommand(() => editor.InsertDefaultTextBox()));
-
-        registry.Register("freep.shape-rectangle",
-            new ActionRibbonCommand(() => editor.InsertDefaultRectangle()));
-
-        registry.Register("freep.shape-ellipse",
-            new ActionRibbonCommand(() => editor.InsertDefaultEllipse()));
-
-        // Picture: open a file-open dialog and insert.
-        registry.Register("freep.picture", new ActionRibbonCommand(() =>
-        {
-            // TODO(3C): replace with a proper picture-insert dialog with preview.
-            var dlg = new Microsoft.Win32.OpenFileDialog
-            {
-                Title  = "Insert Picture",
-                Filter = "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*"
-            };
-            if (dlg.ShowDialog() == true)
-            {
-                try
-                {
-                    var bytes = System.IO.File.ReadAllBytes(dlg.FileName);
-                    var ext   = System.IO.Path.GetExtension(dlg.FileName).ToLowerInvariant();
-                    var mime  = ext switch
-                    {
-                        ".jpg" or ".jpeg" => "image/jpeg",
-                        ".gif"  => "image/gif",
-                        ".bmp"  => "image/bmp",
-                        ".svg"  => "image/svg+xml",
-                        _       => "image/png"
-                    };
-                    editor.InsertPicture(bytes, mime);
-                }
-                catch
-                {
-                    // Ignore IO errors silently (e.g. access denied).
-                }
-            }
-        }));
+        RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true);
 
         // ── Format toggles (stateful) ────────────────────────────────────────────
         //
@@ -357,28 +318,7 @@ internal static class FreePRibbonCommands
 
         // ── Wave 5B: Insert — Tables ─────────────────────────────────────────────
 
-        registry.Register("freep.insert-table-3x3",
-            new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
-
-        registry.Register("freep.insert-table-2x2",
-            new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
-
-        registry.Register("freep.insert-table-4x4",
-            new ActionRibbonCommand(() => editor.InsertTable(4, 4)));
-
         // ── Wave 5B: Insert — Charts ─────────────────────────────────────────────
-
-        registry.Register("freep.insert-chart-column",
-            new ActionRibbonCommand(() => editor.InsertChart(ChartType.ColumnClustered)));
-
-        registry.Register("freep.insert-chart-bar",
-            new ActionRibbonCommand(() => editor.InsertChart(ChartType.BarClustered)));
-
-        registry.Register("freep.insert-chart-line",
-            new ActionRibbonCommand(() => editor.InsertChart(ChartType.Line)));
-
-        registry.Register("freep.insert-chart-pie",
-            new ActionRibbonCommand(() => editor.InsertChart(ChartType.Pie)));
 
         // ── Wave 5B: Design tab — Themes ─────────────────────────────────────────
 
@@ -483,6 +423,60 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onFindReplace?.Invoke()));
 
         return registry;
+    }
+
+    internal static void RegisterSlideObjectInsertionCommands(
+        RibbonCommandRegistry registry,
+        EditingSession editor,
+        bool includePictureCommand)
+    {
+        foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)
+        {
+            if (plan.RequiresPicturePayload)
+            {
+                if (!includePictureCommand)
+                {
+                    continue;
+                }
+
+                registry.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                {
+                    var payload = TryPickPicturePayload();
+                    if (payload is not null)
+                    {
+                        SlideObjectInsertionPlanner.Apply(editor, plan, payload);
+                    }
+                }));
+                continue;
+            }
+
+            registry.Register(plan.CommandId, new ActionRibbonCommand(() =>
+                SlideObjectInsertionPlanner.Apply(editor, plan)));
+        }
+    }
+
+    private static SlideObjectPicturePayload? TryPickPicturePayload()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title  = "Insert Picture",
+            Filter = "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*"
+        };
+
+        if (dlg.ShowDialog() != true)
+        {
+            return null;
+        }
+
+        try
+        {
+            var bytes = System.IO.File.ReadAllBytes(dlg.FileName);
+            return SlideObjectInsertionPlanner.CreatePicturePayload(bytes, dlg.FileName);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // ── Transition helpers ────────────────────────────────────────────────────────
