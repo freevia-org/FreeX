@@ -373,8 +373,14 @@ public sealed partial class MainWindowSourceHygieneTests
     public void GetData_IncludesDelimitedTextAndSpreadsheetMlAdapters()
     {
         var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("ImportDataFilePickerPlanner.cs");
 
-        dataCommandsSource.Should().Contain("\".csv\", \".txt\", \".tsv\", \".tab\", \".xml\"");
+        dataCommandsSource.Should().Contain("ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters)");
+        plannerSource.Should().Contain("\".csv\",");
+        plannerSource.Should().Contain("\".txt\",");
+        plannerSource.Should().Contain("\".tsv\",");
+        plannerSource.Should().Contain("\".tab\",");
+        plannerSource.Should().Contain("\".xml\"");
     }
 
     [Fact]
@@ -382,11 +388,11 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
-        dataCommandsSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
+        dataCommandsSource.Should().Contain("ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters)");
         dataCommandsSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
-        dataCommandsSource.Should().Contain("filter,");
-        dataCommandsSource.Should().Contain("checkFileExists: true");
-        dataCommandsSource.Should().Contain("multiselect: false");
+        dataCommandsSource.Should().Contain("plan.Filter,");
+        dataCommandsSource.Should().Contain("checkFileExists: plan.CheckFileExists");
+        dataCommandsSource.Should().Contain("multiselect: plan.Multiselect");
         dataCommandsSource.Should().Contain("if (!result.Chosen) return;");
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
         dataCommandsSource.Should().Contain("private async void GetDataBtn_Click(object sender, RoutedEventArgs e)");

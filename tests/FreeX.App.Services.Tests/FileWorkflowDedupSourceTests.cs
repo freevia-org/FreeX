@@ -72,4 +72,38 @@ public sealed class FileWorkflowDedupSourceTests
         avaloniaSource.Should().NotContain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
         printSource.Should().NotContain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
     }
+
+    [Fact]
+    public void GetDataPickerPolicy_StaysInSharedPlanner()
+    {
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "ImportDataFilePickerPlanner.cs"));
+        var wpfSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.DataCommands.cs"));
+        var avaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.GetData.cs"));
+
+        plannerSource.Should().Contain("AdapterImportExtensions");
+        plannerSource.Should().Contain("\".csv\",");
+        plannerSource.Should().Contain("\".xml\"");
+        plannerSource.Should().Contain("TextImportPatterns");
+        plannerSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(importAdapters)");
+
+        wpfSource.Should().Contain("ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters)");
+        wpfSource.Should().Contain("var adapters = plan.Adapters;");
+        wpfSource.Should().Contain("checkFileExists: plan.CheckFileExists");
+        wpfSource.Should().Contain("multiselect: plan.Multiselect");
+        wpfSource.Should().NotContain("string[] dataExtensions");
+        wpfSource.Should().NotContain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
+
+        avaloniaSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
+        avaloniaSource.Should().Contain("FileTypeFilter = CreateFilePickerFileTypes(pickerPlan.FileTypes)");
+        avaloniaSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
+    }
 }

@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 
 using FreeX.App.Presentation.Import;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -277,17 +278,12 @@ public sealed partial class MainWindow
 
         async Task BrowseAsync()
         {
+            var pickerPlan = ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get("GetData_FileTypeName"));
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
                 Title = UiText.Get("GetData_FilePickerTitle"),
                 AllowMultiple = false,
-                FileTypeFilter =
-                [
-                    new FilePickerFileType(UiText.Get("GetData_FileTypeName"))
-                    {
-                        Patterns = ["*.csv", "*.tsv", "*.tab", "*.txt"],
-                    },
-                ],
+                FileTypeFilter = CreateFilePickerFileTypes(pickerPlan.FileTypes),
             });
 
             IStorageFile? file = null;

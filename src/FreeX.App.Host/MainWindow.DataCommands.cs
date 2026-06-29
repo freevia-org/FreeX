@@ -23,10 +23,8 @@ public partial class MainWindow
 
     private async void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
-        string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab", ".xml"];
-        var adapters = _fileAdapters
-            .Where(adapter => dataExtensions.Contains(adapter.Extension, StringComparer.OrdinalIgnoreCase))
-            .ToList();
+        var plan = ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters);
+        var adapters = plan.Adapters;
         if (adapters.Count == 0)
         {
             RecordDiagnosticEvent("import_failed", new Dictionary<string, string?>
@@ -41,12 +39,11 @@ public partial class MainWindow
             return;
         }
 
-        var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
         var result = WpfFileDialogService.ShowOpenDialog(
             this,
-            filter,
-            checkFileExists: true,
-            multiselect: false);
+            plan.Filter,
+            checkFileExists: plan.CheckFileExists,
+            multiselect: plan.Multiselect);
         if (!result.Chosen) return;
 
         var ext = System.IO.Path.GetExtension(result.FileName!).ToLowerInvariant();
