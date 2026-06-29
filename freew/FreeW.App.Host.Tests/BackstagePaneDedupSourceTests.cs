@@ -21,6 +21,9 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("SisterBackstageTheme.");
         source.Should().Contain("SisterBackstagePaneSpecPlanner");
         source.Should().Contain("SisterBackstagePaneResources");
+        source.Should().Contain("SisterBackstagePaneResources.ForApp(");
+        source.Should().Contain($"SisterBackstageAppKind.{(appFolder == "freew" ? "FreeW" : "FreeP")}");
+        source.Should().Contain("BackstageStrings.Current.Get");
         source.Should().Contain("SisterBackstageHostController");
         source.Should().Contain("new SisterBackstageHostSpec(");
         source.Should().Contain("backstage.FrameCommand(_actions.New)");
@@ -97,6 +100,8 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("new BackstageTemplatePaneSpec(");
         source.Should().NotContain("new BackstageInfoPaneSpec(");
         source.Should().NotContain("new BackstageAccountPaneSpec(");
+        source.Should().NotContain("SisterBackstagePaneTextSpec.FreeW");
+        source.Should().NotContain("SisterBackstagePaneTextSpec.FreeP");
         source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
         source.Should().NotContain("Color.FromRgb(");
         source.Should().NotContain("BackstageAccent(");

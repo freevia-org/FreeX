@@ -30,11 +30,12 @@ internal sealed class BackstageView : UserControl
 
     // Link accent sourced from the design token (BrandThemes.FreeW.Colors.Accent = #0F6D8C).
     // Byte-identical to the previous hard-coded SisterBackstageTheme.FreeW.LinkColor (#0F6D8C).
-    private static readonly SisterBackstagePaneResources BackstageResources = new(
+    private static readonly SisterBackstagePaneResources BackstageResources = SisterBackstagePaneResources.ForApp(
+        SisterBackstageAppKind.FreeW,
         WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent),
         Theme.TileWidth,
         Theme.TileHeight,
-        SisterBackstagePaneTextSpec.FreeW);
+        BackstageStrings.Current.Get);
     private static BackstageVisualKit Kit => BackstageResources.Kit;
     private static BackstagePaneComposer Panes => BackstageResources.Panes;
     private static SisterBackstagePaneSpecPlanner PaneSpecs => BackstageResources.PaneSpecs;

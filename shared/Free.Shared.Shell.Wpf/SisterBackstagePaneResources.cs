@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using Free.Shared.AppServices;
 
 namespace Free.Shared.Shell.Wpf;
 
@@ -25,4 +26,18 @@ public sealed class SisterBackstagePaneResources
     public BackstagePaneComposer Panes { get; }
 
     public SisterBackstagePaneSpecPlanner PaneSpecs { get; }
+
+    public static SisterBackstagePaneResources ForApp(
+        SisterBackstageAppKind appKind,
+        Color linkColor,
+        double tileWidth,
+        double tileHeight,
+        Func<string, string?>? getText = null) =>
+        new(
+            linkColor,
+            tileWidth,
+            tileHeight,
+            SisterBackstagePaneTextSpec.FromDescriptor(
+                SisterBackstagePaneTextDescriptorPlanner.Build(appKind),
+                getText));
 }
