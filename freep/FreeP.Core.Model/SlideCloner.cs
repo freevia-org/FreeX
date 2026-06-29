@@ -26,7 +26,7 @@ public static class SlideCloner
             Id      = Guid.NewGuid().ToString("N"), // new identity so it is truly a distinct slide
             LayoutId   = slide.LayoutId,
             Background = slide.Background,           // ShapeFill is immutable — share reference
-            Notes      = slide.Notes is null ? null : CloneTextBody(slide.Notes),
+            Notes      = PresentationModelCloneHelper.CloneTextBody(slide.Notes),
             HfVisibility = slide.HfVisibility is null ? null : new HfFlags
             {
                 ShowFooter   = slide.HfVisibility.ShowFooter,
@@ -72,11 +72,11 @@ public static class SlideCloner
             PictureFormat  = shape.PictureFormat is null ? null : ClonePictureFormat(shape.PictureFormat),
             Media          = shape.Media,     // MediaInfo bytes are immutable once loaded — share reference
             LegacyFxpKind  = shape.LegacyFxpKind,
-            TextBody       = shape.TextBody is null ? null : CloneTextBody(shape.TextBody),
-            Table          = shape.Table    is null ? null : CloneTable(shape.Table),
+            TextBody       = PresentationModelCloneHelper.CloneTextBody(shape.TextBody),
+            Table          = shape.Table is null ? null : PresentationModelCloneHelper.CloneTable(shape.Table),
             Chart          = shape.Chart    is null ? null : CloneChart(shape.Chart),
             SmartArt       = shape.SmartArt,  // SmartArtShape bytes are immutable once loaded — share
-            Hyperlink      = CloneHyperlink(shape.Hyperlink),
+            Hyperlink      = PresentationModelCloneHelper.CloneHyperlink(shape.Hyperlink),
         };
 
         // Theme 21: OLE — byte arrays are treated as immutable once loaded; share reference.
@@ -99,142 +99,6 @@ public static class SlideCloner
 
     private static Placeholder ClonePlaceholder(Placeholder p) =>
         new() { Type = p.Type, Idx = p.Idx };
-
-    private static TextBody CloneTextBody(TextBody tb)
-    {
-        var copy = new TextBody
-        {
-            Anchor            = tb.Anchor,
-            DefaultParaAlign  = tb.DefaultParaAlign,
-            InsetLeftPt       = tb.InsetLeftPt,
-            InsetRightPt      = tb.InsetRightPt,
-            InsetTopPt        = tb.InsetTopPt,
-            InsetBottomPt     = tb.InsetBottomPt,
-            Wrap              = tb.Wrap,
-            AutoFit           = tb.AutoFit,
-            WarpPreset        = tb.WarpPreset,       // Wave 16A
-            // Wave 22B: text columns
-            ColumnCount       = tb.ColumnCount,
-            ColumnSpacingEmu  = tb.ColumnSpacingEmu,
-        };
-
-        // BA4: deep-copy warp adjust guides
-        foreach (var adj in tb.WarpAdjusts)
-            copy.WarpAdjusts.Add(adj);
-
-        foreach (var para in tb.Paragraphs)
-            copy.Paragraphs.Add(CloneParagraph(para));
-
-        return copy;
-    }
-
-    private static Paragraph CloneParagraph(Paragraph para)
-    {
-        var copy = new Paragraph
-        {
-            Align        = para.Align,
-            Level        = para.Level,
-            BulletKind   = para.BulletKind,
-            BulletChar   = para.BulletChar,
-            SpaceBeforePt = para.SpaceBeforePt,
-            SpaceAfterPt  = para.SpaceAfterPt,
-        };
-
-        foreach (var run in para.Runs)
-            copy.Runs.Add(CloneRun(run));
-
-        return copy;
-    }
-
-    private static RunTextShadow? CloneRunShadow(RunTextShadow? s) =>
-        s is null ? null : new RunTextShadow
-        {
-            Color  = s.Color,
-            Alpha  = s.Alpha,
-            BlurPt = s.BlurPt,
-            DistPt = s.DistPt,
-            DirDeg = s.DirDeg,
-        };
-
-    private static Run CloneRun(Run run) => new()
-    {
-        Text          = run.Text,
-        FontFamily    = run.FontFamily,
-        FontSizePt    = run.FontSizePt,
-        Bold          = run.Bold,
-        BoldSet       = run.BoldSet,
-        Italic        = run.Italic,
-        ItalicSet     = run.ItalicSet,
-        Underline     = run.Underline,
-        Strikethrough = run.Strikethrough,
-        Color         = run.Color,           // ThemeAwareColor is a struct — copied by value
-        Hyperlink     = CloneHyperlink(run.Hyperlink),
-        Field = run.Field is null ? null : new FieldRun
-        {
-            FieldType  = run.Field.FieldType,
-            CachedText = run.Field.CachedText,
-            FontFamily = run.Field.FontFamily,
-            FontSizePt = run.Field.FontSizePt,
-            Bold       = run.Field.Bold,
-            Italic     = run.Field.Italic,
-            Color      = run.Field.Color,
-        },
-        // Wave 16A: text effects — ShapeFill/ShapeOutline are immutable discriminated unions, share reference
-        TextFill    = run.TextFill,
-        TextOutline = run.TextOutline,
-        TextShadow  = CloneRunShadow(run.TextShadow),
-        // Theme 21: math — MathRunInfo is a small immutable-in-practice container; share reference
-        Math        = run.Math,
-    };
-
-    private static Hyperlink? CloneHyperlink(Hyperlink? h) =>
-        h is null ? null : new Hyperlink { Url = h.Url, TargetSlideId = h.TargetSlideId, Tooltip = h.Tooltip };
-
-    private static TableShape CloneTable(TableShape src)
-    {
-        var copy = new TableShape
-        {
-            Flags        = CloneTableStyleFlags(src.Flags),
-            TableStyleId = src.TableStyleId,
-            StyleData    = src.StyleData,   // StyleData is read from XML and not mutated — share
-        };
-
-        foreach (var w in src.ColumnWidthsEmu)
-            copy.ColumnWidthsEmu.Add(w);
-
-        foreach (var row in src.Rows)
-        {
-            var rowCopy = new TableRow { HeightEmu = row.HeightEmu };
-            foreach (var cell in row.Cells)
-                rowCopy.Cells.Add(CloneTableCell(cell));
-            copy.Rows.Add(rowCopy);
-        }
-
-        return copy;
-    }
-
-    private static TableStyleFlags CloneTableStyleFlags(TableStyleFlags f) => new()
-    {
-        FirstRow = f.FirstRow, LastRow = f.LastRow,
-        FirstCol = f.FirstCol, LastCol = f.LastCol,
-        BandRow  = f.BandRow,  BandCol = f.BandCol,
-    };
-
-    private static TableCell CloneTableCell(TableCell src) => new()
-    {
-        TextBody    = src.TextBody is null ? null : CloneTextBody(src.TextBody),
-        Fill        = src.Fill,     // immutable — share
-        Borders     = src.Borders,  // immutable — share
-        GridSpan    = src.GridSpan,
-        RowSpan     = src.RowSpan,
-        HMerge      = src.HMerge,
-        VMerge      = src.VMerge,
-        InsetLeftPt  = src.InsetLeftPt,
-        InsetRightPt = src.InsetRightPt,
-        InsetTopPt   = src.InsetTopPt,
-        InsetBottomPt = src.InsetBottomPt,
-        Anchor       = src.Anchor,
-    };
 
     private static ChartShape CloneChart(ChartShape src)
     {
