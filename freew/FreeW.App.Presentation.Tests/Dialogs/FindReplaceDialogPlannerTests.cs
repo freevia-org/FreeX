@@ -1,0 +1,208 @@
+using FreeW.App.Presentation.Dialogs;
+
+namespace FreeW.App.Presentation.Tests;
+
+public sealed class FindReplaceDialogPlannerTests
+{
+    [Fact]
+    public void OptionChoices_ExposeWordFindReplaceOptionsInDisplayOrder()
+    {
+        FindReplaceDialogPlanner.OptionChoices.Select(choice => choice.Kind)
+            .Should().Equal(
+                FindReplaceOptionKind.MatchCase,
+                FindReplaceOptionKind.WholeWord,
+                FindReplaceOptionKind.UseWildcards);
+
+        FindReplaceDialogPlanner.OptionChoices.Select(choice => choice.Label)
+            .Should().Equal("Match case", "Whole word", "Use wildcards  (* ? [ ] < >)");
+    }
+
+    [Fact]
+    public void BuildOptionPlans_DisablesWholeWordWhenWildcardsAreEnabled()
+    {
+        var plans = FindReplaceDialogPlanner.BuildOptionPlans(new FindReplaceSearchOptions(
+            MatchCase: false,
+            WholeWord: true,
+            UseWildcards: true));
+
+        plans.Should().Contain(plan =>
+            plan.Kind == FindReplaceOptionKind.WholeWord &&
+            plan.Label == "Whole word" &&
+            !plan.IsEnabled);
+        plans.Where(plan => plan.Kind != FindReplaceOptionKind.WholeWord)
+            .Should().OnlyContain(plan => plan.IsEnabled);
+    }
+
+    [Fact]
+    public void NormalizeOptions_ClearsWholeWordWhenWildcardsAreEnabled()
+    {
+        var options = FindReplaceDialogPlanner.NormalizeOptions(new FindReplaceSearchOptions(
+            MatchCase: true,
+            WholeWord: true,
+            UseWildcards: true));
+
+        options.MatchCase.Should().BeTrue();
+        options.WholeWord.Should().BeFalse();
+        options.UseWildcards.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void TryCreateSearchRequest_RejectsMissingSearchTerm(string? term)
+    {
+        FindReplaceDialogPlanner.TryCreateSearchRequest(
+                term,
+                new FindReplaceSearchOptions(),
+                out var request,
+                out var error)
+            .Should().BeFalse();
+
+        request.Should().BeNull();
+        error.Should().Be(FindReplaceValidationError.SearchTermRequired);
+        FindReplaceDialogPlanner.ValidationMessageFor(error)
+            .Should().Be(FindReplaceDialogPlanner.SearchTermRequiredMessage);
+    }
+
+    [Fact]
+    public void TryCreateReplaceRequest_NormalizesReplacementAndOptions()
+    {
+        FindReplaceDialogPlanner.TryCreateReplaceRequest(
+                "fox",
+                replacement: null,
+                new FindReplaceSearchOptions(MatchCase: true, WholeWord: true, UseWildcards: true),
+                out var request,
+                out var error)
+            .Should().BeTrue();
+
+        error.Should().BeNull();
+        request.Should().NotBeNull();
+        request!.Term.Should().Be("fox");
+        request.Replacement.Should().BeEmpty();
+        request.Options.Should().Be(new FindReplaceSearchOptions(MatchCase: true, WholeWord: false, UseWildcards: true));
+    }
+
+    [Fact]
+    public void StatusBuilders_ComposeFindAndReplaceResults()
+    {
+        var search = new FindReplaceSearchRequest("fox", new FindReplaceSearchOptions());
+        var replace = new FindReplaceReplaceRequest("fox", "wolf", new FindReplaceSearchOptions());
+
+        FindReplaceDialogPlanner.BuildFindStatus(search, found: true).Should().BeEmpty();
+        FindReplaceDialogPlanner.BuildFindStatus(search, found: false).Should().Be("\"fox\" not found.");
+        FindReplaceDialogPlanner.BuildReplaceStatus(replace, replaced: true).Should().BeEmpty();
+        FindReplaceDialogPlanner.BuildReplaceStatus(replace, replaced: false).Should().Be("\"fox\" not found.");
+        FindReplaceDialogPlanner.BuildReplaceAllStatus(replace, replacementCount: 0).Should().Be("\"fox\" not found.");
+        FindReplaceDialogPlanner.BuildReplaceAllStatus(replace, replacementCount: 1).Should().Be("Replaced 1 occurrence.");
+        FindReplaceDialogPlanner.BuildReplaceAllStatus(replace, replacementCount: 2).Should().Be("Replaced 2 occurrences.");
+    }
+
+    [Fact]
+    public void ShouldUsePlainEditorSearch_OnlyForDefaultOptions()
+    {
+        FindReplaceDialogPlanner.ShouldUsePlainEditorSearch(new FindReplaceSearchOptions()).Should().BeTrue();
+        FindReplaceDialogPlanner
+            .ShouldUsePlainEditorSearch(new FindReplaceSearchOptions(MatchCase: true, WholeWord: false, UseWildcards: false))
+            .Should()
+            .BeFalse();
+        FindReplaceDialogPlanner
+            .ShouldUsePlainEditorSearch(new FindReplaceSearchOptions(MatchCase: false, WholeWord: true, UseWildcards: false))
+            .Should()
+            .BeFalse();
+        FindReplaceDialogPlanner
+            .ShouldUsePlainEditorSearch(new FindReplaceSearchOptions(MatchCase: false, WholeWord: false, UseWildcards: true))
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
+    public void CountMatches_FindsAllCaseInsensitiveOccurrences()
+    {
+        var doc = BuildSampleDoc("The quick brown fox. FOX jumped over the fox.");
+
+        var count = FindReplaceDialogPlanner.CountMatches(doc, "fox", new FindReplaceSearchOptions());
+
+        count.Should().Be(3);
+    }
+
+    [Fact]
+    public void CountMatches_RespectsMatchCase()
+    {
+        var doc = BuildSampleDoc("The quick brown fox. FOX jumped over the fox.");
+
+        var count = FindReplaceDialogPlanner.CountMatches(
+            doc,
+            "fox",
+            new FindReplaceSearchOptions(MatchCase: true, WholeWord: false, UseWildcards: false));
+
+        count.Should().Be(2);
+    }
+
+    [Fact]
+    public void CountMatches_RespectsWholeWord()
+    {
+        var doc = BuildSampleDoc("foxglove fox foxes");
+
+        var count = FindReplaceDialogPlanner.CountMatches(
+            doc,
+            "fox",
+            new FindReplaceSearchOptions(MatchCase: false, WholeWord: true, UseWildcards: false));
+
+        count.Should().Be(1);
+    }
+
+    [Fact]
+    public void CountMatches_RespectsWildcardsAndClearsWholeWord()
+    {
+        var doc = BuildSampleDoc("cat bat hat sat rat");
+
+        var count = FindReplaceDialogPlanner.CountMatches(
+            doc,
+            "[cbh]at",
+            new FindReplaceSearchOptions(MatchCase: false, WholeWord: true, UseWildcards: true));
+
+        count.Should().Be(3);
+    }
+
+    [Fact]
+    public void CountMatches_ReturnsZeroForEmptyNeedle()
+    {
+        var doc = BuildSampleDoc("some text");
+
+        FindReplaceDialogPlanner.CountMatches(doc, string.Empty, new FindReplaceSearchOptions())
+            .Should()
+            .Be(0);
+    }
+
+    [Fact]
+    public void CountMatches_SpansMultipleParagraphs()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Hello world") } });
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Say hello again") } });
+
+        var count = FindReplaceDialogPlanner.CountMatches(doc, "hello", new FindReplaceSearchOptions());
+
+        count.Should().Be(2);
+    }
+
+    [Fact]
+    public void DocumentContains_UsesPlannedSearchRequest()
+    {
+        var doc = BuildSampleDoc("fox");
+        var request = new FindReplaceSearchRequest(
+            "fox",
+            new FindReplaceSearchOptions(MatchCase: true, WholeWord: true, UseWildcards: false));
+
+        FindReplaceDialogPlanner.DocumentContains(doc, request).Should().BeTrue();
+    }
+
+    private static TextDocument BuildSampleDoc(string text)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run(text) } });
+        return doc;
+    }
+}
