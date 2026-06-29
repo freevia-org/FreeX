@@ -32,10 +32,8 @@ internal static class FreeWAvaloniaRibbonDefinition
     /// Clicking the button opens this flyout; no colour is set until the user picks one,
     /// so the previous selection colour is never silently cleared.
     /// </summary>
-    private static readonly (string CommandId, string Label)[] FontColors = FreeWRibbonDefinitionData.FontColors;
-
     private static RibbonMenu BuildFontColorMenu() =>
-        new(FontColors
+        new(FreeWRibbonDefinitionData.FontColors
             .Select(fc => new RibbonMenuItem(fc.Label, new RibbonCommandId(fc.CommandId)))
             .ToArray());
 

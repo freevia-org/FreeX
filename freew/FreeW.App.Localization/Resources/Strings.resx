@@ -223,6 +223,39 @@
   <data name="Ribbon_Command_FontDialog_Label" xml:space="preserve">
     <value>Font&#x2026;</value>
   </data>
+  <data name="Ribbon_Palette_FontColor_Automatic_Label" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_Black_Label" xml:space="preserve">
+    <value>Black</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_DarkRed_Label" xml:space="preserve">
+    <value>Dark Red</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_Red_Label" xml:space="preserve">
+    <value>Red</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_Orange_Label" xml:space="preserve">
+    <value>Orange</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_Yellow_Label" xml:space="preserve">
+    <value>Yellow</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_Green_Label" xml:space="preserve">
+    <value>Green</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_Blue_Label" xml:space="preserve">
+    <value>Blue</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_DarkBlue_Label" xml:space="preserve">
+    <value>Dark Blue</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_Purple_Label" xml:space="preserve">
+    <value>Purple</value>
+  </data>
+  <data name="Ribbon_Palette_FontColor_White_Label" xml:space="preserve">
+    <value>White</value>
+  </data>
   <data name="Backstage_GreetingMorning" xml:space="preserve">
     <value>Good morning</value>
   </data>

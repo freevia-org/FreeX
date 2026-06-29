@@ -434,6 +434,62 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().Contain("FreeWRibbonText.ChangeCaseCompactCommand");
     }
 
+    [Fact]
+    public void Home_font_color_palette_labels_are_resource_backed_for_avalonia_profile()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            FontColorPaletteLabels().Should().Equal(
+                Loc.Get("Ribbon_Palette_FontColor_Automatic_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Black_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_DarkRed_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Red_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Orange_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Yellow_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Green_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Blue_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_DarkBlue_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Purple_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_White_Label"));
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            FontColorPaletteLabels().Should().Equal(
+                Loc.Get("Ribbon_Palette_FontColor_Automatic_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Black_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_DarkRed_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Red_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Orange_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Yellow_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Green_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Blue_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_DarkBlue_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_Purple_Label"),
+                Loc.Get("Ribbon_Palette_FontColor_White_Label"));
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Home_font_color_palette_source_uses_resource_descriptors()
+    {
+        var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+
+        dataSource.Should().NotContain("(\"freew.font-color.automatic\", \"Automatic\")");
+        dataSource.Should().NotContain("(\"freew.font-color.dark-red\", \"Dark Red\")");
+        dataSource.Should().NotContain("(\"freew.font-color.dark-blue\", \"Dark Blue\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_Automatic_Label\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkRed_Label\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkBlue_Label\")");
+        avaloniaSource.Should().NotContain("private static readonly (string CommandId, string Label)[] FontColors");
+        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.FontColors");
+    }
+
     private static bool IsAllowed(CommandEntry entry, IReadOnlyList<DivergenceRule> rules) =>
         rules.Any(rule => rule.IsAllowed(entry));
 
@@ -602,6 +658,20 @@ public sealed class FreeWRibbonDefinitionProfileTests
         labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearFormattingCompact_Label"));
         labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColorDropdown_Label"));
         labels["freew.change-case"].Should().Be(Loc.Get("Ribbon_Command_ChangeCaseCompact_Label"));
+    }
+
+    private static IReadOnlyList<string> FontColorPaletteLabels()
+    {
+        var definition = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+        var home = definition.FindTab("home");
+        home.Should().NotBeNull();
+        var font = home!.FindGroup("font");
+        font.Should().NotBeNull();
+
+        var fontColor = RequiredControl(font!, "freew.font-color");
+        var dropdown = fontColor.Should().BeOfType<RibbonDropdown>().Subject;
+
+        return dropdown.Menu.Items.Select(item => item.Header).ToArray();
     }
 
     private static string ReadRepositoryFile(params string[] relativeParts)
