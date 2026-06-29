@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -16,9 +17,9 @@ namespace FreeX.App.Avalonia;
 /// Windows-parity drawing-object editing dialogs for the Avalonia/macOS shell: Format Picture / Format Shape
 /// (size with lock-aspect syncing, rotation, alt text), Crop Picture (per-edge crop percentages), and the shape
 /// Gradient Fill (start/end stop colors + direction with a live preview). Input collection lives here; all the
-/// validation, parsing, aspect-ratio math, preset/direction catalogs, and result building come from the portable
-/// planners in <see cref="FreeX.App.Presentation.DrawingUI"/> so the behavior is single-sourced with the WPF host
-/// and reusable on macOS. Results round-trip through the existing Core drawing commands (ResizePicture /
+/// validation, parsing, aspect-ratio math, preset/direction catalogs, and result building come from portable
+/// planners in <see cref="FreeX.App.Presentation.DrawingUI"/> and <see cref="FreeX.App.Services"/> so the behavior
+/// is single-sourced with the WPF host and reusable on macOS. Results round-trip through the existing Core drawing commands (ResizePicture /
 /// ResizeDrawingShape, SetPictureLockAspectRatio, SetDrawingObjectRotation, SetPicture/DrawingShapeAltText,
 /// SetPictureCrop, SetDrawingShapeGradient). Reached from the Picture/Shape Format contextual-tab buttons.
 /// </summary>
