@@ -442,42 +442,22 @@ public sealed class SlideShowWindow : Window
         // Sound playback on the Avalonia host is deferred / no-op.
         // (The sound bytes are preserved on the model and will re-emit on save.)
 
-        switch (t.Kind)
+        var plan = SlideShowTransitionPlanner.Plan(t);
+        switch (plan.PlaybackKind)
         {
-            case TransitionKind.Cut:
+            case SlideShowTransitionPlaybackKind.Cut:
                 ShowSlideInstant(slide);
                 return;
 
-            case TransitionKind.Fade:
-            case TransitionKind.Dissolve:
-            case TransitionKind.Flash:       // flash → fast fade approximation
+            case SlideShowTransitionPlaybackKind.Fade:
+            case SlideShowTransitionPlaybackKind.FadeFallback:
                 PlayFadeTransition(slide, ms);
                 return;
 
-            case TransitionKind.Push:
-            case TransitionKind.Cover:
-            case TransitionKind.Wipe:
-            case TransitionKind.Uncover:
-                PlayPushTransition(slide, t, ms);
+            case SlideShowTransitionPlaybackKind.PushLike:
+                PlayPushTransition(slide, plan, ms);
                 return;
 
-            // Directional / slide-like transitions: Push approximation
-            case TransitionKind.Gallery:
-            case TransitionKind.Conveyor:
-            case TransitionKind.Pan:
-            case TransitionKind.Reveal:
-            case TransitionKind.Comb:
-            case TransitionKind.Doors:
-            case TransitionKind.Window:
-                PlayPushTransition(slide, t, ms);
-                return;
-
-            // Exotic / 3-D transitions and morph: Fade fallback.
-            // Full morph/3D engines are out of scope. Fade is the safe approximation for:
-            // Morph, Cube, Box, Rotate, Flip, Ferris, Flythrough, Switch, Orbit, Honeycomb,
-            // Glitter, Vortex, Shred, Wind, Ripple, Warp, Fracture, Crush, PeelOff,
-            // PageCurlDouble/Single, Airplane, Origami, Prism, Curtains, Drape, Prestige,
-            // WheelReverse, Zoom, Wheel, RandomBar, Strips, Blinds, Split, Random, Fly, Other.
             default:
                 PlayFadeTransition(slide, ms);
                 return;
@@ -507,10 +487,11 @@ public sealed class SlideShowWindow : Window
         });
     }
 
-    private void PlayPushTransition(Slide slide, SlideTransition t, int durationMs)
+    private void PlayPushTransition(Slide slide, SlideShowTransitionPlan plan, int durationMs)
     {
         var snapshot = CaptureCurrentSlide();
-        var (dx, dy) = GetDirectionVector(t.Direction, t.Kind);
+        var dx = plan.IncomingOffsetX;
+        var dy = plan.IncomingOffsetY;
 
         double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
         double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
@@ -533,19 +514,6 @@ public sealed class SlideShowWindow : Window
                 _slideCanvas.RenderTransform = null;
                 _transitionBackImage.IsVisible = false;
             });
-    }
-
-    private static (double dx, double dy) GetDirectionVector(
-        TransitionDirection? dir, TransitionKind kind)
-    {
-        return dir switch
-        {
-            TransitionDirection.Right => (-1,  0),
-            TransitionDirection.Left  => ( 1,  0),
-            TransitionDirection.Down  => ( 0, -1),
-            TransitionDirection.Up    => ( 0,  1),
-            _                         => ( 1,  0),
-        };
     }
 
     // ── Animation helpers (Avalonia dispatcher-based) ─────────────────────────────

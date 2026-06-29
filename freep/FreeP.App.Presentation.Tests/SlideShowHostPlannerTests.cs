@@ -134,6 +134,68 @@ public sealed class SlideShowHostPlannerTests
         instant.AutoAdvanceAfterMs.Should().Be(2500);
     }
 
+    [Theory]
+    [InlineData(TransitionKind.None, SlideShowTransitionPlaybackKind.Cut)]
+    [InlineData(TransitionKind.Cut, SlideShowTransitionPlaybackKind.Cut)]
+    [InlineData(TransitionKind.Fade, SlideShowTransitionPlaybackKind.Fade)]
+    [InlineData(TransitionKind.Dissolve, SlideShowTransitionPlaybackKind.Fade)]
+    [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
+    [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Uncover, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Gallery, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Conveyor, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Pan, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Reveal, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Comb, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Doors, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Window, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Morph, SlideShowTransitionPlaybackKind.FadeFallback)]
+    [InlineData(TransitionKind.Cube, SlideShowTransitionPlaybackKind.FadeFallback)]
+    [InlineData(TransitionKind.Fly, SlideShowTransitionPlaybackKind.FadeFallback)]
+    [InlineData(TransitionKind.Other, SlideShowTransitionPlaybackKind.FadeFallback)]
+    public void PlanTransition_GroupsKindsIntoRendererNeutralPlayback(
+        TransitionKind kind,
+        SlideShowTransitionPlaybackKind expected)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition { Kind = kind });
+
+        plan.PlaybackKind.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Right, -1, 0)]
+    [InlineData(TransitionDirection.Left, 1, 0)]
+    [InlineData(TransitionDirection.Down, 0, -1)]
+    [InlineData(TransitionDirection.Up, 0, 1)]
+    [InlineData(TransitionDirection.Vertical, 1, 0)]
+    public void PlanTransition_ResolvesPushIncomingOffsets(
+        TransitionDirection direction,
+        double expectedX,
+        double expectedY)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Push,
+            Direction = direction
+        });
+
+        plan.IncomingOffsetX.Should().Be(expectedX);
+        plan.IncomingOffsetY.Should().Be(expectedY);
+    }
+
+    [Fact]
+    public void PlanTransition_CoversEveryTransitionKind()
+    {
+        foreach (var kind in Enum.GetValues<TransitionKind>())
+        {
+            var plan = SlideShowTransitionPlanner.Plan(new SlideTransition { Kind = kind });
+
+            Enum.IsDefined(plan.PlaybackKind).Should().BeTrue(kind.ToString());
+        }
+    }
+
     [Fact]
     public void BuildState_FormatsSharedStatusText()
     {

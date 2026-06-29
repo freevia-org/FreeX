@@ -22,9 +22,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");
+        source.Should().Contain("SlideShowTransitionPlanner.Plan(");
 
         source.Should().NotContain("case Key.Right");
         source.Should().NotContain("case Key.Left");
+        source.Should().NotContain("case TransitionKind.");
         source.Should().NotContain("_controller.GoToSlide(0)");
         source.Should().NotContain("_presentation.Slides.Count - 1");
         source.Should().NotContain("HitTestHyperlinkInShapes(");
