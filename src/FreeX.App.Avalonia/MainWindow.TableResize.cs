@@ -1,15 +1,11 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Layout;
-using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
-using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -19,6 +15,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle TableResizeDialogChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>
     /// Opens the resize dialog for the active table and applies the resolved range through the shared command
     /// planner. Reports an honest status when no table is active.
@@ -89,14 +87,7 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         });
         content.Children.Add(rangeBox);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)));
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);
@@ -135,18 +126,7 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplyTableResizeButtonChrome(Button button, double minWidth, bool isDefault = false)
     {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyButton(button, TableResizeDialogChromeStyle, minWidth, isDefault);
     }
 
     /// <summary>
@@ -154,14 +134,6 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplyTableResizeTextBoxChrome(TextBox textBox)
     {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, TableResizeDialogChromeStyle);
     }
 }

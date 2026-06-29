@@ -25,6 +25,35 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
     }
 
     [Fact]
+    public void TableDesignDialogs_DelegateCompactControlChromeToSharedHelper()
+    {
+        var tableNameSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableName.cs"));
+        var tableResizeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableResize.cs"));
+
+        tableNameSource.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        tableNameSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle TableNameDialogChromeStyle => new(FormulaBarFontFamily);");
+        tableNameSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, TableNameDialogChromeStyle, minWidth, isDefault);");
+        tableNameSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, TableNameDialogChromeStyle);");
+        tableNameSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0))");
+
+        tableResizeSource.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        tableResizeSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle TableResizeDialogChromeStyle => new(FormulaBarFontFamily);");
+        tableResizeSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, TableResizeDialogChromeStyle, minWidth, isDefault);");
+        tableResizeSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, TableResizeDialogChromeStyle);");
+        tableResizeSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0))");
+
+        foreach (var source in new[] { tableNameSource, tableResizeSource })
+        {
+            source.Should().NotContain("button.Height = 24;");
+            source.Should().NotContain("textBox.Height = 24;");
+            source.Should().NotContain("button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);");
+            source.Should().NotContain("textBox.BorderBrush = Brush(130, 130, 130);");
+            source.Should().NotContain("HorizontalAlignment = AvaloniaHorizontalAlignment.Right");
+            source.Should().NotContain("Spacing = 8,");
+        }
+    }
+
+    [Fact]
     public void SharedCompactChrome_CarriesTheExistingDialogMetrics()
     {
         var source = File.ReadAllText(RepoFile(
