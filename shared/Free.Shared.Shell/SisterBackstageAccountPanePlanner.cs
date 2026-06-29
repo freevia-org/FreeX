@@ -1,4 +1,43 @@
+using System.Globalization;
+
 namespace Free.Shared.Shell;
+
+public sealed record SisterBackstageAccountPaneTextSpec(
+    string Heading,
+    string DescriptionFormat,
+    string ProductInformationHeading,
+    string ProductLabel,
+    string VersionLabel,
+    string DeviceLabel,
+    string UserInformationHeading,
+    string WindowsUserLabel,
+    string DataFolderLabel,
+    string ConnectedServicesLabel,
+    string ConnectedServicesValue,
+    string OptionsTextFormat,
+    string MissingValueText)
+{
+    public static SisterBackstageAccountPaneTextSpec NeutralEnglish { get; } = new(
+        Heading: "Account",
+        DescriptionFormat: "View local product and user information for this {0} installation.",
+        ProductInformationHeading: "Product Information",
+        ProductLabel: "Product",
+        VersionLabel: "Version",
+        DeviceLabel: "Device",
+        UserInformationHeading: "User Information",
+        WindowsUserLabel: "Windows user",
+        DataFolderLabel: "Data folder",
+        ConnectedServicesLabel: "Connected services",
+        ConnectedServicesValue: "Local desktop app",
+        OptionsTextFormat: "{0} Options...",
+        MissingValueText: "Not available");
+
+    public string FormatDescription(string productName) =>
+        string.Format(CultureInfo.CurrentCulture, DescriptionFormat, productName);
+
+    public string FormatOptionsText(string productName) =>
+        string.Format(CultureInfo.CurrentCulture, OptionsTextFormat, productName);
+}
 
 public sealed record SisterBackstageAccountPaneContext(
     string ProductName,
@@ -12,6 +51,7 @@ public sealed record SisterBackstageAccountFieldGroup(
     IReadOnlyList<BackstageFieldRow> Fields);
 
 public sealed record SisterBackstageAccountPanePlan(
+    string Heading,
     string Description,
     IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
     string OptionsText);
@@ -22,31 +62,38 @@ public sealed record SisterBackstageAccountPanePlan(
 /// </summary>
 public static class SisterBackstageAccountPanePlanner
 {
-    public static SisterBackstageAccountPanePlan Build(SisterBackstageAccountPaneContext context)
+    public static SisterBackstageAccountPanePlan Build(SisterBackstageAccountPaneContext context) =>
+        Build(context, SisterBackstageAccountPaneTextSpec.NeutralEnglish);
+
+    public static SisterBackstageAccountPanePlan Build(
+        SisterBackstageAccountPaneContext context,
+        SisterBackstageAccountPaneTextSpec text)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(text);
 
-        var productName = ValueOrFallback(context.ProductName);
+        var productName = ValueOrFallback(context.ProductName, text);
         return new SisterBackstageAccountPanePlan(
-            Description: $"View local product and user information for this {productName} installation.",
+            Heading: text.Heading,
+            Description: text.FormatDescription(productName),
             Groups:
             [
-                new("Product Information",
+                new(text.ProductInformationHeading,
                 [
-                    new("Product", productName),
-                    new("Version", ValueOrFallback(context.Version)),
-                    new("Device", ValueOrFallback(context.MachineName)),
+                    new(text.ProductLabel, productName),
+                    new(text.VersionLabel, ValueOrFallback(context.Version, text)),
+                    new(text.DeviceLabel, ValueOrFallback(context.MachineName, text)),
                 ]),
-                new("User Information",
+                new(text.UserInformationHeading,
                 [
-                    new("Windows user", ValueOrFallback(context.UserName)),
-                    new("Data folder", ValueOrFallback(context.DataFolder)),
-                    new("Connected services", "Local desktop app"),
+                    new(text.WindowsUserLabel, ValueOrFallback(context.UserName, text)),
+                    new(text.DataFolderLabel, ValueOrFallback(context.DataFolder, text)),
+                    new(text.ConnectedServicesLabel, text.ConnectedServicesValue),
                 ]),
             ],
-            OptionsText: productName + " Options...");
+            OptionsText: text.FormatOptionsText(productName));
     }
 
-    private static string ValueOrFallback(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "Not available" : value.Trim();
+    private static string ValueOrFallback(string? value, SisterBackstageAccountPaneTextSpec text) =>
+        string.IsNullOrWhiteSpace(value) ? text.MissingValueText : value.Trim();
 }

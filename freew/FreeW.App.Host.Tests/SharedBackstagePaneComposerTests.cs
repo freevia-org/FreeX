@@ -187,6 +187,21 @@ public sealed class SharedBackstagePaneComposerTests
             new SummaryOptions(RecentFilesCap: 9, DefaultSaveFormat: ".docx", UiLanguage: ""),
             @"C:\Users\Ada\AppData\Local\FreeW",
             edit: () => edited = true);
+        var account = planner.BuildAccountPaneSpec(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.2.3",
+                "Ada",
+                "WORD-BOX",
+                @"C:\Users\Ada\AppData\Local\FreeW"),
+            openOptions: () => edited = true);
+        var export = planner.BuildExportPaneSpec(
+            exportPdf: () => { },
+            exportXps: () => { },
+            additionalGroups:
+            [
+                new("Change File Type", []),
+            ]);
 
         recent.EmptyText.Should().Be("No recent documents.");
         recent.Paths.Should().Equal("C:/Docs/Budget.docx");
@@ -195,6 +210,17 @@ public sealed class SharedBackstagePaneComposerTests
         template.FooterText.Should().Be("More templates are not available in this build.");
         options.Description.Should().Be("FreeW application settings. These persist between sessions and apply immediately.");
         options.EditText.Should().Be("Edit options\u2026");
+        account.Heading.Should().Be("Account");
+        account.OptionsText.Should().Be("FreeW Options...");
+        account.Groups.SelectMany(group => group.Fields)
+            .Should().Contain(new BackstageFieldRow("Connected services", "Local desktop app"));
+        export.Heading.Should().Be("Export");
+        export.Description.Should().Be("Create a fixed-layout copy or choose an editable document format.");
+        export.Groups.Should().HaveCount(2);
+        export.Groups[0].Heading.Should().Be("Create PDF/XPS Document");
+        export.Groups[0].Actions.Select(action => action.Label)
+            .Should().Equal("Create PDF or XPS", "Export to XPS");
+        export.Groups[1].Heading.Should().Be("Change File Type");
 
         options.Edit.Should().NotBeNull();
         options.Edit!.Invoke();
@@ -211,12 +237,59 @@ public sealed class SharedBackstagePaneComposerTests
         var options = planner.BuildOptionsPaneSpec(
             new SummaryOptions(RecentFilesCap: 5, DefaultSaveFormat: ".freep", UiLanguage: "en-US"),
             @"C:\Users\Ada\AppData\Local\FreeP");
+        var export = planner.BuildExportPaneSpec(exportPdf: () => { });
 
         recent.EmptyText.Should().Be("No recent presentations.");
         template.TileCaption.Should().Be("Blank presentation");
         options.Description.Should().Be("FreeP application settings. These persist between sessions.");
         options.EditText.Should().BeNull();
         options.Edit.Should().BeNull();
+        export.Heading.Should().Be("Export");
+        export.Description.Should().Be("Create a PDF copy of this presentation - one page per slide, with selectable text.");
+        export.Groups.Should().ContainSingle();
+        export.Groups[0].Heading.Should().Be("Create PDF Copy");
+        export.Groups[0].Actions.Should().ContainSingle();
+        export.Groups[0].Actions[0].Label.Should().Be("Export to PDF...");
+    }
+
+    [Fact]
+    public void SisterBackstageAccountPanePlanner_UsesSuppliedTextSpecForLabelsAndFallbacks()
+    {
+        var text = SisterBackstageAccountPaneTextSpec.NeutralEnglish with
+        {
+            Heading = "Account Test",
+            DescriptionFormat = "Inspect {0}.",
+            ProductInformationHeading = "Product Block",
+            ProductLabel = "Product Name",
+            VersionLabel = "Build",
+            UserInformationHeading = "User Block",
+            ConnectedServicesValue = "Offline mode",
+            OptionsTextFormat = "Configure {0}",
+            MissingValueText = "(missing)"
+        };
+
+        var plan = SisterBackstageAccountPanePlanner.Build(
+            new SisterBackstageAccountPaneContext(
+                " FreeP ",
+                "",
+                "Ada",
+                "PRES-BOX",
+                " "),
+            text);
+
+        plan.Heading.Should().Be("Account Test");
+        plan.Description.Should().Be("Inspect FreeP.");
+        plan.OptionsText.Should().Be("Configure FreeP");
+        plan.Groups[0].Heading.Should().Be("Product Block");
+        plan.Groups[0].Fields.Should().Contain([
+            new BackstageFieldRow("Product Name", "FreeP"),
+            new BackstageFieldRow("Build", "(missing)"),
+        ]);
+        plan.Groups[1].Heading.Should().Be("User Block");
+        plan.Groups[1].Fields.Should().Contain([
+            new BackstageFieldRow("Connected services", "Offline mode"),
+            new BackstageFieldRow("Data folder", "(missing)"),
+        ]);
     }
 
     [Fact]
@@ -374,7 +447,7 @@ public sealed class SharedBackstagePaneComposerTests
                 @"C:\Users\Ada\AppData\Local\FreeW"));
 
         var pane = _composer.BuildAccountPane(new BackstageAccountPaneSpec(
-            "Account",
+            plan.Heading,
             plan.Description,
             plan.Groups,
             plan.OptionsText,

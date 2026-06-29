@@ -130,18 +130,10 @@ internal sealed class BackstageView : UserControl
             _file.SaveFormats,
             _backstage.HideThen<string>(_actions.SaveAsType));
 
-        return Panes.BuildActionPane(new BackstageActionPaneSpec(
-            Heading: "Export",
-            Description: "Create a fixed-layout copy or choose an editable document format.",
-            Groups:
-            [
-                new("Create PDF/XPS Document",
-                [
-                    new("Create PDF or XPS", "Publish a fixed-layout copy for sharing or printing.", _backstage.HideThen(_actions.ExportPdf)),
-                    new("Export to XPS", "Publish an XPS document with selectable, searchable vector text.", _backstage.HideThen(_actions.ExportXps)),
-                ]),
-                changeFileType,
-            ]));
+        return Panes.BuildActionPane(PaneSpecs.BuildExportPaneSpec(
+            _backstage.HideThen(_actions.ExportPdf),
+            exportXps: _backstage.HideThen(_actions.ExportXps),
+            additionalGroups: [changeFileType]));
     }
 
     private UIElement BuildPrintPane()
@@ -318,19 +310,13 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildAccountPane()
     {
-        var plan = SisterBackstageAccountPanePlanner.Build(
+        return Panes.BuildAccountPane(PaneSpecs.BuildAccountPaneSpec(
             new SisterBackstageAccountPaneContext(
                 AppProduct.Current.ProductName,
                 EntryAssemblyVersion.Resolve(),
                 Environment.UserName,
                 Environment.MachineName,
-                _actions.DataFolder()));
-
-        return Panes.BuildAccountPane(new BackstageAccountPaneSpec(
-            "Account",
-            plan.Description,
-            plan.Groups,
-            plan.OptionsText,
+                _actions.DataFolder()),
             _backstage.HideThen(_actions.EditOptions)));
     }
 
