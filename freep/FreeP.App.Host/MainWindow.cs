@@ -192,7 +192,10 @@ public sealed class MainWindow : Window
 
         // Status bar.
         var status = BuildStatusBar();
-        var clientFrame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(ribbon, body, status));
+        var clientFrame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Chrome: ribbon,
+            WorkArea: body,
+            StatusBar: status));
         var root = clientFrame.Root;
 
         // File keyboard shortcuts.

@@ -42,6 +42,8 @@ public sealed class SisterAppFrameHelperTests
 
         source.Should().Contain("RibbonShellBuilder.Build(");
         source.Should().Contain("SisterAppClientFrameBuilder.Build(");
+        source.Should().Contain("WorkArea:");
+        source.Should().Contain("StatusBar:");
         source.Should().Contain("SisterAppWindowFrameBuilder.Build(");
         source.Should().Contain("SisterAppStatusBarChrome.Build(");
         source.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");

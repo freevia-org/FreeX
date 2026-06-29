@@ -49,13 +49,41 @@ public sealed class MainWindowShellFrameTests
 
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
         mainWindow.Should().Contain("using Free.Shared.Shell.Avalonia;");
-        mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(");
+        mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0))");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.CreateInfoText(\"100%\", margin: new Thickness(8, 0))");
-        mainWindow.Should().Contain("BottomPanelsAboveStatus: [findBar]");
+        mainWindow.Should().Contain("chrome: ribbon,");
+        mainWindow.Should().Contain("workArea: workArea,");
+        mainWindow.Should().Contain("statusBar: statusBar,");
+        mainWindow.Should().Contain("bottomPanelsAboveStatus: [findBar]");
         mainWindow.Should().Contain("RightItems: BuildStatusRightItems()");
         mainWindow.Should().NotContain("private readonly TextBlock _zoomLabel = new()");
+    }
+
+    [Fact]
+    public void ClientFrameSpec_ForWorkArea_ExposesChromeWorkAreaContractAliases()
+    {
+        var chrome = new Border();
+        var workArea = new Grid();
+        var statusBar = new Border();
+        var topPanel = new Border();
+        var bottomPanel = new Border();
+
+        var spec = SisterAppClientFrameSpec.ForWorkArea(
+            chrome: chrome,
+            workArea: workArea,
+            statusBar: statusBar,
+            bottomPanelsAboveStatus: [bottomPanel],
+            topPanelsBelowChrome: [topPanel]);
+
+        spec.Chrome.Should().BeSameAs(chrome);
+        spec.Ribbon.Should().BeSameAs(chrome);
+        spec.WorkArea.Should().BeSameAs(workArea);
+        spec.StatusBar.Should().BeSameAs(statusBar);
+        spec.TopPanelsBelowChrome.Should().Equal(topPanel);
+        spec.TopPanelsBelowRibbon.Should().Equal(topPanel);
+        spec.BottomPanelsAboveStatus.Should().Equal(bottomPanel);
     }
 
     [Fact]

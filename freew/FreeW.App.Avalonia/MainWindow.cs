@@ -153,11 +153,11 @@ public sealed class MainWindow : Window
         // and let the async flow re-close if the user saves or discards.
         Closing += OnWindowClosing;
 
-        var frame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
-            Ribbon: ribbon,
-            WorkArea: workArea,
-            StatusBar: statusBar,
-            BottomPanelsAboveStatus: [findBar]));
+        var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
+            chrome: ribbon,
+            workArea: workArea,
+            statusBar: statusBar,
+            bottomPanelsAboveStatus: [findBar]));
 
         Content = frame.Root;
         UpdateStatus();

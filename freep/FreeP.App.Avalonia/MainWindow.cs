@@ -170,10 +170,10 @@ public sealed class MainWindow : Window
         var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             Background: new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
             LeftContent: _statusText)).Root;
-        var frame = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
-            Ribbon: ribbon,
-            WorkArea: BuildBody(),
-            StatusBar: statusBar));
+        var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
+            chrome: ribbon,
+            workArea: BuildBody(),
+            statusBar: statusBar));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 

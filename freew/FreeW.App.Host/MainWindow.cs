@@ -376,7 +376,10 @@ public sealed class MainWindow : Window
 
         var status = BuildStatusBar();
         var clientFrame = SisterAppClientFrameBuilder.Build(
-            new SisterAppClientFrameSpec(chromeStack, body, status));
+            new SisterAppClientFrameSpec(
+                Chrome: chromeStack,
+                WorkArea: body,
+                StatusBar: status));
         var root = clientFrame.Root;
 
         var navPane = BuildNavPane();

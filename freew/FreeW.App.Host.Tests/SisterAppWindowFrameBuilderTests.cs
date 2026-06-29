@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Linq;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Xunit;
 
@@ -30,22 +31,70 @@ public sealed class SisterAppWindowFrameBuilderTests
     }
 
     [StaFact]
-    public void ClientFrameBuilder_ComposesChromeBodyAndStatusRows()
+    public void ClientFrameBuilder_ComposesChromeWorkAreaAndStatusRows()
     {
         var chrome = new Border();
-        var body = new Grid();
-        var status = new Border();
+        var workArea = new Grid();
+        var statusBar = new Border();
 
-        var result = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(chrome, body, status));
+        var result = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Chrome: chrome,
+            WorkArea: workArea,
+            StatusBar: statusBar));
 
         result.Root.RowDefinitions.Should().HaveCount(3);
         result.Root.RowDefinitions[0].Height.Should().Be(GridLength.Auto);
         result.Root.RowDefinitions[1].Height.Should().Be(new GridLength(1, GridUnitType.Star));
         result.Root.RowDefinitions[2].Height.Should().Be(GridLength.Auto);
-        result.Root.Children.Cast<UIElement>().Should().Equal(chrome, body, status);
+        result.Root.Children.Cast<UIElement>().Should().Equal(chrome, workArea, statusBar);
         Grid.GetRow(chrome).Should().Be(0);
-        Grid.GetRow(body).Should().Be(1);
-        Grid.GetRow(status).Should().Be(2);
+        Grid.GetRow(workArea).Should().Be(1);
+        Grid.GetRow(statusBar).Should().Be(2);
+    }
+
+    [StaFact]
+    public void ClientFrameBuilder_ComposesOptionalPanelRowsFromSharedContract()
+    {
+        var chrome = new Border();
+        var topPanel = new Border();
+        var workArea = new Grid();
+        var bottomPanel = new Border();
+        var statusBar = new Border();
+
+        var result = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
+            Chrome: chrome,
+            WorkArea: workArea,
+            StatusBar: statusBar,
+            BottomPanelsAboveStatus: [bottomPanel],
+            TopPanelsBelowChrome: [topPanel]));
+
+        result.Root.RowDefinitions.Select(row => row.Height).Should().Equal(
+            GridLength.Auto,
+            GridLength.Auto,
+            new GridLength(1, GridUnitType.Star),
+            GridLength.Auto,
+            GridLength.Auto);
+        result.Root.Children.Cast<UIElement>().Should().Equal(chrome, topPanel, workArea, bottomPanel, statusBar);
+        Grid.GetRow(chrome).Should().Be(0);
+        Grid.GetRow(topPanel).Should().Be(1);
+        Grid.GetRow(workArea).Should().Be(2);
+        Grid.GetRow(bottomPanel).Should().Be(3);
+        Grid.GetRow(statusBar).Should().Be(4);
+    }
+
+    [Fact]
+    public void ClientFrameContractPlanner_DescribesSharedChromeWorkAreaStatusOrder()
+    {
+        var contract = SisterAppClientFrameContractPlanner.Plan(
+            topPanelsBelowChrome: 1,
+            bottomPanelsAboveStatus: 1);
+
+        contract.Slots.Select(slot => slot.Role).Should().Equal(
+            SisterAppClientFrameSlotRole.Chrome,
+            SisterAppClientFrameSlotRole.TopPanelBelowChrome,
+            SisterAppClientFrameSlotRole.WorkArea,
+            SisterAppClientFrameSlotRole.BottomPanelAboveStatus,
+            SisterAppClientFrameSlotRole.StatusBar);
     }
 
     [StaFact]
