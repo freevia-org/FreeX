@@ -5,13 +5,14 @@ namespace FreeP.App.Host.Tests;
 public sealed class ShellStringCompositionSourceTests
 {
     [Fact]
-    public void AppComposition_InstallsSharedShellStringAdapters()
+    public void AppComposition_InstallsResourceBackedSharedShellStringAdapters()
     {
         var root = FindRepositoryRoot();
         var composition = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "AppComposition.cs"));
 
-        composition.Should().Contain("ShellStrings.Current = StaticShellStrings.ForProductTitle(\"FreeP\")");
-        composition.Should().Contain("BackstageStrings.Current = DefaultBackstageStrings.Instance");
+        composition.Should().Contain("AppLocalization.InstallSharedSeams();");
+        composition.Should().NotContain("StaticShellStrings.ForProductTitle");
+        composition.Should().NotContain("DefaultBackstageStrings.Instance");
         composition.Should().NotContain("new FreePShellStrings");
         composition.Should().NotContain("new FreePBackstageStrings");
         File.Exists(Path.Combine(root, "freep", "FreeP.App.Host", "FreePShellStrings.cs")).Should().BeFalse();

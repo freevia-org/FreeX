@@ -12,8 +12,7 @@ internal static class AppComposition
 {
     public static void InstallSharedSeams()
     {
-        ShellStrings.Current = StaticShellStrings.ForProductTitle("FreeP");
-        BackstageStrings.Current = DefaultBackstageStrings.Instance;
+        AppLocalization.InstallSharedSeams();
         DialogSizing.RegisterAppDialogSizing();
 
         // Resolve freep.* command ids to shared glyphs in the shared WPF renderer (BackstageFrame rail, QAT,
