@@ -21,7 +21,10 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("SisterBackstageTheme.");
         source.Should().Contain("SisterBackstagePaneSpecPlanner");
         source.Should().Contain("SisterBackstagePaneResources");
-        source.Should().Contain("SisterBackstageEntryBuilder.Build(");
+        source.Should().Contain("SisterBackstageHostController");
+        source.Should().Contain("new SisterBackstageHostSpec(");
+        source.Should().Contain("backstage.FrameCommand(_actions.New)");
+        source.Should().Contain("_backstage.HideThen");
         source.Should().Contain("Panes.BuildInfoPane(");
         source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
         source.Should().Contain("Panes.BuildRecentPane(");
@@ -37,7 +40,7 @@ public sealed class BackstagePaneDedupSourceTests
         {
             source.Should().Contain("BuildHomePane = BuildHomePane");
             source.Should().Contain("UseNewPane = true");
-            source.Should().Contain("Close = _actions.Close");
+            source.Should().Contain("Close = backstage.FrameCommand(_actions.Close)");
             source.Should().Contain("BackstageSaveAsFileTypePlanner.Build(");
             source.Should().Contain("_file.SaveFormats");
             source.Should().Contain("BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(");
@@ -71,7 +74,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("new BackstageActionPaneSpec(");
             source.Should().Contain("Heading: \"Home\"");
             source.Should().Contain("BackstageHomePanePlanner.Build(");
-            source.Should().Contain("_shell.Show(\"Open\")");
+            source.Should().Contain("_backstage.ShowPane(\"Open\")");
             source.Should().Contain("RecoverUnsaved");
         }
         else
@@ -83,6 +86,10 @@ public sealed class BackstagePaneDedupSourceTests
 
         source.Should().NotContain("BackstageEntry.Pane(\"Info\"");
         source.Should().NotContain("BackstageEntry.Command(\"Save\"");
+        source.Should().NotContain("new BackstageViewShell(");
+        source.Should().NotContain("SisterBackstageEntryBuilder.Build(");
+        source.Should().NotContain("Hide(); _actions");
+        source.Should().NotContain("_shell.Show");
         source.Should().NotContain("BackstageCorePropertiesPlanner.Build(");
         source.Should().NotContain("BackstageApplicationOptionsPanePlanner.Build(");
         source.Should().NotContain("new BackstageRecentPaneSpec(");
@@ -105,6 +112,24 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("TextTrimming = TextTrimming.CharacterEllipsis");
         source.Should().NotContain("Path.GetFileName(path)");
         source.Should().NotContain("var gallery = new WrapPanel");
+    }
+
+    [Fact]
+    public void SharedSisterBackstageHostController_OwnsHostShellEntryBuilderAndActionAdapters()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "shared",
+            "Free.Shared.Ribbon.Wpf",
+            "SisterBackstageHostController.cs"));
+
+        source.Should().Contain("new BackstageViewShell(");
+        source.Should().Contain("SisterBackstageEntryBuilder.Build(");
+        source.Should().Contain("public Action ShowPane(");
+        source.Should().Contain("public Action FrameCommand(Action action)");
+        source.Should().Contain("public Action HideThen(Action action)");
+        source.Should().Contain("public Action<T> HideThen<T>(Action<T> action)");
+        source.Should().Contain("public Action<T1, T2> HideThen<T1, T2>(Action<T1, T2> action)");
     }
 
     private static string FindRepositoryRoot()

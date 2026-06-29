@@ -42,7 +42,7 @@ internal sealed class BackstageView : UserControl
     private readonly DocumentView _editor;
     private readonly FileCommands _file;
     private readonly BackstageActions _actions;
-    private readonly BackstageViewShell _shell;
+    private readonly SisterBackstageHostController _backstage;
 
     public BackstageView(DocumentView editor, FileCommands file, BackstageActions actions)
     {
@@ -50,35 +50,33 @@ internal sealed class BackstageView : UserControl
         _file = file;
         _actions = actions;
 
-        _shell = new BackstageViewShell(
+        _backstage = new SisterBackstageHostController(
             this,
-            Theme.Accent,
-            BuildEntries(),
-            _actions.OnClosed);
+            new SisterBackstageHostSpec(
+                Theme,
+                BuildEntries,
+                _actions.OnClosed));
     }
 
-    public void Show()
-    {
-        _shell.Show();
-    }
+    public void Show() => _backstage.Show();
 
-    public void Hide() => _shell.Hide();
+    public void Hide() => _backstage.Hide();
 
-    private IEnumerable<BackstageEntry> BuildEntries()
+    private SisterBackstageEntrySpec BuildEntries(SisterBackstageHostController backstage)
     {
-        return SisterBackstageEntryBuilder.Build(new SisterBackstageEntrySpec(
+        return new SisterBackstageEntrySpec(
             BuildInfoPane,
-            _actions.New,
-            _actions.Open,
-            _actions.Save,
-            _actions.SaveAs,
+            backstage.FrameCommand(_actions.New),
+            backstage.FrameCommand(_actions.Open),
+            backstage.FrameCommand(_actions.Save),
+            backstage.FrameCommand(_actions.SaveAs),
             BuildRecentPane,
             BuildNewPane,
             BuildOptionsPane)
         {
-            SaveCopy = _actions.SaveCopy,
-            Close = _actions.Close,
-            Print = _actions.Print,
+            SaveCopy = backstage.FrameCommand(_actions.SaveCopy),
+            Close = backstage.FrameCommand(_actions.Close),
+            Print = backstage.FrameCommand(_actions.Print),
             BuildHomePane = BuildHomePane,
             UseNewPane = true,
             BuildOpenPane = BuildOpenPane,
@@ -88,7 +86,7 @@ internal sealed class BackstageView : UserControl
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane,
             HideRecentPane = true
-        });
+        };
     }
 
     private UIElement BuildInfoPane()
@@ -115,7 +113,7 @@ internal sealed class BackstageView : UserControl
                 new("Paragraphs", stats.Paragraphs.ToString()),
             ],
             EditPropertiesText: "Edit document properties\u2026",
-            EditProperties: () => { Hide(); _actions.EditProperties(); },
+            EditProperties: _backstage.HideThen(_actions.EditProperties),
             ActionGroups: BackstageInfoSafetyPanePlanner.Build()
                 .Select(group => new BackstageActionGroup(
                     group.Heading,
@@ -130,7 +128,7 @@ internal sealed class BackstageView : UserControl
     {
         var changeFileType = BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(
             _file.SaveFormats,
-            extension => { Hide(); _actions.SaveAsType(extension); });
+            _backstage.HideThen<string>(_actions.SaveAsType));
 
         return Panes.BuildActionPane(new BackstageActionPaneSpec(
             Heading: "Export",
@@ -139,8 +137,8 @@ internal sealed class BackstageView : UserControl
             [
                 new("Create PDF/XPS Document",
                 [
-                    new("Create PDF or XPS", "Publish a fixed-layout copy for sharing or printing.", () => { Hide(); _actions.ExportPdf(); }),
-                    new("Export to XPS", "Publish an XPS document with selectable, searchable vector text.", () => { Hide(); _actions.ExportXps(); }),
+                    new("Create PDF or XPS", "Publish a fixed-layout copy for sharing or printing.", _backstage.HideThen(_actions.ExportPdf)),
+                    new("Export to XPS", "Publish an XPS document with selectable, searchable vector text.", _backstage.HideThen(_actions.ExportXps)),
                 ]),
                 changeFileType,
             ]));
@@ -216,10 +214,10 @@ internal sealed class BackstageView : UserControl
             var plan = BackstageOpenPanePlanner.BuildPlan(
                 _file.RecentEntries,
                 filter,
-                path => { Hide(); _actions.OpenPath(path); },
-                folder => { Hide(); _actions.OpenFolder(folder); },
-                () => { Hide(); _actions.Open(); },
-                () => { Hide(); _actions.RecoverUnsaved(); });
+                _backstage.HideThen<string>(_actions.OpenPath),
+                _backstage.HideThen<string>(_actions.OpenFolder),
+                _backstage.HideThen(_actions.Open),
+                _backstage.HideThen(_actions.RecoverUnsaved));
 
             PopulateOpenRows(documentsPanel, plan.DocumentRows, "No recent documents match this search.");
             PopulateOpenRows(foldersPanel, plan.FolderRows, "No recent folders match this search.");
@@ -241,10 +239,10 @@ internal sealed class BackstageView : UserControl
             Groups: BackstageSharePanePlanner.Build(
                 _file.CurrentPath,
                 File.Exists,
-                () => { Hide(); _actions.SaveAs(); },
-                path => { Hide(); _actions.OpenContainingFolder(path); },
-                () => { Hide(); _actions.SaveCopy(); },
-                () => { Hide(); _actions.ExportPdf(); })));
+                _backstage.HideThen(_actions.SaveAs),
+                _backstage.HideThen<string>(_actions.OpenContainingFolder),
+                _backstage.HideThen(_actions.SaveCopy),
+                _backstage.HideThen(_actions.ExportPdf))));
     }
 
     private UIElement BuildHomePane()
@@ -254,10 +252,10 @@ internal sealed class BackstageView : UserControl
             Description: "Start a document, reopen a recent local file, or browse for one stored on this PC.",
             Groups: BackstageHomePanePlanner.Build(
                 _file.RecentEntries,
-                () => { Hide(); _actions.New(); },
-                path => { Hide(); _actions.OpenPath(path); },
-                () => { Hide(); _actions.Open(); },
-                () => _shell.Show("Open"))));
+                _backstage.HideThen(_actions.New),
+                _backstage.HideThen<string>(_actions.OpenPath),
+                _backstage.HideThen(_actions.Open),
+                _backstage.ShowPane("Open"))));
     }
 
     private UIElement BuildSaveAsPane()
@@ -268,7 +266,7 @@ internal sealed class BackstageView : UserControl
             _file.CurrentPath);
         var typeGroups = BackstageSaveAsFileTypePlanner.Build(
             _file.SaveFormats,
-            extension => { Hide(); _actions.SaveAsType(extension); });
+            _backstage.HideThen<string>(_actions.SaveAsType));
 
         var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Kit.HeadingText("Save As"));
@@ -285,8 +283,8 @@ internal sealed class BackstageView : UserControl
         AddSaveAsActionGroup(panel, new BackstageActionGroup(
             "Places",
             [
-                new("This PC", "Save to local folders and connected drives.", () => { Hide(); _actions.SaveAs(); }),
-                new("Browse", "Open the Windows save dialog.", () => { Hide(); _actions.SaveAs(); }),
+                new("This PC", "Save to local folders and connected drives.", _backstage.HideThen(_actions.SaveAs)),
+                new("Browse", "Open the Windows save dialog.", _backstage.HideThen(_actions.SaveAs)),
             ]));
 
         foreach (var group in typeGroups)
@@ -299,13 +297,13 @@ internal sealed class BackstageView : UserControl
     {
         return Panes.BuildRecentPane(PaneSpecs.BuildRecentPaneSpec(
             _file.RecentEntries.Select(entry => entry.Path),
-            path => { Hide(); _actions.OpenPath(path); }));
+            _backstage.HideThen<string>(_actions.OpenPath)));
     }
 
     private UIElement BuildNewPane()
     {
         return Panes.BuildTemplatePane(PaneSpecs.BuildNewPaneSpec(
-            () => { Hide(); _actions.New(); }));
+            _backstage.HideThen(_actions.New)));
     }
 
     private UIElement BuildOptionsPane()
@@ -315,7 +313,7 @@ internal sealed class BackstageView : UserControl
         return Panes.BuildOptionsPane(PaneSpecs.BuildOptionsPaneSpec(
             options,
             _actions.DataFolder(),
-            edit: () => { Hide(); _actions.EditOptions(); }));
+            edit: _backstage.HideThen(_actions.EditOptions)));
     }
 
     private UIElement BuildAccountPane()
@@ -333,24 +331,24 @@ internal sealed class BackstageView : UserControl
             plan.Description,
             plan.Groups,
             plan.OptionsText,
-            () => { Hide(); _actions.EditOptions(); }));
+            _backstage.HideThen(_actions.EditOptions)));
     }
 
     private Action SafetyAction(BackstageInfoSafetyActionKind kind) =>
         kind switch
         {
-            BackstageInfoSafetyActionKind.MarkAsFinal => () => { Hide(); _actions.MarkAsFinal(); },
-            BackstageInfoSafetyActionKind.RestrictEditing => () => { Hide(); _actions.RestrictEditing(); },
-            BackstageInfoSafetyActionKind.InspectDocument => () => { Hide(); _actions.InspectDocument(); },
-            BackstageInfoSafetyActionKind.CheckAccessibility => () => { Hide(); _actions.CheckAccessibility(); },
+            BackstageInfoSafetyActionKind.MarkAsFinal => _backstage.HideThen(_actions.MarkAsFinal),
+            BackstageInfoSafetyActionKind.RestrictEditing => _backstage.HideThen(_actions.RestrictEditing),
+            BackstageInfoSafetyActionKind.InspectDocument => _backstage.HideThen(_actions.InspectDocument),
+            BackstageInfoSafetyActionKind.CheckAccessibility => _backstage.HideThen(_actions.CheckAccessibility),
             _ => static () => { }
         };
 
     private Action PrintAction(BackstagePrintActionKind kind) =>
         kind switch
         {
-            BackstagePrintActionKind.Print => () => { Hide(); _actions.Print(); },
-            BackstagePrintActionKind.PrintPreview => () => { Hide(); _actions.PrintPreview(); },
+            BackstagePrintActionKind.Print => _backstage.HideThen(_actions.Print),
+            BackstagePrintActionKind.PrintPreview => _backstage.HideThen(_actions.PrintPreview),
             _ => static () => { }
         };
 
@@ -407,11 +405,11 @@ internal sealed class BackstageView : UserControl
             Padding = new Thickness(14, 5, 14, 5),
             FontWeight = FontWeights.SemiBold
         };
+        var saveSuggested = _backstage.HideThen<string?, string?>(_actions.SaveAsSuggested);
         saveButton.Click += (_, _) =>
         {
             var extension = typeCombo.SelectedValue as string ?? plan.SelectedExtension;
-            Hide();
-            _actions.SaveAsSuggested(fileNameBox.Text, extension);
+            saveSuggested(fileNameBox.Text, extension);
         };
 
         var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };

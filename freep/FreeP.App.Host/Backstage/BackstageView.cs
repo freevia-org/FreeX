@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.AppServices;
@@ -31,7 +30,7 @@ internal sealed class BackstageView : UserControl
     private readonly Func<Presentation> _getModel;
     private readonly FileCommands _file;
     private readonly BackstageActions _actions;
-    private readonly BackstageViewShell _shell;
+    private readonly SisterBackstageHostController _backstage;
 
     public BackstageView(Func<Presentation> getModel, FileCommands file, BackstageActions actions)
     {
@@ -39,35 +38,33 @@ internal sealed class BackstageView : UserControl
         _file = file;
         _actions = actions;
 
-        _shell = new BackstageViewShell(
+        _backstage = new SisterBackstageHostController(
             this,
-            Theme.Accent,
-            BuildEntries(),
-            _actions.OnClosed);
+            new SisterBackstageHostSpec(
+                Theme,
+                BuildEntries,
+                _actions.OnClosed));
     }
 
-    public void Show()
-    {
-        _shell.Show();
-    }
+    public void Show() => _backstage.Show();
 
-    public void Hide() => _shell.Hide();
+    public void Hide() => _backstage.Hide();
 
-    private IEnumerable<BackstageEntry> BuildEntries()
+    private SisterBackstageEntrySpec BuildEntries(SisterBackstageHostController backstage)
     {
-        return SisterBackstageEntryBuilder.Build(new SisterBackstageEntrySpec(
+        return new SisterBackstageEntrySpec(
             BuildInfoPane,
-            _actions.New,
-            _actions.Open,
-            _actions.Save,
-            _actions.SaveAs,
+            backstage.FrameCommand(_actions.New),
+            backstage.FrameCommand(_actions.Open),
+            backstage.FrameCommand(_actions.Save),
+            backstage.FrameCommand(_actions.SaveAs),
             BuildRecentPane,
             BuildNewPane,
             BuildOptionsPane)
         {
             BuildExportPane = BuildExportPane,
             BuildAccountPane = BuildAccountPane,
-        });
+        };
     }
 
     private UIElement BuildExportPane()
@@ -79,7 +76,7 @@ internal sealed class BackstageView : UserControl
             [
                 new("Create PDF Copy",
                 [
-                    new("Export to PDF...", "Publish a fixed-layout copy for sharing or presenting.", () => { Hide(); _actions.ExportPdf(); }),
+                    new("Export to PDF...", "Publish a fixed-layout copy for sharing or presenting.", _backstage.HideThen(_actions.ExportPdf)),
                 ]),
             ]));
     }
@@ -109,13 +106,13 @@ internal sealed class BackstageView : UserControl
     {
         return Panes.BuildRecentPane(PaneSpecs.BuildRecentPaneSpec(
             _file.RecentEntries.Select(entry => entry.Path),
-            path => { Hide(); _actions.OpenPath(path); }));
+            _backstage.HideThen<string>(_actions.OpenPath)));
     }
 
     private UIElement BuildNewPane()
     {
         return Panes.BuildTemplatePane(PaneSpecs.BuildNewPaneSpec(
-            () => { Hide(); _actions.New(); }));
+            _backstage.HideThen(_actions.New)));
     }
 
     private UIElement BuildOptionsPane()
@@ -142,7 +139,7 @@ internal sealed class BackstageView : UserControl
             plan.Description,
             plan.Groups,
             plan.OptionsText,
-            () => _shell.Show("Options")));
+            _backstage.ShowPane("Options")));
     }
 }
 
