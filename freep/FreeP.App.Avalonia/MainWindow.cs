@@ -771,9 +771,7 @@ public sealed class MainWindow : Window
     {
         var count   = _presentation.Slides.Count;
         var current = Editor.CurrentSlideIndex;
-        _statusText.Text = count == 0
-            ? "No slides"
-            : $"Slide {current + 1} / {count}";
+        _statusText.Text = SisterAppStatusBarTextPlanner.FormatPresentationSlideStatus(current, count);
     }
 
     // ── Keyboard shortcuts ─────────────────────────────────────────────────────

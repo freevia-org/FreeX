@@ -740,13 +740,16 @@ public sealed class MainWindow : Window
         {
             var words = WordCount.Words(selectionText);
             var characters = WordCount.Characters(selectionText, includeSpaces: true);
-            _countsText.Text = $"Selection: {words} words, {characters} characters";
+            _countsText.Text = SisterAppStatusBarTextPlanner.FormatDocumentSelectionStatus(words, characters);
             return;
         }
 
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
-        _countsText.Text = $"Words: {stats.Words}   Characters: {stats.CharactersWithSpaces}   Paragraphs: {stats.Paragraphs}";
+        _countsText.Text = SisterAppStatusBarTextPlanner.FormatDocumentCountsStatus(
+            stats.Words,
+            stats.CharactersWithSpaces,
+            stats.Paragraphs);
     }
 
     // Refresh the Word-style "Page X of Y" status: an approximate page position derived from the editor's
@@ -755,12 +758,12 @@ public sealed class MainWindow : Window
     private void UpdatePageStatus()
     {
         var (current, total) = _editor.PageInfo();
-        _pageText.Text = $"Page {current} of {total}";
+        _pageText.Text = SisterAppStatusBarTextPlanner.FormatDocumentPageStatus(current, total);
 
         // Word-style current-section indicator next to the page count. Best-effort: which section the
         // caret's block falls in, out of TextDocument.Sections (see DocumentView.SectionInfo).
         var (section, sections) = _editor.SectionInfo();
-        _sectionText.Text = $"Section {section} of {sections}";
+        _sectionText.Text = SisterAppStatusBarTextPlanner.FormatDocumentSectionStatus(section, sections);
     }
 
     // Build the footer (status bar) as a single full-width row that sits BELOW the ruler + document region
@@ -834,7 +837,7 @@ public sealed class MainWindow : Window
         var dataFolderPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         dataFolderPanel.Children.Add(SisterAppStatusBarChrome.CreateSeparator());
         _dataFolderText = SisterAppStatusBarChrome.CreateInfoText();
-        _dataFolderText.Text = $"Data folder: {ResolveDataFolderLabel()}";
+        _dataFolderText.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel());
         _dataFolderText.ToolTip = _dataFolderText.Text;
         dataFolderPanel.Children.Add(_dataFolderText);
         _dataFolderItem = dataFolderPanel;

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Free.Shared.AppServices;
 
 namespace Free.Shared.Ribbon.Wpf;
 
@@ -9,7 +10,7 @@ public sealed record SisterAppStatusBarSpec(
     Brush Background,
     UIElement LeftContent,
     IReadOnlyList<FrameworkElement>? RightItems = null,
-    double MinHeight = 26,
+    double MinHeight = SisterAppStatusBarChromeDefaults.Height,
     Thickness LeftMargin = default);
 
 public sealed record SisterAppStatusBarBuildResult(
@@ -22,7 +23,11 @@ public sealed record SisterAppStatusBarBuildResult(
 /// </summary>
 public static class SisterAppStatusBarChrome
 {
-    private static readonly Thickness DefaultLeftMargin = new(10, 0, 4, 0);
+    private static readonly Thickness DefaultLeftMargin = new(
+        SisterAppStatusBarChromeDefaults.LeftMarginLeft,
+        SisterAppStatusBarChromeDefaults.LeftMarginTop,
+        SisterAppStatusBarChromeDefaults.LeftMarginRight,
+        SisterAppStatusBarChromeDefaults.LeftMarginBottom);
 
     public static SisterAppStatusBarBuildResult Build(SisterAppStatusBarSpec spec)
     {
@@ -68,7 +73,7 @@ public static class SisterAppStatusBarChrome
         {
             Text = text,
             Foreground = Brushes.White,
-            FontSize = 12,
+            FontSize = SisterAppStatusBarChromeDefaults.TextFontSize,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -76,9 +81,17 @@ public static class SisterAppStatusBarChrome
     public static Rectangle CreateSeparator() =>
         new()
         {
-            Width = 1,
-            Margin = new Thickness(8, 3, 8, 3),
-            Fill = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            Width = SisterAppStatusBarChromeDefaults.SeparatorWidth,
+            Margin = new Thickness(
+                SisterAppStatusBarChromeDefaults.SeparatorHorizontalMargin,
+                SisterAppStatusBarChromeDefaults.SeparatorVerticalMargin,
+                SisterAppStatusBarChromeDefaults.SeparatorHorizontalMargin,
+                SisterAppStatusBarChromeDefaults.SeparatorVerticalMargin),
+            Fill = new SolidColorBrush(Color.FromArgb(
+                SisterAppStatusBarChromeDefaults.SeparatorAlpha,
+                SisterAppStatusBarChromeDefaults.SeparatorRgb,
+                SisterAppStatusBarChromeDefaults.SeparatorRgb,
+                SisterAppStatusBarChromeDefaults.SeparatorRgb)),
             VerticalAlignment = VerticalAlignment.Stretch
         };
 }
