@@ -69,6 +69,21 @@ public sealed class RibbonResizeThresholdGateTests
         thresholds.ItemAccessCount.Should().BeLessThan(32);
     }
 
+    [Fact]
+    public void CrossedAnyThreshold_SourceDelegatesPolicyToSharedRibbon()
+    {
+        var hostSource = DialogSourceTestSupport.ReadHostSources("RibbonResizeThresholdGate.cs");
+        var sharedSource = WorkspaceFileLocator.ReadAllText(
+            "shared",
+            "Free.Shared.Ribbon",
+            "Layout",
+            "RibbonResizeThresholdGate.cs");
+
+        hostSource.Should().Contain("Free.Shared.Ribbon.RibbonResizeThresholdGate.CrossedAnyThreshold(");
+        hostSource.Should().NotContain("CountThresholdsBelowWidth(");
+        sharedSource.Should().Contain("CountThresholdsBelowWidth(");
+    }
+
     private sealed class CountingThresholdList(IReadOnlyList<double> thresholds) : IReadOnlyList<double>
     {
         public int ItemAccessCount { get; private set; }

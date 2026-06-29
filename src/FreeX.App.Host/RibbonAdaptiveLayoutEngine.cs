@@ -135,17 +135,7 @@ internal static class RibbonAdaptiveLayoutEngine
     public static bool TryGetNextExpandedState(
         RibbonAdaptiveGroupState state,
         out RibbonAdaptiveGroupState expandedState)
-    {
-        expandedState = state switch
-        {
-            RibbonAdaptiveGroupState.Collapsed => RibbonAdaptiveGroupState.IconOnly,
-            RibbonAdaptiveGroupState.IconOnly => RibbonAdaptiveGroupState.SmallWithLabels,
-            RibbonAdaptiveGroupState.SmallWithLabels => RibbonAdaptiveGroupState.Full,
-            _ => state
-        };
-
-        return expandedState != state;
-    }
+        => Free.Shared.Ribbon.RibbonAdaptiveStateTransitions.TryGetNextExpandedState(state, out expandedState);
 
     public static HashSet<int> GetFallbackProtectedGroupIndexes(
         IReadOnlyList<RibbonAdaptiveGroup> groups,
@@ -279,21 +269,17 @@ internal static class RibbonAdaptiveLayoutEngine
         RibbonAdaptiveGroupState[]? rollbackStates,
         ref int rollbackCount)
     {
-        var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
-        for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
+        if (!Free.Shared.Ribbon.RibbonAdaptiveStateTransitions.TryFindNextCollapse(
+                states,
+                preserveFirstGroup,
+                protectedGroupIndexes,
+                out var transition))
         {
-            if (states[i] == RibbonAdaptiveGroupState.Collapsed)
-                continue;
-
-            if (protectedGroupIndexes?.Contains(i) == true)
-                continue;
-
-            RecordStateChange(i, states[i], rollbackIndexes, rollbackStates, ref rollbackCount);
-            states[i] = RibbonAdaptiveGroupState.Collapsed;
-            return true;
+            return false;
         }
 
-        return false;
+        ApplyStateTransition(states, transition, rollbackIndexes, rollbackStates, ref rollbackCount);
+        return true;
     }
 
     private static bool TryFallbackOneMoreGroupCore(
@@ -308,65 +294,49 @@ internal static class RibbonAdaptiveLayoutEngine
         out int changedIndex,
         out RibbonAdaptiveGroupState previousState)
     {
-        changedIndex = -1;
-        previousState = default;
-        var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
-        if (groups is not null)
+        RibbonAdaptiveStateTransition transition;
+        var foundTransition = groups is not null
+            ? Free.Shared.Ribbon.RibbonAdaptiveStateTransitions.TryFindNextFallback(
+                states,
+                groups,
+                preserveFirstGroup,
+                protectedGroupIndexes,
+                availableWidth,
+                GetGroupWidth,
+                out transition)
+            : Free.Shared.Ribbon.RibbonAdaptiveStateTransitions.TryFindNextFallback(
+                states,
+                preserveFirstGroup,
+                protectedGroupIndexes,
+                out transition);
+
+        if (!foundTransition)
         {
-            for (var targetValue = (int)RibbonAdaptiveGroupState.SmallWithLabels;
-                 targetValue <= (int)RibbonAdaptiveGroupState.Collapsed;
-                 targetValue++)
-            {
-                var targetState = (RibbonAdaptiveGroupState)targetValue;
-                for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
-                {
-                    if (i >= groups.Count ||
-                        (int)states[i] >= targetValue)
-                    {
-                        continue;
-                    }
-
-                    if (protectedGroupIndexes?.Contains(i) == true)
-                        continue;
-
-                    var currentWidth = GetGroupWidth(groups[i], states[i], availableWidth);
-                    var targetWidth = GetGroupWidth(groups[i], targetState, availableWidth);
-                    if (targetWidth >= currentWidth - 0.5)
-                        continue;
-
-                    changedIndex = i;
-                    previousState = states[i];
-                    RecordStateChange(i, states[i], rollbackIndexes, rollbackStates, ref rollbackCount);
-                    states[i] = targetState;
-                    return true;
-                }
-            }
-
+            changedIndex = -1;
+            previousState = default;
             return false;
         }
 
-        for (var stateValue = (int)RibbonAdaptiveGroupState.Full;
-             stateValue <= (int)RibbonAdaptiveGroupState.IconOnly;
-             stateValue++)
-        {
-            var state = (RibbonAdaptiveGroupState)stateValue;
-            for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
-            {
-                if (states[i] != state)
-                    continue;
+        changedIndex = transition.Index;
+        previousState = transition.PreviousState;
+        ApplyStateTransition(states, transition, rollbackIndexes, rollbackStates, ref rollbackCount);
+        return true;
+    }
 
-                if (protectedGroupIndexes?.Contains(i) == true)
-                    continue;
-
-                changedIndex = i;
-                previousState = states[i];
-                RecordStateChange(i, states[i], rollbackIndexes, rollbackStates, ref rollbackCount);
-                states[i] = (RibbonAdaptiveGroupState)(stateValue + 1);
-                return true;
-            }
-        }
-
-        return false;
+    private static void ApplyStateTransition(
+        RibbonAdaptiveGroupState[] states,
+        RibbonAdaptiveStateTransition transition,
+        int[]? rollbackIndexes,
+        RibbonAdaptiveGroupState[]? rollbackStates,
+        ref int rollbackCount)
+    {
+        RecordStateChange(
+            transition.Index,
+            transition.PreviousState,
+            rollbackIndexes,
+            rollbackStates,
+            ref rollbackCount);
+        Free.Shared.Ribbon.RibbonAdaptiveStateTransitions.Apply(states, transition);
     }
 
     private static void RecordStateChange(
