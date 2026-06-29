@@ -107,13 +107,17 @@ public partial class MainWindow
         if (picture is null)
             return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_PictureWasNotFound"));
 
-        var commands = new List<IWorkbookCommand>
-        {
-            DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, DrawingObjectTargetKind.Picture, picture.Id, result.Width, result.Height),
-            DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, DrawingObjectTargetKind.Picture, picture.Id, result.RotationDegrees),
-            new SetPictureLockAspectRatioCommand(sheetId, picture.Id, result.LockAspectRatio),
-            DrawingObjectCommandPlanner.BuildAltTextCommand(sheetId, DrawingObjectTargetKind.Picture, picture.Id, result.AltText)
-        };
+        var target = new DrawingObjectFormatTarget(
+            DrawingObjectTarget.FromPicture(picture),
+            FormatPicturePlanner.Capture(picture));
+        var formatResult = new FormatPicturePlanner.FormatObjectResult(
+            result.Width,
+            result.Height,
+            result.RotationDegrees,
+            result.LockAspectRatio,
+            result.AltText);
+        var commands = new List<IWorkbookCommand>(
+            DrawingObjectFormatCommandPolicy.BuildFormatCommands(sheetId, target, formatResult));
         if (picture.Kind == PictureKind.Image)
         {
             commands.Add(new SetPictureCropCommand(
@@ -549,34 +553,10 @@ public partial class MainWindow
     }
 
     private CellColor? ResolveDrawingObjectFillColor(DrawingObjectTarget target) =>
-        !target.HasFill
-            ? null
-            : target.Kind switch
-            {
-                DrawingObjectTargetKind.Shape =>
-                    target.FillThemeColor?.Resolve(_workbook.Theme) ??
-                    target.FillColor ??
-                    DrawingShapeModel.ResolveDefaultFillColor(_workbook.Theme),
-                DrawingObjectTargetKind.TextBox =>
-                    target.FillThemeColor?.Resolve(_workbook.Theme) ??
-                    target.FillColor ??
-                    CellColor.White,
-                _ => CellColor.White
-            };
+        DrawingObjectFormatCommandPolicy.ResolveFillColor(target, _workbook.Theme);
 
     private CellColor ResolveDrawingObjectOutlineColor(DrawingObjectTarget target) =>
-        target.Kind switch
-        {
-            DrawingObjectTargetKind.Shape =>
-                target.OutlineThemeColor?.Resolve(_workbook.Theme) ??
-                target.OutlineColor ??
-                DrawingShapeModel.ResolveDefaultOutlineColor(_workbook.Theme),
-            DrawingObjectTargetKind.TextBox =>
-                target.OutlineThemeColor?.Resolve(_workbook.Theme) ??
-                target.OutlineColor ??
-                new CellColor(89, 89, 89),
-            _ => CellColor.Black
-        };
+        DrawingObjectFormatCommandPolicy.ResolveOutlineColor(target, _workbook.Theme);
 
     private void SetSelectedDrawingShapeGradient()
     {

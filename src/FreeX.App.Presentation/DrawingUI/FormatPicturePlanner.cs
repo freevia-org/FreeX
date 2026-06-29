@@ -67,6 +67,19 @@ public static class FormatPicturePlanner
             shape.AltText ?? string.Empty);
     }
 
+    /// <summary>Snapshots a text box's editable object-format fields. Text boxes have no lock-aspect-ratio flag.</summary>
+    public static FormatObjectValues Capture(TextBoxModel textBox)
+    {
+        ArgumentNullException.ThrowIfNull(textBox);
+        return new FormatObjectValues(
+            textBox.Width,
+            textBox.Height,
+            textBox.RotationDegrees,
+            LockAspectRatio: false,
+            LockAspectRatioSupported: false,
+            textBox.AltText ?? string.Empty);
+    }
+
     /// <summary>
     /// The aspect ratio (width / height) used to keep the two size boxes in sync while locked; returns a
     /// non-positive value when it cannot be computed (height is zero), which the syncing helpers treat as

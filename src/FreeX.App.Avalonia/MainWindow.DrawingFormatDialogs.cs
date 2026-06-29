@@ -87,22 +87,10 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        FormatPicturePlanner.FormatObjectValues values;
-        bool isPicture;
-        switch (_selectedDrawingObjectKind)
-        {
-            case SelectionPaneObjectKind.Picture when ResolveSelectedPicture() is { } picture:
-                values = FormatPicturePlanner.Capture(picture);
-                isPicture = true;
-                break;
-            case SelectionPaneObjectKind.Shape when ResolveSelectedShape() is { } shape:
-                values = FormatPicturePlanner.Capture(shape);
-                isPicture = false;
-                break;
-            default:
-                RefreshShell(UiText.Get("Drawing_SelectObjectFirst"));
-                return;
-        }
+        if (ResolveSelectedFormatTarget() is not { } target)
+            return;
+
+        var values = target.Values;
 
         var aspectRatio = FormatPicturePlanner.AspectRatio(values.Width, values.Height);
         var suppressSync = false;
@@ -173,7 +161,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = isPicture
+            Title = target.Kind == DrawingObjectTargetKind.Picture
                 ? UiText.Get("FormatPicture_PictureTitle")
                 : UiText.Get("FormatPicture_ShapeTitle"),
             Width = 360,
@@ -241,37 +229,22 @@ public sealed partial class MainWindow
             return;
         }
 
-        ApplyFormatObjectResult(result, isPicture);
+        ApplyFormatObjectResult(result, target);
     }
 
     /// <summary>
     /// Applies the validated Format dialog result as a small batch of existing Core commands: resize, then
-    /// rotation, then (pictures only) lock-aspect-ratio, then alt text. Each runs only when its value actually
-    /// changed so undo history stays tight; the first failure stops and surfaces its message.
+    /// rotation, then (pictures only) lock-aspect-ratio, then alt text. The first failure stops and surfaces
+    /// its message.
     /// </summary>
-    private void ApplyFormatObjectResult(FormatPicturePlanner.FormatObjectResult result, bool isPicture)
+    private void ApplyFormatObjectResult(FormatPicturePlanner.FormatObjectResult result, DrawingObjectFormatTarget target)
     {
-        if (_selectedDrawingObjectId is not { } id)
-        {
-            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
-            return;
-        }
-
         var sheetId = _session.ActiveSheet.Id;
-        var kind = isPicture ? SelectionPaneObjectKind.Picture : SelectionPaneObjectKind.Shape;
-
-        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildResizeCommand(sheetId, kind, id, result.Width, result.Height)))
-            return;
-
-        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildRotateCommand(sheetId, kind, id, result.RotationDegrees)))
-            return;
-
-        if (isPicture &&
-            !RunFormatStep(new SetPictureLockAspectRatioCommand(sheetId, id, result.LockAspectRatio)))
-            return;
-
-        if (!RunFormatStep(DrawingObjectCommandPlanner.BuildAltTextCommand(sheetId, kind, id, result.AltText)))
-            return;
+        foreach (var command in DrawingObjectFormatCommandPolicy.BuildFormatCommands(sheetId, target, result))
+        {
+            if (!RunFormatStep(command))
+                return;
+        }
 
         RefreshShell(UiText.Get("FormatPicture_Applied"));
     }

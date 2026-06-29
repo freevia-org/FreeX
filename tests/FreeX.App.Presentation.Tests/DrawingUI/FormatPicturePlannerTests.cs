@@ -48,6 +48,27 @@ public sealed class FormatPicturePlannerTests
     }
 
     [Fact]
+    public void Capture_TextBox_DoesNotSupportLockAspect()
+    {
+        var textBox = new TextBoxModel
+        {
+            Width = 140,
+            Height = 70,
+            RotationDegrees = 25,
+            AltText = "note"
+        };
+
+        var values = FormatPicturePlanner.Capture(textBox);
+
+        values.Width.Should().Be(140);
+        values.Height.Should().Be(70);
+        values.RotationDegrees.Should().Be(25);
+        values.LockAspectRatioSupported.Should().BeFalse();
+        values.LockAspectRatio.Should().BeFalse();
+        values.AltText.Should().Be("note");
+    }
+
+    [Fact]
     public void SyncHeightFromWidth_PreservesAspectRatio()
     {
         var ratio = FormatPicturePlanner.AspectRatio(200, 100); // 2.0

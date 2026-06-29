@@ -132,6 +132,21 @@ public static class DrawingTargetResolver
             shape => shape.IsVisible,
             requireVisible);
 
+    public static DrawingObjectSelectionResult<TextBoxModel> ResolveSelectedTextBox(
+        Sheet? sheet,
+        SelectionPaneObjectKind? selectedKind,
+        Guid? selectedObjectId,
+        bool requireVisible = true) =>
+        ResolveSelectedObject(
+            sheet,
+            selectedKind,
+            selectedObjectId,
+            SelectionPaneObjectKind.TextBox,
+            s => s.TextBoxes,
+            textBox => textBox.Id,
+            textBox => textBox.IsVisible,
+            requireVisible);
+
     public static DrawingObjectZOrderTarget? GetTargetDrawingZOrderObject(
         Sheet? sheet,
         CellAddress? selectedAnchor,
