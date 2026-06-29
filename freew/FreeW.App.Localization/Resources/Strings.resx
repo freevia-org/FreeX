@@ -145,6 +145,60 @@
   <data name="Ribbon_Command_Strikethrough_Label" xml:space="preserve">
     <value>Strikethrough</value>
   </data>
+  <data name="Ribbon_Command_GrowFont_Label" xml:space="preserve">
+    <value>Grow Font</value>
+  </data>
+  <data name="Ribbon_Command_GrowFontCompact_Label" xml:space="preserve">
+    <value>A&#x2191;</value>
+  </data>
+  <data name="Ribbon_Command_ShrinkFont_Label" xml:space="preserve">
+    <value>Shrink Font</value>
+  </data>
+  <data name="Ribbon_Command_ShrinkFontCompact_Label" xml:space="preserve">
+    <value>A&#x2193;</value>
+  </data>
+  <data name="Ribbon_Command_Subscript_Label" xml:space="preserve">
+    <value>Subscript</value>
+  </data>
+  <data name="Ribbon_Command_SubscriptCompact_Label" xml:space="preserve">
+    <value>X&#x2082;</value>
+  </data>
+  <data name="Ribbon_Command_Superscript_Label" xml:space="preserve">
+    <value>Superscript</value>
+  </data>
+  <data name="Ribbon_Command_SuperscriptCompact_Label" xml:space="preserve">
+    <value>X&#xB2;</value>
+  </data>
+  <data name="Ribbon_Command_ChangeCase_Label" xml:space="preserve">
+    <value>Change Case</value>
+  </data>
+  <data name="Ribbon_Command_ChangeCaseCompact_Label" xml:space="preserve">
+    <value>Aa</value>
+  </data>
+  <data name="Ribbon_Command_SmallCaps_Label" xml:space="preserve">
+    <value>Small Caps</value>
+  </data>
+  <data name="Ribbon_Command_AllCaps_Label" xml:space="preserve">
+    <value>All Caps</value>
+  </data>
+  <data name="Ribbon_Command_TextHighlightColor_Label" xml:space="preserve">
+    <value>Text Highlight Colour</value>
+  </data>
+  <data name="Ribbon_Command_HighlightCompact_Label" xml:space="preserve">
+    <value>Highlight</value>
+  </data>
+  <data name="Ribbon_Command_FontColor_Label" xml:space="preserve">
+    <value>Font Colour</value>
+  </data>
+  <data name="Ribbon_Command_FontColorDropdown_Label" xml:space="preserve">
+    <value>Font Color</value>
+  </data>
+  <data name="Ribbon_Command_ClearAllFormatting_Label" xml:space="preserve">
+    <value>Clear All Formatting</value>
+  </data>
+  <data name="Ribbon_Command_ClearFormattingCompact_Label" xml:space="preserve">
+    <value>Clear</value>
+  </data>
   <data name="Ribbon_Command_FontDialog_Label" xml:space="preserve">
     <value>Font&#x2026;</value>
   </data>

@@ -60,6 +60,16 @@ public static class FreeWRibbon
         var italicCommand = FreeWRibbonText.ItalicCommand;
         var underlineCommand = FreeWRibbonText.UnderlineCommand;
         var strikethroughCommand = FreeWRibbonText.StrikethroughCommand;
+        var growFontCommand = FreeWRibbonText.GrowFontCommand;
+        var shrinkFontCommand = FreeWRibbonText.ShrinkFontCommand;
+        var subscriptCommand = FreeWRibbonText.SubscriptCommand;
+        var superscriptCommand = FreeWRibbonText.SuperscriptCommand;
+        var changeCaseCommand = FreeWRibbonText.ChangeCaseCommand;
+        var smallCapsCommand = FreeWRibbonText.SmallCapsCommand;
+        var allCapsCommand = FreeWRibbonText.AllCapsCommand;
+        var textHighlightColorCommand = FreeWRibbonText.TextHighlightColorCommand;
+        var fontColorCommand = FreeWRibbonText.FontColorCommand;
+        var clearAllFormattingCommand = FreeWRibbonText.ClearAllFormattingCommand;
         var fontDialogCommand = FreeWRibbonText.FontDialogCommand;
 
         var definition = new RibbonDefinitionBuilder()
@@ -92,23 +102,23 @@ public static class FreeWRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font),
                         Width = 56
                     });
-                    g.Icon("freew.grow-font", "Grow Font", RibbonCommandIconKind.ArrowUp);
-                    g.Icon("freew.shrink-font", "Shrink Font", RibbonCommandIconKind.ArrowDown);
+                    g.Icon("freew.grow-font", growFontCommand.Label, RibbonCommandIconKind.ArrowUp);
+                    g.Icon("freew.shrink-font", shrinkFontCommand.Label, RibbonCommandIconKind.ArrowDown);
                     g.RowBreak();
                     g.IconToggle("freew.bold", boldCommand.Label, RibbonCommandIconKind.Bold, boldCommand.KeyTip);
                     g.IconToggle("freew.italic", italicCommand.Label, RibbonCommandIconKind.Italic, italicCommand.KeyTip);
                     g.IconToggle("freew.underline", underlineCommand.Label, RibbonCommandIconKind.Underline, underlineCommand.KeyTip);
                     g.Icon("freew.strikethrough", strikethroughCommand.Label, RibbonCommandIconKind.Strikethrough);
-                    g.Icon("freew.subscript", "Subscript", RibbonCommandIconKind.Subscript);
-                    g.Icon("freew.superscript", "Superscript", RibbonCommandIconKind.Superscript);
-                    g.Icon("freew.change-case", "Change Case", RibbonCommandIconKind.ChangeCase);
-                    g.Icon("freew.smallcaps", "Small Caps", RibbonCommandIconKind.Font);
-                    g.Icon("freew.allcaps", "All Caps", RibbonCommandIconKind.Font);
-                    g.Icon("freew.highlight", "Text Highlight Colour", RibbonCommandIconKind.Highlight);
-                    g.Icon("freew.font-color", "Font Colour", RibbonCommandIconKind.FontColor);
+                    g.Icon("freew.subscript", subscriptCommand.Label, RibbonCommandIconKind.Subscript);
+                    g.Icon("freew.superscript", superscriptCommand.Label, RibbonCommandIconKind.Superscript);
+                    g.Icon("freew.change-case", changeCaseCommand.Label, RibbonCommandIconKind.ChangeCase);
+                    g.Icon("freew.smallcaps", smallCapsCommand.Label, RibbonCommandIconKind.Font);
+                    g.Icon("freew.allcaps", allCapsCommand.Label, RibbonCommandIconKind.Font);
+                    g.Icon("freew.highlight", textHighlightColorCommand.Label, RibbonCommandIconKind.Highlight);
+                    g.Icon("freew.font-color", fontColorCommand.Label, RibbonCommandIconKind.FontColor);
                     g.Icon("freew.char-border", "Character Border", RibbonCommandIconKind.Border);
                     g.Icon("freew.char-shading", "Character Shading", RibbonCommandIconKind.Fill);
-                    g.Icon("freew.clear-formatting", "Clear All Formatting", RibbonCommandIconKind.Clear);
+                    g.Icon("freew.clear-formatting", clearAllFormattingCommand.Label, RibbonCommandIconKind.Clear);
                     // Font dialog-launcher: opens the two-tab Font dialog (Font + Advanced tab with
                     // character spacing, kerning, position, ligatures, stylistic sets, number form/spacing).
                     g.Icon("freew.font-dialog", fontDialogCommand.Label, RibbonCommandIconKind.Font);
