@@ -1,64 +1,82 @@
-using Free.Shared.IO;
+using Free.Shared.AppServices;
 
 namespace FreeX.App.Services;
 
-public enum WorkbookFileDialogSurfaceKind
+public sealed record WorkbookFileDialogSurfacePlan : FileDialogSurfacePlan
 {
-    Open,
-    SaveAs
-}
+    public WorkbookFileDialogSurfacePlan(
+        FileDialogSurfaceKind kind,
+        string title,
+        string primaryCommandText,
+        string fileNameLabel,
+        string fileName,
+        string fileTypeLabel,
+        string defaultExtension,
+        IReadOnlyList<FileDialogSurfaceTypeRow> fileTypes,
+        FileDialogSurfaceAutomationIds automationIds)
+        : base(
+            kind,
+            title,
+            primaryCommandText,
+            fileNameLabel,
+            fileName,
+            fileTypeLabel,
+            defaultExtension,
+            fileTypes,
+            automationIds)
+    {
+    }
 
-public sealed record WorkbookFileDialogTypeRow(string DisplayName, IReadOnlyList<string> Patterns);
-
-public sealed record WorkbookFileDialogSurfacePlan(
-    WorkbookFileDialogSurfaceKind Kind,
-    string Title,
-    string PrimaryCommandText,
-    string FileNameLabel,
-    string FileName,
-    string FileTypeLabel,
-    string DefaultExtension,
-    IReadOnlyList<WorkbookFileDialogTypeRow> FileTypes)
-{
-    public string DialogAutomationId =>
-        Kind == WorkbookFileDialogSurfaceKind.Open
-            ? WorkbookFileDialogSurfacePlanner.OpenDialogAutomationId
-            : WorkbookFileDialogSurfacePlanner.SaveAsDialogAutomationId;
+    internal WorkbookFileDialogSurfacePlan(FileDialogSurfacePlan plan)
+        : this(
+            plan.Kind,
+            plan.Title,
+            plan.PrimaryCommandText,
+            plan.FileNameLabel,
+            plan.FileName,
+            plan.FileTypeLabel,
+            plan.DefaultExtension,
+            plan.FileTypes,
+            plan.AutomationIds)
+    {
+    }
 }
 
 public static class WorkbookFileDialogSurfacePlanner
 {
-    public const double Width = 640;
-    public const double Height = 420;
+    public const double Width = FileDialogSurfacePlanner.Width;
+    public const double Height = FileDialogSurfacePlanner.Height;
     public const string OpenDialogAutomationId = "OpenWorkbookDialog";
     public const string SaveAsDialogAutomationId = "SaveAsWorkbookDialog";
     public const string FileNameBoxAutomationId = "WorkbookFileDialogFileNameBox";
     public const string FileTypeBoxAutomationId = "WorkbookFileDialogFileTypeBox";
 
+    private static readonly FileDialogSurfaceAutomationIds AutomationIds = new(
+        OpenDialogAutomationId,
+        SaveAsDialogAutomationId,
+        FileNameBoxAutomationId,
+        FileTypeBoxAutomationId);
+
+    private static readonly FileDialogSurfaceChrome OpenChrome = new(
+        Title: "Open Workbook",
+        PrimaryCommandText: "Open",
+        FileNameLabel: "File name:",
+        FileTypeLabel: "File type:");
+
+    private static readonly FileDialogSurfaceChrome SaveAsChrome = new(
+        Title: "Save Workbook",
+        PrimaryCommandText: "Save",
+        FileNameLabel: "File name:",
+        FileTypeLabel: "Save as type:");
+
     public static WorkbookFileDialogSurfacePlan CreateOpenPlan(WorkbookOpenPickerPlan pickerPlan) =>
-        new(
-            WorkbookFileDialogSurfaceKind.Open,
-            Title: "Open Workbook",
-            PrimaryCommandText: "Open",
-            FileNameLabel: "File name:",
-            FileName: "",
-            FileTypeLabel: "File type:",
-            DefaultExtension: "",
-            FileTypes: ToRows(pickerPlan.FileTypes));
+        new(FileDialogSurfacePlanner.CreateOpenPlan(OpenChrome, pickerPlan.FileTypes, AutomationIds));
 
     public static WorkbookFileDialogSurfacePlan CreateSaveAsPlan(WorkbookSavePickerPlan pickerPlan) =>
-        new(
-            WorkbookFileDialogSurfaceKind.SaveAs,
-            Title: "Save Workbook",
-            PrimaryCommandText: "Save",
-            FileNameLabel: "File name:",
-            FileName: pickerPlan.SuggestedFileName,
-            FileTypeLabel: "Save as type:",
-            DefaultExtension: pickerPlan.DefaultExtensionWithoutDot,
-            FileTypes: ToRows(pickerPlan.FileTypes));
-
-    private static IReadOnlyList<WorkbookFileDialogTypeRow> ToRows(IReadOnlyList<FileDialogPickerTypeDescriptor> fileTypes) =>
-        fileTypes
-            .Select(type => new WorkbookFileDialogTypeRow(type.DisplayName, type.Patterns))
-            .ToArray();
+        new(FileDialogSurfacePlanner.CreateSaveAsPlan(
+            SaveAsChrome,
+            pickerPlan.FileTypes,
+            pickerPlan.SuggestedFileName,
+            pickerPlan.DefaultExtensionWithoutDot,
+            AutomationIds));
 }
