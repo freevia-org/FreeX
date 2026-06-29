@@ -553,9 +553,9 @@ public partial class MainWindow
         OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.DialogButton);
 
     private void OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource source) =>
-        ShowPageSetupDialog(PageLayoutRibbonPolicyPlanner.ResolvePageSetupInitialFocus(source));
+        ShowPageSetupDialog(PageSetupDialogPlanner.PlanOpen(source));
 
-    private void ShowPageSetupDialog(PageSetupInitialFocusTarget initialFocusTarget)
+    private void ShowPageSetupDialog(PageSetupDialogOpenPlan openPlan)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
@@ -565,7 +565,7 @@ public partial class MainWindow
             sheet,
             SheetGrid.SelectedRange,
             request => ApplyPageSetupRangeSelection(dialog, request),
-            initialFocusTarget) { Owner = this };
+            openPlan.InitialFocusTarget) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -581,13 +581,12 @@ public partial class MainWindow
             return;
         }
 
-        var targetCommandBuilds = CurrentGroupedEditSheetIds()
-            .Select(sheetId => submission.Submission!.TryBuildCompositeCommandForTarget(sheet, sheetId))
-            .ToList();
-        var invalidTargetCommand = targetCommandBuilds.FirstOrDefault(build => !build.Success);
-        if (invalidTargetCommand is not null)
+        var targetCommandBuild = submission.Submission!.TryBuildCompositeCommandForTargets(
+            sheet,
+            CurrentGroupedEditSheetIds());
+        if (!targetCommandBuild.Success)
         {
-            var validation = invalidTargetCommand.Validation!;
+            var validation = targetCommandBuild.Validation!;
             DialogMessageHelper.ShowWarning(
                 this,
                 validation.Message.Resolve(UiText.Get),
@@ -595,22 +594,20 @@ public partial class MainWindow
             return;
         }
 
-        var command = targetCommandBuilds.Count > 1
-            ? new CompositeWorkbookCommand("Page Setup", targetCommandBuilds.Select(build => build.Command!).ToList())
-            : targetCommandBuilds[0].Command!;
-        if (!TryExecuteCommand(command, "Page Setup"))
+        if (!TryExecuteCommand(targetCommandBuild.Command!, PageSetupSubmissionPlanner.DefaultCommandLabel))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
-        if (submission.Submission!.RequestedAction == PageSetupDialogAction.Options)
+        switch (submission.Submission.FollowUpAction)
         {
-            ShowPageSetupPrinterOptions();
-            return;
+            case PageSetupDialogFollowUpAction.ShowPrinterOptions:
+                ShowPageSetupPrinterOptions();
+                break;
+            case PageSetupDialogFollowUpAction.Print:
+                PrintButton_Click(this, new RoutedEventArgs());
+                break;
         }
-
-        if (submission.Submission.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
-            PrintButton_Click(this, new RoutedEventArgs());
     }
 
     private void ApplyPageSetupRangeSelection(PageSetupDialog? dialog, PageSetupRangeSelectionRequest request)

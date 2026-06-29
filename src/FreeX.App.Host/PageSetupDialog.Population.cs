@@ -103,21 +103,29 @@ public partial class PageSetupDialog
 
     private void FocusInitialKeyboardTarget()
     {
-        if (_initialFocusTarget == PageSetupInitialFocusTarget.RepeatRows)
+        var openPlan = PageSetupDialogPlanner.PlanOpen(_initialFocusTarget);
+        switch (openPlan.InitialFocusTarget)
         {
-            PageSetupTabs.SelectedItem = SheetTab;
-            DialogFocus.FocusAndSelect(RowsRepeatBox);
-            return;
-        }
-
-        if (_initialFocusTarget == PageSetupInitialFocusTarget.ScaleToFit)
-        {
-            PageSetupTabs.SelectedItem = PageTab;
-            var target = AdjustToRadioButton.IsChecked == true
-                ? ScalePercentBox
-                : FitPagesWideBox;
-            DialogFocus.FocusAndSelect(target);
-            return;
+            case PageSetupInitialFocusTarget.Margins:
+                PageSetupTabs.SelectedItem = MarginsTab;
+                DialogFocus.FocusAndSelect(LeftMarginBox);
+                return;
+            case PageSetupInitialFocusTarget.PaperSize:
+                PageSetupTabs.SelectedItem = PageTab;
+                PaperSizeBox.Focus();
+                Keyboard.Focus(PaperSizeBox);
+                return;
+            case PageSetupInitialFocusTarget.RepeatRows:
+                PageSetupTabs.SelectedItem = SheetTab;
+                DialogFocus.FocusAndSelect(RowsRepeatBox);
+                return;
+            case PageSetupInitialFocusTarget.ScaleToFit:
+                PageSetupTabs.SelectedItem = PageTab;
+                var target = AdjustToRadioButton.IsChecked == true
+                    ? ScalePercentBox
+                    : FitPagesWideBox;
+                DialogFocus.FocusAndSelect(target);
+                return;
         }
 
         OrientationBox.Focus();

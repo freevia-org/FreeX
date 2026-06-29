@@ -15,6 +15,10 @@ public sealed record PageSetupChoicePlan<T>(IReadOnlyList<PageSetupChoice<T>> Ch
         PageSetupDialogModel.ChoiceValue(Choices, selectedIndex, FallbackValue);
 }
 
+public sealed record PageSetupDialogOpenPlan(
+    PageSetupInitialFocusTarget InitialFocusTarget,
+    PageSetupValidationRoute InitialRoute);
+
 public static class PageSetupDialogPlanner
 {
     public const string TitleResourceKey = "PageSetup_Title";
@@ -58,6 +62,36 @@ public static class PageSetupDialogPlanner
 
     public static PageSetupChoicePlan<WorksheetPrintComments> PrintCommentChoices { get; } =
         new(PageSetupDialogModel.PrintCommentChoices, WorksheetPrintComments.None);
+
+    public static PageSetupDialogOpenPlan PlanOpen(PageLayoutPageSetupOpenSource source) =>
+        PlanOpen(ResolveInitialFocusTarget(source));
+
+    public static PageSetupDialogOpenPlan PlanOpen(PageSetupInitialFocusTarget initialFocusTarget) =>
+        new(initialFocusTarget, ResolveInitialFocusRoute(initialFocusTarget));
+
+    public static PageSetupInitialFocusTarget ResolveInitialFocusTarget(PageLayoutPageSetupOpenSource source) =>
+        source switch
+        {
+            PageLayoutPageSetupOpenSource.CustomMargins => PageSetupInitialFocusTarget.Margins,
+            PageLayoutPageSetupOpenSource.ExtendedPaperSize => PageSetupInitialFocusTarget.PaperSize,
+            PageLayoutPageSetupOpenSource.ScaleToFit => PageSetupInitialFocusTarget.ScaleToFit,
+            PageLayoutPageSetupOpenSource.PrintTitles => PageSetupInitialFocusTarget.RepeatRows,
+            _ => PageSetupInitialFocusTarget.PageOrientation
+        };
+
+    public static PageSetupValidationRoute ResolveInitialFocusRoute(PageSetupInitialFocusTarget initialFocusTarget) =>
+        initialFocusTarget switch
+        {
+            PageSetupInitialFocusTarget.Margins =>
+                new(PageSetupDialogTab.Margins, PageSetupDialogField.Margins),
+            PageSetupInitialFocusTarget.PaperSize =>
+                new(PageSetupDialogTab.Page, PageSetupDialogField.PaperSize),
+            PageSetupInitialFocusTarget.ScaleToFit =>
+                new(PageSetupDialogTab.Page, PageSetupDialogField.Scaling),
+            PageSetupInitialFocusTarget.RepeatRows =>
+                new(PageSetupDialogTab.Sheet, PageSetupDialogField.RepeatRows),
+            _ => new(PageSetupDialogTab.Page, PageSetupDialogField.Orientation)
+        };
 
     public static IReadOnlyList<string> ResolveChoiceLabels<T>(
         PageSetupChoicePlan<T> plan,

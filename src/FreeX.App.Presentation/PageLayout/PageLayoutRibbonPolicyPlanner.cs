@@ -66,12 +66,7 @@ public static class PageLayoutRibbonPolicyPlanner
         };
 
     public static PageSetupInitialFocusTarget ResolvePageSetupInitialFocus(PageLayoutPageSetupOpenSource source) =>
-        source switch
-        {
-            PageLayoutPageSetupOpenSource.PrintTitles => PageSetupInitialFocusTarget.RepeatRows,
-            PageLayoutPageSetupOpenSource.ScaleToFit => PageSetupInitialFocusTarget.ScaleToFit,
-            _ => PageSetupInitialFocusTarget.PageOrientation
-        };
+        PageSetupDialogPlanner.ResolveInitialFocusTarget(source);
 
     public static PageLayoutScaleCommitPlan PlanScaleWidthCommit(
         WorksheetScaleToFit current,

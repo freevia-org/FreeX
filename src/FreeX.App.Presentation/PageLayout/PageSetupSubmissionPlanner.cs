@@ -11,6 +11,13 @@ public enum PageSetupDialogAction
     Options
 }
 
+public enum PageSetupDialogFollowUpAction
+{
+    None,
+    Print,
+    ShowPrinterOptions
+}
+
 public sealed record PageSetupValidationMessage(string? ResourceKey, string? FallbackText)
 {
     public string Resolve(Func<string, string> textProvider, string fallbackResourceKey = PageSetupSubmissionPlanner.DefaultCaptionResourceKey)
@@ -41,6 +48,15 @@ public sealed record PageSetupSubmissionPlan(
         SheetId targetSheetId,
         string label = PageSetupSubmissionPlanner.DefaultCommandLabel) =>
         PageSetupSubmissionPlanner.TryBuildCompositeCommandForTarget(sourceSheet, Fields, targetSheetId, label);
+
+    public PageSetupTargetCommandBuildResult TryBuildCompositeCommandForTargets(
+        Sheet sourceSheet,
+        IEnumerable<SheetId> targetSheetIds,
+        string label = PageSetupSubmissionPlanner.DefaultCommandLabel) =>
+        PageSetupSubmissionPlanner.TryBuildCompositeCommandForTargets(sourceSheet, Fields, targetSheetIds, label);
+
+    public PageSetupDialogFollowUpAction FollowUpAction =>
+        PageSetupSubmissionPlanner.ResolveFollowUp(RequestedAction);
 }
 
 public sealed record PageSetupSubmissionBuildResult(
@@ -96,6 +112,40 @@ public static class PageSetupSubmissionPlanner
             ? PageSetupTargetCommandBuildResult.Ok(build.Plan!.ToComposite(label))
             : PageSetupTargetCommandBuildResult.Fail(BuildValidation(build.Target, build.Error));
     }
+
+    public static PageSetupTargetCommandBuildResult TryBuildCompositeCommandForTargets(
+        Sheet sourceSheet,
+        PageSetupDialogFields fields,
+        IEnumerable<SheetId> targetSheetIds,
+        string label = DefaultCommandLabel)
+    {
+        ArgumentNullException.ThrowIfNull(targetSheetIds);
+
+        var commands = new List<IWorkbookCommand>();
+        foreach (var targetSheetId in targetSheetIds)
+        {
+            var build = TryBuildCompositeCommandForTarget(sourceSheet, fields, targetSheetId, label);
+            if (!build.Success)
+                return build;
+
+            commands.Add(build.Command!);
+        }
+
+        return commands.Count switch
+        {
+            0 => PageSetupTargetCommandBuildResult.Fail(BuildValidation(null, "No target sheets are selected.")),
+            1 => PageSetupTargetCommandBuildResult.Ok(commands[0]),
+            _ => PageSetupTargetCommandBuildResult.Ok(new CompositeWorkbookCommand(label, commands)),
+        };
+    }
+
+    public static PageSetupDialogFollowUpAction ResolveFollowUp(PageSetupDialogAction action) =>
+        action switch
+        {
+            PageSetupDialogAction.Options => PageSetupDialogFollowUpAction.ShowPrinterOptions,
+            PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview => PageSetupDialogFollowUpAction.Print,
+            _ => PageSetupDialogFollowUpAction.None
+        };
 
     public static PageSetupSubmissionValidation BuildValidation(PageSetupValidationTarget? target, string? fallbackText) =>
         new(
