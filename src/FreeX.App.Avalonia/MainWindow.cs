@@ -891,9 +891,7 @@ public sealed partial class MainWindow : Window
                     // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
                     // no remembered source there is nothing to refresh (no external DB/web connection engine).
                     ["data.refresh"] = RefreshImportedData,
-                    // Page Layout sheet options (view + print) and Review ▸ Show Notes.
-                    ["pageLayout.gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
-                    ["pageLayout.headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
+                    // Review ▸ Show Notes.
                     ["review.showNotes"] = () => _ = ShowNotesListAsync(),
                     // Insert ▸ PivotChart (charts the active pivot's result range).
                     ["insert.pivotChart"] = InsertPivotChart,
@@ -1043,10 +1041,6 @@ public sealed partial class MainWindow : Window
                     ["data.whatIf"] = () => _ = ShowGoalSeekDialogAsync(),
                     ["data.forecastSheet"] = () => _ = ShowForecastSheetDialogAsync(),
                     ["data.subtotal"] = () => _ = ShowSubtotalDialogAsync(),
-                    // Page Layout tab (Page Setup dialog covers margins/orientation/size).
-                    ["pageLayout.margins"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.orientation"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.size"] = () => _ = ShowPageSetupDialogAsync(),
                     // --- Parity pass: wire remaining no-op ribbon buttons to existing handlers ---
                     // Formula Library category buttons open the function picker (like the others).
                     ["formulas.financial"] = InsertFunction,
@@ -1063,14 +1057,6 @@ public sealed partial class MainWindow : Window
                     ["home.fontColor"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
                     ["home.fillColor"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
                     ["home.numberFormat"] = () => _ = ShowFormatCellsDialogAsync(),
-                    // Page Layout buttons covered by the Page Setup dialog.
-                    ["pageLayout.printArea"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.printTitles"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.breaks"] = ShowPageBreaksMenu,
-                    ["pageLayout.background"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.scale"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.width"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["pageLayout.height"] = () => _ = ShowPageSetupDialogAsync(),
                     // Review: New Note / New Comment on the active cell.
                     ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
                     ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
@@ -1202,37 +1188,6 @@ public sealed partial class MainWindow : Window
                     ["Custom Sort"] = () => _ = ShowSortDialogAsync(),
                     ["Filter"] = ToggleAutoFilter,
 
-                    // Page Layout ▸ Page Setup ▸ Background.
-                    ["Choose Background"] = ChooseSheetBackground,
-                    ["Delete Background"] = DeleteSheetBackground,
-
-                    // Page Layout ▸ Page Setup ▸ Margins presets.
-                    ["Normal"] = () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal"),
-                    ["Wide"] = () => ApplyPageMargins(WorksheetPageMargins.Wide, "RibbonWire_MarginsWide"),
-                    ["Narrow"] = () => ApplyPageMargins(WorksheetPageMargins.Narrow, "RibbonWire_MarginsNarrow"),
-                    ["Custom Margins"] = () => _ = ShowPageSetupDialogAsync(),
-
-                    // Page Layout ▸ Page Setup ▸ Orientation presets.
-                    ["Portrait"] = () => ApplyPageOrientation(WorksheetPageOrientation.Portrait, "RibbonWire_OrientationPortrait"),
-                    ["Landscape"] = () => ApplyPageOrientation(WorksheetPageOrientation.Landscape, "RibbonWire_OrientationLandscape"),
-
-                    // Page Layout ▸ Page Setup ▸ Paper Size presets. The Core enum models only
-                    // Letter / Legal / A4; other sizes open Page Setup (same partial behaviour as WPF).
-                    ["Letter"] = () => ApplyPaperSize(WorksheetPaperSize.Letter, "RibbonWire_PaperLetter"),
-                    ["Legal"] = () => ApplyPaperSize(WorksheetPaperSize.Legal, "RibbonWire_PaperLegal"),
-                    ["A4"] = () => ApplyPaperSize(WorksheetPaperSize.A4, "RibbonWire_PaperA4"),
-                    ["A3"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["A5"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["Executive"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["Statement"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["Tabloid"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["B4"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["B5"] = () => _ = ShowPageSetupDialogAsync(),
-
-                    // Page Layout ▸ Page Setup ▸ Print Area.
-                    ["Set Print Area"] = SetPrintAreaFromSelection,
-                    ["Clear Print Area"] = ClearPrintArea,
-
                     // Formulas ▸ Formula Auditing ▸ Watch Window / Remove Arrows submenu.
                     ["Watch Window"] = () => _ = ShowWatchWindowDialogAsync(),
                     ["Remove Precedent Arrows"] = () => RemoveFormulaTraceArrowsOfKind(FormulaTraceArrowKind.Precedent),
@@ -1345,17 +1300,6 @@ public sealed partial class MainWindow : Window
                     ["Next Note"] = () => NavigateReviewNote(previous: false),
                     ["Previous Note"] = () => NavigateReviewNote(previous: true),
 
-                    // Page Layout ▸ Page Setup / Scale / Sheet Options canonical ids.
-                    ["Page Setup"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["Page Setup dialog"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["Scale to Fit"] = () => _ = ShowPageSetupDialogAsync(),
-                    ["Print Gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
-                    ["Print Headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
-                    ["Insert Page Break"] = () => ApplyPageBreakAction(PageBreakMenuAction.Insert),
-                    ["Remove Page Break"] = () => ApplyPageBreakAction(PageBreakMenuAction.Remove),
-                    ["Reset All Page Breaks"] = () => ApplyPageBreakAction(PageBreakMenuAction.ResetAll),
-                    ["Normal#MarginNormalMenuItem_Click"] = () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal"),
-
                     // Menu-item variants: AutoSum "More Functions", Remove-all-arrows, Data Clear-filter.
                     ["More Functions#AutoSumMoreMenuItem_Click"] = InsertFunction,
                     ["Remove Arrows#RemoveAllArrowsMenuItem_Click"] = RemoveFormulaTraceArrows,
@@ -1377,6 +1321,7 @@ public sealed partial class MainWindow : Window
         // Merge in the Help-tab + contextual-tab (Chart/Picture/Shape/Table/Pivot) command handlers.
         var ribbonExtraCommands = new Dictionary<string, Action>(
             ribbonCallbacks.ExtraCommands!, StringComparer.Ordinal);
+        RegisterPageLayoutRibbonActions(ribbonExtraCommands);
         foreach (var (id, action) in BuildContextualTabCommands())
             ribbonExtraCommands[id] = action;
         // Home ▸ Styles ▸ Cell Styles gallery items: each built-in preset's display name is its canonical
@@ -2108,19 +2053,19 @@ public sealed partial class MainWindow : Window
         _themeEffectsMenuItem.Click += async (_, _) => await ShowThemeEffectsGalleryAsync();
 
         _pageMarginsMenuItem.Menu = CreateNativeMarginsMenu();
-        _pageMarginsNormalMenuItem.Click += (_, _) => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal");
-        _pageMarginsWideMenuItem.Click += (_, _) => ApplyPageMargins(WorksheetPageMargins.Wide, "RibbonWire_MarginsWide");
-        _pageMarginsNarrowMenuItem.Click += (_, _) => ApplyPageMargins(WorksheetPageMargins.Narrow, "RibbonWire_MarginsNarrow");
+        _pageMarginsNormalMenuItem.Click += (_, _) => ApplyPageMarginsPreset(PageLayoutMarginPreset.Normal);
+        _pageMarginsWideMenuItem.Click += (_, _) => ApplyPageMarginsPreset(PageLayoutMarginPreset.Wide);
+        _pageMarginsNarrowMenuItem.Click += (_, _) => ApplyPageMarginsPreset(PageLayoutMarginPreset.Narrow);
         _pageMarginsCustomMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
 
         _pageOrientationMenuItem.Menu = CreateNativePageOrientationMenu();
-        _pageOrientationPortraitMenuItem.Click += (_, _) => ApplyPageOrientation(WorksheetPageOrientation.Portrait, "RibbonWire_OrientationPortrait");
-        _pageOrientationLandscapeMenuItem.Click += (_, _) => ApplyPageOrientation(WorksheetPageOrientation.Landscape, "RibbonWire_OrientationLandscape");
+        _pageOrientationPortraitMenuItem.Click += (_, _) => ApplyPageOrientationPreset(PageLayoutOrientationPreset.Portrait);
+        _pageOrientationLandscapeMenuItem.Click += (_, _) => ApplyPageOrientationPreset(PageLayoutOrientationPreset.Landscape);
 
         _paperSizeMenuItem.Menu = CreateNativePaperSizeMenu();
-        _paperSizeLetterMenuItem.Click += (_, _) => ApplyPaperSize(WorksheetPaperSize.Letter, "RibbonWire_PaperLetter");
-        _paperSizeLegalMenuItem.Click += (_, _) => ApplyPaperSize(WorksheetPaperSize.Legal, "RibbonWire_PaperLegal");
-        _paperSizeA4MenuItem.Click += (_, _) => ApplyPaperSize(WorksheetPaperSize.A4, "RibbonWire_PaperA4");
+        _paperSizeLetterMenuItem.Click += (_, _) => ApplyPaperSizePreset(PageLayoutPaperSizePreset.Letter);
+        _paperSizeLegalMenuItem.Click += (_, _) => ApplyPaperSizePreset(PageLayoutPaperSizePreset.Legal);
+        _paperSizeA4MenuItem.Click += (_, _) => ApplyPaperSizePreset(PageLayoutPaperSizePreset.A4);
         _paperSizeMoreMenuItem.Click += async (_, _) => await ShowPageSetupDialogAsync();
 
         _printAreaMenuItem.Menu = CreateNativePrintAreaMenu();

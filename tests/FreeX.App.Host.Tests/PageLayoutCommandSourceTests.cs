@@ -16,6 +16,7 @@ public sealed class PageLayoutCommandSourceTests
             "MainWindow.Startup.cs",
             "MainWindow.Viewport.cs");
         var policySource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutRibbonPolicyPlanner.cs");
+        var actionSource = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PageLayoutRibbonActionPlanner.cs");
 
         source.Should().Contain("WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme()");
         source.Should().Contain("WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme()");
@@ -34,9 +35,14 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("ApplyPageMarginsPreset(PageLayoutMarginPreset.Normal)");
         source.Should().Contain("ApplyPageOrientationPreset(PageLayoutOrientationPreset.Portrait)");
         source.Should().Contain("ApplyPagePaperSizePreset(PageLayoutPaperSizePreset.Letter)");
-        source.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolveMargins(preset)");
-        source.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolveOrientation(preset)");
-        source.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolvePaperSize(preset)");
+        source.Should().Contain("PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset)");
+        source.Should().Contain("PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset)");
+        source.Should().Contain("PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset)");
+        source.Should().Contain("PageLayoutRibbonActionPlanner.ScaleToFitCommandLabel");
+        actionSource.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolveMargins(preset)");
+        actionSource.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolveOrientation(preset)");
+        actionSource.Should().Contain("PageLayoutRibbonPolicyPlanner.ResolvePaperSize(preset)");
+        actionSource.Should().Contain("PageMarginsCommandLabel");
         policySource.Should().Contain("PageLayoutMarginPreset.Wide => WorksheetPageMargins.Wide");
         policySource.Should().Contain("PageLayoutOrientationPreset.Landscape");
         policySource.Should().Contain("PageLayoutPaperSizePreset.Letter => WorksheetPaperSize.Letter");

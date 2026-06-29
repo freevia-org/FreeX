@@ -5,6 +5,7 @@ public enum PageSetupInitialFocusTarget
     PageOrientation,
     PaperSize,
     Margins,
+    PrintArea,
     RepeatRows,
     ScaleToFit
 }

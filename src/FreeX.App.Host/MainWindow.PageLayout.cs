@@ -214,10 +214,10 @@ public partial class MainWindow
 
     private void ApplyPageMarginsPreset(PageLayoutMarginPreset preset)
     {
-        var margins = PageLayoutRibbonPolicyPlanner.ResolveMargins(preset);
+        var plan = PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset);
         TryExecuteGroupedSheetCommand(
-            "Page Margins",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, margins));
+            plan.CommandLabel,
+            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, plan.Value));
     }
 
     private void MarginCustomMenuItem_Click(object sender, RoutedEventArgs e)
@@ -242,10 +242,10 @@ public partial class MainWindow
 
     private void ApplyPageOrientationPreset(PageLayoutOrientationPreset preset)
     {
-        var orientation = PageLayoutRibbonPolicyPlanner.ResolveOrientation(preset);
+        var plan = PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset);
         TryExecuteGroupedSheetCommand(
-            "Orientation",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, orientation));
+            plan.CommandLabel,
+            sheetId => PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, plan.Value));
     }
 
     private void PageSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -270,10 +270,10 @@ public partial class MainWindow
 
     private void ApplyPagePaperSizePreset(PageLayoutPaperSizePreset preset)
     {
-        var paperSize = PageLayoutRibbonPolicyPlanner.ResolvePaperSize(preset);
+        var plan = PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset);
         TryExecuteGroupedSheetCommand(
-            "Paper Size",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, paperSize));
+            plan.CommandLabel,
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, plan.Value));
     }
 
     private void SizeExecutive_Click(object sender, RoutedEventArgs e) => OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ExtendedPaperSize);
@@ -436,7 +436,7 @@ public partial class MainWindow
     private void ApplyPageLayoutScaleToFit(WorksheetScaleToFit scaleToFit)
     {
         if (!TryExecuteGroupedSheetCommand(
-                "Scale To Fit",
+                PageLayoutRibbonActionPlanner.ScaleToFitCommandLabel,
                 sheetId => PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, scaleToFit)))
             return;
 

@@ -706,6 +706,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageBreakActions.cs"));
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var wireSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs"));
 
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Insert)");
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
@@ -716,9 +717,33 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().NotContain("new SetPageBreaksCommand(");
         source.Should().NotContain("PageBreakActionPlanner.Insert(");
         source.Should().NotContain("PageBreakActionPlanner.Remove(");
-        mainSource.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Insert)");
-        mainSource.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
-        mainSource.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.ResetAll)");
+        mainSource.Should().Contain("RegisterPageLayoutRibbonActions(ribbonExtraCommands)");
+        mainSource.Should().NotContain("[\"Insert Page Break\"] = () => ApplyPageBreakAction(");
+        mainSource.Should().NotContain("[\"Remove Page Break\"] = () => ApplyPageBreakAction(");
+        mainSource.Should().NotContain("[\"Reset All Page Breaks\"] = () => ApplyPageBreakAction(");
+        wireSource.Should().Contain("ApplyPageBreakAction(descriptor.PageBreakAction!.Value)");
+    }
+
+    [Fact]
+    public void PageLayoutRibbonActions_RegisterSharedPresentationDescriptors()
+    {
+        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var wireSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs"));
+
+        mainSource.Should().Contain("RegisterPageLayoutRibbonActions(ribbonExtraCommands)");
+        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.RibbonActionDescriptors");
+        wireSource.Should().Contain("ShowPageSetupDialogAsync(descriptor.PageSetupOpenSource)");
+        wireSource.Should().Contain("ApplyPageMarginsPreset(descriptor.MarginPreset!.Value)");
+        wireSource.Should().Contain("ApplyPageOrientationPreset(descriptor.OrientationPreset!.Value)");
+        wireSource.Should().Contain("ApplyPaperSizePreset(descriptor.PaperSizePreset!.Value)");
+        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset)");
+        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset)");
+        wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset)");
+
+        mainSource.Should().NotContain("[\"pageLayout.printArea\"] = () => _ = ShowPageSetupDialogAsync()");
+        mainSource.Should().NotContain("[\"Normal\"] = () => ApplyPageMargins(");
+        mainSource.Should().NotContain("[\"Portrait\"] = () => ApplyPageOrientation(");
+        mainSource.Should().NotContain("[\"Letter\"] = () => ApplyPaperSize(");
     }
 
     [Fact]

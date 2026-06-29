@@ -28,6 +28,7 @@ public enum PageLayoutPageSetupOpenSource
     CustomMargins,
     ExtendedPaperSize,
     ScaleToFit,
+    PrintArea,
     PrintTitles
 }
 

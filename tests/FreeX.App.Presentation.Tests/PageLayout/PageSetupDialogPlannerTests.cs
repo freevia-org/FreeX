@@ -45,6 +45,7 @@ public sealed class PageSetupDialogPlannerTests
     [InlineData(PageLayoutPageSetupOpenSource.CustomMargins, PageSetupInitialFocusTarget.Margins, PageSetupDialogTab.Margins, PageSetupDialogField.Margins)]
     [InlineData(PageLayoutPageSetupOpenSource.ExtendedPaperSize, PageSetupInitialFocusTarget.PaperSize, PageSetupDialogTab.Page, PageSetupDialogField.PaperSize)]
     [InlineData(PageLayoutPageSetupOpenSource.ScaleToFit, PageSetupInitialFocusTarget.ScaleToFit, PageSetupDialogTab.Page, PageSetupDialogField.Scaling)]
+    [InlineData(PageLayoutPageSetupOpenSource.PrintArea, PageSetupInitialFocusTarget.PrintArea, PageSetupDialogTab.Sheet, PageSetupDialogField.PrintArea)]
     [InlineData(PageLayoutPageSetupOpenSource.PrintTitles, PageSetupInitialFocusTarget.RepeatRows, PageSetupDialogTab.Sheet, PageSetupDialogField.RepeatRows)]
     public void PlanOpen_MapsRibbonSourcesToSharedInitialFocusRoutes(
         PageLayoutPageSetupOpenSource source,
