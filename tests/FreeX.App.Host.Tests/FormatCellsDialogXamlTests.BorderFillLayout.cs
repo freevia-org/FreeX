@@ -135,7 +135,7 @@ public sealed partial class FormatCellsDialogXamlTests
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
 
-        source.Should().Contain("FillPatternOptions");
+        source.Should().Contain("FillPatternChoices");
         source.Should().Contain("FillPatternStyle:");
     }
 
