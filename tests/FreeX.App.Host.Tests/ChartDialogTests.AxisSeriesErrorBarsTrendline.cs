@@ -47,7 +47,14 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartTrendlinePlanner.Plan(ToInput())");
         source.Should().Contain("ChartTrendlinePlanner.Read(chart)");
         source.Should().Contain("ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(");
+        source.Should().Contain("ChartTrendlinePlanner.GetTypeChoices()");
+        source.Should().Contain("ChartTrendlinePlanner.GetDashStyleChoices()");
+        source.Should().Contain("ChartTrendlinePlanner.TryParseDialogInput(");
         source.Should().NotContain("ShowLinearTrendline: ShowTrendline");
+        source.Should().NotContain("TryReadIntInRange(");
+        source.Should().NotContain("TryReadOptionalColor(");
+        source.Should().NotContain("TryReadClampedDouble(");
+        source.Should().NotContain("int.TryParse(");
     }
 
     [Fact]
@@ -66,12 +73,13 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
 
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartTrendline_InvalidPeriodMessage\"), _periodBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartTrendline_InvalidOrderMessage\"), _orderBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _colorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartTrendline_InvalidWidthMessage\"), _thicknessBox);");
+        source.Should().Contain("ChartTrendlineDialogParseIssue.Order => (UiText.Get(\"ChartTrendline_InvalidOrderMessage\"), _orderBox)");
+        source.Should().Contain("ChartTrendlineDialogParseIssue.Color => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _colorBox)");
+        source.Should().Contain("ChartTrendlineDialogParseIssue.Thickness => (UiText.Get(\"ChartTrendline_InvalidWidthMessage\"), _thicknessBox)");
+        source.Should().Contain("_ => (UiText.Get(\"ChartTrendline_InvalidPeriodMessage\"), _periodBox)");
+        source.Should().Contain("private void ShowPlannerParseWarning(ChartTrendlineDialogParseIssue issue)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("private void ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
     }

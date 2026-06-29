@@ -1,5 +1,8 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation;
+using FreeX.App.Presentation.Charts;
+using System.Globalization;
 
 namespace FreeX.App.Presentation.Charts.Editing;
 
@@ -22,6 +25,15 @@ public readonly record struct ChartTrendlineInput(
     double? Thickness = null,
     ChartLineDashStyle? DashStyle = null);
 
+public enum ChartTrendlineDialogParseIssue
+{
+    None,
+    Period,
+    Order,
+    Color,
+    Thickness,
+}
+
 /// <summary>
 /// Portable (no UI) planner for the "Trendline" editing dialog (linear / exponential / logarithmic / power /
 /// moving-average / polynomial, plus the equation and R-squared readouts and optional line style). Single-
@@ -41,6 +53,9 @@ public static class ChartTrendlinePlanner
     public const int MinOrder = 2;
     public const int MaxOrder = 6;
 
+    public const double MinLineThickness = 0.5;
+    public const double MaxLineThickness = 10;
+
     private static readonly ChartTrendlineTypeChoice[] TypeCatalog =
     [
         new(ChartTrendlineType.Linear, "Linear"),
@@ -51,8 +66,12 @@ public static class ChartTrendlinePlanner
         new(ChartTrendlineType.Polynomial, "Polynomial"),
     ];
 
+    private static readonly ChartLineDashStyle[] DashStyleCatalog = Enum.GetValues<ChartLineDashStyle>();
+
     /// <summary>The selectable trendline types, in display order.</summary>
     public static IReadOnlyList<ChartTrendlineTypeChoice> GetTypeChoices() => TypeCatalog;
+
+    public static IReadOnlyList<ChartLineDashStyle> GetDashStyleChoices() => DashStyleCatalog;
 
     /// <summary>The English display label for <paramref name="type"/> (falls back to the enum name).</summary>
     public static string DisplayName(ChartTrendlineType type)
@@ -95,6 +114,65 @@ public static class ChartTrendlinePlanner
             Order = Math.Clamp(input.Order, MinOrder, MaxOrder),
         };
 
+    public static bool TryParseDialogInput(
+        bool showTrendline,
+        ChartTrendlineType? selectedType,
+        string? periodText,
+        string? orderText,
+        bool showEquation,
+        bool showRSquared,
+        string? colorText,
+        string? thicknessText,
+        ChartLineDashStyle? selectedDashStyle,
+        out ChartTrendlineInput input,
+        out ChartTrendlineDialogParseIssue issue)
+    {
+        input = default;
+
+        if (!TryParseIntInRange(periodText, MinPeriod, MaxPeriod, out var period))
+        {
+            issue = ChartTrendlineDialogParseIssue.Period;
+            return false;
+        }
+
+        if (!TryParseIntInRange(orderText, MinOrder, MaxOrder, out var order))
+        {
+            issue = ChartTrendlineDialogParseIssue.Order;
+            return false;
+        }
+
+        if (!ColorInputParser.TryParseOptionalHexColor(colorText ?? string.Empty, out var color))
+        {
+            issue = ChartTrendlineDialogParseIssue.Color;
+            return false;
+        }
+
+        if (!ChartDialogValueParser.TryParseClampedDouble(
+                thicknessText ?? string.Empty,
+                MinLineThickness,
+                MaxLineThickness,
+                out var thickness))
+        {
+            issue = ChartTrendlineDialogParseIssue.Thickness;
+            return false;
+        }
+
+        input = Normalize(new ChartTrendlineInput(
+            showTrendline,
+            selectedType is { } type && IsKnownType(type) ? type : ChartTrendlineType.Linear,
+            period,
+            order,
+            showEquation,
+            showRSquared,
+            color,
+            thickness,
+            selectedDashStyle is { } dashStyle && Enum.IsDefined(dashStyle)
+                ? dashStyle
+                : ChartLineDashStyle.Solid));
+        issue = ChartTrendlineDialogParseIssue.None;
+        return true;
+    }
+
     /// <summary>
     /// Builds the <see cref="ChartLayoutOptions"/> delta for the edited trendline state. An invalid/unknown
     /// type falls back to Linear; the period and order are clamped into Excel's ranges. The type, period,
@@ -125,5 +203,14 @@ public static class ChartTrendlinePlanner
         }
 
         return false;
+    }
+
+    private static bool TryParseIntInRange(string? text, int min, int max, out int value)
+    {
+        var trimmed = (text ?? string.Empty).Trim();
+        return (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.CurrentCulture, out value) ||
+                int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+            && value >= min
+            && value <= max;
     }
 }
