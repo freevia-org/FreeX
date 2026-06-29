@@ -112,6 +112,21 @@
   <data name="Ribbon_Command_Copy_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_FormatPainter_Label" xml:space="preserve">
+    <value>Format Painter</value>
+  </data>
+  <data name="Ribbon_Command_FormatPainter_KeyTip" xml:space="preserve">
+    <value>FP</value>
+  </data>
+  <data name="Ribbon_Command_PasteTextOnly_Label" xml:space="preserve">
+    <value>Paste Text Only</value>
+  </data>
+  <data name="Ribbon_Command_PasteMergeFormatting_Label" xml:space="preserve">
+    <value>Merge Formatting</value>
+  </data>
+  <data name="Ribbon_Command_PasteSpecial_Label" xml:space="preserve">
+    <value>Paste Special&#x2026;</value>
+  </data>
   <data name="Ribbon_Group_Font_Label" xml:space="preserve">
     <value>Font</value>
   </data>
@@ -192,6 +207,12 @@
   </data>
   <data name="Ribbon_Command_FontColorDropdown_Label" xml:space="preserve">
     <value>Font Color</value>
+  </data>
+  <data name="Ribbon_Command_CharacterBorder_Label" xml:space="preserve">
+    <value>Character Border</value>
+  </data>
+  <data name="Ribbon_Command_CharacterShading_Label" xml:space="preserve">
+    <value>Character Shading</value>
   </data>
   <data name="Ribbon_Command_ClearAllFormatting_Label" xml:space="preserve">
     <value>Clear All Formatting</value>

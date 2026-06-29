@@ -24,6 +24,19 @@ internal static class FreeWRibbonText
         "Ribbon_Command_Copy_Label",
         "Ribbon_Command_Copy_KeyTip");
 
+    public static readonly RibbonText FormatPainterCommand = new(
+        "Ribbon_Command_FormatPainter_Label",
+        "Ribbon_Command_FormatPainter_KeyTip");
+
+    public static readonly RibbonText PasteTextOnlyCommand = new(
+        "Ribbon_Command_PasteTextOnly_Label");
+
+    public static readonly RibbonText PasteMergeFormattingCommand = new(
+        "Ribbon_Command_PasteMergeFormatting_Label");
+
+    public static readonly RibbonText PasteSpecialCommand = new(
+        "Ribbon_Command_PasteSpecial_Label");
+
     public static readonly RibbonText FontGroup = new(
         "Ribbon_Group_Font_Label",
         "Ribbon_Group_Font_KeyTip");
@@ -96,6 +109,12 @@ internal static class FreeWRibbonText
 
     public static readonly RibbonText FontColorDropdownCommand = new(
         "Ribbon_Command_FontColorDropdown_Label");
+
+    public static readonly RibbonText CharacterBorderCommand = new(
+        "Ribbon_Command_CharacterBorder_Label");
+
+    public static readonly RibbonText CharacterShadingCommand = new(
+        "Ribbon_Command_CharacterShading_Label");
 
     public static readonly RibbonText ClearAllFormattingCommand = new(
         "Ribbon_Command_ClearAllFormatting_Label");
