@@ -1,14 +1,11 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Presentation.DrawingUI;
+namespace FreeX.App.Services;
 
 /// <summary>
-/// Portable, UI-free planning for the shape "Gradient Fill" dialog shared by the desktop hosts and the
-/// cross-platform shell: the start/end stop colors, the ordered set of gradient directions (each carrying a
-/// localization resource key the shell resolves), direction normalization, and the seed colors used when the
-/// selected shape has no current gradient. Building the dialog (color pickers / preview) and running
-/// <c>SetDrawingShapeGradientCommand</c> stays with each shell; the catalog and seeds live here so behavior is
-/// single-sourced.
+/// Portable, UI-free planning for the shape "Gradient Fill" dialog: seed colors, the ordered set of gradient
+/// directions, direction normalization, validated result creation, and the normalized preview vector shared by
+/// renderer-specific dialogs.
 /// </summary>
 public static class ShapeGradientPlanner
 {
@@ -34,8 +31,8 @@ public static class ShapeGradientPlanner
         DrawingShapeGradientDirection Direction);
 
     /// <summary>
-    /// Captures a shape's current gradient (or a sensible seed when it has none): the start color reuses the
-    /// existing fill when present, the end color reuses the stored gradient end when present.
+    /// Captures a shape's current gradient, or a sensible seed when it has none. The start color reuses the
+    /// existing fill when present, and the end color reuses the stored gradient end when present.
     /// </summary>
     public static GradientValues Capture(DrawingShapeModel shape)
     {
@@ -93,7 +90,7 @@ public static class ShapeGradientPlanner
         new(startColor, endColor, NormalizeDirection(direction));
 
     /// <summary>
-    /// Normalized (0–1) gradient preview vector for a given direction and aspect, matching the host preview so
+    /// Normalized (0-1) gradient preview vector for a given direction and aspect, matching the host preview so
     /// the swatch reads the same on every shell. The diagonal cases inset the vector to the shape's aspect so
     /// the gradient runs corner-to-corner of the visible box.
     /// </summary>

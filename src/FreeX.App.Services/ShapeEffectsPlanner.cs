@@ -1,14 +1,11 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Presentation.DrawingUI;
+namespace FreeX.App.Services;
 
 /// <summary>
-/// Portable, UI-free equivalent of the desktop host's shape-effects dialog planner: the ordered list of effect
-/// presets the dialog offers, each carrying the localization resource keys for its label and description (the
-/// shell resolves them through its own text provider), plus the normalization that maps an out-of-range stored
-/// preset back to <see cref="DrawingShapeEffectPreset.None"/>. Keeping the catalog here single-sources it across
-/// the WPF host and the cross-platform shell; building the dialog and running
-/// <c>SetDrawingShapeEffectCommand</c> stays with each shell.
+/// Portable, UI-free equivalent of the shape-effects dialog policy: the ordered list of effect presets the dialog
+/// offers, each carrying localization resource keys for its label and description, plus normalization for stored
+/// presets that are no longer supported. Shells resolve text and build their own dialog chrome.
 /// </summary>
 public static class ShapeEffectsPlanner
 {

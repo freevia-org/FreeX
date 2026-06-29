@@ -1,8 +1,8 @@
 using FluentAssertions;
-using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Presentation.Tests.DrawingUI;
+namespace FreeX.App.Services.Tests;
 
 public sealed class ShapeEffectsPlannerTests
 {
