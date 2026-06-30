@@ -44,11 +44,11 @@ public static class BackstageViewTextResources
 
     public static BackstagePaneDescriptor Open { get; } = new(
         Title: "Open",
-        Description: "Open a document from your recent files or browse your PC.");
+        Description: "Open a recent document, search recent local files, or browse for one stored on this PC.");
 
     public static BackstagePaneDescriptor SaveAs { get; } = new(
         Title: "Save As",
-        Description: "Save this document in a different format.");
+        Description: "Choose where to save this document and select an editable file type.");
 
     public static BackstagePaneDescriptor Print { get; } = new(
         Title: "Print",
@@ -56,11 +56,11 @@ public static class BackstageViewTextResources
 
     public static BackstagePaneDescriptor Share { get; } = new(
         Title: "Share",
-        Description: "Share this document or send a copy.");
+        Description: "Share a saved local document or create a copy that can be sent elsewhere.");
 
     public static BackstagePaneDescriptor Export { get; } = new(
         Title: "Export",
-        Description: "Export this document to a different file format.");
+        Description: "Create a fixed-layout copy or choose an editable document format.");
 
     public static BackstagePaneDescriptor Info { get; } = new(
         Title: "Info",

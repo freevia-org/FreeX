@@ -60,7 +60,11 @@ public sealed class SisterDialogTextResourceSourceTests
 
         source.Should().Contain("BackstageViewTextResources.WindowTitle");
         source.Should().Contain("BackstageViewTextResources.RailEntries");
-        source.Should().Contain("BackstageViewTextResources.Home.Title");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
         source.Should().Contain("BackstageViewTextResources.DirectPrintDeferredNote");
         source.Should().Contain("BackstageViewTextResources.ProductName");
         source.Should().NotContain("Content = \"\u2190 Back\"");

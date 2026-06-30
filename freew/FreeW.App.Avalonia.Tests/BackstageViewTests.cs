@@ -82,6 +82,12 @@ public class BackstageViewTests
 
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
+        source.Should().Contain("BuildActionGroupContent(surface)");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
         source.Should().Contain("AvaloniaBackstageChrome.CreateContentArea(");
         source.Should().Contain("AvaloniaBackstageChrome.CreateDescribedActionRow(");
