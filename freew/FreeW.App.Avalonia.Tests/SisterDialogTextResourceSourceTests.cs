@@ -61,16 +61,21 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("BackstageViewTextResources.WindowTitle");
         source.Should().Contain("BackstageViewTextResources.RailEntries");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
-        source.Should().Contain("BackstageViewTextResources.DirectPrintDeferredNote");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
+        source.Should().Contain("surface.DeferredNote");
         source.Should().Contain("BackstageViewTextResources.ProductName");
         source.Should().NotContain("Content = \"\u2190 Back\"");
         source.Should().NotContain("AddNavEntry(panel, BackstagePane.Home, \"Home\")");
         source.Should().NotContain("BuildPaneHeader(\"Export\"");
         source.Should().NotContain("Create PDF/XPS Document");
+        source.Should().NotContain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
+        source.Should().NotContain("BackstageViewTextResources.DirectPrintDeferredNote");
     }
 
     private static string ReadAvaloniaSource(params string[] pathParts)

@@ -83,11 +83,19 @@ public class BackstageViewTests
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
+        source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
+        source.Should().Contain("BuildOpenSurface(");
+        source.Should().Contain("surface.Search.AutomationName");
+        source.Should().Contain("surface.Tabs.DocumentsTabLabel");
+        source.Should().Contain("_callbacks.OpenFolder(folder)");
         source.Should().Contain("BuildActionGroupContent(surface)");
+        source.Should().Contain("BuildSurfaceActionRow(action)");
         source.Should().Contain("AvaloniaBackstageChromeStyle BackstageChromeStyle");
         source.Should().Contain("AvaloniaBackstageChrome.CreateContentArea(");
         source.Should().Contain("AvaloniaBackstageChrome.CreateDescribedActionRow(");
@@ -100,6 +108,10 @@ public class BackstageViewTests
         source.Should().NotContain("var rowIndex = grid.RowDefinitions.Count");
         source.Should().NotContain("new RowDefinition(GridLength.Auto)");
         source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*\")");
+        source.Should().NotContain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
+        source.Should().NotContain("BackstagePrintPanePlanner.Build(");
+        source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build(");
+        source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
 
         sharedSource.Should().Contain("public static class AvaloniaBackstageChrome");
         sharedSource.Should().Contain("public static Border CreateContentArea(");
@@ -269,6 +281,7 @@ public class BackstageViewTests
             GetPageSettings: () => new PageSettings(),
             NewDocument: () => { },
             OpenRecent: _ => { },
+            OpenFolder: _ => { },
             Browse: () => { },
             RecoverUnsaved: () => { },
             SaveAs: () => { },

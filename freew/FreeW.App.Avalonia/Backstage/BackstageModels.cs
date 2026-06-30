@@ -49,6 +49,9 @@ internal sealed record BackstageCallbacks(
     /// <summary>Open the document at <paramref name="path"/> directly (no picker).</summary>
     Action<string> OpenRecent,
 
+    /// <summary>Open a recent folder in the operating system shell.</summary>
+    Action<string> OpenFolder,
+
     /// <summary>Open the file picker to browse for a document.</summary>
     Action Browse,
 

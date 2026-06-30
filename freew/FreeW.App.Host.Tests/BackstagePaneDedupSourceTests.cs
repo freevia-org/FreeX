@@ -39,7 +39,6 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
         source.Should().Contain("Panes.BuildOptionsPane(");
         source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
-        source.Should().Contain("PaneSpecs.BuildAccountPaneSpec(");
         source.Should().Contain("Panes.BuildAccountPane(");
 
         if (appFolder == "freew")
@@ -69,12 +68,15 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("inline.FileNameHeading");
             source.Should().Contain("inline.SaveAsTypeHeading");
             source.Should().Contain("BuildPrintPane = BuildPrintPane");
-            source.Should().Contain("BackstagePrintPanePlanner.Build(");
+            source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
+            source.Should().Contain("SurfaceActionRow(action)");
             source.Should().Contain("PrintPreview");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
+            source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
+            source.Should().Contain("ToAccountPaneSpec(surface)");
             source.Should().Contain("HideRecentPane = true");
-            source.Should().Contain("BackstageInfoSafetyPanePlanner.Build(");
-            source.Should().Contain("SafetyAction(action.Kind)");
+            source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
+            source.Should().Contain("ToActionGroups(safetySurface.SafetyGroups)");
             source.Should().Contain("MarkAsFinal");
             source.Should().Contain("RestrictEditing");
             source.Should().Contain("InspectDocument");
@@ -89,6 +91,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().NotContain("BuildHomePane = BuildHomePane");
             source.Should().NotContain("UseNewPane = true");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
+            source.Should().Contain("PaneSpecs.BuildAccountPaneSpec(");
             source.Should().Contain("PaneSpecs.BuildExportPaneSpec(");
         }
 
@@ -107,6 +110,8 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().NotContain("SisterBackstagePaneTextSpec.FreeW");
         source.Should().NotContain("SisterBackstagePaneTextSpec.FreeP");
         source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
+        source.Should().NotContain("BackstagePrintPanePlanner.Build(");
+        source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build(");
         source.Should().NotContain("Color.FromRgb(");
         source.Should().NotContain("BackstageAccent(");
         source.Should().NotContain("No recent documents.");

@@ -99,6 +99,12 @@ internal sealed class BackstageView : UserControl
         var model = _editor.Model;
         var stats = WordCount.Of(model);
         var properties = model.Properties;
+        var safetySurface = BackstagePaneSurfacePlanner.BuildInfoPane(
+            [],
+            _backstage.HideThen(_actions.MarkAsFinal),
+            _backstage.HideThen(_actions.RestrictEditing),
+            _backstage.HideThen(_actions.InspectDocument),
+            _backstage.HideThen(_actions.CheckAccessibility));
 
         return Panes.BuildInfoPane(SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
             DocumentKindLabel: "Document",
@@ -118,14 +124,7 @@ internal sealed class BackstageView : UserControl
             ],
             EditPropertiesText: "Edit document properties\u2026",
             EditProperties: _backstage.HideThen(_actions.EditProperties),
-            ActionGroups: BackstageInfoSafetyPanePlanner.Build()
-                .Select(group => new BackstageActionGroup(
-                    group.Heading,
-                    group.Actions.Select(action => new BackstageActionRow(
-                        action.Label,
-                        action.Description,
-                        SafetyAction(action.Kind))).ToArray()))
-                .ToArray())));
+            ActionGroups: ToActionGroups(safetySurface.SafetyGroups))));
     }
 
     private UIElement BuildExportPane()
@@ -146,27 +145,43 @@ internal sealed class BackstageView : UserControl
     private UIElement BuildPrintPane()
     {
         _editor.CommitToModel();
-        var plan = BackstagePrintPanePlanner.Build(_file.DisplayName, _editor.Model.Page);
+        var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
+            _file.DisplayName,
+            _editor.Model.Page,
+            _backstage.HideThen(_actions.Print),
+            _backstage.HideThen(_actions.PrintPreview));
 
         var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText("Print"));
+        panel.Children.Add(Kit.HeadingText(surface.Title));
         panel.Children.Add(new TextBlock
         {
-            Text = plan.Description,
+            Text = surface.Description,
             Foreground = Kit.Muted,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
 
         panel.Children.Add(Kit.SubHeading("Document"));
-        foreach (var field in plan.Fields)
+        foreach (var field in surface.Fields)
             panel.Children.Add(Kit.Field(field.Label, field.Value));
 
-        foreach (var group in plan.Groups)
+        foreach (var group in surface.Groups)
         {
             panel.Children.Add(Kit.SubHeading(group.Heading));
             foreach (var action in group.Actions)
-                panel.Children.Add(PrintActionRow(action));
+                panel.Children.Add(SurfaceActionRow(action));
+        }
+
+        if (!string.IsNullOrWhiteSpace(surface.DeferredNote))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = surface.DeferredNote,
+                Foreground = Kit.Muted,
+                FontStyle = FontStyles.Italic,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0)
+            });
         }
 
         return Kit.Scroll(panel);
@@ -303,14 +318,16 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildAccountPane()
     {
-        return Panes.BuildAccountPane(PaneSpecs.BuildAccountPaneSpec(
+        var surface = BackstagePaneSurfacePlanner.BuildAccountPane(
             new SisterBackstageAccountPaneContext(
                 AppProduct.Current.ProductName,
                 EntryAssemblyVersion.Resolve(),
                 Environment.UserName,
                 Environment.MachineName,
                 _actions.DataFolder()),
-            _backstage.HideThen(_actions.EditOptions)));
+            _backstage.HideThen(_actions.EditOptions));
+
+        return Panes.BuildAccountPane(ToAccountPaneSpec(surface));
     }
 
     private BackstageOpenPaneSurfaceSpec BuildOpenSurface(string? filter) =>
@@ -325,28 +342,29 @@ internal sealed class BackstageView : UserControl
     private static BackstageActionPaneSpec ToActionPaneSpec(BackstageActionPaneSurfaceSpec surface) =>
         new(surface.Title, surface.Description, surface.Groups);
 
-    private Action SafetyAction(BackstageInfoSafetyActionKind kind) =>
-        kind switch
-        {
-            BackstageInfoSafetyActionKind.MarkAsFinal => _backstage.HideThen(_actions.MarkAsFinal),
-            BackstageInfoSafetyActionKind.RestrictEditing => _backstage.HideThen(_actions.RestrictEditing),
-            BackstageInfoSafetyActionKind.InspectDocument => _backstage.HideThen(_actions.InspectDocument),
-            BackstageInfoSafetyActionKind.CheckAccessibility => _backstage.HideThen(_actions.CheckAccessibility),
-            _ => static () => { }
-        };
+    private static IReadOnlyList<BackstageActionGroup> ToActionGroups(
+        IReadOnlyList<BackstageSurfaceActionGroup> groups) =>
+        groups.Select(group => new BackstageActionGroup(
+            group.Heading,
+            group.Actions
+                .Where(action => action.Invoke is not null)
+                .Select(action => new BackstageActionRow(action.Label, action.Description, action.Invoke!))
+                .ToArray())).ToArray();
 
-    private Action PrintAction(BackstagePrintActionKind kind) =>
-        kind switch
-        {
-            BackstagePrintActionKind.Print => _backstage.HideThen(_actions.Print),
-            BackstagePrintActionKind.PrintPreview => _backstage.HideThen(_actions.PrintPreview),
-            _ => static () => { }
-        };
+    private static BackstageAccountPaneSpec ToAccountPaneSpec(BackstageAccountPaneSurfaceSpec surface) =>
+        new(
+            surface.Title,
+            surface.Description,
+            surface.Groups,
+            surface.OptionsAction.Label,
+            surface.OptionsAction.Invoke);
 
-    private UIElement PrintActionRow(BackstagePrintActionRow action)
+    private UIElement SurfaceActionRow(BackstageSurfaceActionRow action)
     {
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-        var button = Kit.LinkButton(action.Label, PrintAction(action.Kind));
+        var invoke = action.Invoke ?? (() => { });
+        var button = Kit.LinkButton(action.Label, invoke);
+        button.IsEnabled = action.IsEnabled;
         stack.Children.Add(button);
         stack.Children.Add(new TextBlock
         {

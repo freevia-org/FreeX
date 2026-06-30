@@ -1,13 +1,134 @@
 using System.Linq;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Backstage;
 using FreeW.Core.IO;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
 public sealed class BackstagePaneSurfacePlannerTests
 {
+    [Fact]
+    public void BuildPrintPane_ReturnsPageFieldsAndWiredActions()
+    {
+        var printed = false;
+        var previewed = false;
+
+        var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
+            "Agenda",
+            new PageSettings
+            {
+                WidthPt = 612,
+                HeightPt = 792,
+                MarginTopPt = 72,
+                MarginBottomPt = 72,
+                MarginLeftPt = 54,
+                MarginRightPt = 54,
+            },
+            print: () => printed = true,
+            printPreview: () => previewed = true);
+
+        surface.Title.Should().Be("Print");
+        surface.Description.Should().Contain("Print this document");
+        surface.DeferredNote.Should().BeNull();
+        surface.Fields.Should().Contain(row => row.Label == "Document" && row.Value == "Agenda");
+        surface.Fields.Should().Contain(row => row.Label == "Paper" && row.Value == "8.5\" x 11\"");
+        surface.Groups.Select(group => group.Heading).Should().Equal("Print", "Settings");
+
+        var print = surface.Groups.SelectMany(group => group.Actions)
+            .Single(action => action.AutomationId == "PrintAction_Print");
+        var preview = surface.Groups.SelectMany(group => group.Actions)
+            .First(action => action.AutomationId == "PrintAction_PrintPreview");
+
+        print.IsEnabled.Should().BeTrue();
+        preview.IsEnabled.Should().BeTrue();
+
+        print.Invoke!();
+        preview.Invoke!();
+
+        printed.Should().BeTrue();
+        previewed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildPrintPane_DisablesActionsWhenCallbacksAreMissing()
+    {
+        var surface = BackstagePaneSurfacePlanner.BuildPrintPane(
+            "Draft",
+            new PageSettings(),
+            print: null,
+            printPreview: null);
+
+        surface.DeferredNote.Should().Be(BackstageViewTextResources.DirectPrintDeferredNote);
+        surface.Groups.SelectMany(group => group.Actions)
+            .Should().OnlyContain(action => !action.IsEnabled && action.Invoke == null);
+    }
+
+    [Fact]
+    public void BuildInfoPane_ReturnsDocumentFieldsAndSafetyActions()
+    {
+        var marked = false;
+        var inspected = false;
+
+        var surface = BackstagePaneSurfacePlanner.BuildInfoPane(
+            [new BackstageFieldRow("Document", "Plan.docx")],
+            markAsFinal: () => marked = true,
+            restrictEditing: null,
+            inspectDocument: () => inspected = true,
+            checkAccessibility: null);
+
+        surface.Title.Should().Be("Info");
+        surface.Description.Should().Contain("Protect");
+        surface.DocumentFields.Should().Equal(new BackstageFieldRow("Document", "Plan.docx"));
+        surface.SafetyGroups.Select(group => group.Heading).Should().Equal("Protect Document", "Inspect Document");
+
+        var markAsFinal = surface.SafetyGroups.SelectMany(group => group.Actions)
+            .Single(action => action.AutomationId == "InfoAction_MarkAsFinal");
+        var restrictEditing = surface.SafetyGroups.SelectMany(group => group.Actions)
+            .Single(action => action.AutomationId == "InfoAction_RestrictEditing");
+        var inspectDocument = surface.SafetyGroups.SelectMany(group => group.Actions)
+            .Single(action => action.AutomationId == "InfoAction_InspectDocument");
+
+        markAsFinal.IsEnabled.Should().BeTrue();
+        restrictEditing.IsEnabled.Should().BeFalse();
+        inspectDocument.IsEnabled.Should().BeTrue();
+
+        markAsFinal.Invoke!();
+        inspectDocument.Invoke!();
+
+        marked.Should().BeTrue();
+        inspected.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildAccountPane_ReturnsAccountRowsAndOptionsAction()
+    {
+        var openedOptions = false;
+
+        var surface = BackstagePaneSurfacePlanner.BuildAccountPane(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.2.3",
+                "Ada",
+                "WORD-BOX",
+                @"C:\Users\Ada\AppData\Local\FreeW"),
+            openOptions: () => openedOptions = true);
+
+        surface.Title.Should().Be("Account");
+        surface.Description.Should().Contain("FreeW installation");
+        surface.Groups.Select(group => group.Heading).Should().Equal("Product Information", "User Information");
+        surface.Groups[0].Fields.Should().Contain(new BackstageFieldRow("Version", "1.2.3"));
+        surface.OptionsAction.Label.Should().Be("FreeW Options...");
+        surface.OptionsAction.AutomationId.Should().Be("AccountOptionsButton");
+        surface.OptionsAction.IsEnabled.Should().BeTrue();
+
+        surface.OptionsAction.Invoke!();
+
+        openedOptions.Should().BeTrue();
+    }
+
     [Fact]
     public void BuildOpenPane_ReturnsSearchTabsAndFilteredRows()
     {

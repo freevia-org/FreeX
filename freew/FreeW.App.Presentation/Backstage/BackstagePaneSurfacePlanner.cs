@@ -1,6 +1,7 @@
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
 using FreeW.Core.IO;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Backstage;
 
@@ -16,6 +17,74 @@ public static class BackstagePaneSurfacePlanner
     private const string SaveAsFileNameHeading = "File name";
     private const string SaveAsTypeHeading = "Save as type";
     private const string SaveAsButtonLabel = "Save";
+
+    public static BackstagePrintPaneSurfaceSpec BuildPrintPane(
+        string displayName,
+        PageSettings page,
+        Action? print,
+        Action? printPreview)
+    {
+        var plan = BackstagePrintPanePlanner.Build(displayName, page);
+
+        return new BackstagePrintPaneSurfaceSpec(
+            BackstageViewTextResources.Print.Title,
+            plan.Description,
+            plan.Fields,
+            plan.Groups.Select(group => new BackstageSurfaceActionGroup(
+                group.Heading,
+                group.Actions.Select(action => new BackstageSurfaceActionRow(
+                    action.Label,
+                    action.Description,
+                    "PrintAction_" + action.Kind,
+                    ResolvePrintAction(action.Kind, print, printPreview))).ToArray())).ToArray(),
+            print is null && printPreview is null ? BackstageViewTextResources.DirectPrintDeferredNote : null);
+    }
+
+    public static BackstageInfoPaneSurfaceSpec BuildInfoPane(
+        IEnumerable<BackstageFieldRow> documentFields,
+        Action? markAsFinal,
+        Action? restrictEditing,
+        Action? inspectDocument,
+        Action? checkAccessibility)
+    {
+        ArgumentNullException.ThrowIfNull(documentFields);
+
+        return new BackstageInfoPaneSurfaceSpec(
+            BackstageViewTextResources.Info.Title,
+            BackstageViewTextResources.Info.Description,
+            documentFields.ToArray(),
+            BackstageInfoSafetyPanePlanner.Build()
+                .Select(group => new BackstageSurfaceActionGroup(
+                    group.Heading,
+                    group.Actions.Select(action => new BackstageSurfaceActionRow(
+                        action.Label,
+                        action.Description,
+                        "InfoAction_" + action.Kind,
+                        ResolveInfoAction(
+                            action.Kind,
+                            markAsFinal,
+                            restrictEditing,
+                            inspectDocument,
+                            checkAccessibility))).ToArray()))
+                .ToArray());
+    }
+
+    public static BackstageAccountPaneSurfaceSpec BuildAccountPane(
+        SisterBackstageAccountPaneContext context,
+        Action? openOptions)
+    {
+        var plan = SisterBackstageAccountPanePlanner.Build(context);
+
+        return new BackstageAccountPaneSurfaceSpec(
+            plan.Heading,
+            plan.Description,
+            plan.Groups,
+            new BackstageSurfaceActionRow(
+                plan.OptionsText,
+                string.Empty,
+                "AccountOptionsButton",
+                openOptions));
+    }
 
     public static BackstageActionPaneSurfaceSpec BuildHomePane(
         IEnumerable<RecentFileEntry> recentEntries,
@@ -162,12 +231,70 @@ public static class BackstagePaneSurfacePlanner
                 BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(formats.ToArray(), saveAsExtension),
             ]);
     }
+
+    private static Action? ResolvePrintAction(
+        BackstagePrintActionKind kind,
+        Action? print,
+        Action? printPreview) =>
+        kind switch
+        {
+            BackstagePrintActionKind.Print => print,
+            BackstagePrintActionKind.PrintPreview => printPreview,
+            _ => null
+        };
+
+    private static Action? ResolveInfoAction(
+        BackstageInfoSafetyActionKind kind,
+        Action? markAsFinal,
+        Action? restrictEditing,
+        Action? inspectDocument,
+        Action? checkAccessibility) =>
+        kind switch
+        {
+            BackstageInfoSafetyActionKind.MarkAsFinal => markAsFinal,
+            BackstageInfoSafetyActionKind.RestrictEditing => restrictEditing,
+            BackstageInfoSafetyActionKind.InspectDocument => inspectDocument,
+            BackstageInfoSafetyActionKind.CheckAccessibility => checkAccessibility,
+            _ => null
+        };
 }
 
 public sealed record BackstageActionPaneSurfaceSpec(
     string Title,
     string Description,
     IReadOnlyList<BackstageActionGroup> Groups);
+
+public sealed record BackstagePrintPaneSurfaceSpec(
+    string Title,
+    string Description,
+    IReadOnlyList<BackstageFieldRow> Fields,
+    IReadOnlyList<BackstageSurfaceActionGroup> Groups,
+    string? DeferredNote);
+
+public sealed record BackstageInfoPaneSurfaceSpec(
+    string Title,
+    string Description,
+    IReadOnlyList<BackstageFieldRow> DocumentFields,
+    IReadOnlyList<BackstageSurfaceActionGroup> SafetyGroups);
+
+public sealed record BackstageAccountPaneSurfaceSpec(
+    string Title,
+    string Description,
+    IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
+    BackstageSurfaceActionRow OptionsAction);
+
+public sealed record BackstageSurfaceActionGroup(
+    string Heading,
+    IReadOnlyList<BackstageSurfaceActionRow> Actions);
+
+public sealed record BackstageSurfaceActionRow(
+    string Label,
+    string Description,
+    string AutomationId,
+    Action? Invoke)
+{
+    public bool IsEnabled => Invoke is not null;
+}
 
 public sealed record BackstageOpenPaneSurfaceSpec(
     string Title,

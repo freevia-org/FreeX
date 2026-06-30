@@ -1179,28 +1179,35 @@ public sealed class MainWindow : Window
                     // success — OpenPathAsync was already fired
                 }
             },
+            OpenFolder: OpenFolderInShell,
             Browse: () => _ = OpenAsync(),
             RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
             SaveAs: () => _ = SaveAsAsync(),
             SaveAsExtension: ext => _ = SaveAsWithExtensionAsync(ext),
             OpenContainingFolder: path =>
             {
-                try
-                {
-                    var folder = System.IO.Path.GetDirectoryName(path);
-                    if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = folder,
-                            UseShellExecute = true,
-                        });
-                }
-                catch (Exception ex)
-                {
-                    _status.Text = $"Could not open folder: {ex.Message}";
-                }
+                var folder = System.IO.Path.GetDirectoryName(path);
+                if (!string.IsNullOrWhiteSpace(folder))
+                    OpenFolderInShell(folder);
             },
             ExportPdf: () => _ = ExportPdfAsync());
+
+    private void OpenFolderInShell(string folder)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = folder,
+                    UseShellExecute = true,
+                });
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Could not open folder: {ex.Message}";
+        }
+    }
 
     /// <summary>
     /// Save As targeting a specific file extension chosen from the backstage planner.
