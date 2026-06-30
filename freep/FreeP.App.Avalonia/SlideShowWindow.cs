@@ -436,30 +436,27 @@ public sealed class SlideShowWindow : Window
 
     private void PlayTransition(Slide slide, SlideTransition t)
     {
-        int ms = Math.Max(50, t.DurationMs);
-
         // Transition sound: Avalonia has no built-in MediaElement.
         // Sound playback on the Avalonia host is deferred / no-op.
         // (The sound bytes are preserved on the model and will re-emit on save.)
 
-        var plan = SlideShowTransitionPlanner.Plan(t);
-        switch (plan.PlaybackKind)
+        var plan = SlideShowPlaybackPlanner.PlanTransition(t);
+        switch (plan.ActionKind)
         {
-            case SlideShowTransitionPlaybackKind.Cut:
+            case SlideShowTransitionPlaybackActionKind.ShowInstant:
                 ShowSlideInstant(slide);
                 return;
 
-            case SlideShowTransitionPlaybackKind.Fade:
-            case SlideShowTransitionPlaybackKind.FadeFallback:
-                PlayFadeTransition(slide, ms);
+            case SlideShowTransitionPlaybackActionKind.Fade:
+                PlayFadeTransition(slide, plan.DurationMs);
                 return;
 
-            case SlideShowTransitionPlaybackKind.PushLike:
-                PlayPushTransition(slide, plan, ms);
+            case SlideShowTransitionPlaybackActionKind.Push:
+                PlayPushTransition(slide, plan);
                 return;
 
             default:
-                PlayFadeTransition(slide, ms);
+                PlayFadeTransition(slide, plan.DurationMs);
                 return;
         }
     }
@@ -487,7 +484,7 @@ public sealed class SlideShowWindow : Window
         });
     }
 
-    private void PlayPushTransition(Slide slide, SlideShowTransitionPlan plan, int durationMs)
+    private void PlayPushTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
     {
         var snapshot = CaptureCurrentSlide();
         var dx = plan.IncomingOffsetX;
@@ -508,7 +505,7 @@ public sealed class SlideShowWindow : Window
             _transitionBackImage.IsVisible = true;
         }
 
-        AnimateTranslate(_slideCanvas, fromX: dx * w, fromY: dy * h, toX: 0, toY: 0, durationMs,
+        AnimateTranslate(_slideCanvas, fromX: dx * w, fromY: dy * h, toX: 0, toY: 0, plan.DurationMs,
             onComplete: () =>
             {
                 _slideCanvas.RenderTransform = null;
@@ -705,23 +702,17 @@ public sealed class SlideShowWindow : Window
 
     private void PlayAnimationStep(AnimationStep step)
     {
-        foreach (var entry in step.Entries)
+        foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))
         {
-            var anim = entry.Animation;
-            // DA4: use the accumulated start delay from the step entry rather than
-            // the animation's raw DelayMs.  For WithPrevious this equals DelayMs (simultaneous).
-            // For AfterPrevious this is DelayMs + all prior animations' durations in the chain,
-            // ensuring the animation begins only after the preceding animation completes.
-            int effectiveDelayMs = entry.StartDelayMs;
-
+            var anim = plan.Animation;
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
-                PlayFallbackAnimation(anim, effectiveDelayMs);
+                PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));
                 continue;
             }
 
             var shapeId = anim.ShapeId;
-            PlayShapeAnimation(element, anim, effectiveDelayMs, onReveal: () =>
+            PlayShapeAnimation(element, plan, onReveal: () =>
             {
                 // DA1: once the entrance animation finishes (or fires), hand off painting to
                 // the base canvas.  The overlay element stays in the tree at full opacity but
@@ -734,68 +725,72 @@ public sealed class SlideShowWindow : Window
         }
     }
 
-    /// <param name="effectiveDelayMs">
-    /// DA4: the computed start delay for this entry, which for AfterPrevious animations already
-    /// includes the accumulated duration of preceding animations in the chain.  Replaces the raw
-    /// <see cref="ShapeAnimation.DelayMs"/> so that AfterPrevious animations begin after their
-    /// predecessor completes rather than all firing simultaneously.
+    /// <param name="plan">
+    /// DA4: the planner already supplies the computed start delay for this entry, so
+    /// AfterPrevious animations begin after their predecessor completes rather than all
+    /// firing simultaneously.
     /// </param>
     /// <param name="onReveal">
     /// DA1: called once the animation finishes so the base canvas takes over painting the shape.
     /// For non-entrance (Emphasis/Exit) effects this callback is invoked at animation start
     /// because the shape is already visible in the base canvas.
     /// </param>
-    private void PlayShapeAnimation(Control element, ShapeAnimation anim, int effectiveDelayMs, Action? onReveal = null)
+    private void PlayShapeAnimation(Control element, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
-        int durationMs = Math.Max(50, anim.DurationMs);
-        int delayMs    = effectiveDelayMs;
-
-        // Motion-path animation takes priority.
-        if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
         {
-            MotionPathEffect(element, anim.Motion, durationMs, delayMs, onReveal);
+            MotionPathEffect(element, plan, onReveal);
             return;
         }
 
-        switch (anim.Preset)
+        switch (plan.EffectKind)
         {
-            case AnimationPreset.Appear:
-                AppearEffect(element, delayMs, onReveal);
+            case SlideShowShapeAnimationEffectKind.Appear:
+                AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));
                 break;
 
-            case AnimationPreset.Fade:
-                FadeEffect(element, anim.Kind, durationMs, delayMs, onReveal);
+            case SlideShowShapeAnimationEffectKind.Fade:
+                FadeEffect(element, plan, onReveal);
                 break;
 
-            case AnimationPreset.FlyIn:
-                FlyInEffect(element, anim, durationMs, delayMs, onReveal);
+            case SlideShowShapeAnimationEffectKind.FlyIn:
+                FlyInEffect(element, plan, onReveal);
                 break;
 
-            case AnimationPreset.Wipe:
-                WipeEffect(element, anim, durationMs, delayMs, onReveal);
+            case SlideShowShapeAnimationEffectKind.Wipe:
+                WipeEffect(element, plan, onReveal);
                 break;
 
-            case AnimationPreset.Zoom:
-                ZoomEffect(element, anim.Kind, durationMs, delayMs, onReveal);
+            case SlideShowShapeAnimationEffectKind.Zoom:
+                ZoomEffect(element, plan, onReveal);
                 break;
 
-            case AnimationPreset.Pulse:
-            case AnimationPreset.Grow:
-                // Emphasis: shape already visible — reveal immediately.
-                onReveal?.Invoke();
-                PulseEffect(element, durationMs, delayMs);
+            case SlideShowShapeAnimationEffectKind.Pulse:
+                InvokeRevealAtStart(plan, onReveal);
+                PulseEffect(element, plan);
                 break;
 
-            case AnimationPreset.Spin:
-                onReveal?.Invoke();
-                SpinEffect(element, durationMs, delayMs);
+            case SlideShowShapeAnimationEffectKind.Spin:
+                InvokeRevealAtStart(plan, onReveal);
+                SpinEffect(element, plan);
                 break;
 
             default:
-                AppearEffect(element, delayMs, onReveal);
+                AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));
                 break;
         }
     }
+
+    private static void InvokeRevealAtStart(SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal)
+    {
+        if (plan.RevealTiming == SlideShowAnimationRevealTiming.AtStart)
+            onReveal?.Invoke();
+    }
+
+    private static Action? CompleteReveal(SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal) =>
+        plan.RevealTiming == SlideShowAnimationRevealTiming.OnComplete
+            ? onReveal
+            : null;
 
     private void AppearEffect(Control el, int delayMs, Action? onComplete = null)
     {
@@ -813,81 +808,77 @@ public sealed class SlideShowWindow : Window
         timer.Start();
     }
 
-    private void FadeEffect(Control el, AnimationKind kind, int durationMs, int delayMs, Action? onReveal = null)
+    private void FadeEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
-        double from = kind == AnimationKind.Exit ? 1 : 0;
-        double to   = kind == AnimationKind.Exit ? 0 : 1;
+        InvokeRevealAtStart(plan, onReveal);
 
-        // For entrance fades the reveal happens when the fade reaches opacity=1.
-        // For exit fades the shape is already visible, so reveal immediately.
-        if (kind == AnimationKind.Exit) onReveal?.Invoke();
-
-        DelayedAction(delayMs, () =>
-            AnimateOpacity(el, from, to, durationMs,
-                onComplete: kind != AnimationKind.Exit ? onReveal : null));
+        DelayedAction(plan.DelayMs, () =>
+            AnimateOpacity(
+                el,
+                plan.FromOpacity,
+                plan.ToOpacity,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal)));
     }
 
-    private void FlyInEffect(Control el, ShapeAnimation anim, int durationMs, int delayMs, Action? onReveal = null)
+    private void FlyInEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
         double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
         double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
 
-        var (dx, dy) = anim.Direction switch
-        {
-            AnimationDirection.FromLeft        => (-w,  0),
-            AnimationDirection.FromRight       => ( w,  0),
-            AnimationDirection.FromTop         => ( 0, -h),
-            AnimationDirection.FromBottom      => ( 0,  h),
-            AnimationDirection.FromTopLeft     => (-w, -h),
-            AnimationDirection.FromTopRight    => ( w, -h),
-            AnimationDirection.FromBottomLeft  => (-w,  h),
-            AnimationDirection.FromBottomRight => ( w,  h),
-            AnimationDirection.Left            => (-w,  0),
-            AnimationDirection.Right           => ( w,  0),
-            AnimationDirection.Up              => ( 0, -h),
-            AnimationDirection.Down            => ( 0,  h),
-            _                                  => ( 0,  h),
-        };
+        double dx = plan.OffsetXFactor * w;
+        double dy = plan.OffsetYFactor * h;
 
-        el.Opacity = 0;
+        el.Opacity = plan.FromOpacity;
         el.RenderTransform = new TranslateTransform(dx, dy);
 
-        DelayedAction(delayMs, () =>
+        DelayedAction(plan.DelayMs, () =>
         {
-            AnimateTranslate(el, dx, dy, 0, 0, durationMs);
+            AnimateTranslate(el, dx, dy, 0, 0, plan.DurationMs);
             // Reveal in base canvas when the fade-in completes.
-            AnimateOpacity(el, 0, 1, durationMs, onComplete: onReveal);
+            AnimateOpacity(
+                el,
+                plan.FromOpacity,
+                plan.ToOpacity,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal));
         });
     }
 
-    private void WipeEffect(Control el, ShapeAnimation anim, int durationMs, int delayMs, Action? onReveal = null)
+    private void WipeEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
 
         el.Opacity = 1;
+        InvokeRevealAtStart(plan, onReveal);
 
-        bool horizontal = anim.Direction is
-            AnimationDirection.Left or AnimationDirection.Right or
-            AnimationDirection.FromLeft or AnimationDirection.FromRight or
-            AnimationDirection.Horizontal or null;
-
-        if (horizontal)
+        if (plan.WipeHorizontal)
         {
             // Clip from 0 width → full width.
             var clipRect = new RectangleGeometry(new Rect(0, 0, 0, h));
             el.Clip = clipRect;
-            DelayedAction(delayMs, () =>
-                AnimateRectClip(el, clipRect, new Rect(0, 0, 0, h), new Rect(0, 0, w, h), durationMs,
-                    onComplete: onReveal));
+            DelayedAction(plan.DelayMs, () =>
+                AnimateRectClip(
+                    el,
+                    clipRect,
+                    new Rect(0, 0, 0, h),
+                    new Rect(0, 0, w, h),
+                    plan.DurationMs,
+                    onComplete: CompleteReveal(plan, onReveal)));
         }
         else
         {
             var clipRect = new RectangleGeometry(new Rect(0, 0, w, 0));
             el.Clip = clipRect;
-            DelayedAction(delayMs, () =>
-                AnimateRectClip(el, clipRect, new Rect(0, 0, w, 0), new Rect(0, 0, w, h), durationMs,
-                    onComplete: onReveal));
+            DelayedAction(plan.DelayMs, () =>
+                AnimateRectClip(
+                    el,
+                    clipRect,
+                    new Rect(0, 0, w, 0),
+                    new Rect(0, 0, w, h),
+                    plan.DurationMs,
+                    onComplete: CompleteReveal(plan, onReveal)));
         }
     }
 
@@ -918,32 +909,27 @@ public sealed class SlideShowWindow : Window
         timer.Start();
     }
 
-    private void ZoomEffect(Control el, AnimationKind kind, int durationMs, int delayMs, Action? onReveal = null)
+    private void ZoomEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
-        double cx = (el.Width  > 0 ? el.Width  : _slideCanvas.Bounds.Width)  / 2;
-        double cy = (el.Height > 0 ? el.Height : _slideCanvas.Bounds.Height) / 2;
+        InvokeRevealAtStart(plan, onReveal);
 
-        double fromScale = kind == AnimationKind.Exit ? 1.0 : 0.0;
-        double toScale   = kind == AnimationKind.Exit ? 0.0 : 1.0;
-        double fromOp    = kind == AnimationKind.Exit ? 1.0 : 0.0;
-        double toOp      = kind == AnimationKind.Exit ? 0.0 : 1.0;
-
-        // Exit: shape is already visible in base canvas.
-        if (kind == AnimationKind.Exit) onReveal?.Invoke();
-
-        el.Opacity = fromOp;
-        var scale = new ScaleTransform(fromScale, fromScale);
+        el.Opacity = plan.FromOpacity;
+        var scale = new ScaleTransform(plan.FromScale, plan.FromScale);
         // Avalonia ScaleTransform doesn't take center point in the ctor like WPF.
         // We'll adjust by setting RenderTransformOrigin.
         el.RenderTransformOrigin = RelativePoint.Center;
         el.RenderTransform = scale;
 
-        DelayedAction(delayMs, () =>
+        DelayedAction(plan.DelayMs, () =>
         {
             // Reveal when opacity reaches 1 (entrance) or immediately (exit already revealed).
-            AnimateOpacity(el, fromOp, toOp, durationMs,
-                onComplete: kind == AnimationKind.Entrance ? onReveal : null);
-            AnimateScale(el, scale, fromScale, toScale, durationMs);
+            AnimateOpacity(
+                el,
+                plan.FromOpacity,
+                plan.ToOpacity,
+                plan.DurationMs,
+                onComplete: CompleteReveal(plan, onReveal));
+            AnimateScale(el, scale, plan.FromScale, plan.ToScale, plan.DurationMs);
         });
     }
 
@@ -971,31 +957,30 @@ public sealed class SlideShowWindow : Window
         timer.Start();
     }
 
-    private void PulseEffect(Control el, int durationMs, int delayMs)
+    private void PulseEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
     {
         el.Opacity = 1;
         el.RenderTransformOrigin = RelativePoint.Center;
         var scale = new ScaleTransform(1, 1);
         el.RenderTransform = scale;
 
-        DelayedAction(delayMs, () =>
+        DelayedAction(plan.DelayMs, () =>
         {
-            // Scale up to 1.2 then back to 1.0.
-            AnimateScale(el, scale, 1.0, 1.2, durationMs / 2);
-            DelayedAction(durationMs / 2, () =>
-                AnimateScale(el, scale, 1.2, 1.0, durationMs / 2));
+            AnimateScale(el, scale, 1.0, plan.PeakScale, plan.DurationMs / 2);
+            DelayedAction(plan.DurationMs / 2, () =>
+                AnimateScale(el, scale, plan.PeakScale, 1.0, plan.DurationMs / 2));
         });
     }
 
-    private void SpinEffect(Control el, int durationMs, int delayMs)
+    private void SpinEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
     {
         el.Opacity = 1;
         el.RenderTransformOrigin = RelativePoint.Center;
         var rotate = new RotateTransform(0);
         el.RenderTransform = rotate;
 
-        DelayedAction(delayMs, () =>
-            AnimateRotate(rotate, 0, 360, durationMs));
+        DelayedAction(plan.DelayMs, () =>
+            AnimateRotate(rotate, 0, plan.RotationDegrees, plan.DurationMs));
     }
 
     private void AnimateRotate(RotateTransform rotate, double from, double to, int durationMs)
@@ -1023,7 +1008,7 @@ public sealed class SlideShowWindow : Window
     /// <summary>
     /// Motion-path animation: translates the shape along the normalized path in DIP space.
     /// </summary>
-    private void MotionPathEffect(Control element, MotionPath path, int durationMs, int delayMs,
+    private void MotionPathEffect(Control element, SlideShowShapeAnimationPlaybackPlan plan,
         Action? onReveal = null)
     {
         double slideW = _slideDipW > 0 ? _slideDipW : 960;
@@ -1031,32 +1016,27 @@ public sealed class SlideShowWindow : Window
 
         // Motion paths reveal the shape immediately (it's already at its starting position).
         element.Opacity = 1;
-        onReveal?.Invoke();
+        InvokeRevealAtStart(plan, onReveal);
 
-        const int frames = 30;
-        // Pre-sample the path.
-        var pts = new (double dx, double dy)[frames + 1];
-        for (int f = 0; f <= frames; f++)
-        {
-            double t = f / (double)frames;
-            var (dx, dy) = MotionPathEvaluator.Sample(path, t);
-            pts[f] = (dx * slideW, dy * slideH);
-        }
+        var pts = plan.MotionKeyFrames
+            .Select(frame => (dx: frame.OffsetXFactor * slideW, dy: frame.OffsetYFactor * slideH))
+            .ToArray();
+        if (pts.Length == 0) return;
 
         var translate = new TranslateTransform(pts[0].dx, pts[0].dy);
         element.RenderTransform = translate;
 
-        if (durationMs <= 0)
+        if (plan.DurationMs <= 0)
         {
-            translate.X = pts[frames].dx;
-            translate.Y = pts[frames].dy;
+            translate.X = pts[^1].dx;
+            translate.Y = pts[^1].dy;
             return;
         }
 
-        DelayedAction(delayMs, () =>
+        DelayedAction(plan.DelayMs, () =>
         {
             const int frameMs = 16;
-            int steps = Math.Max(1, durationMs / frameMs);
+            int steps = Math.Max(1, plan.DurationMs / frameMs);
             int frame = 0;
             var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
             {
@@ -1067,9 +1047,9 @@ public sealed class SlideShowWindow : Window
                 frame++;
                 double t = Math.Min(1.0, (double)frame / steps);
                 // Sample the pre-sampled array.
-                double scaledT = t * frames;
-                int lo = Math.Min((int)scaledT, frames - 1);
-                int hi = Math.Min(lo + 1, frames);
+                double scaledT = t * (pts.Length - 1);
+                int lo = Math.Min((int)scaledT, pts.Length - 2);
+                int hi = Math.Min(lo + 1, pts.Length - 1);
                 double frac = scaledT - lo;
                 translate.X = pts[lo].dx + (pts[hi].dx - pts[lo].dx) * frac;
                 translate.Y = pts[lo].dy + (pts[hi].dy - pts[lo].dy) * frac;
@@ -1077,8 +1057,8 @@ public sealed class SlideShowWindow : Window
                 {
                     timer.Stop();
                     _activeTimers.Remove(timer);
-                    translate.X = pts[frames].dx;
-                    translate.Y = pts[frames].dy;
+                    translate.X = pts[^1].dx;
+                    translate.Y = pts[^1].dy;
                 }
             };
             timer.Start();
@@ -1086,15 +1066,14 @@ public sealed class SlideShowWindow : Window
     }
 
     /// <summary>Best-effort fallback for shapes without an overlay element.</summary>
-    private void PlayFallbackAnimation(ShapeAnimation anim, int effectiveDelayMs)
+    private void PlayFallbackAnimation(SlideShowFallbackAnimationPlaybackPlan? plan)
     {
-        if (anim.Kind != AnimationKind.Emphasis) return;
+        if (plan is null) return;
 
-        int ms = Math.Max(100, anim.DurationMs);
-        DelayedAction(effectiveDelayMs, () =>
+        DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(_slideCanvas, 1.0, 0.5, ms / 2, onComplete: () =>
-                AnimateOpacity(_slideCanvas, 0.5, 1.0, ms / 2));
+            AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2, onComplete: () =>
+                AnimateOpacity(_slideCanvas, plan.FlashOpacity, plan.FromOpacity, plan.DurationMs / 2));
         });
     }
 
