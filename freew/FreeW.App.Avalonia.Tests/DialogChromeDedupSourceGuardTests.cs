@@ -1,0 +1,129 @@
+using System.IO;
+
+namespace FreeW.App.Avalonia.Tests;
+
+public sealed class DialogChromeDedupSourceGuardTests
+{
+    [Fact]
+    public void ResidualAvaloniaDialogs_DelegateCompactChromeToSharedHelper()
+    {
+        var expectations = new (string FileName, string[] RequiredSnippets)[]
+        {
+            ("AutosaveAdapter.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyButton(yes, DialogChromeStyle, minWidth: 82, isDefault: true);",
+                "AvaloniaCompactDialogChrome.CreateActionRow([yes, no], new Thickness(16, 0, 16, 16));",
+            ]),
+            ("CellEditDialog.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(_box, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 10, 0, 0));",
+            ]),
+            ("DesignDialogs.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyComboBox(_style, InsertDialogLayout.ChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyCheckBox(_semitransparent, InsertDialogLayout.ChromeStyle);",
+                "AvaloniaCompactDialogChrome.CreateActionRow([okButton, noneButton, cancelButton], new Thickness(14, 12, 14, 12));",
+            ]),
+            ("FindReplaceDialog.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyCheckBox(_matchCase, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: 84);",
+                "AvaloniaCompactDialogChrome.CreateActionRow(",
+            ]),
+            ("FontDialog.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyComboBox(_familyBox, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle",
+                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0))",
+            ]),
+            ("InsertDialogs.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "public static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = new(FontFamily.Default);",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(_displayBox, InsertDialogLayout.ChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyButton(btn, ChromeStyle, minWidth: 84);",
+                "AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(14, 12, 14, 12));",
+            ]),
+            ("MailMergeDialogs.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(editor, DialogChromeStyle, fixedHeight: false);",
+                "AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 10, 16, 14));",
+            ]),
+            ("PageSetupDialog.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyComboBox(_paperSizeBox, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle",
+                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0))",
+            ]),
+            ("ParagraphDialog.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyComboBox(_alignBox, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle",
+                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0))",
+            ]),
+            ("WordCountDialog.cs",
+            [
+                "using Free.Shared.Shell.Avalonia;",
+                "AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);",
+                "AvaloniaCompactDialogChrome.CreateActionRow([ok], new Thickness(16, 12, 16, 14));",
+            ]),
+        };
+
+        foreach (var (fileName, requiredSnippets) in expectations)
+        {
+            var source = ReadAvaloniaSource(fileName);
+
+            foreach (var snippet in requiredSnippets)
+                source.Should().Contain(snippet, $"{fileName} should reuse the shared compact dialog chrome");
+
+            AssertNoLocalCompactChrome(source, fileName);
+        }
+    }
+
+    private static void AssertNoLocalCompactChrome(string source, string fileName)
+    {
+        var normalized = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        normalized.Should().NotContain(
+            "new StackPanel\n        {\n            Orientation = Orientation.Horizontal,\n            HorizontalAlignment = HorizontalAlignment.Right,",
+            $"{fileName} should use AvaloniaCompactDialogChrome.CreateActionRow for action rows");
+        source.Should().NotContain("Margin = new Thickness(8, 0, 0, 0)", $"{fileName} should let CreateActionRow own button spacing");
+        source.Should().NotContain("Padding = new Thickness(6, 3, 6, 3)", $"{fileName} should let ApplyButton own button padding");
+        source.Should().NotContain(
+            "Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00))",
+            $"{fileName} should let ApplyValidationStatus own validation status chrome");
+    }
+
+    private static string ReadAvaloniaSource(string fileName)
+    {
+        var path = Path.Combine(FindRepositoryRoot(), "freew", "FreeW.App.Avalonia", fileName);
+        return File.ReadAllText(path);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+}

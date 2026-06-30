@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia;
 
@@ -13,6 +14,8 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal static class MailMergeDialogs
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     /// <summary>
     /// Recipient-list dialog: a multi-line CSV editor (first line = column headers). When the document
     /// already has merge fields, <paramref name="seedHeader"/> pre-fills the header line as a hint. Returns
@@ -46,27 +49,24 @@ internal static class MailMergeDialogs
             Text = string.IsNullOrWhiteSpace(seedHeader) ? string.Empty : seedHeader + "\n",
             PlaceholderText ="FirstName,LastName,City…",
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(editor, DialogChromeStyle, fixedHeight: false);
         Grid.SetRow(editor, 1);
 
         string? result = null;
 
         var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) =>
         {
             var text = editor.Text ?? string.Empty;
             result = string.IsNullOrWhiteSpace(text) ? null : text;
             dialog.Close();
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => { result = null; dialog.Close(); };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 10, 16, 14),
-            Children = { ok, cancel },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 10, 16, 14));
 
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
         var hintHost = hint; Grid.SetRow(hintHost, 0);
@@ -110,6 +110,7 @@ internal static class MailMergeDialogs
             HorizontalAlignment = HorizontalAlignment.Stretch,
             SelectedIndex = fieldNames.Count > 0 ? 0 : -1,
         };
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
         Grid.SetRow(combo, 1);
 
         // Also allow free text entry for a field not in the loaded list.
@@ -118,11 +119,13 @@ internal static class MailMergeDialogs
             PlaceholderText ="…or type a field name",
             Margin = new Thickness(16, 8, 16, 0),
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(freeText, DialogChromeStyle);
         Grid.SetRow(freeText, 2);
 
         string? result = null;
 
         var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) =>
         {
             var typed = freeText.Text?.Trim();
@@ -131,16 +134,11 @@ internal static class MailMergeDialogs
                 : combo.SelectedItem as string;
             dialog.Close();
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => { result = null; dialog.Close(); };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 12, 16, 14),
-            Children = { ok, cancel },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
         Grid.SetRow(buttons, 3);
 
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto") };

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -16,6 +17,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 public sealed class PageSetupDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private static readonly CultureInfo DialogCulture = CultureInfo.InvariantCulture;
 
     private readonly TextBox _topBox = MakeNumericBox();
@@ -28,14 +30,7 @@ public sealed class PageSetupDialog : Window
     private readonly TextBox _paperWidthBox = MakeNumericBox();
     private readonly TextBox _paperHeightBox = MakeNumericBox();
     private readonly StackPanel _customSizePanel;
-    private readonly TextBlock _status = new()
-    {
-        Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00)),
-        FontSize = 11,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 6, 0, 0),
-        IsVisible = false,
-    };
+    private readonly TextBlock _status = new();
 
     public PageSetupDialog(PageSettings current)
     {
@@ -64,6 +59,7 @@ public sealed class PageSetupDialog : Window
         _landscapeRadio.IsChecked = state.OrientationIndex == 1;
 
         _paperSizeBox = new ComboBox { MinWidth = 200 };
+        AvaloniaCompactDialogChrome.ApplyComboBox(_paperSizeBox, DialogChromeStyle);
         _paperSizeBox.ItemsSource = PageSetupDialogPlanner.AvaloniaPaperOptions
             .Select(option => option.AvaloniaLabel)
             .ToArray();
@@ -71,6 +67,9 @@ public sealed class PageSetupDialog : Window
 
         _paperWidthBox.Text = PageSetupDialogPlanner.FormatCompactPoints(current.WidthPt, DialogCulture);
         _paperHeightBox.Text = PageSetupDialogPlanner.FormatCompactPoints(current.HeightPt, DialogCulture);
+        AvaloniaCompactDialogChrome.ApplyRadioButton(_portraitRadio, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyRadioButton(_landscapeRadio, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
 
         var customIndex = PageSetupDialogPlanner.CustomIndex(PageSetupDialogPlanner.AvaloniaPaperOptions);
         _customSizePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
@@ -111,17 +110,13 @@ public sealed class PageSetupDialog : Window
         content.Children.Add(_customSizePanel);
 
         content.Children.Add(_status);
-        var ok = new Button { Content = PageSetupDialogPlanner.OkButton, MinWidth = 84, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = PageSetupDialogPlanner.OkButton, IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
         var cancel = new Button { Content = PageSetupDialogPlanner.CancelButton, MinWidth = 84, IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 84);
         ok.Click += (_, _) => OnOk();
         cancel.Click += (_, _) => Close(null);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 14, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0)));
 
         Content = content;
 
@@ -236,8 +231,12 @@ public sealed class PageSetupDialog : Window
         _status.IsVisible = true;
     }
 
-    private static TextBox MakeNumericBox() =>
-        new() { Width = 80, Margin = new Thickness(0, 4, 0, 0) };
+    private static TextBox MakeNumericBox()
+    {
+        var box = new TextBox { Width = 80, Margin = new Thickness(0, 4, 0, 0) };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        return box;
+    }
 
     private static TextBlock SectionLabel(string text) => new()
     {

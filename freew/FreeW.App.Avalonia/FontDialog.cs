@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -58,6 +59,8 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 public sealed class FontDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     // ── Snapshot of the initial formatting ───────────────────────────────────
     private readonly RunFormatting _original;
     // BZ3: indeterminate flags set from SelectionFormatting at dialog-open.
@@ -82,14 +85,7 @@ public sealed class FontDialog : Window
     private readonly ComboBox _colorBox;
     private readonly ComboBox _highlightBox;
 
-    private readonly TextBlock _status = new()
-    {
-        Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00)),
-        FontSize = 11,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 6, 0, 0),
-        IsVisible = false,
-    };
+    private readonly TextBlock _status = new();
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -136,6 +132,7 @@ public sealed class FontDialog : Window
             MinWidth = 260,
             IsEditable = true,
         };
+        AvaloniaCompactDialogChrome.ApplyComboBox(_familyBox, DialogChromeStyle);
         _familyBox.ItemsSource = FontDialogPlanner.BasicFamilyChoices;
         if (_familyIndeterminate)
         {
@@ -160,6 +157,7 @@ public sealed class FontDialog : Window
             MinWidth = 100,
             IsEditable = true,
         };
+        AvaloniaCompactDialogChrome.ApplyComboBox(_sizeBox, DialogChromeStyle);
         _sizeBox.ItemsSource = FontDialogPlanner.BasicSizeChoices.Select(size => size.Label).ToArray();
         if (_sizeIndeterminate)
         {
@@ -191,6 +189,8 @@ public sealed class FontDialog : Window
         _subChk.IsChecked         = state.Subscript;
         _smallCapsChk.IsChecked   = state.SmallCaps;
         _allCapsChk.IsChecked     = state.AllCaps;
+        ApplyCheckBoxChrome();
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(0, 6, 0, 0));
 
         // Super / Sub are mutually exclusive.
         _superChk.IsCheckedChanged += (_, _) =>
@@ -224,18 +224,14 @@ public sealed class FontDialog : Window
         styleRow2.Children.Add(_allCapsChk);
 
         // ── Buttons ───────────────────────────────────────────────────────────
-        var ok     = new Button { Content = "OK",     MinWidth = 84, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Cancel", MinWidth = 84, IsCancel = true  };
+        var ok     = new Button { Content = "OK", IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
+        var cancel = new Button { Content = "Cancel", IsCancel = true  };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 84);
         ok.Click     += (_, _) => OnOk();
         cancel.Click += (_, _) => Close(null);
 
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 14, 0, 0),
-            Children = { ok, cancel },
-        };
+        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0));
 
         var outer = new StackPanel { Margin = new Thickness(16, 14, 16, 16) };
         outer.Children.Add(grid);
@@ -474,9 +470,28 @@ public sealed class FontDialog : Window
     private static ComboBox BuildPaletteCombo(IReadOnlyList<FontDialogColorChoice> palette, int selectedIndex)
     {
         var cb = new ComboBox { MinWidth = 150 };
+        AvaloniaCompactDialogChrome.ApplyComboBox(cb, DialogChromeStyle);
         cb.ItemsSource = palette.Select(p => p.Label).ToArray();
         cb.SelectedIndex = selectedIndex < 0 || selectedIndex >= palette.Count ? 0 : selectedIndex;
 
         return cb;
+    }
+
+    private void ApplyCheckBoxChrome()
+    {
+        foreach (var checkBox in new[]
+        {
+            _boldChk,
+            _italicChk,
+            _underlineChk,
+            _strikeChk,
+            _superChk,
+            _subChk,
+            _smallCapsChk,
+            _allCapsChk,
+        })
+        {
+            AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
+        }
     }
 }

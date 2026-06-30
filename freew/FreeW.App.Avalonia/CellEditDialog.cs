@@ -1,12 +1,16 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia;
 
 /// <summary>Minimal modal editor for a table cell's text. Returns the new text, or null if cancelled.</summary>
 internal sealed class CellEditDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     private readonly TextBox _box;
 
     public CellEditDialog(string initial)
@@ -18,19 +22,16 @@ internal sealed class CellEditDialog : Window
         CanResize = false;
 
         _box = new TextBox { Text = initial, AcceptsReturn = false };
+        AvaloniaCompactDialogChrome.ApplyTextBox(_box, DialogChromeStyle);
 
         var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) => Close(_box.Text ?? string.Empty);
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => Close(null);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { ok, cancel },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 10, 0, 0));
 
         Content = new StackPanel
         {
