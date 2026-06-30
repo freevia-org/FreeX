@@ -42,6 +42,26 @@ public sealed class PptxPackageWriterSourceTests
             .And.NotContain("StartsWith(\"ppt/slides/\"");
     }
 
+    [Fact]
+    public void DocumentProperties_UseSharedOpcPropertyHelpersAndConstants()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageWriter.cs"));
+
+        source.Should()
+            .Contain("OpcPackageProperties.CorePropertiesZipEntry")
+            .And.Contain("OpcPackageProperties.CorePropertiesPartName")
+            .And.Contain("OpcPackageProperties.CorePropertiesContentType")
+            .And.Contain("OpcDocumentProperties.BuildCorePropertiesDocument(")
+            .And.NotContain("\"docProps/core.xml\"")
+            .And.NotContain("\"/docProps/core.xml\"")
+            .And.NotContain("\"docProps/app.xml\"")
+            .And.NotContain("\"docProps/custom.xml\"");
+    }
+
     private static string ExtractMethod(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);

@@ -44,6 +44,22 @@ public sealed class PptxPackageReaderSourceTests
     }
 
     [Fact]
+    public void CorePropertiesRead_UsesSharedOpcDocumentPropertiesHelper()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageReader.cs"));
+
+        ExtractMethod(source, "private static void ReadCoreProperties(")
+            .Should()
+            .Contain("OpcDocumentProperties.ReadCoreProperties(archive, path)")
+            .And.NotContain("Element(")
+            .And.NotContain("XDocument.Load(");
+    }
+
+    [Fact]
     public void Read_PresentationXmlWithDtd_DoesNotApplyParsedPayload()
     {
         using var stream = new MemoryStream();

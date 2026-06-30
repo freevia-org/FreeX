@@ -8,10 +8,6 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class PptxPackageRetentionTests
 {
-    private const string ExtendedPropsRelType =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
-    private const string CustomPropsRelType =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
     private const string CustomXmlRelType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
     private const string ExternalReviewRelType =
@@ -52,19 +48,21 @@ public sealed class PptxPackageRetentionTests
         stream.Position = 0;
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var coreXml = LoadXml(archive, "docProps/core.xml");
-            coreXml.Root!.Element(DcNs + "title")!.Value.Should().Be("FreeP title");
-            coreXml.Root.Element(DcNs + "creator")!.Value.Should().Be("FreeP author");
-            coreXml.Root.Element(DcNs + "subject")!.Value.Should().Be("FreeP subject");
-            coreXml.Root.Element(CpNs + "keywords")!.Value.Should().Be("freep,pptx,opc");
-            coreXml.Root.Element(DcNs + "description")!.Value.Should().Be("FreeP comments");
-            coreXml.Root.Element(CpNs + "lastModifiedBy")!.Value.Should().Be("FreeP editor");
-            coreXml.Root.Element(DcTermsNs + "created")!.Value.Should().Be("2026-06-29T09:30:00Z");
-            coreXml.Root.Element(DcTermsNs + "modified")!.Value.Should().Be("2026-06-29T10:15:00Z");
-            coreXml.Root.Element(CpNs + "category")!.Value.Should().Be("FreeP category");
-            coreXml.Root.Element(CpNs + "contentStatus")!.Value.Should().Be("Draft");
-            coreXml.Root.Element(DcNs + "language")!.Value.Should().Be("en-US");
-            coreXml.Root.Element(CpNs + "version")!.Value.Should().Be("2026.06");
+            var coreProperties = OpcDocumentProperties.ReadCoreProperties(
+                LoadXml(archive, OpcPackageProperties.CorePropertiesZipEntry));
+            coreProperties.Should().Be(new CoreDocumentProperties(
+                Title: "FreeP title",
+                Author: "FreeP author",
+                Subject: "FreeP subject",
+                Keywords: "freep,pptx,opc",
+                Comments: "FreeP comments",
+                LastModifiedBy: "FreeP editor",
+                Created: created,
+                Modified: modified,
+                Category: "FreeP category",
+                ContentStatus: "Draft",
+                Language: "en-US",
+                Version: "2026.06"));
         }
 
         stream.Position = 0;
@@ -109,16 +107,26 @@ public sealed class PptxPackageRetentionTests
 
         using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
         {
-            ReadText(archive, "docProps/app.xml").Should().Contain("FreeP retention harness");
-            ReadText(archive, "docProps/custom.xml").Should().Contain("RetentionMarker");
+            var extendedProperties = OpcDocumentProperties.ReadExtendedProperties(
+                LoadXml(archive, OpcPackageProperties.ExtendedPropertiesZipEntry));
+            extendedProperties.Application.Should().Be("FreeP retention harness");
+            var customProperties = OpcCustomDocumentProperties.FromDocument(
+                LoadXml(archive, OpcPackageProperties.CustomPropertiesZipEntry));
+            customProperties.GetString("RetentionMarker").Should().Be("retain-me");
             ReadText(archive, "customXml/item1.xml").Should().Contain("retain-me");
             ReadText(archive, "customXml/itemProps1.xml").Should().Contain("itemID");
             ReadText(archive, "customXml/payload.freex").Should().Contain("freex-payload");
             ReadBytes(archive, "ppt/customData/viewState.bin").Should().Equal(new byte[] { 0x46, 0x50, 0x52, 0x01 });
 
             var rootRels = LoadXml(archive, "_rels/.rels");
-            Relationship(rootRels, ExtendedPropsRelType, "docProps/app.xml").Should().NotBeNull();
-            Relationship(rootRels, CustomPropsRelType, "docProps/custom.xml").Should().NotBeNull();
+            Relationship(
+                rootRels,
+                OpcPackageProperties.ExtendedPropertiesRelationshipType,
+                OpcPackageProperties.ExtendedPropertiesZipEntry).Should().NotBeNull();
+            Relationship(
+                rootRels,
+                OpcPackageProperties.CustomPropertiesRelationshipType,
+                OpcPackageProperties.CustomPropertiesZipEntry).Should().NotBeNull();
             Relationship(rootRels, CustomXmlRelType, "customXml/item1.xml").Should().NotBeNull();
             var externalReviewRel = Relationship(rootRels, ExternalReviewRelType, "https://example.com/freep-review");
             externalReviewRel.Should().NotBeNull();
@@ -129,10 +137,14 @@ public sealed class PptxPackageRetentionTests
             Relationship(presRels, UnknownViewRelType, "customData/viewState.bin").Should().NotBeNull();
 
             var contentTypes = LoadXml(archive, "[Content_Types].xml");
-            Override(contentTypes, "/docProps/app.xml",
-                "application/vnd.openxmlformats-officedocument.extended-properties+xml").Should().NotBeNull();
-            Override(contentTypes, "/docProps/custom.xml",
-                "application/vnd.openxmlformats-officedocument.custom-properties+xml").Should().NotBeNull();
+            Override(
+                contentTypes,
+                OpcPackageProperties.ExtendedPropertiesPartName,
+                OpcPackageProperties.ExtendedPropertiesContentType).Should().NotBeNull();
+            Override(
+                contentTypes,
+                OpcPackageProperties.CustomPropertiesPartName,
+                OpcPackageProperties.CustomPropertiesContentType).Should().NotBeNull();
             Override(contentTypes, "/customXml/itemProps1.xml",
                 "application/vnd.openxmlformats-officedocument.customXmlProperties+xml").Should().NotBeNull();
             Override(contentTypes, "/ppt/customData/viewState.bin",
@@ -157,24 +169,19 @@ public sealed class PptxPackageRetentionTests
         package.Position = 0;
         using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
         {
-            WriteText(archive, "docProps/app.xml",
-                """
-                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
-                            xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-                  <Application>FreeP retention harness</Application>
-                </Properties>
-                """);
-            WriteText(archive, "docProps/custom.xml",
-                """
-                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
-                            xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-                  <property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="RetentionMarker">
-                    <vt:lpwstr>retain-me</vt:lpwstr>
-                  </property>
-                </Properties>
-                """);
+            WriteXml(
+                archive,
+                OpcPackageProperties.ExtendedPropertiesZipEntry,
+                OpcDocumentProperties.BuildExtendedPropertiesDocument(
+                    new ExtendedDocumentProperties(Application: "FreeP retention harness"),
+                    includeXmlDeclaration: true));
+
+            var customProperties = OpcCustomDocumentProperties.Create();
+            customProperties.SetString("RetentionMarker", "retain-me");
+            WriteXml(
+                archive,
+                OpcPackageProperties.CustomPropertiesZipEntry,
+                customProperties.ToXDocument(includeXmlDeclaration: true));
             WriteText(archive, "customXml/item1.xml", """<bag xmlns="urn:freep:test">retain-me</bag>""");
             WriteText(archive, "customXml/itemProps1.xml",
                 """<ds:datastoreItem ds:itemID="{11111111-1111-1111-1111-111111111111}" xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"/>""");
@@ -182,8 +189,16 @@ public sealed class PptxPackageRetentionTests
             WriteBytes(archive, "ppt/customData/viewState.bin", new byte[] { 0x46, 0x50, 0x52, 0x01 });
 
             var rootRels = LoadXml(archive, "_rels/.rels");
-            AddRelationship(rootRels, "rIdAppProps", ExtendedPropsRelType, "docProps/app.xml");
-            AddRelationship(rootRels, "rIdCustomProps", CustomPropsRelType, "docProps/custom.xml");
+            AddRelationship(
+                rootRels,
+                "rIdAppProps",
+                OpcPackageProperties.ExtendedPropertiesRelationshipType,
+                OpcPackageProperties.ExtendedPropertiesZipEntry);
+            AddRelationship(
+                rootRels,
+                "rIdCustomProps",
+                OpcPackageProperties.CustomPropertiesRelationshipType,
+                OpcPackageProperties.CustomPropertiesZipEntry);
             AddRelationship(rootRels, "rIdCustomXml", CustomXmlRelType, "customXml/item1.xml");
             AddRelationship(rootRels, "rIdExternalReview", ExternalReviewRelType, "https://example.com/freep-review", external: true);
             AddRelationship(rootRels, "rIdSlideMirror", UnknownSlideMirrorRelType, "ppt/slides/slide1.xml");
@@ -203,10 +218,14 @@ public sealed class PptxPackageRetentionTests
             WriteXml(archive, "ppt/_rels/presentation.xml.rels", presRels);
 
             var contentTypes = LoadXml(archive, "[Content_Types].xml");
-            AddOverride(contentTypes, "/docProps/app.xml",
-                "application/vnd.openxmlformats-officedocument.extended-properties+xml");
-            AddOverride(contentTypes, "/docProps/custom.xml",
-                "application/vnd.openxmlformats-officedocument.custom-properties+xml");
+            AddOverride(
+                contentTypes,
+                OpcPackageProperties.ExtendedPropertiesPartName,
+                OpcPackageProperties.ExtendedPropertiesContentType);
+            AddOverride(
+                contentTypes,
+                OpcPackageProperties.CustomPropertiesPartName,
+                OpcPackageProperties.CustomPropertiesContentType);
             AddOverride(contentTypes, "/customXml/itemProps1.xml",
                 "application/vnd.openxmlformats-officedocument.customXmlProperties+xml");
             AddOverride(contentTypes, "/ppt/customData/viewState.bin",
@@ -223,11 +242,6 @@ public sealed class PptxPackageRetentionTests
         "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace ContentTypesNs =
         "http://schemas.openxmlformats.org/package/2006/content-types";
-    private static readonly XNamespace DcNs = "http://purl.org/dc/elements/1.1/";
-    private static readonly XNamespace DcTermsNs = "http://purl.org/dc/terms/";
-    private static readonly XNamespace CpNs =
-        "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
-
     private static XElement? Relationship(XDocument doc, string type, string target) =>
         doc.Root?.Elements(RelsNs + "Relationship").FirstOrDefault(r =>
             r.Attribute("Type")?.Value == type &&
