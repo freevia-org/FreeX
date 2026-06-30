@@ -26,6 +26,9 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("BackstageStrings.Current.Get");
         source.Should().Contain("SisterBackstageHostController");
         source.Should().Contain("new SisterBackstageHostSpec(");
+        source.Should().Contain("Chrome = BackstageRibbonChrome.Create()");
+        source.Should().Contain("public void Show() => _backstage.Show();");
+        source.Should().Contain("public void Hide() => _backstage.Hide();");
         source.Should().Contain("backstage.FrameCommand(_actions.New)");
         source.Should().Contain("_backstage.HideThen");
         source.Should().Contain("Panes.BuildInfoPane(");

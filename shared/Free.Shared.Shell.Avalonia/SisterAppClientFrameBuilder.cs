@@ -57,15 +57,32 @@ public static class SisterAppClientFrameBuilder
                 case SisterAppClientFrameSlotRole.TopPanelBelowChrome:
                     AddDocked(root, topPanelsBelowChrome[slot.Index], Dock.Top);
                     break;
+                case SisterAppClientFrameSlotRole.WorkArea:
+                case SisterAppClientFrameSlotRole.BottomPanelAboveStatus:
+                case SisterAppClientFrameSlotRole.StatusBar:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(slot), slot.Role, "Unknown sister-app frame slot.");
             }
         }
 
-        AddDocked(root, spec.StatusBar, Dock.Bottom);
+        foreach (var slot in contract.Slots.Reverse())
+        {
+            switch (slot.Role)
+            {
+                case SisterAppClientFrameSlotRole.StatusBar:
+                    AddDocked(root, spec.StatusBar, Dock.Bottom);
+                    break;
+                case SisterAppClientFrameSlotRole.BottomPanelAboveStatus:
+                    AddDocked(root, bottomPanelsAboveStatus[slot.Index], Dock.Bottom);
+                    break;
+            }
+        }
 
-        foreach (var panel in bottomPanelsAboveStatus)
-            AddDocked(root, panel, Dock.Bottom);
-
-        root.Children.Add(spec.WorkArea);
+        var workAreaSlot = contract.Slots.Single(slot => slot.Role == SisterAppClientFrameSlotRole.WorkArea);
+        root.Children.Add(workAreaSlot.Index == 0
+            ? spec.WorkArea
+            : throw new ArgumentOutOfRangeException(nameof(workAreaSlot), workAreaSlot.Index, "Unknown sister-app workarea slot."));
 
         return new SisterAppClientFrameBuildResult(root);
     }

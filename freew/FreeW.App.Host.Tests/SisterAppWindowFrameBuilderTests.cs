@@ -77,45 +77,70 @@ public sealed class SisterAppWindowFrameBuilderTests
     public void ClientFrameBuilder_ComposesOptionalPanelRowsFromSharedContract()
     {
         var chrome = new Border();
-        var topPanel = new Border();
+        var topPanel1 = new Border();
+        var topPanel2 = new Border();
         var workArea = new Grid();
-        var bottomPanel = new Border();
+        var bottomPanel1 = new Border();
+        var bottomPanel2 = new Border();
         var statusBar = new Border();
 
         var result = SisterAppClientFrameBuilder.Build(new SisterAppClientFrameSpec(
             Chrome: chrome,
             WorkArea: workArea,
             StatusBar: statusBar,
-            BottomPanelsAboveStatus: [bottomPanel],
-            TopPanelsBelowChrome: [topPanel]));
+            BottomPanelsAboveStatus: [bottomPanel1, bottomPanel2],
+            TopPanelsBelowChrome: [topPanel1, topPanel2]));
 
         result.Root.RowDefinitions.Select(row => row.Height).Should().Equal(
             GridLength.Auto,
             GridLength.Auto,
+            GridLength.Auto,
             new GridLength(1, GridUnitType.Star),
             GridLength.Auto,
+            GridLength.Auto,
             GridLength.Auto);
-        result.Root.Children.Cast<UIElement>().Should().Equal(chrome, topPanel, workArea, bottomPanel, statusBar);
+        result.Root.Children.Cast<UIElement>().Should().Equal(
+            chrome,
+            topPanel1,
+            topPanel2,
+            workArea,
+            bottomPanel1,
+            bottomPanel2,
+            statusBar);
         Grid.GetRow(chrome).Should().Be(0);
-        Grid.GetRow(topPanel).Should().Be(1);
-        Grid.GetRow(workArea).Should().Be(2);
-        Grid.GetRow(bottomPanel).Should().Be(3);
-        Grid.GetRow(statusBar).Should().Be(4);
+        Grid.GetRow(topPanel1).Should().Be(1);
+        Grid.GetRow(topPanel2).Should().Be(2);
+        Grid.GetRow(workArea).Should().Be(3);
+        Grid.GetRow(bottomPanel1).Should().Be(4);
+        Grid.GetRow(bottomPanel2).Should().Be(5);
+        Grid.GetRow(statusBar).Should().Be(6);
     }
 
     [Fact]
-    public void ClientFrameContractPlanner_DescribesSharedChromeWorkAreaStatusOrder()
+    public void ClientFrameContractPlanner_DescribesSharedChromeWorkAreaStatusOrderAndIndexes()
     {
         var contract = SisterAppClientFrameContractPlanner.Plan(
-            topPanelsBelowChrome: 1,
-            bottomPanelsAboveStatus: 1);
+            topPanelsBelowChrome: 2,
+            bottomPanelsAboveStatus: 2);
 
-        contract.Slots.Select(slot => slot.Role).Should().Equal(
-            SisterAppClientFrameSlotRole.Chrome,
-            SisterAppClientFrameSlotRole.TopPanelBelowChrome,
-            SisterAppClientFrameSlotRole.WorkArea,
-            SisterAppClientFrameSlotRole.BottomPanelAboveStatus,
-            SisterAppClientFrameSlotRole.StatusBar);
+        contract.Slots.Should().Equal(
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.Chrome, 0),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.TopPanelBelowChrome, 0),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.TopPanelBelowChrome, 1),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.WorkArea, 0),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.BottomPanelAboveStatus, 0),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.BottomPanelAboveStatus, 1),
+            new SisterAppClientFrameSlotPlan(SisterAppClientFrameSlotRole.StatusBar, 0));
+    }
+
+    [Fact]
+    public void ClientFrameContractPlanner_RejectsNegativePanelCounts()
+    {
+        Action negativeTop = () => SisterAppClientFrameContractPlanner.Plan(topPanelsBelowChrome: -1);
+        Action negativeBottom = () => SisterAppClientFrameContractPlanner.Plan(bottomPanelsAboveStatus: -1);
+
+        negativeTop.Should().Throw<ArgumentOutOfRangeException>();
+        negativeBottom.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     [StaFact]
