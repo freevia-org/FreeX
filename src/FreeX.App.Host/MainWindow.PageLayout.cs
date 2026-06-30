@@ -639,7 +639,7 @@ public partial class MainWindow
         var isChecked = (sender as System.Windows.Controls.CheckBox)?.IsChecked == true;
         TryExecuteCommand(
             PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false),
-            "Print Gridlines");
+            PageLayoutRibbonActionPlanner.PrintGridlinesCommandLabel);
     }
 
     private void PrintHeadingsChk_Click(object sender, RoutedEventArgs e)
@@ -648,7 +648,7 @@ public partial class MainWindow
         var isChecked = (sender as System.Windows.Controls.CheckBox)?.IsChecked == true;
         TryExecuteCommand(
             PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked),
-            "Print Headings");
+            PageLayoutRibbonActionPlanner.PrintHeadingsCommandLabel);
     }
 
     // ── Formulas tab ──────────────────────────────────────────────────────────

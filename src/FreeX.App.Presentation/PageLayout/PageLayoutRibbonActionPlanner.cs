@@ -44,6 +44,8 @@ public static class PageLayoutRibbonActionPlanner
     public const string PrintAreaCommandLabel = "Print Area";
     public const string PageBreaksCommandLabel = "Page Breaks";
     public const string ScaleToFitCommandLabel = "Scale To Fit";
+    public const string PrintGridlinesCommandLabel = "Print Gridlines";
+    public const string PrintHeadingsCommandLabel = "Print Headings";
 
     public static IReadOnlyList<PageLayoutRibbonActionDescriptor> RibbonActionDescriptors { get; } =
     [
