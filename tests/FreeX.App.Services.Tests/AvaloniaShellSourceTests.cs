@@ -2515,7 +2515,8 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private async Task ShowAllowEditRangesParityDialogAsync()");
         parityCaptureSource.Should().Contain("new AllowEditRangeCommand(sheetId, range)");
 
-        pictureShapeSource.Should().Contain("[\"shapeFormat.shapeEffects\"] = () => RunGuarded(OpenShapeEffectsDialogAsync),");
+        pictureShapeSource.Should().Contain("DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs()");
+        pictureShapeSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync)");
         drawingFormatSource.Should().Contain("private async System.Threading.Tasks.Task OpenShapeEffectsDialogAsync()");
         drawingFormatSource.Should().Contain("ShapeEffectsPlanner.CreatePlan(shape.GetEffectiveEffectPreset())");
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ShapeEffectsDialog\");");

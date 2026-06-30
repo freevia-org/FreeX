@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -26,6 +27,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle PictureShapeDialogChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>
     /// Picture/Shape Format command id -> handler entries. Merge these into
     /// <see cref="BuildContextualTabCommands"/> (they replace the four Phase-1 picture/shape shells and add
@@ -33,60 +36,35 @@ public sealed partial class MainWindow
     /// </summary>
     private IEnumerable<KeyValuePair<string, Action>> BuildPictureShapeTabCommands()
     {
-        return new Dictionary<string, Action>(StringComparer.Ordinal)
-        {
-            // --- Picture Format (picture.selected). ---
-            // Format Picture dialog — size (W/H + lock aspect), rotation, and alt text via FormatPicturePlanner,
-            // applied through ResizePictureCommand / SetPictureLockAspectRatioCommand /
-            // SetDrawingObjectRotationCommand / SetPictureAltTextCommand.
-            ["pictureFormat.formatPicture"] = () => RunGuarded(OpenFormatPictureDialogAsync),
-            // Crop Picture is a dropdown: its "Crop..." menu item opens the per-edge crop-percentage dialog
-            // (PictureCropDialogPlanner + SetPictureCropCommand, image pictures only); "Reset Crop" clears the
-            // crop. The dropdown PARENT only opens the menu (the renderer never invokes a dropdown's own
-            // command), so it stays a registered, enabled no-op-style hint.
-            ["pictureFormat.crop"] = () => RefreshShell(UiText.Get("PictureCrop_Title")),
-            ["Crop"] = () => RunGuarded(OpenPictureCropDialogAsync),
-            ["Reset Crop"] = () => ResetSelectedPictureCrop(),
-            // Picture z-order: real, via the cross-kind MoveSelectionPaneObjectCommand (same Core path the
-            // Selection Pane uses for one-step z-order moves), preserving undo/redo.
-            ["pictureFormat.bringForward"] = () => BringSelectedPictureForward(),
-            ["pictureFormat.sendBackward"] = () => SendSelectedPictureBackward(),
-            ["pictureFormat.selectionPane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
-            ["pictureFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
-            ["pictureFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
-            ["pictureFormat.altText"] = () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
+        var commands = new Dictionary<string, Action>(StringComparer.Ordinal);
+        foreach (var spec in DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs())
+            commands[spec.CommandId] = CreatePictureShapeTabCommand(spec);
 
-            // --- Shape Format (shape.selected). ---
-            ["shapeFormat.shapeFill"] = () => RunGuarded(SetSelectedShapeFillColorAsync),
-            ["shapeFormat.shapeOutline"] = () => RunGuarded(SetSelectedShapeOutlineColorAsync),
-            // Shape Gradient dialog — start/end stop colors + direction via ShapeGradientPlanner, applied through
-            // SetDrawingShapeGradientCommand.
-            ["shapeFormat.shapeGradient"] = () => RunGuarded(OpenShapeGradientDialogAsync),
-            // Shape Effects is a dropdown whose eight menu items (No Effect / Shadow / Inner Shadow / Reflection
-            // / Glow / Soft Edges / Bevel / 3-D Rotation) are now all wired to apply the matching preset through
-            // SetDrawingShapeEffectCommand. The preset catalog (presets + labels) is single-sourced in the
-            // portable ShapeEffectsPlanner. The dropdown PARENT only opens the menu (the renderer never invokes
-            // a dropdown's own command), so it stays a registered, enabled menu hint. The two legacy
-            // shapeEffectNone/shapeEffectShadow aliases are preserved for backward compatibility.
-            ["shapeFormat.shapeEffectNone"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
-            ["shapeFormat.shapeEffectShadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
-            ["shapeFormat.shapeEffects"] = () => RunGuarded(OpenShapeEffectsDialogAsync),
-            ["No Effect"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.None),
-            ["Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Shadow),
-            ["Inner Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),
-            ["Reflection"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Reflection),
-            ["Glow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Glow),
-            ["Soft Edges"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.SoftEdges),
-            ["Bevel"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Bevel),
-            ["3-D Rotation"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
-            ["shapeFormat.bringForward"] = () => BringSelectedShapeForward(),
-            ["shapeFormat.sendBackward"] = () => SendSelectedShapeBackward(),
-            ["shapeFormat.selectionPane"] = () => RunGuarded(OpenSelectionPaneDialogAsync),
-            ["shapeFormat.rotate"] = () => RunGuarded(RotateSelectedDrawingObjectAsync),
-            ["shapeFormat.size"] = () => RunGuarded(ResizeSelectedDrawingObjectAsync),
-            ["shapeFormat.altText"] = () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
-        };
+        return commands;
     }
+
+    private Action CreatePictureShapeTabCommand(DrawingObjectContextualCommandSpec spec) =>
+        spec.Action switch
+        {
+            DrawingObjectContextualCommandAction.FormatPicture => () => RunGuarded(OpenFormatPictureDialogAsync),
+            DrawingObjectContextualCommandAction.PictureCropMenuHint => () => RefreshShell(UiText.Get("PictureCrop_Title")),
+            DrawingObjectContextualCommandAction.CropPicture => () => RunGuarded(OpenPictureCropDialogAsync),
+            DrawingObjectContextualCommandAction.ResetPictureCrop => ResetSelectedPictureCrop,
+            DrawingObjectContextualCommandAction.BringPictureForward => BringSelectedPictureForward,
+            DrawingObjectContextualCommandAction.SendPictureBackward => SendSelectedPictureBackward,
+            DrawingObjectContextualCommandAction.SelectionPane => () => RunGuarded(OpenSelectionPaneDialogAsync),
+            DrawingObjectContextualCommandAction.RotateObject => () => RunGuarded(RotateSelectedDrawingObjectAsync),
+            DrawingObjectContextualCommandAction.ResizeObject => () => RunGuarded(ResizeSelectedDrawingObjectAsync),
+            DrawingObjectContextualCommandAction.EditAltText => () => RunGuarded(EditSelectedDrawingObjectAltTextAsync),
+            DrawingObjectContextualCommandAction.ShapeFill => () => RunGuarded(SetSelectedShapeFillColorAsync),
+            DrawingObjectContextualCommandAction.ShapeOutline => () => RunGuarded(SetSelectedShapeOutlineColorAsync),
+            DrawingObjectContextualCommandAction.ShapeGradient => () => RunGuarded(OpenShapeGradientDialogAsync),
+            DrawingObjectContextualCommandAction.ShapeEffectsDialog => () => RunGuarded(OpenShapeEffectsDialogAsync),
+            DrawingObjectContextualCommandAction.ShapeEffectPreset => () => ApplySelectedShapeEffect(spec.EffectPreset ?? DrawingShapeEffectPreset.None),
+            DrawingObjectContextualCommandAction.BringShapeForward => BringSelectedShapeForward,
+            DrawingObjectContextualCommandAction.SendShapeBackward => SendSelectedShapeBackward,
+            _ => throw new NotSupportedException($"Unsupported picture/shape contextual action: {spec.Action}")
+        };
 
     // -------------------------------------------------------------------------------------------------------
     // Selected-object resolution
@@ -413,6 +391,7 @@ public sealed partial class MainWindow
             TextWrapping = multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
             MinHeight = multiline ? 64 : double.NaN,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(input, PictureShapeDialogChromeStyle, fixedHeight: !multiline);
         AutomationProperties.SetAutomationId(input, "PictureShapeInputBox");
 
         var dialog = new Window
@@ -432,8 +411,8 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "PictureShapeInputCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((string?)null);
-        ApplyDialogButtonChrome(okButton, 80, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 80);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, PictureShapeDialogChromeStyle, 80, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, PictureShapeDialogChromeStyle, 80);
 
         dialog.Content = new StackPanel
         {
@@ -444,13 +423,7 @@ public sealed partial class MainWindow
             {
                 new TextBlock { Text = prompt },
                 input,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children = { okButton, cancelButton },
-                },
+                AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]),
             },
         };
 
@@ -473,6 +446,7 @@ public sealed partial class MainWindow
             Width = 120,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(widthBox, PictureShapeDialogChromeStyle);
         AutomationProperties.SetAutomationId(widthBox, "ObjectSizeWidthBox");
 
         var heightBox = new TextBox
@@ -481,14 +455,11 @@ public sealed partial class MainWindow
             Width = 120,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(heightBox, PictureShapeDialogChromeStyle);
         AutomationProperties.SetAutomationId(heightBox, "ObjectSizeHeightBox");
 
-        var warning = new TextBlock
-        {
-            Foreground = Brush(180, 30, 30),
-            TextWrapping = TextWrapping.Wrap,
-            IsVisible = false,
-        };
+        var warning = new TextBlock();
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(warning, PictureShapeDialogChromeStyle);
 
         var dialog = new Window
         {
@@ -520,8 +491,8 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ObjectSizeCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((ObjectSizeDialogSize?)null);
-        ApplyDialogButtonChrome(okButton, 80, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 80);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, PictureShapeDialogChromeStyle, 80, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, PictureShapeDialogChromeStyle, 80);
 
         StackPanel Row(string label, TextBox box) => new()
         {
@@ -545,13 +516,7 @@ public sealed partial class MainWindow
                 Row(UiText.Get("InsertLoc_WidthLabel"), widthBox),
                 Row(UiText.Get("InsertLoc_HeightLabel"), heightBox),
                 warning,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children = { okButton, cancelButton },
-                },
+                AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]),
             },
         };
 

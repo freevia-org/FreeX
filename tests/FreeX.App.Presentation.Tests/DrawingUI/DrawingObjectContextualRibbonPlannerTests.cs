@@ -91,4 +91,26 @@ public sealed class DrawingObjectContextualRibbonPlannerTests
         SelectionPaneObjectKind kind,
         string expected) =>
         DrawingObjectContextualRibbonPlanner.ResolveActivationKey(kind).Should().Be(expected);
+
+    [Fact]
+    public void CreatePictureShapeCommandSpecs_OwnsContextualTabActionMetadata()
+    {
+        var specs = DrawingObjectContextualRibbonPlanner.CreatePictureShapeCommandSpecs();
+
+        specs.Select(spec => spec.CommandId).Should().OnlyHaveUniqueItems();
+        specs.Should().Contain(new DrawingObjectContextualCommandSpec(
+            "pictureFormat.formatPicture",
+            DrawingObjectContextualCommandAction.FormatPicture));
+        specs.Should().Contain(new DrawingObjectContextualCommandSpec(
+            "shapeFormat.shapeGradient",
+            DrawingObjectContextualCommandAction.ShapeGradient));
+        specs.Should().Contain(new DrawingObjectContextualCommandSpec(
+            "shapeFormat.shapeEffectShadow",
+            DrawingObjectContextualCommandAction.ShapeEffectPreset,
+            DrawingShapeEffectPreset.Shadow));
+        specs.Should().Contain(new DrawingObjectContextualCommandSpec(
+            "3-D Rotation",
+            DrawingObjectContextualCommandAction.ShapeEffectPreset,
+            DrawingShapeEffectPreset.ThreeDRotation));
+    }
 }

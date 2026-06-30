@@ -9,6 +9,32 @@ public enum DrawingObjectContextualRibbonCommand
     ShapeEffects
 }
 
+public enum DrawingObjectContextualCommandAction
+{
+    FormatPicture,
+    PictureCropMenuHint,
+    CropPicture,
+    ResetPictureCrop,
+    BringPictureForward,
+    SendPictureBackward,
+    SelectionPane,
+    RotateObject,
+    ResizeObject,
+    EditAltText,
+    ShapeFill,
+    ShapeOutline,
+    ShapeGradient,
+    ShapeEffectsDialog,
+    ShapeEffectPreset,
+    BringShapeForward,
+    SendShapeBackward
+}
+
+public sealed record DrawingObjectContextualCommandSpec(
+    string CommandId,
+    DrawingObjectContextualCommandAction Action,
+    DrawingShapeEffectPreset? EffectPreset = null);
+
 public sealed record DrawingObjectContextualRibbonPlan(
     bool ShapeFormatVisible,
     bool PictureFormatVisible,
@@ -44,6 +70,40 @@ public static class DrawingObjectContextualRibbonPlanner
     public const string ShapeGradientCommandName = "Shape Gradient";
     public const string ShapeEffectsCommandName = "Shape Effects";
     public const string CropPictureCommandName = "Crop Picture";
+
+    public static IReadOnlyList<DrawingObjectContextualCommandSpec> CreatePictureShapeCommandSpecs() =>
+    [
+        new("pictureFormat.formatPicture", DrawingObjectContextualCommandAction.FormatPicture),
+        new("pictureFormat.crop", DrawingObjectContextualCommandAction.PictureCropMenuHint),
+        new("Crop", DrawingObjectContextualCommandAction.CropPicture),
+        new("Reset Crop", DrawingObjectContextualCommandAction.ResetPictureCrop),
+        new("pictureFormat.bringForward", DrawingObjectContextualCommandAction.BringPictureForward),
+        new("pictureFormat.sendBackward", DrawingObjectContextualCommandAction.SendPictureBackward),
+        new("pictureFormat.selectionPane", DrawingObjectContextualCommandAction.SelectionPane),
+        new("pictureFormat.rotate", DrawingObjectContextualCommandAction.RotateObject),
+        new("pictureFormat.size", DrawingObjectContextualCommandAction.ResizeObject),
+        new("pictureFormat.altText", DrawingObjectContextualCommandAction.EditAltText),
+        new("shapeFormat.shapeFill", DrawingObjectContextualCommandAction.ShapeFill),
+        new("shapeFormat.shapeOutline", DrawingObjectContextualCommandAction.ShapeOutline),
+        new("shapeFormat.shapeGradient", DrawingObjectContextualCommandAction.ShapeGradient),
+        new("shapeFormat.shapeEffectNone", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.None),
+        new("shapeFormat.shapeEffectShadow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Shadow),
+        new("shapeFormat.shapeEffects", DrawingObjectContextualCommandAction.ShapeEffectsDialog),
+        new("No Effect", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.None),
+        new("Shadow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Shadow),
+        new("Inner Shadow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.InnerShadow),
+        new("Reflection", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Reflection),
+        new("Glow", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Glow),
+        new("Soft Edges", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.SoftEdges),
+        new("Bevel", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.Bevel),
+        new("3-D Rotation", DrawingObjectContextualCommandAction.ShapeEffectPreset, DrawingShapeEffectPreset.ThreeDRotation),
+        new("shapeFormat.bringForward", DrawingObjectContextualCommandAction.BringShapeForward),
+        new("shapeFormat.sendBackward", DrawingObjectContextualCommandAction.SendShapeBackward),
+        new("shapeFormat.selectionPane", DrawingObjectContextualCommandAction.SelectionPane),
+        new("shapeFormat.rotate", DrawingObjectContextualCommandAction.RotateObject),
+        new("shapeFormat.size", DrawingObjectContextualCommandAction.ResizeObject),
+        new("shapeFormat.altText", DrawingObjectContextualCommandAction.EditAltText),
+    ];
 
     public static DrawingObjectContextualRibbonPlan Build(
         Sheet? sheet,
