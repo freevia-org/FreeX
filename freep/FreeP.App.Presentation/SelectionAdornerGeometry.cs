@@ -1,3 +1,5 @@
+using Free.Shared.Drawing;
+
 namespace FreeP.App.Compositor;
 
 public readonly record struct SelectionAdornerRect(
@@ -10,13 +12,12 @@ public readonly record struct SelectionAdornerRect(
 
     public double Bottom => Top + Height;
 
-    public bool Contains(CanvasGesturePoint point)
-    {
-        return point.X >= Left
-            && point.X <= Right
-            && point.Y >= Top
-            && point.Y <= Bottom;
-    }
+    public bool Contains(CanvasGesturePoint point) =>
+        DrawingObjectInteractionPlanner.ContainsInclusive(
+            ToLayoutRect(),
+            new LayoutPoint(point.X, point.Y));
+
+    internal LayoutRect ToLayoutRect() => new(Left, Top, Width, Height);
 }
 
 public static class SelectionAdornerGeometry
@@ -26,71 +27,44 @@ public static class SelectionAdornerGeometry
     public const double RotateHandleOffset = 18.0;
     public const double HandleHitRadius = 8.0;
 
-    private static readonly CanvasGestureHandleKind[] HandleKinds =
-    [
-        CanvasGestureHandleKind.ResizeN,
-        CanvasGestureHandleKind.ResizeNE,
-        CanvasGestureHandleKind.ResizeE,
-        CanvasGestureHandleKind.ResizeSE,
-        CanvasGestureHandleKind.ResizeS,
-        CanvasGestureHandleKind.ResizeSW,
-        CanvasGestureHandleKind.ResizeW,
-        CanvasGestureHandleKind.ResizeNW
-    ];
-
     public static IReadOnlyList<CanvasGesturePoint> GetHandleCenters(SelectionAdornerRect rect)
-    {
-        double mx = rect.Left + rect.Width / 2.0;
-        double my = rect.Top + rect.Height / 2.0;
-
-        return
-        [
-            new CanvasGesturePoint(mx, rect.Top),
-            new CanvasGesturePoint(rect.Right, rect.Top),
-            new CanvasGesturePoint(rect.Right, my),
-            new CanvasGesturePoint(rect.Right, rect.Bottom),
-            new CanvasGesturePoint(mx, rect.Bottom),
-            new CanvasGesturePoint(rect.Left, rect.Bottom),
-            new CanvasGesturePoint(rect.Left, my),
-            new CanvasGesturePoint(rect.Left, rect.Top)
-        ];
-    }
+        => DrawingObjectInteractionPlanner.GetResizeHandleCenters(rect.ToLayoutRect())
+            .Select(ToCanvasPoint)
+            .ToArray();
 
     public static CanvasGesturePoint GetRotateHandleCenter(SelectionAdornerRect rect)
-    {
-        return new CanvasGesturePoint(
-            rect.Left + rect.Width / 2.0,
-            rect.Top - RotateHandleOffset);
-    }
+        => ToCanvasPoint(DrawingObjectInteractionPlanner.GetRotateHandleCenter(
+            rect.ToLayoutRect(),
+            RotateHandleOffset));
 
     public static CanvasGestureHandleKind HitTestHandle(
         SelectionAdornerRect selectionRect,
         CanvasGesturePoint screenPoint)
     {
-        var rotateCenter = GetRotateHandleCenter(selectionRect);
-        if (Distance(screenPoint, rotateCenter) <= HandleHitRadius)
-        {
-            return CanvasGestureHandleKind.Rotate;
-        }
-
-        var centers = GetHandleCenters(selectionRect);
-        for (int i = 0; i < centers.Count; i++)
-        {
-            if (Distance(screenPoint, centers[i]) <= HandleHitRadius)
-            {
-                return HandleKinds[i];
-            }
-        }
-
-        return selectionRect.Contains(screenPoint)
-            ? CanvasGestureHandleKind.Body
-            : CanvasGestureHandleKind.None;
+        var hit = DrawingObjectInteractionPlanner.HitTestHandleCenters(
+            selectionRect.ToLayoutRect(),
+            new LayoutPoint(screenPoint.X, screenPoint.Y),
+            HandleHitRadius,
+            RotateHandleOffset);
+        return ToCanvasHandle(hit);
     }
 
-    private static double Distance(CanvasGesturePoint a, CanvasGesturePoint b)
-    {
-        double dx = a.X - b.X;
-        double dy = a.Y - b.Y;
-        return Math.Sqrt(dx * dx + dy * dy);
-    }
+    private static CanvasGesturePoint ToCanvasPoint(LayoutPoint point) =>
+        new(point.X, point.Y);
+
+    private static CanvasGestureHandleKind ToCanvasHandle(DrawingObjectInteractionKind kind) =>
+        kind switch
+        {
+            DrawingObjectInteractionKind.Body => CanvasGestureHandleKind.Body,
+            DrawingObjectInteractionKind.ResizeN => CanvasGestureHandleKind.ResizeN,
+            DrawingObjectInteractionKind.ResizeNE => CanvasGestureHandleKind.ResizeNE,
+            DrawingObjectInteractionKind.ResizeE => CanvasGestureHandleKind.ResizeE,
+            DrawingObjectInteractionKind.ResizeSE => CanvasGestureHandleKind.ResizeSE,
+            DrawingObjectInteractionKind.ResizeS => CanvasGestureHandleKind.ResizeS,
+            DrawingObjectInteractionKind.ResizeSW => CanvasGestureHandleKind.ResizeSW,
+            DrawingObjectInteractionKind.ResizeW => CanvasGestureHandleKind.ResizeW,
+            DrawingObjectInteractionKind.ResizeNW => CanvasGestureHandleKind.ResizeNW,
+            DrawingObjectInteractionKind.Rotate => CanvasGestureHandleKind.Rotate,
+            _ => CanvasGestureHandleKind.None
+        };
 }

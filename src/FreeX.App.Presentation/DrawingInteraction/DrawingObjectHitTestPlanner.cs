@@ -1,4 +1,6 @@
-using FreeX.App.Presentation.Charts;
+using SharedBoundsHitTester = Free.Shared.Drawing.DrawingBoundsHitTester;
+using SharedInteractionKind = Free.Shared.Drawing.DrawingObjectInteractionKind;
+using SharedInteractionPlanner = Free.Shared.Drawing.DrawingObjectInteractionPlanner;
 
 namespace FreeX.App.Presentation.DrawingInteraction;
 
@@ -46,7 +48,7 @@ public static class DrawingObjectHitTestPlanner
         for (var i = 0; i < candidates.Count; i++)
         {
             var candidate = candidates[i];
-            if (!Contains(candidate.Bounds, position))
+            if (!SharedBoundsHitTester.Contains(candidate.Bounds, position))
                 continue;
 
             // Higher z wins; equal z falls through to the later (last-painted) candidate.
@@ -84,7 +86,7 @@ public static class DrawingObjectHitTestPlanner
     {
         ArgumentNullException.ThrowIfNull(candidates);
 
-        var handle = ObjectDragPlanner.HitTestHandle(
+        var handle = SharedInteractionPlanner.HitTestBoundingBoxHandles(
             position,
             selectedBounds,
             handleSize,
@@ -92,14 +94,25 @@ public static class DrawingObjectHitTestPlanner
             rotationDegrees);
 
         // A handle / rotation grip on the selected object always wins, even over a neighbor's body.
-        if (handle is not ObjectDragKind.None and not ObjectDragKind.Move)
-            return new DrawingObjectHit<TId>(selectedId, selectedBounds, handle);
+        if (handle is not SharedInteractionKind.None and not SharedInteractionKind.Body)
+            return new DrawingObjectHit<TId>(selectedId, selectedBounds, ToFreeX(handle));
 
         return HitTest(candidates, position);
     }
 
-    private static bool Contains(LayoutRect rect, LayoutPoint point) =>
-        rect.Width > 0 && rect.Height > 0 &&
-        point.X >= rect.Left && point.X <= rect.Right &&
-        point.Y >= rect.Top && point.Y <= rect.Bottom;
+    private static ObjectDragKind ToFreeX(SharedInteractionKind kind) =>
+        kind switch
+        {
+            SharedInteractionKind.Body => ObjectDragKind.Move,
+            SharedInteractionKind.ResizeNW => ObjectDragKind.ResizeNW,
+            SharedInteractionKind.ResizeN => ObjectDragKind.ResizeN,
+            SharedInteractionKind.ResizeNE => ObjectDragKind.ResizeNE,
+            SharedInteractionKind.ResizeE => ObjectDragKind.ResizeE,
+            SharedInteractionKind.ResizeSE => ObjectDragKind.ResizeSE,
+            SharedInteractionKind.ResizeS => ObjectDragKind.ResizeS,
+            SharedInteractionKind.ResizeSW => ObjectDragKind.ResizeSW,
+            SharedInteractionKind.ResizeW => ObjectDragKind.ResizeW,
+            SharedInteractionKind.Rotate => ObjectDragKind.Rotate,
+            _ => ObjectDragKind.None
+        };
 }
