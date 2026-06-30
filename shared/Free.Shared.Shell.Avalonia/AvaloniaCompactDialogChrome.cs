@@ -27,6 +27,7 @@ public static class AvaloniaCompactDialogChrome
     private static readonly IBrush DefaultButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112));
     private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(130, 130, 130));
+    private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
 
     public static void ApplyButton(
         Button button,
@@ -102,6 +103,22 @@ public static class AvaloniaCompactDialogChrome
 
         radioButton.FontSize = style.FontSize;
         radioButton.FontFamily = style.FontFamily;
+    }
+
+    public static void ApplyValidationStatus(
+        TextBlock status,
+        AvaloniaCompactDialogChromeStyle style,
+        Thickness margin = default)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(style);
+
+        status.Foreground = ValidationStatusBrush;
+        status.FontSize = 11;
+        status.FontFamily = style.FontFamily;
+        status.TextWrapping = TextWrapping.Wrap;
+        status.Margin = margin;
+        status.IsVisible = false;
     }
 
     public static void ApplyListBox(ListBox listBox, AvaloniaCompactDialogChromeStyle style)

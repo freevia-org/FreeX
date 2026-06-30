@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
@@ -18,6 +19,8 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class ZoomDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     // Representative fit scales for the page-relative presets. These mirror typical Word values for
     // a Letter page in a roughly 1000px workspace; exact fit-to-viewport computation is deferred.
     private static readonly ZoomDialogFitFactors DefaultFitFactors = new(
@@ -34,14 +37,7 @@ internal sealed class ZoomDialog : Window
         Width = 64,
         VerticalAlignment = VerticalAlignment.Center,
     };
-    private readonly TextBlock _status = new()
-    {
-        Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00)),
-        FontSize = 11,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(16, 8, 16, 0),
-        IsVisible = false,
-    };
+    private readonly TextBlock _status = new();
     private readonly List<(RadioButton Button, int Percent)> _presetButtons = [];
 
     /// <summary>The scale the user accepted (1.0 == 100%), or <c>null</c> if cancelled.</summary>
@@ -55,6 +51,9 @@ internal sealed class ZoomDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+
+        AvaloniaCompactDialogChrome.ApplyTextBox(_percentBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
         var plan = ZoomDialogPlanner.Build(currentScale);
         _percentBox.Text = plan.CustomPercentText;
@@ -96,18 +95,14 @@ internal sealed class ZoomDialog : Window
         _customButton.IsChecked = plan.InitialChoice == ZoomDialogInitialChoice.Custom;
         presets.Children.Add(customRow);
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 72 };
+        var ok = new Button { Content = "OK", IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => { Result = null; Close(); };
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 12, 16, 14),
-            Children = { ok, cancel },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
 
         DockPanel.SetDock(buttons, global::Avalonia.Controls.Dock.Bottom);
         Content = new DockPanel
@@ -176,10 +171,15 @@ internal sealed class ZoomDialog : Window
         return null;
     }
 
-    private static RadioButton Preset(string label) => new()
+    private static RadioButton Preset(string label)
     {
-        Content = label,
-        GroupName = "zoom",
-        VerticalAlignment = VerticalAlignment.Center,
-    };
+        var button = new RadioButton
+        {
+            Content = label,
+            GroupName = "zoom",
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        AvaloniaCompactDialogChrome.ApplyRadioButton(button, DialogChromeStyle);
+        return button;
+    }
 }
