@@ -46,6 +46,24 @@ public enum SelectionPaneDropPlacement
     After
 }
 
+public enum SelectionPaneKeyboardKey
+{
+    Other,
+    F2,
+    Space,
+    Up,
+    Down
+}
+
+public enum SelectionPaneKeyboardAction
+{
+    None,
+    MoveUp,
+    MoveDown,
+    FocusRename,
+    ToggleVisibility
+}
+
 public sealed record SelectionPaneDialogResult(
     SelectionPaneDialogAction Action,
     SelectionPaneItem? Target,
@@ -170,6 +188,18 @@ public static class SelectionPanePlanner
         var plan = PlanDragReorder(items, draggedId, targetId, placement);
         return new SelectionPaneDropVisualPlan(targetId, placement, plan is not null);
     }
+
+    public static SelectionPaneKeyboardAction PlanKeyboardAction(
+        SelectionPaneKeyboardKey key,
+        bool hasControlModifier) =>
+        key switch
+        {
+            SelectionPaneKeyboardKey.Up when hasControlModifier => SelectionPaneKeyboardAction.MoveUp,
+            SelectionPaneKeyboardKey.Down when hasControlModifier => SelectionPaneKeyboardAction.MoveDown,
+            SelectionPaneKeyboardKey.F2 => SelectionPaneKeyboardAction.FocusRename,
+            SelectionPaneKeyboardKey.Space => SelectionPaneKeyboardAction.ToggleVisibility,
+            _ => SelectionPaneKeyboardAction.None
+        };
 
     public static int FindMoveTargetIndex(
         IReadOnlyList<SelectionPaneItemState> items,

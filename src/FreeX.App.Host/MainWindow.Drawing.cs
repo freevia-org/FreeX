@@ -621,7 +621,8 @@ public partial class MainWindow
             return;
         }
 
-        if (!Enum.IsDefined(preset))
+        var normalizedPreset = ShapeEffectsDialogPlanner.NormalizePreset(preset);
+        if (normalizedPreset != preset)
             return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -629,7 +630,7 @@ public partial class MainWindow
                 sheetId => new SetDrawingShapeEffectCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
-                    preset)))
+                    normalizedPreset)))
             return;
 
         SetActiveCell(shape.Anchor);

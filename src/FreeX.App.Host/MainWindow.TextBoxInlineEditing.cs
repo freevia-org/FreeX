@@ -191,21 +191,31 @@ public partial class MainWindow
             return true;
         }
 
-        var newText = _textBoxInlineEditor.Text;
-        if (string.Equals(_textBoxInlineOriginalText, newText, StringComparison.Ordinal))
+        var plan = TextBoxInlineEditPlanner.CreateCommitPlan(
+            _textBoxInlineOriginalText,
+            _textBoxInlineEditor.Text);
+        if (!plan.TextChanged)
             return true;
 
-        if (!TryExecuteCommand(new SetTextBoxTextCommand(_currentSheetId, textBoxId, newText), "Edit Text Box"))
+        if (!TryExecuteCommand(
+                new SetTextBoxTextCommand(_currentSheetId, textBoxId, plan.Text),
+                TextBoxInlineEditPlanner.CommitCommandTitle))
             return false;
 
-        _textBoxInlineOriginalText = newText;
+        _textBoxInlineOriginalText = plan.Text;
         textChanged = true;
         return true;
     }
 
     private void TextBoxInlineEditor_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
+        var action = TextBoxInlineEditPlanner.PlanKeyDown(
+            ToTextBoxInlineEditKey(e.Key),
+            Keyboard.Modifiers != ModifierKeys.None);
+        if (action == TextBoxInlineEditKeyAction.None)
+            return;
+
+        if (action == TextBoxInlineEditKeyAction.Cancel)
         {
             if (_textBoxInlineEditor is not null && _textBoxInlineOriginalText is not null)
                 _textBoxInlineEditor.Text = _textBoxInlineOriginalText;
@@ -216,21 +226,22 @@ public partial class MainWindow
             return;
         }
 
-        if (e.Key is Key.Enter or Key.Return && Keyboard.Modifiers == ModifierKeys.None)
-        {
-            if (HideTextBoxInlineEditor(commit: true))
-                FocusSheetGridIfNeeded();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Tab)
+        if (action == TextBoxInlineEditKeyAction.Commit)
         {
             if (HideTextBoxInlineEditor(commit: true))
                 FocusSheetGridIfNeeded();
             e.Handled = true;
         }
     }
+
+    private static TextBoxInlineEditKey ToTextBoxInlineEditKey(Key key) =>
+        key switch
+        {
+            Key.Escape => TextBoxInlineEditKey.Escape,
+            Key.Enter => TextBoxInlineEditKey.Enter,
+            Key.Tab => TextBoxInlineEditKey.Tab,
+            _ => TextBoxInlineEditKey.Other
+        };
 
     private void TextBoxInlineEditor_LostFocus(object sender, RoutedEventArgs e)
     {
@@ -241,11 +252,10 @@ public partial class MainWindow
 
     private void CommitTextBoxInlineEditorLostFocusIfNeeded()
     {
-        if (_textBoxInlineEditor?.IsVisible != true)
-            return;
-
-        if (ReferenceEquals(Keyboard.FocusedElement, _textBoxInlineEditor) ||
-            ReferenceEquals(FocusManager.GetFocusedElement(this), _textBoxInlineEditor))
+        if (!TextBoxInlineEditPlanner.ShouldCommitLostFocus(
+                _textBoxInlineEditor?.IsVisible == true,
+                ReferenceEquals(Keyboard.FocusedElement, _textBoxInlineEditor),
+                ReferenceEquals(FocusManager.GetFocusedElement(this), _textBoxInlineEditor)))
             return;
 
         HideTextBoxInlineEditor(commit: true);

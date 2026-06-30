@@ -45,6 +45,8 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("menuItem.IsChecked = preset == currentPreset;");
         source.Should().Contain("private void ShapeEffectPresetMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("SetSelectedDrawingShapeEffect(preset);");
+        source.Should().Contain("var normalizedPreset = ShapeEffectsDialogPlanner.NormalizePreset(preset);");
+        source.Should().NotContain("Enum.IsDefined(preset)");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildZOrderCommand(");
         source.Should().Contain("var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);");
         source.Should().Contain("private DrawingObjectTarget? GetTargetTransformDrawingObject(");

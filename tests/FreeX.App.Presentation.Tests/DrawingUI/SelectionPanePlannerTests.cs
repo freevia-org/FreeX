@@ -215,6 +215,20 @@ public sealed class SelectionPanePlannerTests
         filtered.Should().BeSameAs(items);
     }
 
+    [Theory]
+    [InlineData(SelectionPaneKeyboardKey.Up, true, SelectionPaneKeyboardAction.MoveUp)]
+    [InlineData(SelectionPaneKeyboardKey.Down, true, SelectionPaneKeyboardAction.MoveDown)]
+    [InlineData(SelectionPaneKeyboardKey.Up, false, SelectionPaneKeyboardAction.None)]
+    [InlineData(SelectionPaneKeyboardKey.F2, false, SelectionPaneKeyboardAction.FocusRename)]
+    [InlineData(SelectionPaneKeyboardKey.F2, true, SelectionPaneKeyboardAction.FocusRename)]
+    [InlineData(SelectionPaneKeyboardKey.Space, false, SelectionPaneKeyboardAction.ToggleVisibility)]
+    [InlineData(SelectionPaneKeyboardKey.Other, true, SelectionPaneKeyboardAction.None)]
+    public void PlanKeyboardAction_MapsSelectionPaneShortcuts(
+        SelectionPaneKeyboardKey key,
+        bool hasControlModifier,
+        SelectionPaneKeyboardAction expected) =>
+        SelectionPanePlanner.PlanKeyboardAction(key, hasControlModifier).Should().Be(expected);
+
     [Fact]
     public void PlanDragReorder_CreatesAdjacentMovesAndNewOrder()
     {

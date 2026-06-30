@@ -105,44 +105,39 @@ public sealed partial class SelectionPaneDialog
 
     private void List_KeyDown(object sender, KeyEventArgs e)
     {
-        if (TryHandleListReorderShortcut(e))
-            return;
-
-        if (e.Key == Key.F2)
+        var action = SelectionPanePlanner.PlanKeyboardAction(
+            ToSelectionPaneKeyboardKey(e.Key),
+            (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
+        switch (action)
         {
-            FocusRenameBox();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Space)
-        {
-            ToggleSelectedVisibility();
-            e.Handled = true;
+            case SelectionPaneKeyboardAction.MoveUp:
+                AcceptMove(SelectionPaneDialogAction.MoveUp);
+                e.Handled = true;
+                break;
+            case SelectionPaneKeyboardAction.MoveDown:
+                AcceptMove(SelectionPaneDialogAction.MoveDown);
+                e.Handled = true;
+                break;
+            case SelectionPaneKeyboardAction.FocusRename:
+                FocusRenameBox();
+                e.Handled = true;
+                break;
+            case SelectionPaneKeyboardAction.ToggleVisibility:
+                ToggleSelectedVisibility();
+                e.Handled = true;
+                break;
         }
     }
 
-    private bool TryHandleListReorderShortcut(KeyEventArgs e)
-    {
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
-            return false;
-
-        if (e.Key == Key.Up)
+    private static SelectionPaneKeyboardKey ToSelectionPaneKeyboardKey(Key key) =>
+        key switch
         {
-            AcceptMove(SelectionPaneDialogAction.MoveUp);
-            e.Handled = true;
-            return true;
-        }
-
-        if (e.Key == Key.Down)
-        {
-            AcceptMove(SelectionPaneDialogAction.MoveDown);
-            e.Handled = true;
-            return true;
-        }
-
-        return false;
-    }
+            Key.F2 => SelectionPaneKeyboardKey.F2,
+            Key.Space => SelectionPaneKeyboardKey.Space,
+            Key.Up => SelectionPaneKeyboardKey.Up,
+            Key.Down => SelectionPaneKeyboardKey.Down,
+            _ => SelectionPaneKeyboardKey.Other
+        };
 
     private void DragReorder(
         SelectionPaneDialogItem dragged,
