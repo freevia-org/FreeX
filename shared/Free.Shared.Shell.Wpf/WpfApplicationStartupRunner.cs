@@ -14,6 +14,10 @@ public sealed record WpfApplicationStartupSpec<TOptions>(
 {
     public Action? InstallSharedSeams { get; init; }
 
+    public IWpfApplicationThemeStartupSpec? Theme { get; init; }
+
+    public WpfApplicationLocalizationStartupSpec<TOptions>? Localization { get; init; }
+
     public IApplicationDataPathProvider? OptionsPathProvider { get; init; }
 
     public string? OptionsOverridePath { get; init; }
@@ -21,6 +25,61 @@ public sealed record WpfApplicationStartupSpec<TOptions>(
     public string OptionsFileName { get; init; } = ApplicationOptionsStore<TOptions>.DefaultFileName;
 
     public IAppDiagnosticsPathProvider? DiagnosticsPathProvider { get; init; }
+}
+
+public interface IWpfApplicationThemeStartupSpec
+{
+    void Apply(Application application, Func<string, string?> getEnvironmentVariable);
+}
+
+public sealed record WpfApplicationThemeStartupSpec<TTheme>(
+    string EnvironmentVariableName,
+    string AlternateThemeValue,
+    TTheme DefaultTheme,
+    TTheme AlternateTheme,
+    string ResourceKeyPrefix,
+    Action<Application, TTheme, string> ApplyTheme)
+    : IWpfApplicationThemeStartupSpec
+{
+    public Action<TTheme>? SetActiveTheme { get; init; }
+
+    public void Apply(Application application, Func<string, string?> getEnvironmentVariable)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        ArgumentNullException.ThrowIfNull(getEnvironmentVariable);
+        ArgumentException.ThrowIfNullOrEmpty(EnvironmentVariableName);
+        ArgumentException.ThrowIfNullOrEmpty(AlternateThemeValue);
+        ArgumentException.ThrowIfNullOrEmpty(ResourceKeyPrefix);
+        ArgumentNullException.ThrowIfNull(ApplyTheme);
+
+        var theme = string.Equals(
+            getEnvironmentVariable(EnvironmentVariableName),
+            AlternateThemeValue,
+            StringComparison.OrdinalIgnoreCase)
+            ? AlternateTheme
+            : DefaultTheme;
+
+        SetActiveTheme?.Invoke(theme);
+        ApplyTheme(application, theme, ResourceKeyPrefix);
+    }
+}
+
+public sealed record WpfApplicationLocalizationStartupSpec<TOptions>(
+    Func<TOptions, string?> SelectUiLanguage,
+    Action<string?> ApplyUiLanguage,
+    Action ApplyCurrentCultureToWpf)
+    where TOptions : class, INormalizableApplicationOptions, new()
+{
+    public void Apply(TOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(SelectUiLanguage);
+        ArgumentNullException.ThrowIfNull(ApplyUiLanguage);
+        ArgumentNullException.ThrowIfNull(ApplyCurrentCultureToWpf);
+
+        ApplyUiLanguage(SelectUiLanguage(options));
+        ApplyCurrentCultureToWpf();
+    }
 }
 
 /// <summary>
@@ -59,6 +118,8 @@ public static class WpfApplicationStartupRunner
             handler => app.DispatcherUnhandledException += (_, args) => handler(args.Exception));
         diagnostics.RecordEvent(StartupEventName);
 
+        spec.Theme?.Apply(app, runtime.GetEnvironmentVariable);
+        spec.Localization?.Apply(options);
         runtime.RunApplication(app, spec.CreateWindow(options, optionsStore));
 
         diagnostics.RecordEvent(ExitEventName);
@@ -72,6 +133,9 @@ internal sealed class WpfApplicationStartupRuntime
     public Func<Application> CreateApplication { get; init; } = () => new Application();
 
     public Func<string> ResolveVersion { get; init; } = EntryAssemblyVersion.Resolve;
+
+    public Func<string, string?> GetEnvironmentVariable { get; init; } =
+        name => Environment.GetEnvironmentVariable(name);
 
     public Func<string, IAppDiagnosticsPathProvider?, IWpfApplicationStartupDiagnostics> CreateDiagnostics { get; init; } =
         (version, provider) => new LocalWpfApplicationStartupDiagnostics(

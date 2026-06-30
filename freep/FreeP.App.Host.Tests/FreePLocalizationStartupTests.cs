@@ -75,7 +75,8 @@ public sealed class FreePLocalizationStartupTests : IDisposable
         var composition = File.ReadAllText(RepositoryFile("freep", "FreeP.App.Host", "AppComposition.cs"));
 
         program.Should().Contain("InstallSharedSeams = AppComposition.InstallSharedSeams");
-        program.Should().Contain("AppLocalization.ApplyAppLanguage(options.UiLanguage)");
+        program.Should().Contain("ApplyUiLanguage: AppLocalization.ApplyAppLanguage");
+        program.Should().Contain("ApplyCurrentCultureToWpf: AppLocalization.ApplyCurrentCultureToWpf");
         composition.Should().Contain("AppLocalization.InstallSharedSeams();");
         composition.Should().NotContain("StaticShellStrings.ForProductTitle");
         composition.Should().NotContain("DefaultBackstageStrings.Instance");

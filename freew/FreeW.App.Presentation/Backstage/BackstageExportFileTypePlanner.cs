@@ -12,11 +12,9 @@ public static class BackstageExportFileTypePlanner
         ArgumentNullException.ThrowIfNull(formats);
         ArgumentNullException.ThrowIfNull(saveAsExtension);
 
-        var rows = BackstageSaveAsFileTypePlanner
-            .Build(formats, saveAsExtension)
-            .SelectMany(group => group.Actions)
-            .ToArray();
-
-        return new BackstageActionGroup("Change File Type", rows);
+        return BackstageFileTypeActionPlanner.BuildGroup(
+            "Change File Type",
+            BackstageSaveAsFileTypePlanner.BuildRows(formats),
+            saveAsExtension);
     }
 }
