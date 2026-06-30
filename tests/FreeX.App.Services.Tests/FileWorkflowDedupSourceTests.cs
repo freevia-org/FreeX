@@ -109,6 +109,37 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
+    public void FreeXWorkbookSaveTargetAndPathNormalizationDecisions_StayInCoordinator()
+    {
+        var coordinatorSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileLifecycleCoordinator.cs"));
+        var avaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.cs"));
+        var wpfSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.Backstage.cs"));
+
+        coordinatorSource.Should().Contain("PlanSaveTargetWrite(");
+        coordinatorSource.Should().Contain("FileSavePlanner.CanSkipCleanSave(");
+        coordinatorSource.Should().Contain("PlanSavePathNormalization(");
+        coordinatorSource.Should().Contain("WorkbookSession.EnsureSaveExtension(");
+
+        avaloniaSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(");
+        avaloniaSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        avaloniaSource.Should().NotContain("FileSavePlanner.CanSkipCleanSave(");
+        avaloniaSource.Should().NotContain("ShouldPromptForNormalizedWorkbookOverwrite(");
+        avaloniaSource.Should().NotContain("Path.GetFullPath(requestedPath)");
+
+        wpfSource.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(");
+        wpfSource.Should().NotContain("FileSavePlanner.CanSkipCleanSave(");
+    }
+
+    [Fact]
     public void FreeXWorkbookPickerPlans_UseSharedDialogPlanRecords()
     {
         var pickerSource = File.ReadAllText(RepositoryFileLocator.Find(

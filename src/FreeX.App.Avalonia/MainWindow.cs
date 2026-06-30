@@ -20662,28 +20662,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task SaveCurrentWorkbookAsync()
+    private async Task<bool> SaveCurrentWorkbookAsync()
     {
         if (_isSaving)
-            return;
+            return false;
 
         if (!TryCommitPendingFormulaEdit())
-            return;
+            return false;
 
-        await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
-            _session.IsDirty,
-            _session.CurrentFilePath,
-            () => _session.CanSaveCurrentSource(out var target) ? target : null,
-            async target =>
-            {
-                await SaveWorkbookToTargetAsync(target);
-                return true;
-            },
-            async () =>
-            {
-                await SaveWorkbookAsAsync();
-                return true;
-            });
+        return await WorkbookFileLifecycleCoordinator.SaveResolvedAsync(
+            isDirty: _session.IsDirty,
+            currentFilePath: _session.CurrentFilePath,
+            resolveCurrentTarget: () => _session.CanSaveCurrentSource(out var target) ? target : null,
+            saveTargetAsync: target => SaveWorkbookToTargetAsync(target),
+            saveAsAsync: SaveWorkbookAsAsync);
     }
 
     private async Task ShareWorkbookAsync()
@@ -20724,7 +20716,8 @@ public sealed partial class MainWindow : Window
         {
             case WorkbookShareActionPlanKind.SaveAsBeforeShare:
                 ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
-                await SaveWorkbookAsAsync();
+                if (!await SaveWorkbookAsAsync())
+                    return;
                 var nextPlan = CreateWorkbookShareActionPlan();
                 if (nextPlan.Kind == WorkbookShareActionPlanKind.SaveAsBeforeShare)
                 {
@@ -20765,8 +20758,7 @@ public sealed partial class MainWindow : Window
         if (!_session.IsDirty)
             return true;
 
-        await SaveCurrentWorkbookAsync();
-        return !_session.IsDirty;
+        return await SaveCurrentWorkbookAsync() && !_session.IsDirty;
     }
 
     private async Task ShowWorkbookShareSheetAsync(WorkbookShareActionPlan plan)
@@ -20866,15 +20858,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task SaveWorkbookAsAsync()
+    private async Task<bool> SaveWorkbookAsAsync()
     {
         if (!TryBeginFileOperation())
-            return;
+            return false;
 
         try
         {
             if (!TryCommitPendingFormulaEdit())
-                return;
+                return false;
 
             var savePlan = WorkbookFileCommandPlanner.PlanSaveAsPicker(
                 StorageProvider.CanSave,
@@ -20885,7 +20877,7 @@ public sealed partial class MainWindow : Window
             if (!savePlan.CanShowPicker)
             {
                 ShowSaveIssue(savePlan.Message);
-                return;
+                return false;
             }
 
             var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(savePlan.FileTypes);
@@ -20900,7 +20892,7 @@ public sealed partial class MainWindow : Window
             });
 
             if (storageFile is null)
-                return;
+                return false;
 
             using (storageFile)
             {
@@ -20908,26 +20900,29 @@ public sealed partial class MainWindow : Window
                 if (string.IsNullOrWhiteSpace(path))
                 {
                     ShowSaveIssue("Save As requires a local file path.");
-                    return;
+                    return false;
                 }
 
-                var requestedPath = path;
-                path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);
-                if (ShouldPromptForNormalizedWorkbookOverwrite(requestedPath, path) &&
-                    !await ConfirmNormalizedWorkbookOverwriteAsync(path))
+                var pathPlan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(
+                    path,
+                    NativeWorkbookExtension,
+                    File.Exists);
+                if (pathPlan.ShouldConfirmOverwrite &&
+                    !await ConfirmNormalizedWorkbookOverwriteAsync(pathPlan.Path))
                 {
                     ShowSaveIssue("Save canceled.");
-                    return;
+                    return false;
                 }
 
+                path = pathPlan.Path;
                 if (!_session.TryResolveSaveTarget(path, out var target, out var message))
                 {
                     ShowSaveIssue(message);
-                    return;
+                    return false;
                 }
 
                 var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
-                await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
+                return await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
             }
         }
         finally
@@ -21025,10 +21020,6 @@ public sealed partial class MainWindow : Window
         _isSaving = false;
         UpdateSaveButton();
     }
-
-    private static bool ShouldPromptForNormalizedWorkbookOverwrite(string requestedPath, string normalizedPath) =>
-        !string.Equals(Path.GetFullPath(requestedPath), Path.GetFullPath(normalizedPath), StringComparison.OrdinalIgnoreCase)
-        && File.Exists(normalizedPath);
 
     private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
     {
@@ -21355,10 +21346,16 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private async Task SaveWorkbookToTargetAsync(
+    private async Task<bool> SaveWorkbookToTargetAsync(
         FileSaveTarget target,
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
+        if (WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_session.IsDirty, _session.CurrentFilePath, target)
+            == WorkbookSaveTargetIntent.SkipCleanCurrentPath)
+        {
+            return true;
+        }
+
         // Capture the dirty generation before the first await so mid-save edits are detectable.
         var generationAtSaveStart = _session.DirtyGeneration;
         _isSaving = true;
@@ -21384,10 +21381,12 @@ public sealed partial class MainWindow : Window
             _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, target.Path, fileAccessIdentity);
             RecordRecentWorkbook(target.Path, fileAccessIdentity);
             RefreshShell(FormatSaveCompletionStatus(target.Path, saveWarnings));
+            return true;
         }
         catch (Exception ex)
         {
             ShowSaveIssue($"Save failed: {ex.Message}");
+            return false;
         }
         finally
         {
@@ -21453,8 +21452,7 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> SaveCurrentWorkbookThenConfirmCleanAsync()
     {
-        await SaveCurrentWorkbookAsync();
-        return !_session.IsDirty;
+        return await SaveCurrentWorkbookAsync() && !_session.IsDirty;
     }
 
     private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice) => choice switch

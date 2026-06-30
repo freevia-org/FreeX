@@ -188,8 +188,10 @@ public sealed partial class MainWindowSourceHygieneTests
         saveAsMethod.Should().Contain("HideStartScreen();");
 
         var saveTargetMethod = ExtractMethodSource(backstageSource, "private async Task<bool> SaveWorkbookToTargetAsync(");
-        saveTargetMethod.Should().Contain("FileSavePlanner.CanSkipCleanSave(_workbookDirty, _currentFilePath, target)");
-        saveTargetMethod.IndexOf("FileSavePlanner.CanSkipCleanSave", StringComparison.Ordinal)
+        saveTargetMethod.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_workbookDirty, _currentFilePath, target)");
+        saveTargetMethod.Should().Contain("WorkbookSaveTargetIntent.SkipCleanCurrentPath");
+        saveTargetMethod.Should().NotContain("FileSavePlanner.CanSkipCleanSave(");
+        saveTargetMethod.IndexOf("WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite", StringComparison.Ordinal)
             .Should()
             .BeLessThan(saveTargetMethod.IndexOf("ConfirmUnsupportedXlsxFeatureSave()", StringComparison.Ordinal));
         saveTargetMethod.Should().Contain("ShowSaveProgress(CreateSaveProgress(\"preparing\", TimeSpan.Zero, 1));");

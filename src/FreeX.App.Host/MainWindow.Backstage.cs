@@ -1069,7 +1069,8 @@ public partial class MainWindow
         if (_isSavingFile)
             return false;
 
-        if (FileSavePlanner.CanSkipCleanSave(_workbookDirty, _currentFilePath, target))
+        if (WorkbookFileLifecycleCoordinator.PlanSaveTargetWrite(_workbookDirty, _currentFilePath, target)
+            == WorkbookSaveTargetIntent.SkipCleanCurrentPath)
             return true;
 
         var ext = System.IO.Path.GetExtension(target.Path).ToLowerInvariant();

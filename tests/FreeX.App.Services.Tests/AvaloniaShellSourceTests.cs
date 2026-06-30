@@ -349,22 +349,22 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("if (_isOpening || _isSaving)");
         source.Should().Contain("_isSaving = true;");
         source.Should().Contain("private void EndFileOperation()");
-        source.Should().Contain("private static bool ShouldPromptForNormalizedWorkbookOverwrite(string requestedPath, string normalizedPath)");
-        source.Should().Contain("!string.Equals(Path.GetFullPath(requestedPath), Path.GetFullPath(normalizedPath), StringComparison.OrdinalIgnoreCase)");
-        source.Should().Contain("&& File.Exists(normalizedPath);");
+        source.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        source.Should().NotContain("private static bool ShouldPromptForNormalizedWorkbookOverwrite(");
+        source.Should().NotContain("Path.GetFullPath(requestedPath)");
 
         var saveAsBlock = ExtractSourceBlock(
             source,
-            "private async Task SaveWorkbookAsAsync()",
-            "await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);");
+            "private async Task<bool> SaveWorkbookAsAsync()",
+            "return await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);");
         saveAsBlock.Should().Contain("if (!TryBeginFileOperation())");
         saveAsBlock.Should().Contain("var storageFile = await StorageProvider.SaveFilePickerAsync");
         saveAsBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
             .Should().BeLessThan(saveAsBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
-        saveAsBlock.Should().Contain("var requestedPath = path;");
-        saveAsBlock.Should().Contain("path = WorkbookSession.EnsureSaveExtension(path, NativeWorkbookExtension);");
-        saveAsBlock.Should().Contain("ShouldPromptForNormalizedWorkbookOverwrite(requestedPath, path)");
-        saveAsBlock.Should().Contain("!await ConfirmNormalizedWorkbookOverwriteAsync(path)");
+        saveAsBlock.Should().Contain("var pathPlan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        saveAsBlock.Should().Contain("pathPlan.ShouldConfirmOverwrite");
+        saveAsBlock.Should().Contain("!await ConfirmNormalizedWorkbookOverwriteAsync(pathPlan.Path)");
+        saveAsBlock.Should().Contain("path = pathPlan.Path;");
         source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"WorkbookSaveOverwriteReplaceButton\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"WorkbookSaveOverwriteCancelButton\")");
 

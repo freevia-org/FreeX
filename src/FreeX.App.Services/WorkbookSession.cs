@@ -2796,16 +2796,23 @@ public sealed class WorkbookSession
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
+        var plan = SaveCompletionPlanner.Plan(
+            generationAtSaveStart,
+            DirtyGeneration,
+            sameWorkbook: true);
         var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
-        var noEditsArrived = DirtyGeneration == generationAtSaveStart;
-        if (noEditsArrived)
+        if (plan.MarkSaved)
             IsDirty = false;
 
-        CurrentFilePath = path;
-        CurrentFileAccessIdentity = resolvedIdentity;
-        CurrentXlsxFeatureReport = null;
-        Workbook.Name = Path.GetFileName(path);
-        return noEditsArrived;
+        if (plan.ApplyFileContext)
+        {
+            CurrentFilePath = path;
+            CurrentFileAccessIdentity = resolvedIdentity;
+            CurrentXlsxFeatureReport = null;
+            Workbook.Name = Path.GetFileName(path);
+        }
+
+        return plan.MarkSaved;
     }
 
     public string BuildSuggestedSaveAsFileName(string defaultExtension)
