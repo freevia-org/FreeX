@@ -62,8 +62,13 @@ public sealed partial class MainWindow
 
         var closeButton = CreateBackstageCloseButton("BackstageInfoCloseButton", dialog);
 
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.AvaloniaInfoDialog,
+            CreateBackstageInfoPaneRequest(display));
         var content = AvaloniaBackstageChrome.CreatePane(
-            BuildBackstageInfoPaneSpec(display, dialog),
+            BuildBackstagePaneSpec(
+                FreeXBackstagePaneProjectionPlanner.BuildInfoDialog(pane),
+                dialog),
             BackstageChromeStyle);
 
         dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
@@ -92,40 +97,6 @@ public sealed partial class MainWindow
     private static WorkbookInfoDisplayStrings CreateWorkbookInfoDisplayStrings() =>
         new(UiText.Get, (key, args) => UiText.Format(key, args));
 
-    private AvaloniaBackstagePaneSpec BuildBackstageInfoPaneSpec(
-        WorkbookInfoDisplayPlan display,
-        Window dialog)
-    {
-        var pane = FreeXBackstageInfoPanePlanner.Build(
-            FreeXBackstageInfoSurface.AvaloniaInfoDialog,
-            CreateBackstageInfoPaneRequest(display));
-        var elements = new List<AvaloniaBackstagePaneElementSpec>
-        {
-            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.FileSectionHeaderKey)),
-            new AvaloniaBackstageDetailRowsElementSpec(BuildBackstageInfoDetailRows(pane)),
-        };
-
-        if (pane.UnsavedChangesNote is { } unsavedChangesNote)
-            elements.Add(new AvaloniaBackstageNoteElementSpec(
-                ResolveBackstageTextValue(unsavedChangesNote),
-                "BackstageInfoUnsaved"));
-
-        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.ProtectionSectionHeaderKey)));
-        elements.Add(new AvaloniaBackstageNoteElementSpec(
-            ResolveBackstageTextValue(pane.WorkbookProtectionSummary),
-            "BackstageInfoProtection"));
-        elements.Add(new AvaloniaBackstageNoteElementSpec(
-            ResolveBackstageTextValue(pane.ActiveSheetProtectionSummary),
-            "BackstageInfoActiveSheetProtection"));
-        elements.Add(new AvaloniaBackstageActionRowElementSpec(BuildBackstageInfoActionButtons(pane, dialog)));
-        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.StatisticsSectionHeaderKey)));
-        elements.Add(new AvaloniaBackstageNoteElementSpec(
-            ResolveBackstageTextValue(pane.StatisticsSummary),
-            "BackstageInfoStatistics"));
-
-        return new AvaloniaBackstagePaneSpec(elements);
-    }
-
     private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(
         WorkbookInfoDisplayPlan display) =>
         new(
@@ -144,36 +115,21 @@ public sealed partial class MainWindow
             FormulaErrorSummary: string.Empty,
             display.UnsavedChangesNote);
 
-    private static IReadOnlyList<AvaloniaBackstageDetailRowSpec> BuildBackstageInfoDetailRows(
-        FreeXBackstageInfoPanePlan pane)
-    {
-        var rows = new List<AvaloniaBackstageDetailRowSpec>();
-        foreach (var detail in pane.Details)
-        {
-            rows.Add(new AvaloniaBackstageDetailRowSpec(
-                UiText.Get(detail.LabelKey),
-                ResolveBackstageTextValue(detail.Value),
-                detail.ValueAutomationId));
-        }
-
-        return rows;
-    }
-
     private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageInfoActionButtons(
-        FreeXBackstageInfoPanePlan pane,
+        IReadOnlyList<FreeXBackstageInfoActionPlan> actions,
         Window dialog)
     {
-        var actions = new List<AvaloniaBackstageActionButtonSpec>();
-        foreach (var action in pane.Actions)
+        var buttons = new List<AvaloniaBackstageActionButtonSpec>();
+        foreach (var action in actions)
         {
-            actions.Add(CreateBackstageClosingActionButtonSpec(
+            buttons.Add(CreateBackstageClosingActionButtonSpec(
                 UiText.Get(action.LabelKey),
                 action.AutomationId,
                 dialog,
                 ResolveBackstageInfoAction(action.Id)));
         }
 
-        return actions;
+        return buttons;
     }
 
     private Action ResolveBackstageInfoAction(FreeXBackstageInfoActionId id) =>
@@ -229,8 +185,9 @@ public sealed partial class MainWindow
         var selectedScope = scopePlan.DefaultScope;
         var selectedFormat = scopePlan.DefaultOutputKind;
         var content = AvaloniaBackstageChrome.CreatePane(
-            BuildBackstageExportPaneSpec(
-                exportPane,
+            BuildBackstagePaneSpec(
+                FreeXBackstagePaneProjectionPlanner.BuildExportDialog(exportPane),
+                dialog,
                 scope => selectedScope = FreeXBackstageExportPanePlanner.ToExternalScope<WorkbookExportPrintScope>(scope),
                 outputKind => selectedFormat = FreeXBackstageExportPanePlanner.ToExternalOutputKind<WorkbookExportPrintOutputKind>(outputKind)),
             BackstageChromeStyle);
@@ -280,38 +237,12 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private static AvaloniaBackstagePaneSpec BuildBackstageExportPaneSpec(
-        FreeXBackstageExportPanePlan panePlan,
-        Action<FreeXBackstageExportScopeId> selectScope,
-        Action<FreeXBackstageExportOutputKindId> selectOutputKind)
-    {
-        var elements = new List<AvaloniaBackstagePaneElementSpec>();
-        if (panePlan.ShowUnavailableNote)
-        {
-            elements.Add(new AvaloniaBackstageNoteElementSpec(
-                UiText.Get(panePlan.UnavailableNoteKey),
-                panePlan.UnavailableAutomationId));
-        }
-
-        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(panePlan.ScopeHeaderKey)));
-        elements.Add(new AvaloniaBackstageRadioGroupElementSpec(
-            panePlan.ScopeGroupAutomationId,
-            BuildBackstageExportScopeOptions(panePlan.ScopeOptions, selectScope)));
-
-        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(panePlan.FormatHeaderKey)));
-        elements.Add(new AvaloniaBackstageRadioGroupElementSpec(
-            panePlan.FormatGroupAutomationId,
-            BuildBackstageExportFormatOptions(panePlan.OutputKindOptions, selectOutputKind)));
-
-        return new AvaloniaBackstagePaneSpec(elements);
-    }
-
     private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportScopeOptions(
-        IReadOnlyList<FreeXBackstageExportScopeOptionPlan> scopeOptions,
+        IReadOnlyList<FreeXBackstageExportRadioOptionProjection> scopeOptions,
         Action<FreeXBackstageExportScopeId> selectScope)
     {
         var options = new List<AvaloniaBackstageRadioOptionSpec>();
-        foreach (var option in scopeOptions)
+        foreach (var option in scopeOptions.OfType<FreeXBackstageExportScopeRadioOptionProjection>())
         {
             var capturedScope = option.Scope;
             options.Add(new AvaloniaBackstageRadioOptionSpec(
@@ -328,11 +259,11 @@ public sealed partial class MainWindow
     }
 
     private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportFormatOptions(
-        IReadOnlyList<FreeXBackstageExportOutputKindOptionPlan> outputKindOptions,
+        IReadOnlyList<FreeXBackstageExportRadioOptionProjection> outputKindOptions,
         Action<FreeXBackstageExportOutputKindId> selectOutputKind)
     {
         var options = new List<AvaloniaBackstageRadioOptionSpec>();
-        foreach (var option in outputKindOptions)
+        foreach (var option in outputKindOptions.OfType<FreeXBackstageExportOutputKindRadioOptionProjection>())
         {
             var capturedKind = option.OutputKind;
             options.Add(new AvaloniaBackstageRadioOptionSpec(
@@ -372,7 +303,10 @@ public sealed partial class MainWindow
 
         var closeButton = CreateBackstageCloseButton("BackstageAccountCloseButton", dialog);
         var content = AvaloniaBackstageChrome.CreatePane(
-            BuildBackstageAccountPaneSpec(plan, dialog),
+            BuildBackstagePaneSpec(
+                FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(
+                    BuildBackstageAccountPanePlan(plan)),
+                dialog),
             BackstageChromeStyle);
 
         dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
@@ -389,11 +323,9 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private AvaloniaBackstagePaneSpec BuildBackstageAccountPaneSpec(
-        LocalAccountInfoPlan plan,
-        Window dialog)
-    {
-        var pane = FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+    private FreeXBackstageAccountPanePlan BuildBackstageAccountPanePlan(
+        LocalAccountInfoPlan plan) =>
+        FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
             plan.UserName,
             plan.DeviceName,
             plan.VersionText,
@@ -404,30 +336,64 @@ public sealed partial class MainWindow
             plan.LicenseNotice,
             plan.PrivacyNotice));
 
-        var elements = new List<AvaloniaBackstagePaneElementSpec>
+    private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageAccountActionButtons(
+        IReadOnlyList<FreeXBackstageAccountActionDefinition> actions,
+        Window dialog)
+    {
+        var buttons = new List<AvaloniaBackstageActionButtonSpec>();
+        foreach (var action in actions)
         {
-            new AvaloniaBackstageHeadingElementSpec(UiText.Get(pane.TitleKey)),
-            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.LocalInfoHeadingKey)),
-            new AvaloniaBackstageDetailRowsElementSpec(BuildBackstageAccountDetailRows(pane)),
-            new AvaloniaBackstageActionRowElementSpec(BuildBackstageAccountActionButtons(pane, dialog)),
-            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.NoticesHeadingKey)),
-        };
+            buttons.Add(CreateBackstageClosingActionButtonSpec(
+                UiText.Get(action.LabelKey),
+                action.AutomationId,
+                dialog,
+                ResolveBackstageAccountAction(action.Id)));
+        }
 
-        foreach (var notice in pane.Notices)
+        return buttons;
+    }
+
+    private AvaloniaBackstagePaneSpec BuildBackstagePaneSpec(
+        FreeXBackstagePaneProjectionPlan projection,
+        Window dialog,
+        Action<FreeXBackstageExportScopeId>? selectScope = null,
+        Action<FreeXBackstageExportOutputKindId>? selectOutputKind = null)
+    {
+        var elements = new List<AvaloniaBackstagePaneElementSpec>();
+        foreach (var element in projection.Elements)
         {
-            elements.Add(new AvaloniaBackstageNoteElementSpec(
-                notice.Text,
-                notice.AutomationId));
+            elements.Add(element switch
+            {
+                FreeXBackstageHeadingProjectionElement heading =>
+                    new AvaloniaBackstageHeadingElementSpec(UiText.Get(heading.TextKey)),
+                FreeXBackstageSectionHeaderProjectionElement section =>
+                    new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(section.TextKey)),
+                FreeXBackstageNoteProjectionElement note =>
+                    new AvaloniaBackstageNoteElementSpec(
+                        ResolveBackstageTextValue(note.Text),
+                        note.AutomationId),
+                FreeXBackstageDetailRowsProjectionElement details =>
+                    new AvaloniaBackstageDetailRowsElementSpec(BuildBackstageDetailRows(details.Rows)),
+                FreeXBackstageInfoActionRowProjectionElement actions =>
+                    new AvaloniaBackstageActionRowElementSpec(BuildBackstageInfoActionButtons(actions.Actions, dialog)),
+                FreeXBackstageAccountActionRowProjectionElement actions =>
+                    new AvaloniaBackstageActionRowElementSpec(BuildBackstageAccountActionButtons(actions.Actions, dialog)),
+                FreeXBackstageExportRadioGroupProjectionElement group =>
+                    new AvaloniaBackstageRadioGroupElementSpec(
+                        group.GroupAutomationId,
+                        BuildBackstageExportOptions(group.Options, selectScope, selectOutputKind)),
+                _ => throw new ArgumentOutOfRangeException(nameof(element), element, null),
+            });
         }
 
         return new AvaloniaBackstagePaneSpec(elements);
     }
 
-    private IReadOnlyList<AvaloniaBackstageDetailRowSpec> BuildBackstageAccountDetailRows(
-        FreeXBackstageAccountPanePlan plan)
+    private static IReadOnlyList<AvaloniaBackstageDetailRowSpec> BuildBackstageDetailRows(
+        IReadOnlyList<FreeXBackstageDetailRowProjection> details)
     {
         var rows = new List<AvaloniaBackstageDetailRowSpec>();
-        foreach (var detail in plan.Details)
+        foreach (var detail in details)
         {
             rows.Add(new AvaloniaBackstageDetailRowSpec(
                 UiText.Get(detail.LabelKey),
@@ -438,22 +404,21 @@ public sealed partial class MainWindow
         return rows;
     }
 
-    private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageAccountActionButtons(
-        FreeXBackstageAccountPanePlan plan,
-        Window dialog)
-    {
-        var actions = new List<AvaloniaBackstageActionButtonSpec>();
-        foreach (var action in plan.Actions)
+    private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportOptions(
+        IReadOnlyList<FreeXBackstageExportRadioOptionProjection> options,
+        Action<FreeXBackstageExportScopeId>? selectScope,
+        Action<FreeXBackstageExportOutputKindId>? selectOutputKind) =>
+        options.FirstOrDefault() switch
         {
-            actions.Add(CreateBackstageClosingActionButtonSpec(
-                UiText.Get(action.LabelKey),
-                action.AutomationId,
-                dialog,
-                ResolveBackstageAccountAction(action.Id)));
-        }
-
-        return actions;
-    }
+            FreeXBackstageExportScopeRadioOptionProjection => BuildBackstageExportScopeOptions(
+                options,
+                selectScope ?? throw new ArgumentNullException(nameof(selectScope))),
+            FreeXBackstageExportOutputKindRadioOptionProjection => BuildBackstageExportFormatOptions(
+                options,
+                selectOutputKind ?? throw new ArgumentNullException(nameof(selectOutputKind))),
+            null => [],
+            _ => throw new ArgumentOutOfRangeException(nameof(options), options, null)
+        };
 
     private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
         value.TextKey is { } key
