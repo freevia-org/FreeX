@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.PageLayout;
@@ -115,6 +116,70 @@ public sealed class PrintPreviewSettingsPanelPlannerTests
 
         plan.FromPage.Should().Be(expectedFrom);
         plan.ToPage.Should().Be(expectedTo);
+    }
+
+    [Fact]
+    public void SelectionActions_PlanPreviewSettingUpdates()
+    {
+        var panelPlan = PrintPreviewSettingsPanelPlanner.Build(
+            CreateSheet(),
+            new PrintPreviewSettings(),
+            hasSelection: true,
+            canUpdatePrintPreviewSettings: true);
+        var currentSettings = new PrintPreviewSettings();
+
+        PrintPreviewSettingsPanelPlanner.CreateCopiesAction(currentSettings, "4")
+            .Settings.Should().Be(currentSettings with { Copies = 4 });
+        PrintPreviewSettingsPanelPlanner.CreateCopiesAction(currentSettings, "1000")
+            .Kind.Should().Be(PrintPreviewSettingsPanelActionKind.None);
+        PrintPreviewSettingsPanelPlanner.CreatePrintWhatAction(panelPlan, currentSettings, 2)
+            .Settings.Should().Be(currentSettings with { PrintWhat = PrintWhat.Selection });
+        PrintPreviewSettingsPanelPlanner.CreateSidesAction(panelPlan, currentSettings, 1)
+            .Settings.Should().Be(currentSettings with { Sides = PrintPreviewSidesMode.TwoSidedLongEdge });
+        PrintPreviewSettingsPanelPlanner.CreateCollationAction(panelPlan, currentSettings, 1)
+            .Settings.Should().Be(currentSettings with { Collated = false });
+        PrintPreviewSettingsPanelPlanner.CreateIgnorePrintAreaAction(currentSettings, true)
+            .Settings.Should().Be(currentSettings with { IgnorePrintArea = true });
+        PrintPreviewSettingsPanelPlanner.CreatePageRangeAction(currentSettings, "2", "5")
+            .Settings.Should().Be(currentSettings with { PageFrom = 2, PageTo = 5 });
+    }
+
+    [Fact]
+    public void SelectionActions_PlanPageLayoutCommandsAndPlaceholderDialogs()
+    {
+        var sheet = CreateSheet();
+        var panelPlan = PrintPreviewSettingsPanelPlanner.Build(
+            sheet,
+            new PrintPreviewSettings(),
+            hasSelection: false,
+            canUpdatePrintPreviewSettings: true);
+
+        PrintPreviewSettingsPanelPlanner.CreateOrientationAction(sheet.Id, panelPlan, 1)
+            .Command.Should().BeOfType<SetPageOrientationCommand>();
+        PrintPreviewSettingsPanelPlanner.CreatePaperSizeAction(sheet.Id, panelPlan, 2)
+            .Command.Should().BeOfType<SetPaperSizeCommand>();
+        PrintPreviewSettingsPanelPlanner.CreateMarginsAction(sheet.Id, panelPlan, 1)
+            .Command.Should().BeOfType<SetPageMarginsCommand>();
+        PrintPreviewSettingsPanelPlanner.CreateScalingAction(sheet.Id, panelPlan, 1)
+            .Command.Should().BeOfType<SetScaleToFitCommand>();
+        PrintPreviewSettingsPanelPlanner.CreatePrintOptionsAction(sheet.Id, printGridlines: true, printHeadings: false)
+            .Command.Should().BeOfType<SetPrintOptionsCommand>();
+
+        var customMargins = PrintPreviewSettingsPanelPlanner.CreateMarginsAction(
+            sheet.Id,
+            panelPlan,
+            PrintPreviewSettingsPanelPlanner.CustomMarginsOptionIndex);
+        customMargins.Kind.Should().Be(PrintPreviewSettingsPanelActionKind.OpenCustomMargins);
+        customMargins.ResetSelection.Should().BeTrue();
+        customMargins.Command.Should().BeNull();
+
+        var customScaling = PrintPreviewSettingsPanelPlanner.CreateScalingAction(
+            sheet.Id,
+            panelPlan,
+            PrintPreviewSettingsPanelPlanner.CustomScalingOptionIndex);
+        customScaling.Kind.Should().Be(PrintPreviewSettingsPanelActionKind.OpenPageSetup);
+        customScaling.ResetSelection.Should().BeTrue();
+        customScaling.Command.Should().BeNull();
     }
 
     private static Sheet CreateSheet() =>
