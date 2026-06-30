@@ -20,8 +20,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
     private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private static readonly XNamespace ContentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace PackageRelNs = OpcRelationships.Namespace;
     private static readonly XNamespace X14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 
     public static void NormalizeSourcePackageSave(Stream packageStream) =>
@@ -57,7 +56,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             RemoveCalcChain(archive);
 
         NormalizeVolatileDependenciesPackageGraph(archive);
-        PruneMissingContentTypeOverrides(archive);
+        OpcMediaTypes.PruneMissingOverrideContentTypes(archive);
     }
 
     private static void RemoveInvalidWorkbookExtensionAttributes(ZipArchive archive)
@@ -458,17 +457,14 @@ internal static partial class XlsxExcelCompatibilityNormalizer
                     new XAttribute("count", "0"))));
 
         var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(cachePart);
-        var relationshipsXml = new XDocument(
-            new XElement(
-                PackageRelNs + "Relationships",
-                new XElement(
-                    PackageRelNs + "Relationship",
-                    new XAttribute("Id", "rId1"),
-                    new XAttribute("Type", PivotCacheRecordsRelationshipType),
-                    new XAttribute("Target", Path.GetFileName(recordsPath)))));
+        var relationshipsXml = OpcRelationships.CreateDocument(
+            OpcRelationships.CreateRelationship(
+                "rId1",
+                PivotCacheRecordsRelationshipType,
+                Path.GetFileName(recordsPath)));
         XlsxPackageXmlEditor.ReplaceXml(archive, relationshipsPath, relationshipsXml);
 
-        EnsureContentTypeOverride(
+        OpcMediaTypes.EnsureOverrideContentType(
             archive,
             "/" + recordsPath,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml");
@@ -552,15 +548,15 @@ internal static partial class XlsxExcelCompatibilityNormalizer
                 XlsxPackageXmlEditor.ReplaceXml(archive, "xl/_rels/workbook.xml.rels", workbookRelationships!);
         }
 
-        RemoveContentTypeOverride(archive, "/xl/calcChain.xml");
-        RemoveContentTypeOverride(archive, "/" + VolatileDependenciesPath);
+        OpcMediaTypes.RemoveOverrideContentTypes(archive, ["/xl/calcChain.xml"]);
+        OpcMediaTypes.RemoveOverrideContentTypes(archive, ["/" + VolatileDependenciesPath]);
     }
 
     private static void NormalizeVolatileDependenciesPackageGraph(ZipArchive archive)
     {
         if (archive.GetEntry(VolatileDependenciesPath) is null)
         {
-            RemoveContentTypeOverride(archive, "/" + VolatileDependenciesPath);
+            OpcMediaTypes.RemoveOverrideContentTypes(archive, ["/" + VolatileDependenciesPath]);
             RemoveWorkbookRelationships(
                 archive,
                 relationship =>
@@ -568,7 +564,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
             return;
         }
 
-        EnsureContentTypeOverride(archive, "/" + VolatileDependenciesPath, VolatileDependenciesContentType);
+        OpcMediaTypes.EnsureOverrideContentType(archive, "/" + VolatileDependenciesPath, VolatileDependenciesContentType);
 
         var workbookRelationships = LoadXml(archive, "xl/_rels/workbook.xml.rels");
         var relationshipRoot = workbookRelationships?.Root;
@@ -596,7 +592,7 @@ internal static partial class XlsxExcelCompatibilityNormalizer
         {
             relationshipRoot.Add(new XElement(
                 PackageRelNs + "Relationship",
-                new XAttribute("Id", NextRelationshipId(relationshipRoot)),
+                new XAttribute("Id", OpcRelationships.NextRelationshipId(workbookRelationships!, PackageRelNs)),
                 new XAttribute("Type", VolatileDependenciesRelationshipType),
                 new XAttribute("Target", "volatileDependencies.xml")));
             changed = true;
@@ -694,22 +690,6 @@ internal static partial class XlsxExcelCompatibilityNormalizer
                    StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string NextRelationshipId(XElement relationshipRoot)
-    {
-        var used = relationshipRoot
-            .Elements(PackageRelNs + "Relationship")
-            .Select(relationship => relationship.Attribute("Id")?.Value)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        for (var index = 1;; index++)
-        {
-            var id = "rId" + index.ToString(CultureInfo.InvariantCulture);
-            if (!used.Contains(id))
-                return id;
-        }
-    }
-
     private static List<string> GetWorkbookWorksheetPaths(ZipArchive archive)
     {
         var workbookXml = LoadXml(archive, "xl/workbook.xml");
@@ -729,99 +709,6 @@ internal static partial class XlsxExcelCompatibilityNormalizer
 
     private static XDocument? LoadXml(ZipArchive archive, string path) =>
         archive.GetEntry(path) is { } entry ? XlsxPackageXmlEditor.LoadXml(entry) : null;
-
-    private static void EnsureContentTypeOverride(ZipArchive archive, string partName, string contentType)
-    {
-        var contentTypes = LoadXml(archive, "[Content_Types].xml");
-        var root = contentTypes?.Root;
-        if (root is null)
-            return;
-
-        var normalizedPartName = NormalizePartName(partName);
-        var existing = FindContentTypeOverride(root, normalizedPartName);
-        if (existing is not null)
-        {
-            existing.SetAttributeValue("ContentType", contentType);
-        }
-        else
-        {
-            root.Add(new XElement(
-                ContentTypeNs + "Override",
-                new XAttribute("PartName", normalizedPartName),
-                new XAttribute("ContentType", contentType)));
-        }
-
-        XlsxPackageXmlEditor.ReplaceXml(archive, "[Content_Types].xml", contentTypes!);
-    }
-
-    private static void RemoveContentTypeOverride(ZipArchive archive, string partName)
-    {
-        var contentTypes = LoadXml(archive, "[Content_Types].xml");
-        var root = contentTypes?.Root;
-        if (root is null)
-            return;
-
-        var normalizedPartName = NormalizePartName(partName);
-        var removed = false;
-        foreach (var overrideElement in FindContentTypeOverrides(root, normalizedPartName).ToList())
-        {
-            overrideElement.Remove();
-            removed = true;
-        }
-
-        if (removed)
-            XlsxPackageXmlEditor.ReplaceXml(archive, "[Content_Types].xml", contentTypes!);
-    }
-
-    private static XElement? FindContentTypeOverride(XElement contentTypesRoot, string normalizedPartName)
-    {
-        foreach (var overrideElement in FindContentTypeOverrides(contentTypesRoot, normalizedPartName))
-            return overrideElement;
-
-        return null;
-    }
-
-    private static IEnumerable<XElement> FindContentTypeOverrides(XElement contentTypesRoot, string normalizedPartName) =>
-        contentTypesRoot
-            .Elements(ContentTypeNs + "Override")
-            .Where(overrideElement => ContentTypeOverrideMatchesPartName(overrideElement, normalizedPartName));
-
-    private static bool ContentTypeOverrideMatchesPartName(XElement overrideElement, string normalizedPartName) =>
-        string.Equals(
-            NormalizePartName(overrideElement.Attribute("PartName")?.Value),
-            normalizedPartName,
-            StringComparison.OrdinalIgnoreCase);
-
-    private static void PruneMissingContentTypeOverrides(ZipArchive archive)
-    {
-        var contentTypes = LoadXml(archive, "[Content_Types].xml");
-        var root = contentTypes?.Root;
-        if (root is null)
-            return;
-
-        var changed = false;
-        foreach (var overrideElement in root.Elements(ContentTypeNs + "Override").ToList())
-        {
-            var partName = overrideElement.Attribute("PartName")?.Value;
-            var zipPath = NormalizePartName(partName).TrimStart('/');
-            if (!string.IsNullOrWhiteSpace(zipPath) && archive.GetEntry(zipPath) is null)
-            {
-                overrideElement.Remove();
-                changed = true;
-            }
-        }
-
-        if (changed)
-            XlsxPackageXmlEditor.ReplaceXml(archive, "[Content_Types].xml", contentTypes!);
-    }
-
-    private static string NormalizePartName(string? partName)
-    {
-        if (string.IsNullOrWhiteSpace(partName))
-            return "";
-
-        return "/" + XlsxPackagePath.NormalizePackagePath(partName.Trim());
-    }
 
     private sealed record PivotTablePartInfo(string Path, XDocument Xml);
 }

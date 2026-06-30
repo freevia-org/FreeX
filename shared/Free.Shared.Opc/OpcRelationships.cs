@@ -54,9 +54,12 @@ public static class OpcRelationships
         return document is null ? [] : Load(document);
     }
 
-    public static IReadOnlyList<OpcRelationship> Load(XDocument relationshipsXml) =>
-        relationshipsXml.Root?
-            .Elements(Namespace + "Relationship")
+    public static IReadOnlyList<OpcRelationship> Load(
+        XDocument relationshipsXml,
+        XNamespace relationshipsNamespace)
+    {
+        return relationshipsXml.Root?
+            .Elements(relationshipsNamespace + "Relationship")
             .Select(element => new OpcRelationship(
                 element.Attribute("Id")?.Value ?? string.Empty,
                 element.Attribute("Type")?.Value ?? string.Empty,
@@ -65,6 +68,10 @@ public static class OpcRelationships
             .Where(relationship => !string.IsNullOrEmpty(relationship.Id))
             .ToList()
         ?? [];
+    }
+
+    public static IReadOnlyList<OpcRelationship> Load(XDocument relationshipsXml) =>
+        Load(relationshipsXml, Namespace);
 
     public static Dictionary<string, OpcRelationship> LoadById(
         ZipArchive archive,

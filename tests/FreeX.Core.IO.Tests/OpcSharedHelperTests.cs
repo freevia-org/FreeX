@@ -28,6 +28,35 @@ public sealed class OpcSharedHelperTests
     }
 
     [Theory]
+    [InlineData("xl/worksheets", "xl/media/image 1.png", "../media/image 1.png")]
+    [InlineData("xl/drawings", "xl/charts/chart1.xml", "../charts/chart1.xml")]
+    [InlineData("xl/pivotCache", "xl/pivotCache/pivotCacheRecords1.xml", "pivotCacheRecords1.xml")]
+    public void GetRelativeZipPath_ReturnsOpcRelationshipTargets(
+        string baseDirectory,
+        string targetPath,
+        string expected)
+    {
+        OpcPathHelper.GetRelativeZipPath(baseDirectory, targetPath).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("../media/image%201.png", "../media/image 1.png")]
+    [InlineData("../media/image%2F1.png", "../media/image%2F1.png")]
+    [InlineData("%2E%2E/media/image.png", "%2E%2E/media/image.png")]
+    public void UnescapeRelationshipPathSegments_PreservesOpcPathControlSegments(string encoded, string unescaped)
+    {
+        OpcPathHelper.UnescapeRelationshipPathSegments(encoded).Should().Be(unescaped);
+    }
+
+    [Theory]
+    [InlineData("../media/image 1.png", "../media/image%201.png")]
+    [InlineData("../media/image#1?.png", "../media/image%231%3F.png")]
+    public void EscapeRelationshipPathSegments_EscapesUnsafeSegmentCharacters(string value, string expected)
+    {
+        OpcPathHelper.EscapeRelationshipPathSegments(value).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("/word/charts", "../media/image1.png", "/word/media/image1.png")]
     [InlineData("/word/charts", "/docProps/core.xml", "/docProps/core.xml")]
     [InlineData("/", "../escaped.xml", null)]
@@ -58,6 +87,51 @@ public sealed class OpcSharedHelperTests
     public void GetDrawingMediaContentType_MatchesPresentationImageDefaults(string path, string expected)
     {
         OpcMediaTypes.GetDrawingMediaContentType(path).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ContentTypeHelpers_EnsureRemoveAndPruneOverrides()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteText(archive, OpcMediaTypes.ContentTypesPath, """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="xml" ContentType="application/xml" />
+                  <Override PartName="/xl/stale.xml" ContentType="application/xml" />
+                </Types>
+                """);
+            WriteText(archive, "xl/live.xml", "<live />");
+        }
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            OpcMediaTypes.EnsureDefaultContentType(archive, ".rels", OpcMediaTypes.RelationshipsContentType)
+                .Should().BeTrue();
+            OpcMediaTypes.EnsureOverrideContentType(
+                    archive,
+                    "xl/live.xml",
+                    "application/vnd.example.live+xml")
+                .Should()
+                .BeTrue();
+            OpcMediaTypes.RemoveOverrideContentTypes(archive, ["/xl/stale.xml"]).Should().BeTrue();
+            OpcMediaTypes.PruneMissingOverrideContentTypes(archive).Should().BeFalse();
+        }
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var contentTypes = OpcXml.LoadXml(readArchive.GetEntry(OpcMediaTypes.ContentTypesPath)!);
+        contentTypes.Root!
+            .Elements(OpcMediaTypes.ContentTypesNamespace + "Default")
+            .Should()
+            .Contain(element => (string?)element.Attribute("Extension") == "rels");
+        contentTypes.Root!
+            .Elements(OpcMediaTypes.ContentTypesNamespace + "Override")
+            .Should()
+            .ContainSingle(element =>
+                (string?)element.Attribute("PartName") == "/xl/live.xml" &&
+                (string?)element.Attribute("ContentType") == "application/vnd.example.live+xml");
     }
 
     [Theory]
@@ -256,6 +330,30 @@ public sealed class OpcSharedHelperTests
         pptxWriterSource.Should().Contain("OpcMediaTypes.GetDrawingMediaExtension");
         pptxWriterSource.Should().Contain("OpcMediaTypes.GetAudioVideoExtension");
         pptxWriterSource.Should().NotContain("private static string ContentTypeToExtension(");
+    }
+
+    [Fact]
+    public void FreeXOpcSubstrateDedupSourceGuard_UsesSharedPathRelationshipContentTypeAndXmlHelpers()
+    {
+        var xlsxPathSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxPackagePath.cs");
+        var xlsxXmlEditorSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxPackageXmlEditor.cs");
+        var relationshipReaderSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxRelationshipReader.cs");
+        var excelCompatibilitySource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxExcelCompatibilityNormalizer.cs");
+        var singleXmlCellSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorksheetSingleXmlCellMapper.cs");
+
+        xlsxPathSource.Should().Contain("OpcPathHelper.GetRelativeZipPath");
+        xlsxPathSource.Should().Contain("OpcPathHelper.EscapeRelationshipPathSegments");
+        xlsxXmlEditorSource.Should().Contain("OpcMediaTypes.EnsureDefaultContentType");
+        xlsxXmlEditorSource.Should().Contain("OpcMediaTypes.EnsureOverrideContentType");
+        xlsxXmlEditorSource.Should().NotContain("http://schemas.openxmlformats.org/package/2006/content-types");
+        relationshipReaderSource.Should().Contain("OpcRelationships.Load");
+        relationshipReaderSource.Should().NotContain("private static XDocument LoadXml");
+        excelCompatibilitySource.Should().Contain("OpcMediaTypes.PruneMissingOverrideContentTypes");
+        excelCompatibilitySource.Should().Contain("OpcRelationships.NextRelationshipId");
+        excelCompatibilitySource.Should().NotContain("private static string NextRelationshipId");
+        excelCompatibilitySource.Should().NotContain("private static void EnsureContentTypeOverride");
+        singleXmlCellSource.Should().Contain("OpcMediaTypes.RemoveOverrideContentTypes");
+        singleXmlCellSource.Should().NotContain("private static void RemoveSpecificContentTypes");
     }
 
     [Fact]

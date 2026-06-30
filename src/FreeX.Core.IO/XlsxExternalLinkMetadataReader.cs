@@ -29,10 +29,10 @@ internal static class XlsxExternalLinkMetadataReader
 
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace packageRelNs = OpcRelationships.Namespace;
 
-            var workbookXml = LoadXml(workbookEntry);
-            var workbookRels = LoadRelationshipTargets(
+            var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+            var workbookRels = XlsxRelationshipReader.LoadTargets(
                 archive,
                 "xl/_rels/workbook.xml.rels",
                 "xl/workbook.xml",
@@ -55,20 +55,12 @@ internal static class XlsxExternalLinkMetadataReader
                 var externalLinkRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(externalLinkPath));
                 if (externalLinkRelsEntry is not null)
                 {
-                    var externalLinkRelsXml = LoadXml(externalLinkRelsEntry);
-                    XElement? pathRelationship = null;
-                    foreach (var relationship in externalLinkRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
-                    {
-                        if (!(relationship.Attribute("Type")?.Value ?? "").EndsWith(
-                                "/externalLinkPath",
-                                StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        pathRelationship = relationship;
-                        break;
-                    }
+                    var externalLinkRelsXml = XlsxPackageXmlEditor.LoadXml(externalLinkRelsEntry);
+                    var pathRelationship = externalLinkRelsXml.Root?
+                        .Elements(packageRelNs + "Relationship")
+                        .FirstOrDefault(relationship => (relationship.Attribute("Type")?.Value ?? "").EndsWith(
+                            "/externalLinkPath",
+                            StringComparison.OrdinalIgnoreCase));
 
                     model.TargetUri = pathRelationship?.Attribute("Target")?.Value;
                     model.TargetMode = pathRelationship?.Attribute("TargetMode")?.Value;
@@ -85,25 +77,4 @@ internal static class XlsxExternalLinkMetadataReader
         }
     }
 
-    private static XDocument LoadXml(ZipArchiveEntry entry)
-    {
-        return XlsxPackageXmlEditor.LoadXml(entry);
-    }
-
-    private static Dictionary<string, string> LoadRelationshipTargets(
-        ZipArchive archive,
-        string relsPath,
-        string sourcePart,
-        XNamespace packageRelNs)
-    {
-        var relsEntry = archive.GetEntry(relsPath);
-        if (relsEntry is null)
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var relsXml = LoadXml(relsEntry);
-        return XlsxRelationshipReader.ReadTargets(
-            relsXml,
-            packageRelNs,
-            target => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target));
-    }
 }
