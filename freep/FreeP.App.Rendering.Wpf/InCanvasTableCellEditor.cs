@@ -97,10 +97,8 @@ public sealed class InCanvasTableCellEditor
         if (cellRect is null) { _cellEditActive = false; return; }
 
         var xf = _canvas.CurrentTransform;
-        double x = cellRect.Value.X * xf.Scale + xf.OffsetX;
-        double y = cellRect.Value.Y * xf.Scale + xf.OffsetY;
-        double w = cellRect.Value.Width  * xf.Scale;
-        double h = cellRect.Value.Height * xf.Scale;
+        var screenRect = SlideCanvasGeometryPlanner.DipBoundsToScreen(cellRect.Value, xf.Core);
+        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(screenRect, 30, 18);
 
         _cellEditPlan = InCanvasTableCellTextEditPlanner.BeginRichText(
             _editor.CurrentSlideIndex,
@@ -124,16 +122,16 @@ public sealed class InCanvasTableCellEditor
             BorderThickness       = new Thickness(1.5),
             SpellCheck            = { IsEnabled = false },
             IsUndoEnabled         = false,
-            MinWidth              = Math.Max(30, w),
-            MinHeight             = Math.Max(18, h),
-            Width                 = Math.Max(30, w),
-            Height                = Math.Max(18, h),
+            MinWidth              = placement.Width,
+            MinHeight             = placement.Height,
+            Width                 = placement.Width,
+            Height                = placement.Height,
             VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
         };
 
-        Canvas.SetLeft(_cellTextBox, x);
-        Canvas.SetTop (_cellTextBox, y);
+        Canvas.SetLeft(_cellTextBox, placement.Left);
+        Canvas.SetTop (_cellTextBox, placement.Top);
 
         _cellTextBox.LostFocus    += (_, _) => CommitCellEdit();
         _cellTextBox.KeyDown      += OnCellTextBoxKeyDown;
@@ -402,23 +400,20 @@ public sealed class InCanvasTableCellEditor
         if (cellRect is null) return;
 
         var xf = _canvas.CurrentTransform;
-        double x = cellRect.Value.X * xf.Scale + xf.OffsetX;
-        double y = cellRect.Value.Y * xf.Scale + xf.OffsetY;
-        double w = cellRect.Value.Width  * xf.Scale;
-        double h = cellRect.Value.Height * xf.Scale;
+        var screenRect = SlideCanvasGeometryPlanner.DipBoundsToScreen(cellRect.Value, xf.Core);
 
         _cellHighlight = new Rectangle
         {
-            Width           = Math.Max(1, w),
-            Height          = Math.Max(1, h),
+            Width           = Math.Max(1, screenRect.Width),
+            Height          = Math.Max(1, screenRect.Height),
             Stroke          = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
             StrokeThickness = 2.0,
             Fill            = new SolidColorBrush(Color.FromArgb(0x18, 0x21, 0x96, 0xF3)),
             IsHitTestVisible = false,
         };
 
-        Canvas.SetLeft(_cellHighlight, x);
-        Canvas.SetTop (_cellHighlight, y);
+        Canvas.SetLeft(_cellHighlight, screenRect.Left);
+        Canvas.SetTop (_cellHighlight, screenRect.Top);
         _overlay.Children.Add(_cellHighlight);
     }
 

@@ -177,13 +177,13 @@ public sealed class SelectionAdorner : Adorner
             if (g.IsHorizontal)
             {
                 // Horizontal guide: a full-width line at screen-Y derived from guide DIP position.
-                double screenY = g.Position * xf.Scale + xf.OffsetY;
+                double screenY = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf.Core);
                 dc.DrawLine(SnapGuidePen, new Point(0, screenY), new Point(w, screenY));
             }
             else
             {
                 // Vertical guide: a full-height line at screen-X.
-                double screenX = g.Position * xf.Scale + xf.OffsetX;
+                double screenX = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf.Core);
                 dc.DrawLine(SnapGuidePen, new Point(screenX, 0), new Point(screenX, h));
             }
         }

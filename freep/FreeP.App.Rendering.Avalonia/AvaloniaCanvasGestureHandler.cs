@@ -38,7 +38,7 @@ public sealed class AvaloniaCanvasGestureHandler
     private bool        _dragStarted;   // true once pointer has moved > threshold
 
     // ── Move ───────────────────────────────────────────────────────────────────
-    private Dictionary<uint, (long ox, long oy)>? _moveStartPositions;
+    private IReadOnlyList<CanvasMoveShapeState>? _moveStartShapes;
 
     // ── Resize ─────────────────────────────────────────────────────────────────
     private uint                              _resizeShapeId;
@@ -279,13 +279,7 @@ public sealed class AvaloniaCanvasGestureHandler
         _gesture          = GestureKind.Move;
         _dragStartScreen  = screenPt;
         _dragStarted      = false;
-        _moveStartPositions = new Dictionary<uint, (long, long)>();
-        foreach (var id in _editor.SelectedShapeIds)
-        {
-            var s = slide.Shapes.FirstOrDefault(sh => sh.Id == id);
-            if (s is not null)
-                _moveStartPositions[id] = (s.OffsetXEmu, s.OffsetYEmu);
-        }
+        _moveStartShapes = CanvasGesturePlanner.CaptureMoveState(slide, _editor.SelectedShapeIds);
         pointer.Capture(_canvas);
     }
 
@@ -296,112 +290,41 @@ public sealed class AvaloniaCanvasGestureHandler
         if (!_dragStarted && Math.Abs(ddxPx) < 3 && Math.Abs(ddyPx) < 3) return;
         _dragStarted = true;
 
-        double ddxDip = xf.ScaleScreenToDip(ddxPx);
-        double ddyDip = xf.ScaleScreenToDip(ddyPx);
+        if (_moveStartShapes is null)
+            return;
 
-        // Alt key disables snapping (PowerPoint convention), matching WPF CanvasGestureHandler.
-        bool altHeld    = (modifiers & KeyModifiers.Alt) != 0;
-        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
+        var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            Transform: xf,
+            Shapes: _moveStartShapes,
+            CurrentSlide: slide,
+            SnapToGrid: SnapToGrid,
+            SnapToShapes: SnapToShapes,
+            BypassSnap: (modifiers & KeyModifiers.Alt) != 0));
 
-        SnapResult snap = SnapResult.None;
-        if (snapEnabled && _moveStartPositions is not null && _editor.SelectedShapeIds.Count > 0)
-        {
-            var firstId = _editor.SelectedShapeIds[0];
-            if (_moveStartPositions.TryGetValue(firstId, out var firstOrig))
-            {
-                var firstShape = slide.Shapes.FirstOrDefault(s => s.Id == firstId);
-                if (firstShape is not null)
-                {
-                    double newL = SlideTransformCore.EmuToDip(firstOrig.ox) + ddxDip;
-                    double newT = SlideTransformCore.EmuToDip(firstOrig.oy) + ddyDip;
-                    double newR = newL + SlideTransformCore.EmuToDip(firstShape.ExtentCxEmu);
-                    double newB = newT + SlideTransformCore.EmuToDip(firstShape.ExtentCyEmu);
-                    var candidates = SnapToShapes
-                        ? SnapEngine.BuildShapeCandidates(slide, _editor.SelectedShapeIds)
-                        : null;
-                    snap = SnapEngine.Snap(
-                        (newL, newT, newR, newB), candidates,
-                        xf.SlideWidthDip, xf.SlideHeightDip,
-                        snapEnabled: true,
-                        gridPitchDip: SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0);
-                }
-            }
-        }
-
-        double snapDxPx = snap.SnapDx * xf.Scale;
-        double snapDyPx = snap.SnapDy * xf.Scale;
-
-        var rects = new List<(uint, Rect)>();
-        foreach (var id in _editor.SelectedShapeIds)
-        {
-            if (_moveStartPositions is null || !_moveStartPositions.TryGetValue(id, out var orig)) continue;
-            var s = slide.Shapes.FirstOrDefault(sh => sh.Id == id);
-            if (s is null) continue;
-            double ox = SlideTransformCore.EmuToDip(orig.ox) * xf.Scale + xf.OffsetX + ddxPx + snapDxPx;
-            double oy = SlideTransformCore.EmuToDip(orig.oy) * xf.Scale + xf.OffsetY + ddyPx + snapDyPx;
-            double cw = SlideTransformCore.EmuToDip(s.ExtentCxEmu) * xf.Scale;
-            double ch = SlideTransformCore.EmuToDip(s.ExtentCyEmu) * xf.Scale;
-            rects.Add((id, new Rect(ox, oy, cw, ch)));
-        }
-
-        if (rects.Count == 1)
-            _adorner.UpdatePreview(rects[0].Item2);
-        else if (rects.Count > 1)
-        {
-            double l  = rects.Min(r => r.Item2.Left);
-            double t  = rects.Min(r => r.Item2.Top);
-            double rt = rects.Max(r => r.Item2.Right);
-            double bt = rects.Max(r => r.Item2.Bottom);
-            _adorner.UpdatePreview(new Rect(l, t, rt - l, bt - t));
-        }
-
-        _adorner.UpdateSnapGuides(snap.Guides.Count > 0 ? snap.Guides : null, xf);
+        _adorner.UpdatePreview(plan.PreviewBounds is { } bounds ? ToAvaloniaRect(bounds) : null);
+        _adorner.UpdateSnapGuides(plan.SnapGuides.Count > 0 ? plan.SnapGuides : null, xf);
     }
 
     private void CommitMove(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
-        if (_moveStartPositions is null || !_dragStarted) return;
+        if (_moveStartShapes is null || !_dragStarted) return;
         double ddxPx = screenPt.X - _dragStartScreen.X;
         double ddyPx = screenPt.Y - _dragStartScreen.Y;
         if (Math.Abs(ddxPx) < 1 && Math.Abs(ddyPx) < 1) return;
 
-        // Alt key disables snapping (PowerPoint convention), matching WPF CanvasGestureHandler.
-        bool altHeld     = (modifiers & KeyModifiers.Alt) != 0;
-        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
+        var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            Transform: xf,
+            Shapes: _moveStartShapes,
+            CurrentSlide: _editor.CurrentSlide,
+            SnapToGrid: SnapToGrid,
+            SnapToShapes: SnapToShapes,
+            BypassSnap: (modifiers & KeyModifiers.Alt) != 0));
 
-        double snapDxPx = 0, snapDyPx = 0;
-        var slide = _editor.CurrentSlide;
-        if (snapEnabled && slide is not null && _editor.SelectedShapeIds.Count > 0)
-        {
-            double ddxDip = xf.ScaleScreenToDip(ddxPx);
-            double ddyDip = xf.ScaleScreenToDip(ddyPx);
-            var firstId   = _editor.SelectedShapeIds[0];
-            if (_moveStartPositions.TryGetValue(firstId, out var firstOrig))
-            {
-                var firstShape = slide.Shapes.FirstOrDefault(s => s.Id == firstId);
-                if (firstShape is not null)
-                {
-                    double newL = SlideTransformCore.EmuToDip(firstOrig.ox) + ddxDip;
-                    double newT = SlideTransformCore.EmuToDip(firstOrig.oy) + ddyDip;
-                    double newR = newL + SlideTransformCore.EmuToDip(firstShape.ExtentCxEmu);
-                    double newB = newT + SlideTransformCore.EmuToDip(firstShape.ExtentCyEmu);
-                    var candidates = SnapToShapes
-                        ? SnapEngine.BuildShapeCandidates(slide, _editor.SelectedShapeIds)
-                        : null;
-                    var snap = SnapEngine.Snap(
-                        (newL, newT, newR, newB), candidates,
-                        xf.SlideWidthDip, xf.SlideHeightDip,
-                        snapEnabled: true,
-                        gridPitchDip: SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0);
-                    snapDxPx = snap.SnapDx * xf.Scale;
-                    snapDyPx = snap.SnapDy * xf.Scale;
-                }
-            }
-        }
-
-        long dxEmu = xf.ScreenDeltaToEmu(ddxPx + snapDxPx);
-        long dyEmu = xf.ScreenDeltaToEmu(ddyPx + snapDyPx);
-        _editor.MoveSelected(dxEmu, dyEmu);
+        _editor.MoveSelected(plan.DeltaXEmu, plan.DeltaYEmu);
     }
 
     // ── Resize gesture ─────────────────────────────────────────────────────────
@@ -433,8 +356,8 @@ public sealed class AvaloniaCanvasGestureHandler
             _dragStarted = true;
         }
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf, modifiers);
-        var r = BoundsToScreenRect(nx, ny, ncx, ncy, xf);
-        _adorner.UpdatePreview(r);
+        var r = SlideCanvasGeometryPlanner.EmuBoundsToScreen(nx, ny, ncx, ncy, xf);
+        _adorner.UpdatePreview(ToAvaloniaRect(r));
     }
 
     private void CommitResize(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
@@ -527,8 +450,8 @@ public sealed class AvaloniaCanvasGestureHandler
         _gesture           = GestureKind.Marquee;
         _dragStartScreen   = screenPt;
         _dragStarted       = false;
-        _marqueeStartSlide = new Point(xf.ScreenToSlide(screenPt.X, screenPt.Y).X,
-                                       xf.ScreenToSlide(screenPt.X, screenPt.Y).Y);
+        var slidePoint = xf.ScreenToSlide(screenPt.X, screenPt.Y);
+        _marqueeStartSlide = new Point(slidePoint.X, slidePoint.Y);
         pointer.Capture(_canvas);
     }
 
@@ -539,11 +462,10 @@ public sealed class AvaloniaCanvasGestureHandler
         if (!_dragStarted && Math.Abs(ddxPx) < 3 && Math.Abs(ddyPx) < 3) return;
         _dragStarted = true;
 
-        double l = Math.Min(_dragStartScreen.X, screenPt.X);
-        double t = Math.Min(_dragStartScreen.Y, screenPt.Y);
-        double r = Math.Max(_dragStartScreen.X, screenPt.X);
-        double b = Math.Max(_dragStartScreen.Y, screenPt.Y);
-        _adorner.UpdateMarquee(new Rect(l, t, r - l, b - t));
+        var rect = SlideCanvasGeometryPlanner.ScreenRectBetween(
+            ToGesturePoint(_dragStartScreen),
+            ToGesturePoint(screenPt));
+        _adorner.UpdateMarquee(ToAvaloniaRect(rect));
     }
 
     private void CommitMarquee(Point screenPt, SlideTransformCore xf)
@@ -672,21 +594,16 @@ public sealed class AvaloniaCanvasGestureHandler
 
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransformCore xf)
     {
-        var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
-        if (s is null || _editor.Presentation is null) return null;
-        var b = ShapeHitTester.GetShapeBoundsDip(s, _editor.Presentation);
-        return BoundsToScreenRect(
-            SlideTransformCore.DipToEmu(b.Left), SlideTransformCore.DipToEmu(b.Top),
-            SlideTransformCore.DipToEmu(b.Width), SlideTransformCore.DipToEmu(b.Height), xf);
+        if (_editor.Presentation is null) return null;
+        var rect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
+            slide,
+            _editor.Presentation,
+            shapeId,
+            xf);
+        return rect is { } screenRect ? ToAvaloniaRect(screenRect) : null;
     }
 
-    private static Rect BoundsToScreenRect(long offX, long offY, long cx, long cy, SlideTransformCore xf)
-    {
-        double x = SlideTransformCore.EmuToDip(offX) * xf.Scale + xf.OffsetX;
-        double y = SlideTransformCore.EmuToDip(offY) * xf.Scale + xf.OffsetY;
-        double w = SlideTransformCore.EmuToDip(cx) * xf.Scale;
-        double h = SlideTransformCore.EmuToDip(cy) * xf.Scale;
-        return new Rect(x, y, Math.Max(0, w), Math.Max(0, h));
-    }
+    private static Rect ToAvaloniaRect(SlideScreenRect rect)
+        => new(rect.Left, rect.Top, rect.Width, rect.Height);
 
 }

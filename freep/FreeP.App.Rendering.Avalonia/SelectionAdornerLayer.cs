@@ -132,12 +132,12 @@ public sealed class SelectionAdornerLayer : Control
         {
             if (g.IsHorizontal)
             {
-                double sy = g.Position * xf.Scale + xf.OffsetY;
+                double sy = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
                 dc.DrawLine(SnapGuidePen, new Point(-Span, sy), new Point(Span, sy));
             }
             else
             {
-                double sx = g.Position * xf.Scale + xf.OffsetX;
+                double sx = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
                 dc.DrawLine(SnapGuidePen, new Point(sx, -Span), new Point(sx, Span));
             }
         }

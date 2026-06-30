@@ -59,21 +59,18 @@ public sealed class AvaloniaInCanvasTextEditor
             shape.TextBody);
 
         var xf = _canvas.CurrentTransform;
-        var b = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation);
-        double x = b.Left * xf.Scale + xf.OffsetX;
-        double y = b.Top * xf.Scale + xf.OffsetY;
-        double w = b.Width * xf.Scale;
-        double h = b.Height * xf.Scale;
+        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, _editor.Presentation, xf);
+        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(screenRect, 40, 20);
 
         _textBox = new TextBox
         {
             AcceptsReturn = true,
             TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
             Text = _editPlan.OriginalPlainText,
-            MinWidth = Math.Max(40, w),
-            MinHeight = Math.Max(20, h),
-            Width = Math.Max(40, w),
-            Height = Math.Max(20, h),
+            MinWidth = placement.Width,
+            MinHeight = placement.Height,
+            Width = placement.Width,
+            Height = placement.Height,
             Padding = new Thickness(2),
             Background = new global::Avalonia.Media.SolidColorBrush(
                 global::Avalonia.Media.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
@@ -82,8 +79,8 @@ public sealed class AvaloniaInCanvasTextEditor
             BorderThickness = new Thickness(1.5),
         };
 
-        Canvas.SetLeft(_textBox, x);
-        Canvas.SetTop(_textBox, y);
+        Canvas.SetLeft(_textBox, placement.Left);
+        Canvas.SetTop(_textBox, placement.Top);
 
         _textBox.LostFocus += (_, _) => Commit();
         _textBox.KeyDown += OnTextBoxKeyDown;
