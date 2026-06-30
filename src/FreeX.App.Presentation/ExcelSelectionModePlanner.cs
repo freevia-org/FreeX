@@ -1,3 +1,5 @@
+using Free.Shared.AppServices;
+
 namespace FreeX.App.Presentation;
 
 public enum ExcelSelectionKey
@@ -44,4 +46,15 @@ public static class ExcelSelectionModePlanner
         mode == ExcelSelectionMode.Extend ||
         modifiers is ExcelWorksheetNavigationModifiers.Shift or
             (ExcelWorksheetNavigationModifiers.Control | ExcelWorksheetNavigationModifiers.Shift);
+
+    public static string StatusBarModeResourceKey(ExcelSelectionMode mode) =>
+        mode switch
+        {
+            ExcelSelectionMode.Extend => StatusBarTextResourceKeys.ExtendSelectionMode,
+            ExcelSelectionMode.Add => StatusBarTextResourceKeys.AddToSelectionMode,
+            _ => StatusBarTextResourceKeys.ReadyText
+        };
+
+    public static string EndModeStatusBarResourceKey(bool enabled) =>
+        enabled ? StatusBarTextResourceKeys.EndMode : StatusBarTextResourceKeys.ReadyText;
 }

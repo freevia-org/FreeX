@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.App.Presentation;
 using HostExcelSelectionModePlanner = FreeX.App.Host.ExcelSelectionModePlanner;
 
@@ -73,5 +74,26 @@ public sealed class ExcelSelectionModePlannerTests
         bool expected)
     {
         HostExcelSelectionModePlanner.ShouldExtendSelection(mode, modifiers).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(ExcelSelectionMode.Normal, StatusBarTextResourceKeys.ReadyText)]
+    [InlineData(ExcelSelectionMode.Extend, StatusBarTextResourceKeys.ExtendSelectionMode)]
+    [InlineData(ExcelSelectionMode.Add, StatusBarTextResourceKeys.AddToSelectionMode)]
+    public void StatusBarModeResourceKey_MapsSelectionModeToSharedStatusText(
+        ExcelSelectionMode mode,
+        string expectedResourceKey)
+    {
+        HostExcelSelectionModePlanner.StatusBarModeResourceKey(mode).Should().Be(expectedResourceKey);
+    }
+
+    [Theory]
+    [InlineData(false, StatusBarTextResourceKeys.ReadyText)]
+    [InlineData(true, StatusBarTextResourceKeys.EndMode)]
+    public void EndModeStatusBarResourceKey_MapsEndModeToSharedStatusText(
+        bool enabled,
+        string expectedResourceKey)
+    {
+        HostExcelSelectionModePlanner.EndModeStatusBarResourceKey(enabled).Should().Be(expectedResourceKey);
     }
 }

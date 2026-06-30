@@ -75,6 +75,72 @@ public sealed class StatusBarPresentationPlannerTests
         StatusBarPresentationPlanner.ReadoutValue(model, StatusBarReadoutKind.Sum).Should().BeEmpty();
     }
 
+    [Fact]
+    public void BuildRendererPlan_MapsPresentationToStableRendererSlots()
+    {
+        var model = StatsModel();
+        var options = StatusBarOptionVisibility.ExcelDefaults with
+        {
+            NumericalCount = true,
+            Sum = false,
+            Maximum = true,
+            Zoom = false
+        };
+        var presentation = StatusBarPresentationPlanner.Build(
+            model,
+            options,
+            fallbackAutomationText: "Customize Status Bar");
+
+        var renderer = StatusBarPresentationPlanner.BuildRendererPlan(presentation);
+
+        renderer.ReadyText.Should().BeEmpty();
+        renderer.StatsPanelAutomationText.Should().Be("Average: 20; Count: 4; Numerical Count: 3; Max: 30");
+        renderer.VisibilityElements.Should().Contain(new StatusBarElementVisibilityPlan(
+            StatusBarPresentationElement.StatsPanel,
+            true));
+        renderer.VisibilityElements.Should().Contain(new StatusBarElementVisibilityPlan(
+            StatusBarPresentationElement.Sum,
+            false));
+        renderer.VisibilityElements.Should().Contain(new StatusBarElementVisibilityPlan(
+            StatusBarPresentationElement.ZoomText,
+            false));
+        renderer.VisibilityElements.Should().Contain(new StatusBarElementVisibilityPlan(
+            StatusBarPresentationElement.ZoomControls,
+            true));
+
+        renderer.ReadoutElements.Should().ContainInOrder(
+            new StatusBarReadoutPresentationPlan(
+                StatusBarReadoutKind.Average,
+                StatusBarPresentationElement.Average,
+                "Average: 20",
+                StatusBarTextResourceKeys.Average),
+            new StatusBarReadoutPresentationPlan(
+                StatusBarReadoutKind.Count,
+                StatusBarPresentationElement.Count,
+                "Count: 4",
+                StatusBarTextResourceKeys.Count),
+            new StatusBarReadoutPresentationPlan(
+                StatusBarReadoutKind.NumericalCount,
+                StatusBarPresentationElement.NumericalCount,
+                "Numerical Count: 3",
+                StatusBarTextResourceKeys.NumericalCount),
+            new StatusBarReadoutPresentationPlan(
+                StatusBarReadoutKind.Sum,
+                StatusBarPresentationElement.Sum,
+                "Sum: 60",
+                StatusBarTextResourceKeys.Sum),
+            new StatusBarReadoutPresentationPlan(
+                StatusBarReadoutKind.Minimum,
+                StatusBarPresentationElement.Minimum,
+                "Min: 10",
+                StatusBarTextResourceKeys.Minimum),
+            new StatusBarReadoutPresentationPlan(
+                StatusBarReadoutKind.Maximum,
+                StatusBarPresentationElement.Maximum,
+                "Max: 30",
+                StatusBarTextResourceKeys.Maximum));
+    }
+
     private static StatusBarViewModel StatsModel() =>
         StatusBarDisplayModelBuilder.Stats(
             StatusBarViewMode.Normal,
