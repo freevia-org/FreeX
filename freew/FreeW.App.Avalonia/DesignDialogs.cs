@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Free.Shared.Shell.Avalonia;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -62,6 +63,9 @@ public sealed class PageBordersDialog : Window
 
         _width.ItemsSource = new[] { "0.5 pt", "1 pt", "1.5 pt", "2.25 pt", "3 pt", "4.5 pt", "6 pt" };
         _width.SelectedIndex = current is null ? 1 : ClosestWidthIndex(current.WidthPt);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_style, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_color, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_width, InsertDialogLayout.ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -70,26 +74,21 @@ public sealed class PageBordersDialog : Window
         InsertDialogLayout.AddLabeledRow(grid, 1, "Color:", _color);
         InsertDialogLayout.AddLabeledRow(grid, 2, "Width:", _width);
 
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(14, 12, 14, 12),
-        };
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("OK", (_, _) =>
+        var okButton = InsertDialogLayout.MakeButton("OK", (_, _) =>
         {
             var style = BorderStyles[Math.Max(0, _style.SelectedIndex)].Style;
             var hex = Colors[Math.Max(0, _color.SelectedIndex)].Hex;
             var widthPt = WidthPtForIndex(Math.Max(0, _width.SelectedIndex));
             Result = new PageBorder(hex, widthPt) { LineStyle = style };
             Close();
-        }));
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("None", (_, _) =>
+        });
+        var noneButton = InsertDialogLayout.MakeButton("None", (_, _) =>
         {
             RemoveRequested = true;
             Close();
-        }));
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("Cancel", (_, _) => Close()));
+        });
+        var cancelButton = InsertDialogLayout.MakeButton("Cancel", (_, _) => Close());
+        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, noneButton, cancelButton], new Thickness(14, 12, 14, 12));
 
         var outer = new StackPanel();
         outer.Children.Add(grid);
@@ -179,6 +178,11 @@ public sealed class WatermarkDialog : Window
         _layout.SelectedIndex = current?.Layout == WatermarkLayout.Horizontal ? 1 : 0;
 
         _semitransparent.IsChecked = current is null || current.Opacity < 0.999;
+        AvaloniaCompactDialogChrome.ApplyTextBox(_text, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_font, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_color, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_layout, InsertDialogLayout.ChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(_semitransparent, InsertDialogLayout.ChromeStyle);
 
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -191,13 +195,7 @@ public sealed class WatermarkDialog : Window
         var checkRow = new StackPanel { Margin = new Thickness(14, 0, 14, 0) };
         checkRow.Children.Add(_semitransparent);
 
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(14, 12, 14, 12),
-        };
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("OK", (_, _) =>
+        var okButton = InsertDialogLayout.MakeButton("OK", (_, _) =>
         {
             var text = _text.Text?.Trim();
             if (string.IsNullOrEmpty(text))
@@ -210,13 +208,14 @@ public sealed class WatermarkDialog : Window
                 Opacity = _semitransparent.IsChecked == true ? 0.3 : 1.0,
             };
             Close();
-        }));
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("No Watermark", (_, _) =>
+        });
+        var noWatermarkButton = InsertDialogLayout.MakeButton("No Watermark", (_, _) =>
         {
             RemoveRequested = true;
             Close();
-        }));
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("Cancel", (_, _) => Close()));
+        });
+        var cancelButton = InsertDialogLayout.MakeButton("Cancel", (_, _) => Close());
+        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, noWatermarkButton, cancelButton], new Thickness(14, 12, 14, 12));
 
         var outer = new StackPanel();
         outer.Children.Add(grid);

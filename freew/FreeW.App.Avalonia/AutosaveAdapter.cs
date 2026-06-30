@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.IO;
 
@@ -194,6 +195,8 @@ internal sealed class AutosaveAdapter : IDisposable
 /// </summary>
 internal sealed class RecoveryPromptDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     private RecoveryPromptDialog(string message)
     {
         Title = "FreeW – Recover";
@@ -210,18 +213,14 @@ internal sealed class RecoveryPromptDialog : Window
         };
 
         var yes = new Button { Content = "Recover", MinWidth = 82, IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(yes, DialogChromeStyle, minWidth: 82, isDefault: true);
         yes.Click += (_, _) => Close(true);
 
-        var no = new Button { Content = "Skip", MinWidth = 82, IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
+        var no = new Button { Content = "Skip", MinWidth = 82, IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(no, DialogChromeStyle, minWidth: 82);
         no.Click += (_, _) => Close(false);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-            Children = { yes, no },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([yes, no], new Thickness(16, 0, 16, 16));
 
         Content = new StackPanel { Children = { text, buttons } };
     }

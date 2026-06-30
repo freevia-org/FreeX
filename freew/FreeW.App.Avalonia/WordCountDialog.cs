@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -14,6 +15,8 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class WordCountDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     public WordCountDialog(DocumentStatistics stats)
     {
         Title = "Word Count";
@@ -35,15 +38,10 @@ internal sealed class WordCountDialog : Window
         AddStatRow(grid, 4, "Lines", stats.Lines);
 
         var ok = new Button { Content = "OK", IsDefault = true, IsCancel = true, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) => Close();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 12, 16, 14),
-            Children = { ok },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok], new Thickness(16, 12, 16, 14));
 
         DockPanel.SetDock(buttons, global::Avalonia.Controls.Dock.Bottom);
         Content = new DockPanel

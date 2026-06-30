@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -28,6 +29,8 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 public sealed class FindReplaceDialog : Window
 {
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
+
     // ── Editor reference ──────────────────────────────────────────────────────
 
     private readonly DocumentView _editor;
@@ -95,6 +98,12 @@ public sealed class FindReplaceDialog : Window
 
         _useWildcards.IsCheckedChanged += (_, _) => ApplyOptionPolicy();
         ApplyOptionPolicy();
+        AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(_matchCase, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(_wholeWord, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCheckBox(_useWildcards, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyComboBox(_goToTarget, DialogChromeStyle);
 
         // --- Main grid (Find label | Find box, Replace label | Replace box) ------
         var grid = new Grid { Margin = new Thickness(14, 10, 14, 0) };
@@ -116,16 +125,13 @@ public sealed class FindReplaceDialog : Window
         }
 
         // --- Action buttons ---------------------------------------------------
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(14, 10, 14, 0),
-        };
-        btnRow.Children.Add(MakeButton("Find Next", (_, _) => FindNext()));
-        btnRow.Children.Add(MakeButton("Replace", (_, _) => Replace()));
-        btnRow.Children.Add(MakeButton("Replace All", (_, _) => ReplaceAll()));
-        btnRow.Children.Add(MakeButton("Close", (_, _) => Close()));
+        var findNextButton = MakeButton("Find Next", (_, _) => FindNext());
+        var replaceButton = MakeButton("Replace", (_, _) => Replace());
+        var replaceAllButton = MakeButton("Replace All", (_, _) => ReplaceAll());
+        var closeButton = MakeButton("Close", (_, _) => Close());
+        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [findNextButton, replaceButton, replaceAllButton, closeButton],
+            new Thickness(14, 10, 14, 0));
 
         // --- Go To section ---------------------------------------------------
         var goToSection = BuildGoToSection();
@@ -181,14 +187,14 @@ public sealed class FindReplaceDialog : Window
 
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         Grid.SetColumn(_goToTarget, 0);
         row.Children.Add(_goToTarget);
 
         var goBtn = MakeButton("Go", (_, _) => GoTo());
-        goBtn.Margin = new Thickness(8, 0, 0, 0);
-        Grid.SetColumn(goBtn, 1);
+        Grid.SetColumn(goBtn, 2);
         row.Children.Add(goBtn);
 
         panel.Children.Add(row);
@@ -383,10 +389,8 @@ public sealed class FindReplaceDialog : Window
         var btn = new Button
         {
             Content = content,
-            MinWidth = 84,
-            Margin = new Thickness(6, 0, 0, 0),
-            Padding = new Thickness(6, 3, 6, 3),
         };
+        AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: 84);
         btn.Click += onClick;
         return btn;
     }
