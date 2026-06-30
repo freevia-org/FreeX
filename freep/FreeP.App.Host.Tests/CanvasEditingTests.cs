@@ -67,6 +67,26 @@ public sealed class CanvasEditingTests
         emuBack.Should().Be(emu);
     }
 
+    [Fact]
+    public void SlideTransform_WpfFacadeDelegatesToCompositorCore()
+    {
+        var transform = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideTransform.cs");
+        var canvas = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var gestures = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
+
+        transform.Should().Contain("internal SlideTransformCore Core");
+        transform.Should().Contain("Core.SlideToScreen");
+        transform.Should().Contain("Core.ScreenToSlide");
+        transform.Should().Contain("SlideTransformCore.DipToEmu");
+        transform.Should().Contain("SlideTransformCore.Compute");
+        transform.Should().NotContain("private const double EmuPerDip");
+        transform.Should().NotContain("Math.Min(renderW / slideWidthDip");
+
+        canvas.Should().Contain("SlideTransform.Compute(renderW, renderH");
+        gestures.Should().Contain("=> xf.Core;");
+        gestures.Should().NotContain("new(xf.Scale, xf.OffsetX");
+    }
+
     // ── ShapeHitTester ────────────────────────────────────────────────────────────
 
     private static (Presentation pres, Slide slide, SlideShape shape1, SlideShape shape2) MakeTestSlide()

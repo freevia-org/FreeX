@@ -158,12 +158,10 @@ public sealed class SlideCanvas : FrameworkElement
         if (renderW <= 0 || renderH <= 0) return;
 
         // Scale slide DIP coordinates → actual render pixels (uniform fit).
-        double scale = Math.Min(renderW / _slideWidthDip, renderH / _slideHeightDip);
-        double offsetX = (renderW - _slideWidthDip * scale) / 2;
-        double offsetY = (renderH - _slideHeightDip * scale) / 2;
-
-        // Expose the slide→screen transform so the editing layer can use it.
-        CurrentTransform = new SlideTransform(scale, offsetX, offsetY, _slideWidthDip, _slideHeightDip);
+        CurrentTransform = SlideTransform.Compute(renderW, renderH, _slideWidthDip, _slideHeightDip);
+        double scale = CurrentTransform.Scale;
+        double offsetX = CurrentTransform.OffsetX;
+        double offsetY = CurrentTransform.OffsetY;
 
         var transform = new TransformGroup();
         transform.Children.Add(new ScaleTransform(scale, scale));
