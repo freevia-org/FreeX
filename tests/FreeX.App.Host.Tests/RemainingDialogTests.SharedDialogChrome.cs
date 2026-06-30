@@ -41,4 +41,47 @@ public sealed partial class RemainingDialogTests
         objectSource.Should().Contain("Target = box");
         objectSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72)");
     }
+
+    [Fact]
+    public void MiniDialogs_UseSharedDialogChromeButtonRowsAndFocusHelpers()
+    {
+        var source = ReadMiniDialogSources();
+
+        source.Should().Contain("using Free.Shared.Shell.Wpf;");
+        source.Should().Contain("public sealed class ActivateSheetDialog : DialogWindow");
+        source.Should().Contain("public sealed class UnhideSheetDialog : DialogWindow");
+        source.Should().Contain("public sealed class UnhideWindowDialog : DialogWindow");
+        source.Should().Contain("public sealed class AddWatchDialog : DialogWindow");
+        source.Should().Contain("DialogButtonRowFactory.Create(_okButton, _cancelButton)");
+        source.Should().Contain("DialogButtonRowFactory.Create(add, cancel, new Thickness(0, 12, 0, 0));");
+        source.Should().Contain("DialogFocus.Focus(_sheetList);");
+        source.Should().Contain("DialogFocus.Focus(_sheetBox);");
+        source.Should().Contain("DialogFocus.Focus(_windowBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(_rangeBox);");
+        source.Should().NotContain("WindowStartupLocation = WindowStartupLocation.CenterOwner;");
+        source.Should().NotContain("ShowInTaskbar = false;");
+        source.Should().NotContain("Keyboard.Focus(");
+    }
+
+    [Fact]
+    public void SharedDialogResources_UseDirectDynamicThemeKeysForBrushSetters()
+    {
+        var source = DialogSourceTestSupport.ReadShellSources("DialogResources.xaml");
+
+        source.Should().Contain("{DynamicResource ThemeNeutralTextBrush}");
+        source.Should().Contain("{DynamicResource ThemeAccentBrush}");
+        source.Should().Contain("{DynamicResource ThemeAccentSoftBrush}");
+        source.Should().Contain("{DynamicResource ThemeAccentPressedBrush}");
+        source.Should().Contain("{DynamicResource ThemeAccentDarkBrush}");
+        source.Should().NotContain("{StaticResource DialogText}");
+        source.Should().NotContain("{StaticResource DialogAccent}");
+        source.Should().NotContain("{StaticResource DialogHover}");
+        source.Should().NotContain("{StaticResource DialogPressed}");
+        source.Should().NotContain("{StaticResource DialogAccentDark}");
+        source.Should().NotContain("{DynamicResource DialogText}");
+        source.Should().NotContain("{DynamicResource DialogAccent}");
+        source.Should().NotContain("{DynamicResource DialogHover}");
+        source.Should().NotContain("{DynamicResource DialogPressed}");
+        source.Should().NotContain("{DynamicResource DialogAccentDark}");
+    }
 }
