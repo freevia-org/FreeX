@@ -66,12 +66,10 @@ public sealed partial class MainWindow
         var gapWidthField = ChartBarFormatPlanner.GetDialogField(ChartBarFormatDialogFieldId.GapWidth);
         var overlapField = ChartBarFormatPlanner.GetDialogField(ChartBarFormatDialogFieldId.Overlap);
 
-        var gapWidthBox = new TextBox { Text = current.BarGapWidth.ToString(CultureInfo.InvariantCulture), Width = 260 };
+        var gapWidthBox = CreateChartTextBox(current.BarGapWidth.ToString(CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(gapWidthBox, gapWidthField.LabelResourceKey, gapWidthField.AutomationId);
-        ApplyChartTextBoxChrome(gapWidthBox);
-        var overlapBox = new TextBox { Text = current.BarOverlap.ToString(CultureInfo.InvariantCulture), Width = 260 };
+        var overlapBox = CreateChartTextBox(current.BarOverlap.ToString(CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(overlapBox, overlapField.LabelResourceKey, overlapField.AutomationId);
-        ApplyChartTextBoxChrome(overlapBox);
 
         var dialog = NewChartDialog(UiText.Get(ChartBarFormatPlanner.TitleResourceKey), ChartBarFormatPlanner.DialogAutomationId);
 
@@ -151,26 +149,18 @@ public sealed partial class MainWindow
         var explodedDistanceField = ChartPieFormatPlanner.GetDialogField(ChartPieFormatDialogFieldId.ExplodedSliceDistance);
         var holeField = ChartPieFormatPlanner.GetDialogField(ChartPieFormatDialogFieldId.DoughnutHoleSize);
 
-        var angleBox = new TextBox { Text = current.FirstSliceAngle.ToString(CultureInfo.InvariantCulture), Width = 260 };
+        var angleBox = CreateChartTextBox(current.FirstSliceAngle.ToString(CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(angleBox, angleField.LabelResourceKey, angleField.AutomationId);
-        ApplyChartTextBoxChrome(angleBox);
-        var explodedIndexBox = new TextBox { Text = current.ExplodedSliceIndex.ToString(CultureInfo.InvariantCulture), Width = 260 };
+        var explodedIndexBox = CreateChartTextBox(current.ExplodedSliceIndex.ToString(CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(explodedIndexBox, explodedIndexField.LabelResourceKey, explodedIndexField.AutomationId);
-        ApplyChartTextBoxChrome(explodedIndexBox);
-        var explodedDistBox = new TextBox
-        {
-            Text = ChartPieFormatPlanner.ToDisplayPercent(current.ExplodedSliceDistance).ToString(CultureInfo.InvariantCulture),
-            Width = 260,
-        };
+        var explodedDistBox = CreateChartTextBox(
+            ChartPieFormatPlanner.ToDisplayPercent(current.ExplodedSliceDistance).ToString(CultureInfo.InvariantCulture),
+            260);
         ApplyTypeFormatDescriptorAutomation(explodedDistBox, explodedDistanceField.LabelResourceKey, explodedDistanceField.AutomationId);
-        ApplyChartTextBoxChrome(explodedDistBox);
-        var holeBox = new TextBox
-        {
-            Text = ChartPieFormatPlanner.ToDisplayPercent(current.DoughnutHoleSize).ToString(CultureInfo.InvariantCulture),
-            Width = 260,
-        };
+        var holeBox = CreateChartTextBox(
+            ChartPieFormatPlanner.ToDisplayPercent(current.DoughnutHoleSize).ToString(CultureInfo.InvariantCulture),
+            260);
         ApplyTypeFormatDescriptorAutomation(holeBox, holeField.LabelResourceKey, holeField.AutomationId);
-        ApplyChartTextBoxChrome(holeBox);
 
         var dialog = NewChartDialog(UiText.Get(ChartPieFormatPlanner.TitleResourceKey), ChartPieFormatPlanner.DialogAutomationId);
 
@@ -253,17 +243,17 @@ public sealed partial class MainWindow
         var negativeField = ChartBubbleFormatPlanner.GetDialogField(ChartBubbleFormatDialogFieldId.ShowNegativeBubbles);
         var sizeField = ChartBubbleFormatPlanner.GetDialogField(ChartBubbleFormatDialogFieldId.SizeRepresents);
 
-        var scaleBox = new TextBox { Text = current.BubbleScale.ToString(CultureInfo.InvariantCulture), Width = 260 };
+        var scaleBox = CreateChartTextBox(current.BubbleScale.ToString(CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(scaleBox, scaleField.LabelResourceKey, scaleField.AutomationId);
-        ApplyChartTextBoxChrome(scaleBox);
 
-        var negativeCheck = new CheckBox { Content = TypeFormatDescriptorText(negativeField.LabelResourceKey), IsChecked = current.ShowNegativeBubbles };
+        var negativeCheck = CreateChartCheckBox(
+            TypeFormatDescriptorText(negativeField.LabelResourceKey),
+            current.ShowNegativeBubbles);
         ApplyTypeFormatDescriptorAutomation(negativeCheck, negativeField.LabelResourceKey, negativeField.AutomationId);
 
         var sizeChoices = ChartBubbleFormatPlanner.GetSizeRepresentsChoices();
-        var sizeCombo = new ComboBox { Width = 260, ItemsSource = sizeChoices };
+        var sizeCombo = CreateChartComboBox(260, sizeChoices);
         ApplyTypeFormatDescriptorAutomation(sizeCombo, sizeField.LabelResourceKey, sizeField.AutomationId);
-        ApplyChartComboBoxChrome(sizeCombo);
         sizeCombo.SelectedItem = current.BubbleSizeRepresents;
 
         var dialog = NewChartDialog(UiText.Get(ChartBubbleFormatPlanner.TitleResourceKey), ChartBubbleFormatPlanner.DialogAutomationId);
@@ -353,24 +343,17 @@ public sealed partial class MainWindow
         var highLowColorField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.HighLowLineColor);
         var thicknessField = ChartStockFormatPlanner.GetDialogField(ChartStockFormatDialogFieldId.HighLowLineThickness);
 
-        var gapWidthBox = new TextBox { Text = current.UpDownBarGapWidth.ToString(CultureInfo.InvariantCulture), Width = 260 };
+        var gapWidthBox = CreateChartTextBox(current.UpDownBarGapWidth.ToString(CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(gapWidthBox, gapWidthField.LabelResourceKey, gapWidthField.AutomationId);
-        ApplyChartTextBoxChrome(gapWidthBox);
 
         var upFillButton = ColorPickerButton(upFillField, current.UpBarFillColor);
-        ApplyChartButtonChrome(upFillButton, 260);
         var upBorderButton = ColorPickerButton(upBorderField, current.UpBarBorderColor);
-        ApplyChartButtonChrome(upBorderButton, 260);
         var downFillButton = ColorPickerButton(downFillField, current.DownBarFillColor);
-        ApplyChartButtonChrome(downFillButton, 260);
         var downBorderButton = ColorPickerButton(downBorderField, current.DownBarBorderColor);
-        ApplyChartButtonChrome(downBorderButton, 260);
         var highLowButton = ColorPickerButton(highLowColorField, current.HighLowLineColor);
-        ApplyChartButtonChrome(highLowButton, 260);
 
-        var thicknessBox = new TextBox { Text = current.HighLowLineThickness.ToString("G", CultureInfo.InvariantCulture), Width = 260 };
+        var thicknessBox = CreateChartTextBox(current.HighLowLineThickness.ToString("G", CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(thicknessBox, thicknessField.LabelResourceKey, thicknessField.AutomationId);
-        ApplyChartTextBoxChrome(thicknessBox);
 
         upFillButton.Click += async (_, _) =>
         {
@@ -483,7 +466,7 @@ public sealed partial class MainWindow
     private static Button ColorPickerButton(ChartStockFormatDialogFieldDescriptor field, CellColor? color)
     {
         var label = TypeFormatDescriptorText(field.LabelResourceKey);
-        var button = new Button { Content = DescribeColor(label, color), Width = 260 };
+        var button = CreateChartButton(DescribeColor(label, color), 260);
         ApplyTypeFormatDescriptorAutomation(button, field.LabelResourceKey, field.AutomationId);
         return button;
     }
