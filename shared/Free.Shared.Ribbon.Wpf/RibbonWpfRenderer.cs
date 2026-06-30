@@ -62,7 +62,9 @@ public static class RibbonWpfRenderer
 
             var full = (FrameworkElement)BuildGroup(group, resourceHost, registry, stateStore, options);
             var captured = group;
-            var collapsedKeyTip = DeriveGroupKeyTip(group.Header, usedGroupKeyTips);
+            var collapsedKeyTip = RibbonCollapsedGroupPresentationPlanner.DeriveGroupKeyTip(
+                group.Header,
+                usedGroupKeyTips);
             panel.Children.Add(new RibbonGroupHost(
                 group,
                 full,
@@ -81,47 +83,14 @@ public static class RibbonWpfRenderer
         };
     }
 
-    // Derives a unique 2-letter keytip for a collapsed group from its header (Charts -> CH, Editing ->
-    // ED), falling back to G/G1.. — mirrors the original adaptive ribbon's CreateGroupKeyTip.
-    private static string DeriveGroupKeyTip(string header, HashSet<string> used)
-    {
-        var letters = header.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray();
-        var candidates = new List<string>();
-        if (letters.Length >= 2)
-        {
-            candidates.Add(new string(new[] { letters[0], letters[1] }));
-            for (var i = 2; i < letters.Length; i++)
-                candidates.Add(new string(new[] { letters[0], letters[i] }));
-        }
-        else if (letters.Length == 1)
-        {
-            candidates.Add(new string(new[] { letters[0] }));
-        }
-
-        candidates.Add("G");
-        for (var i = 1; i <= 9; i++)
-            candidates.Add($"G{i}");
-
-        foreach (var candidate in candidates)
-        {
-            if (used.Add(candidate))
-                return candidate;
-        }
-
-        return "G";
-    }
-
     // Builds the collapsed group's dropdown: every commandable control becomes a menu item carrying
     // the control's keytip and routed through the registry, so a keytip opens the group and selects a
     // command exactly like the expanded form.
     private static ContextMenu BuildCollapsedGroupMenu(RibbonGroup group, IRibbonCommandRegistry? registry)
     {
         var menu = new ContextMenu();
-        foreach (var control in group.Controls)
+        foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group))
         {
-            if (control is RibbonSeparator or RibbonRowBreak || string.IsNullOrEmpty(control.Label))
-                continue;
-
             var menuItem = new MenuItem { Header = control.Label, Tag = control.Label };
             if (!string.IsNullOrEmpty(control.KeyTip))
                 RibbonTooltip.SetKeyTip(menuItem, control.KeyTip);
