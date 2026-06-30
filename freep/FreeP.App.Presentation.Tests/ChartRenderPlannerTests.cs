@@ -206,9 +206,16 @@ public sealed class ChartRenderPlannerTests
         second.Values.AddRange(new double?[] { 10, 20, 30 });
         chart.Series.Add(second);
 
+        var seriesColors = new[]
+        {
+            new SrgbColor(0x10, 0x20, 0x30),
+            new SrgbColor(0x40, 0x50, 0x60)
+        };
+
         var primitives = ChartRenderPlanner.BuildAreaSeriesPrimitives(
             chart,
-            new ChartPlanRect(0, 0, 200, 100));
+            new ChartPlanRect(0, 0, 200, 100),
+            seriesColors);
 
         primitives.Should().HaveCount(2);
         primitives[0].SeriesIndex.Should().Be(1);
@@ -219,6 +226,15 @@ public sealed class ChartRenderPlannerTests
             new ChartPlanPoint(0, 90),
             new ChartPlanPoint(100, 80),
             new ChartPlanPoint(200, 70));
+        primitives[0].Fill.Should().Be(new ChartFillPlan(seriesColors[1], ChartRenderPlanner.AreaFillAlpha));
+        primitives[0].AreaPath.IsClosed.Should().BeTrue();
+        primitives[0].AreaPath.Fill.Should().Be(primitives[0].Fill);
+        primitives[0].AreaPath.Points.Should().Equal(
+            new ChartPlanPoint(0, 100),
+            new ChartPlanPoint(0, 90),
+            new ChartPlanPoint(100, 80),
+            new ChartPlanPoint(200, 70),
+            new ChartPlanPoint(200, 100));
     }
 
     [Fact]
