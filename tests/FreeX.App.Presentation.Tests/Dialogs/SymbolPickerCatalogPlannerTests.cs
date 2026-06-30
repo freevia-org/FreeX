@@ -30,6 +30,19 @@ public sealed class SymbolPickerCatalogPlannerTests
     }
 
     [Fact]
+    public void GetPreferredFontChoices_OffersSharedSymbolPickerFonts()
+    {
+        SymbolPickerCatalogPlanner.GetPreferredFontChoices().Should().Contain([
+            "Segoe UI Symbol",
+            "Segoe UI Emoji",
+            "Segoe UI Historic",
+            "Cambria Math",
+            "Symbol",
+            "Wingdings",
+            "Webdings"]);
+    }
+
+    [Fact]
     public void GetSymbolsForSubset_BuildsBroaderCatalogFromUnicodeRanges()
     {
         SymbolPickerCatalogPlanner.GetSymbolsForSubset("Currency Symbols").Should().Contain("\u20ac");

@@ -57,25 +57,7 @@ public sealed partial class SymbolPickerDialog : Window
 
     private static IReadOnlyList<string> CreateFontChoices()
     {
-        string[] preferredFonts =
-        [
-            "Segoe UI Symbol",
-            "Segoe UI Emoji",
-            "Segoe UI Historic",
-            "Segoe UI",
-            "Calibri",
-            "Cambria Math",
-            "Arial",
-            "Times New Roman",
-            "Courier New",
-            "Consolas",
-            "Symbol",
-            "Wingdings",
-            "Wingdings 2",
-            "Wingdings 3",
-            "Webdings"
-        ];
-
+        var preferredFonts = SymbolPickerCatalogPlanner.GetPreferredFontChoices();
         var installedFonts = Fonts.SystemFontFamilies
             .Select(font => font.Source)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
