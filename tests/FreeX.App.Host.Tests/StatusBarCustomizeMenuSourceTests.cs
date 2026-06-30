@@ -46,10 +46,12 @@ public sealed class StatusBarCustomizeMenuSourceTests
         gridStatusSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(plan);");
         gridStatusSource.Should().Contain("foreach (var entry in rendererPlan.VisibilityElements)");
         gridStatusSource.Should().Contain("GetStatusBarReadoutTextBlock(readout.Kind)");
+        gridStatusSource.Should().Contain("private void ApplyStatusBarInteractiveDisplayState(StatusBarRendererPlan rendererPlan)");
+        gridStatusSource.Should().Contain("rendererPlan.IsElementVisible(StatusBarPresentationElement.ViewShortcuts)");
         gridStatusSource.Should().Contain("StatusBarOptionVisibilityStore.ToVisibility(_options)");
         gridStatusSource.Should().Contain("StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked)");
         gridStatusSource.Should().NotContain("case StatusBarOptionTags.Average");
         gridStatusSource.Should().Contain("_options.Save()");
-        gridStatusSource.Should().Contain("ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);");
+        gridStatusSource.Should().NotContain("ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);");
     }
 }

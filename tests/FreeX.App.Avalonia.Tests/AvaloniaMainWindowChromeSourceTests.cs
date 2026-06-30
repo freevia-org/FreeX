@@ -906,7 +906,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         mainSource.Should().Contain("var inputPlan = StatusBarZoomSliderPlanner.BuildInput(args.NewValue);");
         mainSource.Should().Contain("foreach (var left in zoomSliderPlan.VisualTickLefts)");
         mainSource.Should().Contain("StatusBarZoomSliderPlanner.BuildThumbPlan(");
-        statusBarSource.Should().Contain("var sliderPlan = StatusBarZoomSliderPlanner.Build(plan.ZoomPercent);");
+        statusBarSource.Should().Contain("var sliderPlan = StatusBarZoomSliderPlanner.Build(rendererPlan.ZoomPercent);");
         mainSource.Should().Contain("Width = 1,");
         mainSource.Should().Contain("Height = 4,");
         mainSource.Should().NotContain("BuildStatusZoomTick(left: 60, isMiddle: true)");
@@ -928,8 +928,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         mainSource.Should().Contain("private bool HasStatusBarAccessibleValue() =>");
         mainSource.Should().Contain("!string.IsNullOrWhiteSpace(_statusText.Text) ||");
         mainSource.Should().Contain("!string.IsNullOrWhiteSpace(_selectionStatsText.Text);");
-        statusBarSource.Should().Contain("_statusText.IsVisible = visibility.ReadyTextVisible && plan.VisibleReadoutText.Length == 0;");
-        statusBarSource.Should().Contain("_selectionStatsText.Text = plan.VisibleReadoutText;");
+        statusBarSource.Should().Contain("AvaloniaStatusBarSource.BuildRendererPlan(model, _statusBarOptionVisibility);");
+        statusBarSource.Should().Contain("_statusText.IsVisible = rendererPlan.ReadyTextVisible;");
+        statusBarSource.Should().Contain("_selectionStatsText.Text = rendererPlan.VisibleReadoutText;");
+        statusBarSource.Should().Contain("_selectionStatsText.IsVisible = rendererPlan.VisibleReadoutTextVisible;");
     }
 
     private static string RepoFile(params string[] parts)

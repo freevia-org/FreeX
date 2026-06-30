@@ -45,7 +45,23 @@ public sealed record StatusBarRendererPlan(
     IReadOnlyList<StatusBarElementVisibilityPlan> VisibilityElements,
     string ReadyText,
     IReadOnlyList<StatusBarReadoutPresentationPlan> ReadoutElements,
-    string StatsPanelAutomationText);
+    string StatsPanelAutomationText,
+    string VisibleReadoutText,
+    bool ReadyTextVisible,
+    bool VisibleReadoutTextVisible,
+    int ZoomPercent)
+{
+    public bool IsElementVisible(StatusBarPresentationElement element)
+    {
+        foreach (var entry in VisibilityElements)
+        {
+            if (entry.Element == element)
+                return entry.IsVisible;
+        }
+
+        return false;
+    }
+}
 
 public static class StatusBarPresentationPlanner
 {
@@ -85,7 +101,11 @@ public static class StatusBarPresentationPlanner
             BuildVisibilityElements(plan.Visibility),
             plan.ReadyText,
             BuildReadoutElements(plan),
-            plan.AutomationText);
+            plan.AutomationText,
+            plan.VisibleReadoutText,
+            plan.Visibility.ReadyTextVisible && plan.VisibleReadoutText.Length == 0,
+            plan.Visibility.StatsPanelVisible && plan.VisibleReadoutText.Length > 0,
+            plan.ZoomPercent);
     }
 
     public static IReadOnlyList<StatusBarElementVisibilityPlan> BuildVisibilityElements(
