@@ -60,6 +60,24 @@ public sealed class AutoFilterDropdownMenuPlannerTests
     }
 
     [Fact]
+    public void SharedCriteriaCatalog_PreservesSuggestionsAndDialogPrefixes()
+    {
+        var textCriteria = AutoFilterMenuCatalog.GetCriteriaDescriptors(AutoFilterMenuFilterKind.Text);
+
+        textCriteria.Select(descriptor => descriptor.SuggestionPrefix ?? descriptor.CriteriaPrefix)
+            .Should()
+            .Equal("equals:", "text<>", "contains:", "notcontains:", "begins:", "ends:", "blank", "nonblank");
+        textCriteria.Select(descriptor => descriptor.CriteriaPrefix)
+            .Should()
+            .Equal("text=", "text<>", "contains:", "notcontains:", "begins:", "ends:", "blank", "nonblank");
+
+        AutoFilterMenuCatalog.IsBetweenCriteriaPrefix("between:").Should().BeTrue();
+        AutoFilterMenuCatalog.IsBetweenCriteriaPrefix("datebetween:").Should().BeTrue();
+        AutoFilterMenuCatalog.IsTopBottomCriteriaPrefix("toppercent:").Should().BeTrue();
+        AutoFilterMenuCatalog.IsTopBottomCriteriaPrefix("blank").Should().BeFalse();
+    }
+
+    [Fact]
     public void CreateMenuPlan_IncludesColorOptions_WhenWorkbookStylesHaveColors()
     {
         var workbook = new Workbook("Book");

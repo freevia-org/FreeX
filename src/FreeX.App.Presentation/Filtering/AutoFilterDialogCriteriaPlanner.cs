@@ -6,7 +6,7 @@ namespace FreeX.App.Presentation.Filtering;
 /// search mode, and composing the criteria strings the filter command parses (typed operators, Between,
 /// Top/Bottom, the date-preset and composite And/Or rows). Pure decision/format logic single-sourced here so the
 /// desktop host and the macOS port share identical behavior; the host keeps only the widget construction and
-/// supplies the localized operator labels (see the host-side label helper).
+/// supplies the localized operator labels from the shared AutoFilter menu catalog.
 /// </summary>
 public static class AutoFilterDialogCriteriaPlanner
 {
@@ -191,14 +191,10 @@ public static class AutoFilterDialogCriteriaPlanner
         menuPlan.Entries.Any(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
 
     public static bool IsBetweenOption(AutoFilterCriteriaOption option) =>
-        option.CriteriaPrefix.Equals("between:", StringComparison.OrdinalIgnoreCase) ||
-        option.CriteriaPrefix.Equals("datebetween:", StringComparison.OrdinalIgnoreCase);
+        AutoFilterMenuCatalog.IsBetweenCriteriaPrefix(option.CriteriaPrefix);
 
     public static bool IsTopBottomOption(AutoFilterCriteriaOption option) =>
-        option.CriteriaPrefix.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
-        option.CriteriaPrefix.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase) ||
-        option.CriteriaPrefix.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
-        option.CriteriaPrefix.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase);
+        AutoFilterMenuCatalog.IsTopBottomCriteriaPrefix(option.CriteriaPrefix);
 
     private static string BuildMonthCriteria(DateTime firstDayOfMonth)
     {
