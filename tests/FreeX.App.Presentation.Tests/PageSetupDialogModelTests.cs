@@ -147,6 +147,16 @@ public sealed class PageSetupDialogModelTests
                 selectedIndex: 99)
             .Should()
             .BeEmpty();
+        PageSetupDialogModel.HeaderFooterPresetExactIndex(
+                PageSetupDialogModel.HeaderPresetChoices,
+                "Confidential, Page &[Page]")
+            .Should()
+            .Be(7);
+        PageSetupDialogModel.HeaderFooterPresetExactIndex(
+                PageSetupDialogModel.HeaderPresetChoices,
+                "Custom center text")
+            .Should()
+            .Be(-1);
 
         PageSetupDialogModel.BuildHeaderFooterPreview(new WorksheetHeaderFooter("&[File]", "", "&[Date]"), "(none)")
             .Should()

@@ -58,8 +58,8 @@ public partial class PageSetupDialog
         PrintErrorValueBox.SelectedIndex = PageSetupDialogPlanner.PrintErrorValueChoices.IndexOf(fields.PrintErrorValue);
         PrintCommentsBox.SelectedIndex = PageSetupDialogPlanner.PrintCommentChoices.IndexOf(fields.PrintComments);
         PopulateHeaderFooterPresetBoxes();
-        SelectPreset(HeaderPresetBox, Header.Center);
-        SelectPreset(FooterPresetBox, Footer.Center);
+        SelectPreset(HeaderPresetBox, PageSetupDialogModel.HeaderPresetChoices, Header.Center);
+        SelectPreset(FooterPresetBox, PageSetupDialogModel.FooterPresetChoices, Footer.Center);
         DifferentFirstPageBox.IsChecked = DifferentFirstPage;
         DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
         ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;
