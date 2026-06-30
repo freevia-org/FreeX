@@ -116,8 +116,62 @@ public sealed record DocumentFloatingObjectPlacementPlan(
     double YDip,
     int AnchorPageIndex);
 
+public enum DocumentFloatingHandle
+{
+    None,
+    Body,
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+public sealed record DocumentFloatPoint(double XDip, double YDip);
+
+public sealed record DocumentFloatRect(double XDip, double YDip, double WidthDip, double HeightDip)
+{
+    public double LeftDip => XDip;
+    public double TopDip => YDip;
+    public double RightDip => XDip + WidthDip;
+    public double BottomDip => YDip + HeightDip;
+    public double CenterXDip => XDip + WidthDip / 2;
+    public double CenterYDip => YDip + HeightDip / 2;
+
+    public bool Contains(DocumentFloatPoint point) =>
+        point.XDip >= LeftDip
+        && point.XDip <= RightDip
+        && point.YDip >= TopDip
+        && point.YDip <= BottomDip;
+
+    public DocumentFloatRect Inflate(double paddingDip) =>
+        new(
+            XDip - paddingDip,
+            YDip - paddingDip,
+            WidthDip + 2 * paddingDip,
+            HeightDip + 2 * paddingDip);
+}
+
+public sealed record DocumentFloatingHandleRect(
+    DocumentFloatingHandle Handle,
+    DocumentFloatRect Rect);
+
+public sealed record DocumentFloatingWrapExclusionZone(
+    DocumentFloatRect Rect,
+    ImageWrapping Wrapping);
+
+public sealed record DocumentFloatingLineExclusionPlan(
+    double LeftDeltaDip,
+    double RightShrinkDip);
+
 public static class DocumentViewLayoutPlanner
 {
+    private const double DefaultWrapGapDip = 9.0;
+    private const double DefaultMinimumLineWidthDip = 20.0;
+
     public static DocumentPageMetricsPlan BuildPageMetrics(PageSettings page)
     {
         ArgumentNullException.ThrowIfNull(page);
@@ -282,6 +336,328 @@ public static class DocumentViewLayoutPlanner
         };
 
         return new DocumentFloatingObjectPlacementPlan(xDip, yDip, anchorPageIndex);
+    }
+
+    public static DocumentViewSurfacePlan BuildFloatingOverlaySurfacePlan(
+        PageSettings page,
+        bool printLayout,
+        double plainInsetDip)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        var metrics = BuildPageMetrics(page);
+        if (printLayout)
+        {
+            return new DocumentViewSurfacePlan(
+                DocumentViewLayoutKind.PrintLayout,
+                metrics.PageWidthDip,
+                metrics.PageHeightDip,
+                metrics.MarginLeftDip,
+                metrics.MarginTopDip,
+                metrics.MarginRightDip,
+                metrics.MarginBottomDip,
+                PageLeftDip: 0,
+                ContentLeftDip: metrics.MarginLeftDip,
+                metrics.ContentWidthDip,
+                metrics.ContentHeightDip,
+                DeskPaddingDip: 0,
+                PageGapDip: 0);
+        }
+
+        var inset = Math.Max(0, plainInsetDip);
+        return new DocumentViewSurfacePlan(
+            DocumentViewLayoutKind.WebLayout,
+            metrics.PageWidthDip,
+            double.MaxValue / 2,
+            MarginLeftDip: inset,
+            MarginTopDip: inset,
+            MarginRightDip: inset,
+            MarginBottomDip: inset,
+            PageLeftDip: 0,
+            ContentLeftDip: inset,
+            metrics.ContentWidthDip,
+            double.MaxValue / 2,
+            DeskPaddingDip: 0,
+            PageGapDip: 0);
+    }
+
+    public static DocumentFloatingWrapExclusionZone? BuildWrapExclusionZone(
+        DocumentFloatRect pageSpaceRect,
+        ImageWrapping wrapping)
+    {
+        return wrapping is ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom
+            ? new DocumentFloatingWrapExclusionZone(pageSpaceRect, wrapping)
+            : null;
+    }
+
+    public static DocumentFloatingLineExclusionPlan BuildSquareTightWrapExclusion(
+        IEnumerable<DocumentFloatingWrapExclusionZone> zones,
+        double lineTopDip,
+        double lineHeightDip,
+        double columnLeftDip,
+        double columnWidthDip,
+        double wrapGapDip = DefaultWrapGapDip,
+        double minimumLineWidthDip = DefaultMinimumLineWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(zones);
+
+        var lineBottomDip = lineTopDip + lineHeightDip;
+        var columnRightDip = columnLeftDip + columnWidthDip;
+        var maxLeftDeltaDip = 0.0;
+        var maxRightShrinkDip = 0.0;
+
+        foreach (var zone in zones)
+        {
+            if (zone.Wrapping == ImageWrapping.TopAndBottom)
+                continue;
+
+            var rect = zone.Rect;
+            if (rect.BottomDip <= lineTopDip || rect.TopDip >= lineBottomDip)
+                continue;
+
+            if (rect.RightDip <= columnLeftDip || rect.LeftDip >= columnRightDip)
+                continue;
+
+            var freeLeftDip = rect.LeftDip - columnLeftDip;
+            var freeRightDip = columnRightDip - rect.RightDip;
+            if (freeLeftDip < minimumLineWidthDip && freeRightDip < minimumLineWidthDip)
+                continue;
+
+            if (freeLeftDip >= freeRightDip)
+            {
+                var shrinkToDip = columnRightDip - Math.Max(
+                    rect.LeftDip - wrapGapDip,
+                    columnLeftDip + minimumLineWidthDip);
+                maxRightShrinkDip = Math.Max(maxRightShrinkDip, shrinkToDip);
+            }
+            else
+            {
+                var pushToDip = Math.Min(
+                    rect.RightDip + wrapGapDip,
+                    columnRightDip - minimumLineWidthDip) - columnLeftDip;
+                maxLeftDeltaDip = Math.Max(maxLeftDeltaDip, pushToDip);
+            }
+        }
+
+        var totalShrinkDip = maxLeftDeltaDip + maxRightShrinkDip;
+        var maxShrinkDip = Math.Max(0, columnWidthDip - minimumLineWidthDip);
+        if (totalShrinkDip > maxShrinkDip && totalShrinkDip > 0)
+        {
+            var scale = maxShrinkDip / totalShrinkDip;
+            maxLeftDeltaDip *= scale;
+            maxRightShrinkDip *= scale;
+        }
+
+        return new DocumentFloatingLineExclusionPlan(maxLeftDeltaDip, maxRightShrinkDip);
+    }
+
+    public static double? BuildTopAndBottomWrapExclusionBottom(
+        IEnumerable<DocumentFloatingWrapExclusionZone> zones,
+        double lineTopDip,
+        double lineHeightDip,
+        double contentLeftDip,
+        int columnCount,
+        double columnWidthDip,
+        double columnGapDip,
+        double minimumSideWidthDip = DefaultMinimumLineWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(zones);
+
+        var lineBottomDip = lineTopDip + lineHeightDip;
+        var safeColumnCount = Math.Max(1, columnCount);
+        var safeColumnWidthDip = Math.Max(0, columnWidthDip);
+        var safeColumnGapDip = Math.Max(0, columnGapDip);
+        var maxBottomDip = (double?)null;
+
+        foreach (var zone in zones)
+        {
+            var rect = zone.Rect;
+            if (rect.BottomDip <= lineTopDip || rect.TopDip >= lineBottomDip)
+                continue;
+
+            if (zone.Wrapping == ImageWrapping.TopAndBottom)
+            {
+                maxBottomDip = Math.Max(maxBottomDip ?? double.MinValue, rect.BottomDip);
+                continue;
+            }
+
+            var columnIndex = 0;
+            var columnStrideDip = safeColumnWidthDip + safeColumnGapDip;
+            if (safeColumnCount > 1 && columnStrideDip > 0)
+            {
+                columnIndex = Math.Clamp(
+                    (int)Math.Round((rect.LeftDip - contentLeftDip) / columnStrideDip),
+                    0,
+                    safeColumnCount - 1);
+            }
+
+            var columnLeftDip = contentLeftDip + columnIndex * columnStrideDip;
+            var freeLeftDip = rect.LeftDip - columnLeftDip;
+            var freeRightDip = columnLeftDip + safeColumnWidthDip - rect.RightDip;
+            if (freeLeftDip < minimumSideWidthDip && freeRightDip < minimumSideWidthDip)
+                maxBottomDip = Math.Max(maxBottomDip ?? double.MinValue, rect.BottomDip);
+        }
+
+        return maxBottomDip;
+    }
+
+    public static double BuildContentYAfterTopAndBottomWrapExclusion(
+        DocumentViewSurfacePlan surface,
+        double currentContentYDip,
+        double peekContentYDip,
+        double exclusionBottomDip,
+        int columnCount)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+
+        var safeColumnCount = Math.Max(1, columnCount);
+        var safeTextAreaHeightDip = Math.Max(1, surface.TextAreaHeightDip);
+        var slot = (int)(peekContentYDip / safeTextAreaHeightDip);
+        var pageIndex = safeColumnCount > 1 ? slot / safeColumnCount : slot;
+        var pageTopDip = surface.IsPrintLayout ? surface.PageTopDip(pageIndex) : 0;
+        var offsetInPageDip = exclusionBottomDip - pageTopDip - surface.MarginTopDip;
+        var clampedOffsetDip = Math.Clamp(offsetInPageDip, 0, safeTextAreaHeightDip);
+        var lastSlotOnPage = (pageIndex + 1) * safeColumnCount - 1;
+        var targetContentYDip = lastSlotOnPage * safeTextAreaHeightDip + clampedOffsetDip;
+        return Math.Max(currentContentYDip, targetContentYDip);
+    }
+
+    public static IReadOnlyList<DocumentFloatingHandleRect> BuildFloatingHandleRects(
+        DocumentFloatRect rect,
+        double handleSizeDip)
+    {
+        var sizeDip = Math.Max(0, handleSizeDip);
+        var halfDip = sizeDip / 2;
+        var x = new[] { rect.LeftDip, rect.CenterXDip, rect.RightDip };
+        var y = new[] { rect.TopDip, rect.CenterYDip, rect.BottomDip };
+        var map = new[,]
+        {
+            { DocumentFloatingHandle.TopLeft, DocumentFloatingHandle.Top, DocumentFloatingHandle.TopRight },
+            { DocumentFloatingHandle.Left, DocumentFloatingHandle.None, DocumentFloatingHandle.Right },
+            { DocumentFloatingHandle.BottomLeft, DocumentFloatingHandle.Bottom, DocumentFloatingHandle.BottomRight },
+        };
+
+        var handles = new List<DocumentFloatingHandleRect>(capacity: 8);
+        for (var row = 0; row < 3; row++)
+        {
+            for (var col = 0; col < 3; col++)
+            {
+                var handle = map[row, col];
+                if (handle == DocumentFloatingHandle.None)
+                    continue;
+
+                handles.Add(new DocumentFloatingHandleRect(
+                    handle,
+                    new DocumentFloatRect(
+                        x[col] - halfDip,
+                        y[row] - halfDip,
+                        sizeDip,
+                        sizeDip)));
+            }
+        }
+
+        return handles;
+    }
+
+    public static DocumentFloatingHandle HitTestFloatingHandle(
+        DocumentFloatRect selectionRect,
+        DocumentFloatPoint point,
+        double handleSizeDip,
+        double hitPaddingDip)
+    {
+        foreach (var handleRect in BuildFloatingHandleRects(selectionRect, handleSizeDip))
+        {
+            if (handleRect.Rect.Inflate(Math.Max(0, hitPaddingDip)).Contains(point))
+                return handleRect.Handle;
+        }
+
+        return selectionRect.Contains(point)
+            ? DocumentFloatingHandle.Body
+            : DocumentFloatingHandle.None;
+    }
+
+    public static DocumentFloatRect BuildFloatingMoveRect(
+        DocumentFloatRect baseRect,
+        DocumentFloatPoint pointerDown,
+        DocumentFloatPoint pointer)
+    {
+        var dxDip = pointer.XDip - pointerDown.XDip;
+        var dyDip = pointer.YDip - pointerDown.YDip;
+        return new DocumentFloatRect(
+            baseRect.XDip + dxDip,
+            baseRect.YDip + dyDip,
+            baseRect.WidthDip,
+            baseRect.HeightDip);
+    }
+
+    public static DocumentFloatRect BuildFloatingResizeRect(
+        DocumentFloatRect baseRect,
+        DocumentFloatingHandle handle,
+        DocumentFloatPoint pointer,
+        bool preserveAspect,
+        double minimumSizeDip)
+    {
+        var minimumDip = Math.Max(0, minimumSizeDip);
+        var leftDip = baseRect.LeftDip;
+        var topDip = baseRect.TopDip;
+        var rightDip = baseRect.RightDip;
+        var bottomDip = baseRect.BottomDip;
+
+        var movesLeft = handle is DocumentFloatingHandle.TopLeft
+            or DocumentFloatingHandle.Left
+            or DocumentFloatingHandle.BottomLeft;
+        var movesRight = handle is DocumentFloatingHandle.TopRight
+            or DocumentFloatingHandle.Right
+            or DocumentFloatingHandle.BottomRight;
+        var movesTop = handle is DocumentFloatingHandle.TopLeft
+            or DocumentFloatingHandle.Top
+            or DocumentFloatingHandle.TopRight;
+        var movesBottom = handle is DocumentFloatingHandle.BottomLeft
+            or DocumentFloatingHandle.Bottom
+            or DocumentFloatingHandle.BottomRight;
+
+        if (movesLeft)
+            leftDip = Math.Min(pointer.XDip, rightDip - minimumDip);
+        if (movesRight)
+            rightDip = Math.Max(pointer.XDip, leftDip + minimumDip);
+        if (movesTop)
+            topDip = Math.Min(pointer.YDip, bottomDip - minimumDip);
+        if (movesBottom)
+            bottomDip = Math.Max(pointer.YDip, topDip + minimumDip);
+
+        var widthDip = rightDip - leftDip;
+        var heightDip = bottomDip - topDip;
+        var isCorner = handle is DocumentFloatingHandle.TopLeft
+            or DocumentFloatingHandle.TopRight
+            or DocumentFloatingHandle.BottomLeft
+            or DocumentFloatingHandle.BottomRight;
+
+        if (preserveAspect && isCorner && baseRect.WidthDip > 0 && baseRect.HeightDip > 0)
+        {
+            var ratio = baseRect.WidthDip / baseRect.HeightDip;
+            if (widthDip / baseRect.WidthDip >= heightDip / baseRect.HeightDip)
+                heightDip = widthDip / ratio;
+            else
+                widthDip = heightDip * ratio;
+
+            widthDip = Math.Max(minimumDip, widthDip);
+            heightDip = Math.Max(minimumDip, heightDip);
+            if (movesLeft)
+                leftDip = rightDip - widthDip;
+            else
+                rightDip = leftDip + widthDip;
+
+            if (movesTop)
+                topDip = bottomDip - heightDip;
+            else
+                bottomDip = topDip + heightDip;
+        }
+
+        return new DocumentFloatRect(
+            leftDip,
+            topDip,
+            Math.Max(minimumDip, rightDip - leftDip),
+            Math.Max(minimumDip, bottomDip - topDip));
     }
 
     private static DocumentViewSurfacePlan BuildPrintSurfacePlan(

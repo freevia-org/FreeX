@@ -4757,51 +4757,24 @@ public sealed class DocumentView : RichTextBox
         }
         floating.Sort((a, b) => a.ZOrder.CompareTo(b.ZOrder));
 
-        // Page geometry for anchor-relative positioning.
-        var page = _model.Page;
-        var (marginLeft, marginTop, _, _) = PageLayout.MarginsDip(page);
-        var (pageW, _) = PageLayout.PageSizeDip(page);
-        var (contentW, _) = PageLayout.ContentAreaDip(page);
-
-        // In Print Layout the editor padding equals the page margins (set by ApplyPageChrome).
-        // In plain/continuous mode the editor uses a uniform padding (PlainPadding = 48 dip).
-        // We use the same margin values for both modes as a reasonable approximation; exact
-        // positioning in continuous mode is less critical (floating images are rare there).
-        var padLeft = PrintLayoutEnabled ? marginLeft : 48;
-        var padTop = PrintLayoutEnabled ? marginTop : 48;
+        var surface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
+            _model.Page,
+            PrintLayoutEnabled,
+            PlainPadding.Left);
 
         foreach (var (_, hOffPt, vOffPt, hAnchor, vAnchor, buildVisual) in floating)
         {
             var visual = buildVisual();
-            var hOffDip = hOffPt * PageLayout.DipPerPoint;
-            var vOffDip = vOffPt * PageLayout.DipPerPoint;
-            double left, top;
-            switch (hAnchor)
-            {
-                case HorizontalAnchor.Page:
-                    left = hOffDip;
-                    break;
-                case HorizontalAnchor.Margin:
-                    left = padLeft + hOffDip;
-                    break;
-                default: // Column
-                    left = padLeft + hOffDip;
-                    break;
-            }
-            switch (vAnchor)
-            {
-                case VerticalAnchor.Page:
-                    top = vOffDip;
-                    break;
-                case VerticalAnchor.Margin:
-                    top = padTop + vOffDip;
-                    break;
-                default: // Paragraph
-                    top = padTop + vOffDip;
-                    break;
-            }
-            Canvas.SetLeft(visual, left);
-            Canvas.SetTop(visual, top);
+            var placement = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+                surface,
+                anchorContentYDip: 0,
+                columnCount: 1,
+                hAnchor,
+                hOffPt,
+                vAnchor,
+                vOffPt);
+            Canvas.SetLeft(visual, placement.XDip);
+            Canvas.SetTop(visual, placement.YDip);
             canvas.Children.Add(visual);
         }
     }
