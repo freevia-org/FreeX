@@ -27,113 +27,44 @@ public static partial class PrintRenderer
         double pageWidthInches = 8.27,
         double pageHeightInches = 11.69)
     {
-        const double dpi = PagePaginationPlanner.Dpi;
-        double pageW = pageWidthInches * dpi;
-        double pageH = pageHeightInches * dpi;
         var doc = new FixedDocument();
 
         var sheet = workbook.GetSheet(sheetId);
         if (sheet == null) return doc;
 
-        var pageSize = WorksheetPageLayout.GetPageSizeInches(sheet.PaperSize, sheet.PageOrientation);
-        pageW = pageSize.Width * dpi;
-        pageH = pageSize.Height * dpi;
+        var initialMetrics = WorksheetPrintRenderPlanner.BuildMetrics(sheet);
+        doc.DocumentPaginator.PageSize = new Size(initialMetrics.PageWidth, initialMetrics.PageHeight);
 
-        var margins = sheet.PageMargins;
-        double marginLeft = margins.Left * dpi;
-        double marginRight = margins.Right * dpi;
-        double marginTop = margins.Top * dpi;
-        double marginBottom = margins.Bottom * dpi;
-        double headerMargin = sheet.HeaderMargin * dpi;
-        double footerMargin = sheet.FooterMargin * dpi;
+        if (!WorksheetPrintRenderPlanner.TryBuild(sheet, printRangeOverride, ignorePrintArea, out var printPlan))
+            return doc;
 
-        doc.DocumentPaginator.PageSize = new Size(pageW, pageH);
-
-        // Resolve the list of ranges to print. Each range produces its own set of pages.
-        // Multi-area print: each area in sheet.PrintAreas gets its own page(s).
-        IReadOnlyList<GridRange> printRanges;
-        if (printRangeOverride is { } rangeOverride &&
-            rangeOverride.Start.Sheet == sheetId &&
-            rangeOverride.End.Sheet == sheetId)
-        {
-            printRanges = [rangeOverride];
-        }
-        else if (ignorePrintArea)
-        {
-            var used = sheet.GetUsedRange();
-            printRanges = used.HasValue ? [used.Value] : [];
-        }
-        else if (sheet.PrintAreas.Count > 0)
-        {
-            // Only keep areas belonging to this sheet.
-            printRanges = sheet.PrintAreas
-                .Where(a => a.Start.Sheet == sheetId && a.End.Sheet == sheetId)
-                .ToList();
-        }
-        else
-        {
-            var used = sheet.GetUsedRange();
-            printRanges = used.HasValue ? [used.Value] : [];
-        }
-
-        if (printRanges.Count == 0) return doc;
-
-        // Compute a super-viewport covering all areas plus print titles.
-        uint maxPrintRow = printRanges.Max(r => r.End.Row);
-        uint maxPrintCol = printRanges.Max(r => r.End.Col);
-        var maxViewportRow = Math.Max(maxPrintRow, sheet.PrintTitleRows?.End ?? 0);
-        var maxViewportCol = Math.Max(maxPrintCol, sheet.PrintTitleColumns?.End ?? 0);
-
-        double printableW = pageW - marginLeft - marginRight;
-        double printableH = pageH - marginTop - marginBottom;
+        var pageW = printPlan.Metrics.PageWidth;
+        var pageH = printPlan.Metrics.PageHeight;
+        var marginLeft = printPlan.Metrics.MarginLeft;
+        var marginRight = printPlan.Metrics.MarginRight;
+        var marginTop = printPlan.Metrics.MarginTop;
+        var headerMargin = printPlan.Metrics.HeaderMargin;
+        var footerMargin = printPlan.Metrics.FooterMargin;
 
         var viewport = viewportService.GetViewport(workbook, sheetId,
             new ViewportRequest(
                 TopRow: 1,
                 LeftCol: 1,
-                AvailableHeight: (double)maxViewportRow * 9999,
-                AvailableWidth: (double)maxViewportCol * 9999));
+                AvailableHeight: printPlan.Viewport.RequestHeight,
+                AvailableWidth: printPlan.Viewport.RequestWidth));
 
         var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
-
-        // Build pagination for each area separately and count total pages first (for header/footer).
-        var areaPaginationPlans = printRanges
-            .Select(areaRange => PagePaginationPlanner.BuildPlan(
-                areaRange,
-                sheet.ScaleToFit,
-                sheet.PrintTitleRows,
-                sheet.PrintTitleColumns,
-                sheet.PaperSize,
-                sheet.PageOrientation,
-                sheet.PageMargins,
-                sheet.RowHeights,
-                sheet.DefaultRowHeight,
-                sheet.ColumnWidths,
-                sheet.DefaultColumnWidth,
-                sheet.HeaderMargin,
-                sheet.FooterMargin,
-                sheet.RowPageBreaks,
-                sheet.ColumnPageBreaks))
-            .ToList();
 
         IReadOnlyList<IReadOnlyList<KeyValuePair<CellAddress, string>>> commentSummaryPages =
             sheet.PrintComments == WorksheetPrintComments.AtEnd
                 ? BuildCommentSummaryPages(sheet.Comments, sheet.ThreadedComments, pageH, marginTop)
                 : [];
-        var totalPages = areaPaginationPlans.Sum(p => p.RowPlans.Count * p.ColumnPlans.Count)
-                         + commentSummaryPages.Count;
-        var nextPageNumber = sheet.FirstPageNumber ?? 1;
+        var totalPages = printPlan.GridPageCount + commentSummaryPages.Count;
         var printableHyperlinks = BuildPrintableHyperlinkLookup(workbook, sheet);
         var printableCellDestinations = BuildPrintableCellDestinationLookup(workbook, sheet);
 
-        // Emit pages for each area in order (each area starts on a new page).
-        foreach (var paginationPlan in areaPaginationPlans)
-        {
-            var rowPlans = paginationPlan.RowPlans;
-            var columnPlans = paginationPlan.ColumnPlans;
-            foreach (var page in PrintPageGridPlanner.Build(rowPlans, columnPlans, sheet.PageOrder))
-                AddPrintPage(page);
-        }
+        foreach (var page in printPlan.Pages)
+            AddPrintPage(page);
 
         if (commentSummaryPages.Count > 0)
         {
@@ -141,22 +72,22 @@ public static partial class PrintRenderer
                 AddCommentSummaryPage(commentsForPage);
         }
 
-        void AddPrintPage(PrintPageGridEntry page)
+        void AddPrintPage(WorksheetPrintPagePlan page)
         {
             var rowPlan = page.RowPlan;
             var columnPlan = page.ColumnPlan;
-            var pageRows = rowPlan.TitleRows.Concat(rowPlan.BodyRows).ToList();
-            var pageColumns = columnPlan.TitleColumns.Concat(columnPlan.BodyColumns).ToList();
+            var pageRows = page.Rows;
+            var pageColumns = page.Columns;
             if (pageRows.Count == 0 || pageColumns.Count == 0)
                 return;
 
-            var pageNumber = nextPageNumber++;
             var measurement = PrintLayoutPlanner.MeasurePrintableGrid(
-                printableW,
-                printableH,
+                printPlan.Metrics.PrintableWidth,
+                printPlan.Metrics.PrintableHeight,
                 (uint)pageRows.Count,
                 (uint)pageColumns.Count,
                 sheet.PrintHeadings);
+            var pageNumber = page.PageNumber;
             var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
             var (visual, textOverlays, linkOverlays, cellDestinationOverlays) = RenderPageVisual(
                 pageW,
@@ -193,8 +124,8 @@ public static partial class PrintRenderer
                 sheet.PrintComments,
                 sheet.Comments,
                 sheet.ThreadedComments,
-                printableW,
-                printableH,
+                printPlan.Metrics.PrintableWidth,
+                printPlan.Metrics.PrintableHeight,
                 pageNumber,
                 totalPages,
                 sheet.PrintDraftQuality,
