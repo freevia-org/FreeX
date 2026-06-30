@@ -41,31 +41,33 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
         source.Should().Contain("PaneSpecs.BuildAccountPaneSpec(");
         source.Should().Contain("Panes.BuildAccountPane(");
-        source.Should().Contain("PaneSpecs.BuildExportPaneSpec(");
 
         if (appFolder == "freew")
         {
             source.Should().Contain("BuildHomePane = BuildHomePane");
             source.Should().Contain("UseNewPane = true");
             source.Should().Contain("Close = backstage.FrameCommand(_actions.Close)");
-            source.Should().Contain("BackstageSaveAsFileTypePlanner.Build(");
+            source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
+            source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
+            source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
+            source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
+            source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
+            source.Should().Contain("BackstageExportPaneSurfaceText.FromDescriptor(");
             source.Should().Contain("_file.SaveFormats");
-            source.Should().Contain("BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(");
             source.Should().Contain("BuildOpenPane = BuildOpenPane");
-            source.Should().Contain("BackstageOpenPanePlanner.BuildPlan(");
+            source.Should().Contain("BuildOpenSurface(");
             source.Should().Contain("_file.RecentEntries");
-            source.Should().Contain("Search recent documents");
-            source.Should().Contain("new TabItem { Header = \"Documents\"");
-            source.Should().Contain("new TabItem { Header = \"Folders\"");
+            source.Should().Contain("surface.Search.AutomationName");
+            source.Should().Contain("surface.Tabs.DocumentsTabLabel");
+            source.Should().Contain("surface.Tabs.FoldersTabLabel");
             source.Should().Contain("OpenFolder");
             source.Should().Contain("BuildSharePane = BuildSharePane");
-            source.Should().Contain("BackstageSharePanePlanner.Build(");
             source.Should().Contain("OpenContainingFolder");
             source.Should().Contain("BuildSaveAsPane = BuildSaveAsPane");
             source.Should().Contain("BuildSaveAsInlineEditor");
             source.Should().Contain("SaveAsSuggested");
-            source.Should().Contain("File name");
-            source.Should().Contain("Save as type");
+            source.Should().Contain("inline.FileNameHeading");
+            source.Should().Contain("inline.SaveAsTypeHeading");
             source.Should().Contain("BuildPrintPane = BuildPrintPane");
             source.Should().Contain("BackstagePrintPanePlanner.Build(");
             source.Should().Contain("PrintPreview");
@@ -78,9 +80,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("InspectDocument");
             source.Should().Contain("CheckAccessibility");
             source.Should().Contain("Panes.BuildActionPane(");
-            source.Should().Contain("new BackstageActionPaneSpec(");
-            source.Should().Contain("Heading: \"Home\"");
-            source.Should().Contain("BackstageHomePanePlanner.Build(");
+            source.Should().Contain("ToActionPaneSpec(surface)");
             source.Should().Contain("_backstage.ShowPane(\"Open\")");
             source.Should().Contain("RecoverUnsaved");
         }
@@ -89,6 +89,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().NotContain("BuildHomePane = BuildHomePane");
             source.Should().NotContain("UseNewPane = true");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
+            source.Should().Contain("PaneSpecs.BuildExportPaneSpec(");
         }
 
         source.Should().NotContain("BackstageEntry.Pane(\"Info\"");

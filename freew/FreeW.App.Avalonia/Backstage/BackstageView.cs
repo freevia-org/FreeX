@@ -19,9 +19,8 @@ namespace FreeW.App.Avalonia.Backstage;
 
 /// <summary>
 /// The FreeW Avalonia backstage (File screen): a full-window modal dialog with a left rail of pane
-/// entries and a scrollable content area. Each content pane is rendered from its portable planner
-/// (<see cref="BackstageHomePanePlanner"/>, <see cref="BackstageOpenPanePlanner"/>, etc.) so the
-/// data-shaping lives in the shared Presentation tier and this file only lays out.
+/// entries and a scrollable content area. The shared <see cref="BackstagePaneSurfacePlanner"/> owns
+/// pane text and row planning; this file keeps the Avalonia-specific layout and controls.
 ///
 /// Opened via <see cref="BackstageView.ShowAsync"/>; dismissed by the Back button or Escape.
 /// </summary>
@@ -239,57 +238,51 @@ internal sealed class BackstageView : Window
 
     private Control BuildHomePane()
     {
-        var recentEntries = _callbacks.GetRecentEntries();
-        var groups = BackstageHomePanePlanner.Build(
-            recentEntries,
+        var surface = BackstagePaneSurfacePlanner.BuildHomePane(
+            _callbacks.GetRecentEntries(),
             newDocument: () => { Close(); _callbacks.NewDocument(); },
             openRecent: path => { Close(); _callbacks.OpenRecent(path); },
             browse: () => { Close(); _callbacks.Browse(); },
             openMore: () => NavigateTo(BackstagePane.Open));
 
-        return BuildActionGroupContent(BackstageViewTextResources.Home.Title, groups, BackstageViewTextResources.Home.Description);
+        return BuildActionGroupContent(surface);
     }
 
     // ── Open pane ─────────────────────────────────────────────────────────────
 
     private Control BuildOpenPane()
     {
-        var recentEntries = _callbacks.GetRecentEntries();
-        var groups = BackstageOpenPanePlanner.Build(
-            recentEntries,
+        var surface = BackstagePaneSurfacePlanner.BuildOpenActionPane(
+            _callbacks.GetRecentEntries(),
             openRecent: path => { Close(); _callbacks.OpenRecent(path); },
             browse: () => { Close(); _callbacks.Browse(); },
             recoverUnsaved: () => { Close(); _callbacks.RecoverUnsaved(); });
 
-        return BuildActionGroupContent(BackstageViewTextResources.Open.Title, groups, BackstageViewTextResources.Open.Description);
+        return BuildActionGroupContent(surface);
     }
 
     // ── Save As pane ─────────────────────────────────────────────────────────
 
     private Control BuildSaveAsPane()
     {
-        var formats = _callbacks.GetFileFormats();
-        var inlinePlan = BackstageSaveAsFileTypePlanner.BuildInlinePlan(
-            formats,
+        var surface = BackstagePaneSurfacePlanner.BuildSaveAsPane(
+            _callbacks.GetFileFormats(),
             _callbacks.DisplayName,
-            _callbacks.CurrentPath);
-
-        var groups = BackstageSaveAsFileTypePlanner.Build(
-            formats,
+            _callbacks.CurrentPath,
+            saveAs: () => { Close(); _callbacks.SaveAs(); },
             saveAsExtension: ext => { Close(); _callbacks.SaveAsExtension(ext); });
 
         var content = new StackPanel { Spacing = 20 };
-        content.Children.Add(BuildPaneHeader(BackstageViewTextResources.SaveAs.Title, BackstageViewTextResources.SaveAs.Description));
+        content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
 
         // Inline plan info: current suggested filename + selected extension
         var infoGrid = CreateDetailGrid();
-        AddDetailRow(infoGrid, BackstageViewTextResources.FileNameLabel, inlinePlan.SuggestedFileName, "SaveAsSuggestedFileName");
-        AddDetailRow(infoGrid, BackstageViewTextResources.FormatLabel, inlinePlan.SelectedExtension, "SaveAsSelectedExtension");
+        AddDetailRow(infoGrid, surface.Inline.FileNameHeading, surface.InlinePlan.SuggestedFileName, "SaveAsSuggestedFileName");
+        AddDetailRow(infoGrid, surface.Inline.SaveAsTypeHeading, surface.InlinePlan.SelectedExtension, "SaveAsSelectedExtension");
         content.Children.Add(infoGrid);
 
-        // Format groups
-        foreach (var group in groups)
-            content.Children.Add(BuildActionGroup(group, isLast: group == groups[^1]));
+        foreach (var group in surface.Groups)
+            content.Children.Add(BuildActionGroup(group, isLast: group == surface.Groups[^1]));
 
         return content;
     }
@@ -342,7 +335,7 @@ internal sealed class BackstageView : Window
 
     private Control BuildSharePane()
     {
-        var groups = BackstageSharePanePlanner.Build(
+        var surface = BackstagePaneSurfacePlanner.BuildSharePane(
             currentPath: _callbacks.CurrentPath,
             fileExists: File.Exists,
             saveAs: () => { Close(); _callbacks.SaveAs(); },
@@ -350,37 +343,21 @@ internal sealed class BackstageView : Window
             saveCopy: () => { Close(); _callbacks.SaveAs(); },   // saveCopy → SaveAs (no separate copy-save yet)
             exportPdf: () => { Close(); _callbacks.ExportPdf(); });
 
-        return BuildActionGroupContent(BackstageViewTextResources.Share.Title, groups, BackstageViewTextResources.Share.Description);
+        return BuildActionGroupContent(surface);
     }
 
     // ── Export pane ───────────────────────────────────────────────────────────
 
     private Control BuildExportPane()
     {
-        var formats = _callbacks.GetFileFormats();
-        var changeFileTypeGroup = BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(
-            formats,
+        var surface = BackstagePaneSurfacePlanner.BuildExportPane(
+            _callbacks.GetFileFormats(),
+            exportPdf: () => { Close(); _callbacks.ExportPdf(); },
+            exportXps: null,
             saveAsExtension: ext => { Close(); _callbacks.SaveAsExtension(ext); });
 
-        var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(BuildPaneHeader(BackstageViewTextResources.Export.Title, BackstageViewTextResources.Export.Description));
+        return BuildActionGroupContent(surface);
 
-        // PDF export action (real — wired to ExportPdf)
-        content.Children.Add(BuildSectionHeader(BackstageViewTextResources.CreatePdfSection));
-        content.Children.Add(AvaloniaBackstageChrome.CreateDescribedActionRow(
-            new AvaloniaBackstageDescribedActionRowSpec(
-                BackstageViewTextResources.CreatePdfLabel,
-                BackstageViewTextResources.CreatePdfDescription,
-                "ExportCreatePdfButton")
-            {
-                Action = () => { Close(); _callbacks.ExportPdf(); },
-            },
-            BackstageChromeStyle));
-
-        // Change file type group from the planner
-        content.Children.Add(BuildActionGroup(changeFileTypeGroup, isLast: true));
-
-        return content;
     }
 
     // ── Info pane ─────────────────────────────────────────────────────────────
@@ -481,6 +458,9 @@ internal sealed class BackstageView : Window
             content.Children.Add(BuildActionGroup(groups[i], isLast: i == groups.Count - 1));
         return content;
     }
+
+    private Control BuildActionGroupContent(BackstageActionPaneSurfaceSpec surface) =>
+        BuildActionGroupContent(surface.Title, surface.Groups, surface.Description);
 
     private Control BuildActionGroup(BackstageActionGroup group, bool isLast)
     {
