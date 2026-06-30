@@ -19,7 +19,6 @@ public sealed partial class PivotWorkflowDialogTests
             "PivotChartOptionsDialog.cs",
             "PivotSlicerTimelineDialogs.cs",
             "PivotCalculatedDialogs.cs",
-            "PivotStyleCatalog.cs",
             "PivotStyleGalleryDialog.cs",
             "PivotTableOptionsDialog.cs",
             "PivotTableOptionsDialog.Result.cs");

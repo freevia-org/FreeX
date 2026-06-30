@@ -10,9 +10,12 @@ public sealed class PivotStyleGalleryPlannerTests
     public void BuiltInStyleNames_Has84LightMediumDarkNames()
     {
         PivotStyleGalleryPlanner.BuiltInStyleNames.Should().HaveCount(84);
-        PivotStyleGalleryPlanner.BuiltInStyleNames.Should().Contain("PivotStyleLight1");
-        PivotStyleGalleryPlanner.BuiltInStyleNames.Should().Contain("PivotStyleMedium28");
-        PivotStyleGalleryPlanner.BuiltInStyleNames.Should().Contain("PivotStyleDark14");
+        PivotStyleGalleryPlanner.BuiltInStyleNames.Take(28)
+            .Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"));
+        PivotStyleGalleryPlanner.BuiltInStyleNames.Skip(28).Take(28)
+            .Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"));
+        PivotStyleGalleryPlanner.BuiltInStyleNames.Skip(56).Take(28)
+            .Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}"));
     }
 
     [Theory]
