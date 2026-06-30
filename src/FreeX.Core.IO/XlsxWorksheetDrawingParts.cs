@@ -403,7 +403,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             .Element(drawingNs + "prstGeom")?
             .Attribute("prst")?
             .Value;
-        if (ToDrawingShapeKind(preset) is not { } kind)
+        if (!DrawingMlPresetGeometryMap.TryGetShapeKind(preset, out var kind))
             return;
 
         // Parse txBody text formatting (simplified to first-run properties).
@@ -634,7 +634,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             .Value;
 
         // Default to Line when no prstGeom is present (bare connector with no geometry override).
-        var kind = ToDrawingShapeKind(preset) ?? DrawingShapeKind.Line;
+        var kind = DrawingMlPresetGeometryMap.GetShapeKindOrDefault(preset, DrawingShapeKind.Line);
         shapes.Add(new XlsxShapePackagePart(
             kind,
             name,
@@ -1037,57 +1037,5 @@ internal static partial class XlsxWorksheetDrawingPartReader
         };
         return new DrawingArrowhead(type, w, len);
     }
-
-    private static DrawingShapeKind? ToDrawingShapeKind(string? preset) =>
-        preset switch
-        {
-            "rect" => DrawingShapeKind.Rectangle,
-            "roundRect" => DrawingShapeKind.RoundedRectangle,
-            "ellipse" => DrawingShapeKind.Ellipse,
-            "line" or "straightConnector1" => DrawingShapeKind.Line,
-            "bentConnector2" or "bentConnector3" or "bentConnector4" or "bentConnector5" => DrawingShapeKind.ElbowConnector,
-            "curvedConnector2" or "curvedConnector3" or "curvedConnector4" or "curvedConnector5" => DrawingShapeKind.CurvedConnector,
-            "triangle" => DrawingShapeKind.Triangle,
-            "rtTriangle" => DrawingShapeKind.RightTriangle,
-            "diamond" => DrawingShapeKind.Diamond,
-            "parallelogram" => DrawingShapeKind.Parallelogram,
-            "trapezoid" => DrawingShapeKind.Trapezoid,
-            "pentagon" => DrawingShapeKind.Pentagon,
-            "hexagon" => DrawingShapeKind.Hexagon,
-            "octagon" => DrawingShapeKind.Octagon,
-            "cross" => DrawingShapeKind.Cross,
-            "rightArrow" => DrawingShapeKind.RightArrow,
-            "leftArrow" => DrawingShapeKind.LeftArrow,
-            "upArrow" => DrawingShapeKind.UpArrow,
-            "downArrow" => DrawingShapeKind.DownArrow,
-            "leftRightArrow" => DrawingShapeKind.LeftRightArrow,
-            "upDownArrow" => DrawingShapeKind.UpDownArrow,
-            "mathPlus" => DrawingShapeKind.PlusSign,
-            "mathMinus" => DrawingShapeKind.MinusSign,
-            "mathMultiply" => DrawingShapeKind.MultiplySign,
-            "mathDivide" => DrawingShapeKind.DivideSign,
-            "mathEqual" => DrawingShapeKind.EqualSign,
-            "mathNotEqual" => DrawingShapeKind.NotEqualSign,
-            "flowChartProcess" => DrawingShapeKind.FlowchartProcess,
-            "flowChartDecision" => DrawingShapeKind.FlowchartDecision,
-            "flowChartInputOutput" => DrawingShapeKind.FlowchartData,
-            "flowChartPredefinedProcess" => DrawingShapeKind.FlowchartPredefinedProcess,
-            "flowChartDocument" => DrawingShapeKind.FlowchartDocument,
-            "flowChartTerminator" => DrawingShapeKind.FlowchartTerminator,
-            "star5" => DrawingShapeKind.Star5,
-            "star8" => DrawingShapeKind.Star8,
-            "irregularSeal1" => DrawingShapeKind.Explosion,
-            "ribbon" => DrawingShapeKind.Ribbon,
-            "wave" => DrawingShapeKind.Wave,
-            "wedgeRectCallout" => DrawingShapeKind.RectangularCallout,
-            "wedgeRoundRectCallout" => DrawingShapeKind.RoundedRectangularCallout,
-            "wedgeEllipseCallout" => DrawingShapeKind.OvalCallout,
-            "lineCallout1" or "lineCallout2" or "lineCallout3" or "lineCallout4" or
-            "borderCallout1" or "borderCallout2" or "borderCallout3" or "borderCallout4" => DrawingShapeKind.LineCallout,
-            "chevron" => DrawingShapeKind.Chevron,
-            "homePlate" => DrawingShapeKind.HomePlate,
-            "can" => DrawingShapeKind.Cylinder,
-            _ => null
-        };
 
 }

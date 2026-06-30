@@ -5,6 +5,70 @@ namespace FreeX.Core.Model.Tests;
 
 public sealed class DrawingShapeSharedDrawingTests
 {
+    public static TheoryData<DrawingShapeKind, string> CanonicalPresetCases =>
+        new()
+        {
+            { DrawingShapeKind.Rectangle, "rect" },
+            { DrawingShapeKind.RoundedRectangle, "roundRect" },
+            { DrawingShapeKind.Ellipse, "ellipse" },
+            { DrawingShapeKind.Line, "line" },
+            { DrawingShapeKind.ElbowConnector, "bentConnector2" },
+            { DrawingShapeKind.CurvedConnector, "curvedConnector2" },
+            { DrawingShapeKind.Triangle, "triangle" },
+            { DrawingShapeKind.RightTriangle, "rtTriangle" },
+            { DrawingShapeKind.Diamond, "diamond" },
+            { DrawingShapeKind.Parallelogram, "parallelogram" },
+            { DrawingShapeKind.Trapezoid, "trapezoid" },
+            { DrawingShapeKind.Pentagon, "pentagon" },
+            { DrawingShapeKind.Hexagon, "hexagon" },
+            { DrawingShapeKind.Octagon, "octagon" },
+            { DrawingShapeKind.Cross, "cross" },
+            { DrawingShapeKind.RightArrow, "rightArrow" },
+            { DrawingShapeKind.LeftArrow, "leftArrow" },
+            { DrawingShapeKind.UpArrow, "upArrow" },
+            { DrawingShapeKind.DownArrow, "downArrow" },
+            { DrawingShapeKind.LeftRightArrow, "leftRightArrow" },
+            { DrawingShapeKind.UpDownArrow, "upDownArrow" },
+            { DrawingShapeKind.PlusSign, "mathPlus" },
+            { DrawingShapeKind.MinusSign, "mathMinus" },
+            { DrawingShapeKind.MultiplySign, "mathMultiply" },
+            { DrawingShapeKind.DivideSign, "mathDivide" },
+            { DrawingShapeKind.EqualSign, "mathEqual" },
+            { DrawingShapeKind.NotEqualSign, "mathNotEqual" },
+            { DrawingShapeKind.FlowchartProcess, "flowChartProcess" },
+            { DrawingShapeKind.FlowchartDecision, "flowChartDecision" },
+            { DrawingShapeKind.FlowchartData, "flowChartInputOutput" },
+            { DrawingShapeKind.FlowchartPredefinedProcess, "flowChartPredefinedProcess" },
+            { DrawingShapeKind.FlowchartDocument, "flowChartDocument" },
+            { DrawingShapeKind.FlowchartTerminator, "flowChartTerminator" },
+            { DrawingShapeKind.Star5, "star5" },
+            { DrawingShapeKind.Star8, "star8" },
+            { DrawingShapeKind.Explosion, "irregularSeal1" },
+            { DrawingShapeKind.Ribbon, "ribbon" },
+            { DrawingShapeKind.Wave, "wave" },
+            { DrawingShapeKind.RectangularCallout, "wedgeRectCallout" },
+            { DrawingShapeKind.RoundedRectangularCallout, "wedgeRoundRectCallout" },
+            { DrawingShapeKind.OvalCallout, "wedgeEllipseCallout" },
+            { DrawingShapeKind.LineCallout, "lineCallout1" },
+            { DrawingShapeKind.Chevron, "chevron" },
+            { DrawingShapeKind.HomePlate, "homePlate" },
+            { DrawingShapeKind.Cylinder, "can" },
+        };
+
+    public static TheoryData<string, DrawingShapeKind, string> AliasPresetCases =>
+        new()
+        {
+            { "roundrect", DrawingShapeKind.RoundedRectangle, "roundRect" },
+            { "straightConnector1", DrawingShapeKind.Line, "line" },
+            { "bentConnector5", DrawingShapeKind.ElbowConnector, "bentConnector2" },
+            { "curvedConnector5", DrawingShapeKind.CurvedConnector, "curvedConnector2" },
+            { "flowchartinputoutput", DrawingShapeKind.FlowchartData, "flowChartInputOutput" },
+            { "irregularSeal2", DrawingShapeKind.Explosion, "irregularSeal1" },
+            { "ribbon2", DrawingShapeKind.Ribbon, "ribbon" },
+            { "lineCallout4", DrawingShapeKind.LineCallout, "lineCallout1" },
+            { "borderCallout4", DrawingShapeKind.LineCallout, "lineCallout1" },
+        };
+
     [Fact]
     public void DrawingShapeModel_UsesSharedDrawingShapeKind()
     {
@@ -49,5 +113,62 @@ public sealed class DrawingShapeSharedDrawingTests
         DrawingShapeKindSupport.IsLineLike(DrawingShapeKind.Line).Should().BeTrue();
         DrawingShapeKindSupport.IsLineLike(DrawingShapeKind.Cylinder).Should().BeFalse();
         ((int)DrawingShapeKind.Cylinder).Should().Be(44);
+    }
+
+    [Theory]
+    [MemberData(nameof(CanonicalPresetCases))]
+    public void DrawingMlPresetGeometryMap_RoundTripsCanonicalPresets(
+        DrawingShapeKind kind,
+        string preset)
+    {
+        DrawingMlPresetGeometryMap.GetPreset(kind).Should().Be(preset);
+
+        DrawingMlPresetGeometryMap.TryGetShapeKind(preset, out var parsed).Should().BeTrue();
+        parsed.Should().Be(kind);
+    }
+
+    [Theory]
+    [MemberData(nameof(AliasPresetCases))]
+    public void DrawingMlPresetGeometryMap_MapsAliasesToCanonicalKinds(
+        string alias,
+        DrawingShapeKind kind,
+        string canonicalPreset)
+    {
+        DrawingMlPresetGeometryMap.TryGetShapeKind(alias, out var parsed).Should().BeTrue();
+        parsed.Should().Be(kind);
+        DrawingMlPresetGeometryMap.GetPreset(parsed).Should().Be(canonicalPreset);
+    }
+
+    [Fact]
+    public void DrawingMlPresetGeometryMap_ReturnsCallerFallbackForUnknownPreset()
+    {
+        DrawingMlPresetGeometryMap.TryGetShapeKind("freeform", out _).Should().BeFalse();
+
+        DrawingMlPresetGeometryMap.GetShapeKindOrDefault("freeform", DrawingShapeKind.Line)
+            .Should()
+            .Be(DrawingShapeKind.Line);
+    }
+
+    [Fact]
+    public void AppIoPresetGeometryMaps_DelegateToSharedDrawing()
+    {
+        var sharedRoot = TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("shared", "Free.Shared.Drawing");
+        var freeXIoRoot = TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("src", "FreeX.Core.IO");
+
+        File.Exists(Path.Combine(sharedRoot, "DrawingMlPresetGeometryMap.cs"))
+            .Should()
+            .BeTrue("DrawingML preset geometry mapping should remain owned by Free.Shared.Drawing");
+
+        var writerSource = File.ReadAllText(Path.Combine(freeXIoRoot, "XlsxWorksheetDrawingObjectWriter.cs"));
+        var partsSource = File.ReadAllText(Path.Combine(freeXIoRoot, "XlsxWorksheetDrawingParts.cs"));
+
+        writerSource.Should().Contain("DrawingMlPresetGeometryMap.GetPreset");
+        partsSource.Should().Contain("DrawingMlPresetGeometryMap.TryGetShapeKind");
+        partsSource.Should().Contain("DrawingMlPresetGeometryMap.GetShapeKindOrDefault");
+
+        writerSource.Should().NotContain("private static string ToDrawingPreset");
+        partsSource.Should().NotContain("private static DrawingShapeKind? ToDrawingShapeKind");
+        writerSource.Should().NotContain("DrawingShapeKind.Cylinder => \"can\"");
+        partsSource.Should().NotContain("\"can\" => DrawingShapeKind.Cylinder");
     }
 }
