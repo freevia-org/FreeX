@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Generic OPC helpers extracted from FreeX.Core.IO. Their existing consumers
          live in FreeX.Core.IO and rely on internal visibility; preserve it until a
          type is intentionally promoted to the public shared API (e.g. for FreeW). -->

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using Free.Shared.AppServices;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -42,16 +41,10 @@ public static class BackstageInfoPlanner
                 WorkbookShareSurface.WindowsShare,
                 fileExists));
         var exportStatus = WorkbookExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
-        var fileInfo = TryGetFileInfo(currentFilePath, out var currentFileInfo)
-            ? currentFileInfo
-            : null;
-        var workbookInfoPlan = WorkbookInfoPlanner.Build(
+        var workbookInfoPlan = WorkbookInfoFileMetadataReader.BuildPlan(
             workbook,
             currentFilePath,
-            ResolveActiveSheetIndex(workbook, activeSheet),
-            fileInfo?.Length,
-            fileInfo?.LastWriteTimeUtc,
-            fileInfo?.LastWriteTime);
+            ResolveActiveSheetIndex(workbook, activeSheet));
         var display = WorkbookInfoDisplayPlanner.Build(
             workbookInfoPlan,
             WorkbookInfoDisplaySurface.WindowsBackstagePane,
@@ -88,31 +81,6 @@ public static class BackstageInfoPlanner
             : issueCount == 1
                 ? strings.Get("Backstage_Info_OneIssueFound")
                 : strings.Format("Backstage_Info_MultipleIssuesFound", issueCount);
-
-    private static bool TryGetFileInfo(string? currentFilePath, out FileInfo fileInfo)
-    {
-        fileInfo = null!;
-        if (string.IsNullOrWhiteSpace(currentFilePath))
-            return false;
-
-        try
-        {
-            fileInfo = new FileInfo(currentFilePath);
-            return fileInfo.Exists;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            return false;
-        }
-    }
 
     private static int ResolveActiveSheetIndex(Workbook workbook, Sheet? activeSheet)
     {
