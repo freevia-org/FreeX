@@ -1003,42 +1003,20 @@ public sealed class SlideCanvas : FrameworkElement
         IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        int catCount = Math.Max(1, chart.Categories.Count);
-        if (chart.Series.Count == 0) return;
-
-        var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
-        double range = maxVal - minVal;
-        if (range <= 0) return;
-
-        double stepX = plotW / Math.Max(1, catCount - 1);
-        double baseY = plotY + plotH;
-
-        // Draw series back to front (later series on top)
-        for (int si = chart.Series.Count - 1; si >= 0; si--)
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildAreaSeriesPrimitives(chart, plot))
         {
-            var series = chart.Series[si];
-            var color  = GetSeriesColor(chart, si, 0, seriesColors);
+            var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
             var brush  = FreezeBrush(new SolidColorBrush(
                 Color.FromArgb(200, color.R, color.G, color.B)));
-
-            if (series.Values.Count == 0) continue;
 
             var geo = new StreamGeometry();
             using (var ctx = geo.Open())
             {
-                ctx.BeginFigure(new Point(plotX, baseY), isFilled: true, isClosed: true);
-
-                for (int ci = 0; ci < catCount; ci++)
-                {
-                    double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
-                    double  val    = rawVal ?? 0;
-                    double  px     = plotX + ci * stepX;
-                    double  py     = plotY + plotH - (val - minVal) / range * plotH;
-                    ctx.LineTo(new Point(px, py), isStroked: true, isSmoothJoin: false);
-                }
-
-                // Close to bottom-right then bottom-left
-                ctx.LineTo(new Point(plotX + plotW, baseY), isStroked: false, isSmoothJoin: false);
+                ctx.BeginFigure(ToPoint(primitive.BaselineStart), isFilled: true, isClosed: true);
+                foreach (var point in primitive.Points)
+                    ctx.LineTo(ToPoint(point), isStroked: true, isSmoothJoin: false);
+                ctx.LineTo(ToPoint(primitive.BaselineEnd), isStroked: false, isSmoothJoin: false);
             }
             if (geo.CanFreeze) geo.Freeze();
 
@@ -1099,92 +1077,51 @@ public sealed class SlideCanvas : FrameworkElement
         IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        if (chart.Series.Count == 0) return;
-
-        // Compute value ranges across all X and Y values
-        var (xMin, xMax, xUnit) = ComputeNiceScatterAxisRange(chart, useX: true);
-        var (yMin, yMax, yUnit) = ComputeNiceAxisRange(chart);
-        double xRange = xMax - xMin;
-        double yRange = yMax - yMin;
-        if (xRange <= 0 || yRange <= 0) return;
-
-        bool drawLines   = chart.ScatterStyle is FreeP.Core.Model.ScatterStyle.Line
-                                              or FreeP.Core.Model.ScatterStyle.LineMarker
-                                              or FreeP.Core.Model.ScatterStyle.Smooth
-                                              or FreeP.Core.Model.ScatterStyle.SmoothMarker;
-        bool drawMarkers = chart.ScatterStyle is FreeP.Core.Model.ScatterStyle.Marker
-                                              or FreeP.Core.Model.ScatterStyle.LineMarker
-                                              or FreeP.Core.Model.ScatterStyle.SmoothMarker;
-        if (!drawLines && !drawMarkers) drawMarkers = true;  // default to markers
-
-        // Gridlines
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot);
         var gridPen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
         if (gridPen.CanFreeze) gridPen.Freeze();
-        double xSteps = xRange / xUnit;
-        for (int gi = 0; gi <= (int)Math.Round(xSteps); gi++)
-        {
-            double gx = plotX + plotW * gi / xSteps;
-            dc.DrawLine(gridPen, new Point(gx, plotY), new Point(gx, plotY + plotH));
-        }
-        double ySteps = yRange / yUnit;
-        for (int gi = 0; gi <= (int)Math.Round(ySteps); gi++)
-        {
-            double gy = plotY + plotH - plotH * gi / ySteps;
-            dc.DrawLine(gridPen, new Point(plotX, gy), new Point(plotX + plotW, gy));
-        }
 
-        // Plot each series
-        for (int si = 0; si < chart.Series.Count; si++)
+        foreach (var gridLine in plan.GridLines)
+            dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
+
+        foreach (var primitive in plan.Series)
+            RenderScatterSeriesPrimitive(dc, chart, seriesColors, primitive);
+
+        foreach (var label in plan.XAxisLabels)
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        foreach (var label in plan.YAxisLabels)
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+    }
+
+    private static void RenderScatterSeriesPrimitive(
+        DrawingContext dc,
+        FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        ChartScatterSeriesPrimitive primitive)
+    {
+        var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
+        var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
+        var pen = primitive.DrawLines ? new Pen(brush, 1.5) : null;
+        if (pen?.CanFreeze == true) pen.Freeze();
+        var markerBrush = primitive.DrawMarkers ? brush : null;
+
+        Point? previous = null;
+        foreach (var plannedPoint in primitive.Points)
         {
-            var series = chart.Series[si];
-            var color  = GetSeriesColor(chart, si, 0, seriesColors);
-            int ptCount = Math.Max(series.XValues.Count, series.Values.Count);
-            if (ptCount == 0) continue;
-
-            var pen = drawLines
-                ? new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))), 1.5)
-                : null;
-            if (pen?.CanFreeze == true) pen.Freeze();
-            var markerBrush = drawMarkers
-                ? FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)))
-                : null;
-
-            Point? prev = null;
-            for (int pi = 0; pi < ptCount; pi++)
+            if (!plannedPoint.HasValue)
             {
-                double? xv = pi < series.XValues.Count ? series.XValues[pi] : null;
-                double? yv = pi < series.Values.Count  ? series.Values[pi]  : null;
-                if (!xv.HasValue || !yv.HasValue) { prev = null; continue; }
-
-                double px = plotX + (xv.Value - xMin) / xRange * plotW;
-                double py = plotY + plotH - (yv.Value - yMin) / yRange * plotH;
-                var pt = new Point(px, py);
-
-                if (drawLines && pen is not null && prev.HasValue)
-                    dc.DrawLine(pen, prev.Value, pt);
-                if (drawMarkers && markerBrush is not null)
-                    dc.DrawEllipse(markerBrush, null, pt, 3.5, 3.5);
-
-                prev = pt;
+                previous = null;
+                continue;
             }
-        }
 
-        // Axis tick labels
-        var labelPen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
-        if (labelPen.CanFreeze) labelPen.Freeze();
-        for (int ti = 0; ti <= (int)Math.Round(xSteps); ti++)
-        {
-            double val = xMin + xUnit * ti;
-            double vx  = plotX + plotW * ti / xSteps;
-            var labelRect = new Rect(vx - 20, plotY + plotH + 2, 40, 12);
-            DrawChartLabel(dc, FormatAxisValue(val), labelRect, false, 6.5, TextAlignment.Center);
-        }
-        for (int ti = 0; ti <= (int)Math.Round(ySteps); ti++)
-        {
-            double val = yMin + yUnit * ti;
-            double vy  = plotY + plotH - plotH * ti / ySteps;
-            var labelRect = new Rect(plotX - 38, vy - 6, 36, 12);
-            DrawChartLabel(dc, FormatAxisValue(val), labelRect, false, 6.5, TextAlignment.Right);
+            var point = ToPoint(plannedPoint.Value);
+            if (primitive.DrawLines && pen is not null && previous.HasValue)
+                dc.DrawLine(pen, previous.Value, point);
+            if (primitive.DrawMarkers && markerBrush is not null)
+                dc.DrawEllipse(markerBrush, null, point, 3.5, 3.5);
+
+            previous = point;
         }
     }
 
@@ -1195,79 +1132,28 @@ public sealed class SlideCanvas : FrameworkElement
         IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        if (chart.Series.Count == 0) return;
-
-        var (xMin, xMax, xUnit) = ComputeNiceScatterAxisRange(chart, useX: true);
-        var (yMin, yMax, yUnit) = ComputeNiceAxisRange(chart);
-        double xRange = xMax - xMin;
-        double yRange = yMax - yMin;
-        if (xRange <= 0 || yRange <= 0) return;
-
-        // Compute max bubble size across all series for normalization
-        double maxBubble = 0;
-        foreach (var s in chart.Series)
-            foreach (var bv in s.BubbleSizes)
-                if (bv.HasValue) maxBubble = Math.Max(maxBubble, bv.Value);
-        if (maxBubble <= 0) maxBubble = 1;
-
-        double maxBubbleRadius = Math.Min(plotW, plotH) / 8.0;
-
-        // Gridlines
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot);
         var gridPen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
         if (gridPen.CanFreeze) gridPen.Freeze();
-        double xSteps = xRange / xUnit;
-        double ySteps = yRange / yUnit;
-        for (int gi = 0; gi <= (int)Math.Round(xSteps); gi++)
-        {
-            double gx = plotX + plotW * gi / xSteps;
-            dc.DrawLine(gridPen, new Point(gx, plotY), new Point(gx, plotY + plotH));
-        }
-        for (int gi = 0; gi <= (int)Math.Round(ySteps); gi++)
-        {
-            double gy = plotY + plotH - plotH * gi / ySteps;
-            dc.DrawLine(gridPen, new Point(plotX, gy), new Point(plotX + plotW, gy));
-        }
 
-        for (int si = 0; si < chart.Series.Count; si++)
+        foreach (var gridLine in plan.GridLines)
+            dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
+
+        foreach (var primitive in plan.Bubbles)
         {
-            var series = chart.Series[si];
-            var color  = GetSeriesColor(chart, si, 0, seriesColors);
+            var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
             var brush  = FreezeBrush(new SolidColorBrush(Color.FromArgb(180, color.R, color.G, color.B)));
             var outlinePen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))), 0.8);
             if (outlinePen.CanFreeze) outlinePen.Freeze();
 
-            int ptCount = Math.Max(series.XValues.Count, series.Values.Count);
-            for (int pi = 0; pi < ptCount; pi++)
-            {
-                double? xv = pi < series.XValues.Count   ? series.XValues[pi]   : null;
-                double? yv = pi < series.Values.Count     ? series.Values[pi]    : null;
-                double? bv = pi < series.BubbleSizes.Count ? series.BubbleSizes[pi] : null;
-                if (!xv.HasValue || !yv.HasValue) continue;
-
-                double px = plotX + (xv.Value - xMin) / xRange * plotW;
-                double py = plotY + plotH - (yv.Value - yMin) / yRange * plotH;
-                double r  = bv.HasValue ? Math.Sqrt(bv.Value / maxBubble) * maxBubbleRadius : maxBubbleRadius * 0.3;
-                r = Math.Max(2, r);
-
-                dc.DrawEllipse(brush, outlinePen, new Point(px, py), r, r);
-            }
+            dc.DrawEllipse(brush, outlinePen, ToPoint(primitive.Center), primitive.Radius, primitive.Radius);
         }
 
-        // Axis tick labels
-        for (int ti = 0; ti <= (int)Math.Round(xSteps); ti++)
-        {
-            double val = xMin + xUnit * ti;
-            double vx  = plotX + plotW * ti / xSteps;
-            DrawChartLabel(dc, FormatAxisValue(val), new Rect(vx - 20, plotY + plotH + 2, 40, 12),
-                false, 6.5, TextAlignment.Center);
-        }
-        for (int ti = 0; ti <= (int)Math.Round(ySteps); ti++)
-        {
-            double val = yMin + yUnit * ti;
-            double vy  = plotY + plotH - plotH * ti / ySteps;
-            DrawChartLabel(dc, FormatAxisValue(val), new Rect(plotX - 38, vy - 6, 36, 12),
-                false, 6.5, TextAlignment.Right);
-        }
+        foreach (var label in plan.XAxisLabels)
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+        foreach (var label in plan.YAxisLabels)
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
     }
 
     // ── Radar chart ───────────────────────────────────────────────────────────
@@ -1277,111 +1163,67 @@ public sealed class SlideCanvas : FrameworkElement
         IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        if (chart.Series.Count == 0) return;
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot);
 
-        int catCount = Math.Max(3, chart.Categories.Count > 0 ? chart.Categories.Count
-            : (chart.Series[0].Values.Count > 0 ? chart.Series[0].Values.Count : 3));
-
-        double cx = plotX + plotW / 2;
-        double cy = plotY + plotH / 2;
-        double r  = Math.Min(plotW, plotH) / 2 * 0.75;
-
-        // Compute max value for scale
-        double dataMax = 0;
-        foreach (var s in chart.Series)
-            foreach (var v in s.Values)
-                if (v.HasValue) dataMax = Math.Max(dataMax, Math.Abs(v.Value));
-        if (dataMax <= 0) dataMax = 1;
-
-        // Nice round gridline rings (4 rings)
-        int gridRings = 4;
         var gridPen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
         if (gridPen.CanFreeze) gridPen.Freeze();
-        for (int ring = 1; ring <= gridRings; ring++)
+        foreach (var ring in plan.Rings)
         {
-            double ringR = r * ring / gridRings;
             var ringGeo = new StreamGeometry();
             using (var ctx = ringGeo.Open())
             {
-                for (int ci = 0; ci < catCount; ci++)
+                for (int pointIndex = 0; pointIndex < ring.Points.Count; pointIndex++)
                 {
-                    double angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
-                    var pt = new Point(cx + ringR * Math.Cos(angle), cy + ringR * Math.Sin(angle));
-                    if (ci == 0) ctx.BeginFigure(pt, isFilled: false, isClosed: true);
-                    else         ctx.LineTo(pt, isStroked: true, isSmoothJoin: false);
+                    var point = ToPoint(ring.Points[pointIndex]);
+                    if (pointIndex == 0)
+                        ctx.BeginFigure(point, isFilled: false, isClosed: true);
+                    else
+                        ctx.LineTo(point, isStroked: true, isSmoothJoin: false);
                 }
             }
             if (ringGeo.CanFreeze) ringGeo.Freeze();
             dc.DrawGeometry(null, gridPen, ringGeo);
         }
 
-        // Spokes
         var spokePen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0))), 0.5);
         if (spokePen.CanFreeze) spokePen.Freeze();
-        for (int ci = 0; ci < catCount; ci++)
-        {
-            double angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
-            dc.DrawLine(spokePen,
-                new Point(cx, cy),
-                new Point(cx + r * Math.Cos(angle), cy + r * Math.Sin(angle)));
-        }
+        foreach (var spoke in plan.Spokes)
+            dc.DrawLine(spokePen, ToPoint(spoke.Start), ToPoint(spoke.End));
 
-        // Category labels on spoke tips
-        for (int ci = 0; ci < chart.Categories.Count && ci < catCount; ci++)
-        {
-            double angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
-            double lx = cx + (r + 6) * Math.Cos(angle);
-            double ly = cy + (r + 6) * Math.Sin(angle);
-            DrawChartLabel(dc, chart.Categories[ci],
-                new Rect(lx - 20, ly - 6, 40, 12),
-                false, 6.5, TextAlignment.Center);
-        }
+        foreach (var label in plan.CategoryLabels)
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
 
-        bool withMarkers = chart.RadarStyle == FreeP.Core.Model.RadarStyle.Marker;
-        bool filled      = chart.RadarStyle == FreeP.Core.Model.RadarStyle.Filled;
-
-        for (int si = 0; si < chart.Series.Count; si++)
+        foreach (var primitive in plan.Series)
         {
-            var series = chart.Series[si];
-            var color  = GetSeriesColor(chart, si, 0, seriesColors);
+            var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
             var pen    = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))), 1.5);
             if (pen.CanFreeze) pen.Freeze();
 
             var polyGeo2 = new StreamGeometry();
             using (var ctx3 = polyGeo2.Open())
             {
-                for (int ci = 0; ci < catCount; ci++)
+                for (int pointIndex = 0; pointIndex < primitive.Points.Count; pointIndex++)
                 {
-                    double? v = ci < series.Values.Count ? series.Values[ci] : null;
-                    double  val = v ?? 0;
-                    double  frac = Math.Clamp(val / dataMax, 0, 1);
-                    double  angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
-                    var pt = new Point(cx + r * frac * Math.Cos(angle), cy + r * frac * Math.Sin(angle));
-
-                    if (ci == 0) ctx3.BeginFigure(pt, isFilled: filled, isClosed: true);
-                    else         ctx3.LineTo(pt, isStroked: true, isSmoothJoin: true);
+                    var point = ToPoint(primitive.Points[pointIndex]);
+                    if (pointIndex == 0)
+                        ctx3.BeginFigure(point, isFilled: primitive.IsFilled, isClosed: true);
+                    else
+                        ctx3.LineTo(point, isStroked: true, isSmoothJoin: true);
                 }
             }
             if (polyGeo2.CanFreeze) polyGeo2.Freeze();
 
-            Brush? fillBrush = filled
+            Brush? fillBrush = primitive.IsFilled
                 ? FreezeBrush(new SolidColorBrush(Color.FromArgb(80, color.R, color.G, color.B)))
                 : null;
             dc.DrawGeometry(fillBrush, pen, polyGeo2);
 
-            if (withMarkers)
+            if (primitive.WithMarkers)
             {
                 var markerBrush = FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
-                for (int ci = 0; ci < catCount; ci++)
-                {
-                    double? v = ci < series.Values.Count ? series.Values[ci] : null;
-                    double  val = v ?? 0;
-                    double  frac = Math.Clamp(val / dataMax, 0, 1);
-                    double  angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
-                    dc.DrawEllipse(markerBrush, null,
-                        new Point(cx + r * frac * Math.Cos(angle), cy + r * frac * Math.Sin(angle)),
-                        3, 3);
-                }
+                foreach (var point in primitive.Points)
+                    dc.DrawEllipse(markerBrush, null, ToPoint(point), 3, 3);
             }
         }
     }

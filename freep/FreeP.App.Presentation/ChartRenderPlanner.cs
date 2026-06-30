@@ -65,6 +65,50 @@ public readonly record struct ChartLineSeriesPrimitive(
     bool WithMarkers,
     IReadOnlyList<ChartPlanPoint?> Points);
 
+public readonly record struct ChartAreaSeriesPrimitive(
+    int SeriesIndex,
+    ChartPlanPoint BaselineStart,
+    ChartPlanPoint BaselineEnd,
+    IReadOnlyList<ChartPlanPoint> Points);
+
+public readonly record struct ChartScatterSeriesPrimitive(
+    int SeriesIndex,
+    bool DrawLines,
+    bool DrawMarkers,
+    IReadOnlyList<ChartPlanPoint?> Points);
+
+public readonly record struct ChartScatterPrimitivePlan(
+    IReadOnlyList<ChartGridLinePlan> GridLines,
+    IReadOnlyList<ChartTextPlan> XAxisLabels,
+    IReadOnlyList<ChartTextPlan> YAxisLabels,
+    IReadOnlyList<ChartScatterSeriesPrimitive> Series);
+
+public readonly record struct ChartBubblePrimitive(
+    int SeriesIndex,
+    int PointIndex,
+    ChartPlanPoint Center,
+    double Radius);
+
+public readonly record struct ChartBubblePrimitivePlan(
+    IReadOnlyList<ChartGridLinePlan> GridLines,
+    IReadOnlyList<ChartTextPlan> XAxisLabels,
+    IReadOnlyList<ChartTextPlan> YAxisLabels,
+    IReadOnlyList<ChartBubblePrimitive> Bubbles);
+
+public readonly record struct ChartRadarRingPrimitive(IReadOnlyList<ChartPlanPoint> Points);
+
+public readonly record struct ChartRadarSeriesPrimitive(
+    int SeriesIndex,
+    bool IsFilled,
+    bool WithMarkers,
+    IReadOnlyList<ChartPlanPoint> Points);
+
+public readonly record struct ChartRadarPrimitivePlan(
+    IReadOnlyList<ChartRadarRingPrimitive> Rings,
+    IReadOnlyList<ChartGridLinePlan> Spokes,
+    IReadOnlyList<ChartTextPlan> CategoryLabels,
+    IReadOnlyList<ChartRadarSeriesPrimitive> Series);
+
 public readonly record struct ChartPieSlicePrimitive(
     int SeriesIndex,
     int PointIndex,
@@ -602,6 +646,291 @@ public static class ChartRenderPlanner
         return primitives;
     }
 
+    public static IReadOnlyList<ChartAreaSeriesPrimitive> BuildAreaSeriesPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        int categoryCount = Math.Max(1, chart.Categories.Count);
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+            return Array.Empty<ChartAreaSeriesPrimitive>();
+
+        var (minValue, maxValue, _) = ComputePrimaryValueAxisRange(chart);
+        double range = maxValue - minValue;
+        if (range <= 0)
+            return Array.Empty<ChartAreaSeriesPrimitive>();
+
+        double stepX = plot.Width / Math.Max(1, categoryCount - 1);
+        var baselineStart = new ChartPlanPoint(plot.X, plot.Bottom);
+        var baselineEnd = new ChartPlanPoint(plot.Right, plot.Bottom);
+        var primitives = new List<ChartAreaSeriesPrimitive>();
+
+        for (int seriesIndex = chart.Series.Count - 1; seriesIndex >= 0; seriesIndex--)
+        {
+            var series = chart.Series[seriesIndex];
+            if (series.Values.Count == 0)
+                continue;
+
+            var points = new ChartPlanPoint[categoryCount];
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                double value = categoryIndex < series.Values.Count
+                    ? series.Values[categoryIndex] ?? 0
+                    : 0;
+                double x = plot.X + categoryIndex * stepX;
+                double y = plot.Bottom - (value - minValue) / range * plot.Height;
+                points[categoryIndex] = new ChartPlanPoint(x, y);
+            }
+
+            primitives.Add(new ChartAreaSeriesPrimitive(
+                seriesIndex,
+                baselineStart,
+                baselineEnd,
+                points));
+        }
+
+        return primitives;
+    }
+
+    public static ChartScatterPrimitivePlan BuildScatterPrimitivePlan(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+            return EmptyScatterPrimitivePlan();
+
+        var (xMin, xMax, xUnit) = ComputeScatterAxisRange(chart, useX: true);
+        var (yMin, yMax, yUnit) = ComputePrimaryValueAxisRange(chart);
+        double xRange = xMax - xMin;
+        double yRange = yMax - yMin;
+        if (xRange <= 0 || yRange <= 0)
+            return EmptyScatterPrimitivePlan();
+
+        bool drawLines = chart.ScatterStyle is ScatterStyle.Line
+            or ScatterStyle.LineMarker
+            or ScatterStyle.Smooth
+            or ScatterStyle.SmoothMarker;
+        bool drawMarkers = chart.ScatterStyle is ScatterStyle.Marker
+            or ScatterStyle.LineMarker
+            or ScatterStyle.SmoothMarker;
+        if (!drawLines && !drawMarkers)
+            drawMarkers = true;
+
+        var (gridLines, xLabels, yLabels) = BuildScatterAxisPrimitives(
+            plot,
+            xMin,
+            xRange,
+            xUnit,
+            yMin,
+            yRange,
+            yUnit);
+
+        var seriesPrimitives = new List<ChartScatterSeriesPrimitive>();
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            int pointCount = Math.Max(series.XValues.Count, series.Values.Count);
+            if (pointCount == 0)
+                continue;
+
+            var points = new ChartPlanPoint?[pointCount];
+            for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+            {
+                double? xValue = pointIndex < series.XValues.Count ? series.XValues[pointIndex] : null;
+                double? yValue = pointIndex < series.Values.Count ? series.Values[pointIndex] : null;
+                if (!xValue.HasValue || !yValue.HasValue)
+                    continue;
+
+                points[pointIndex] = new ChartPlanPoint(
+                    plot.X + (xValue.Value - xMin) / xRange * plot.Width,
+                    plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height);
+            }
+
+            seriesPrimitives.Add(new ChartScatterSeriesPrimitive(
+                seriesIndex,
+                drawLines,
+                drawMarkers,
+                points));
+        }
+
+        return new ChartScatterPrimitivePlan(
+            gridLines,
+            xLabels,
+            yLabels,
+            seriesPrimitives);
+    }
+
+    public static ChartBubblePrimitivePlan BuildBubblePrimitivePlan(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+            return EmptyBubblePrimitivePlan();
+
+        var (xMin, xMax, xUnit) = ComputeScatterAxisRange(chart, useX: true);
+        var (yMin, yMax, yUnit) = ComputePrimaryValueAxisRange(chart);
+        double xRange = xMax - xMin;
+        double yRange = yMax - yMin;
+        if (xRange <= 0 || yRange <= 0)
+            return EmptyBubblePrimitivePlan();
+
+        double maxBubble = 0;
+        foreach (var series in chart.Series)
+        {
+            foreach (var value in series.BubbleSizes)
+            {
+                if (value.HasValue)
+                    maxBubble = Math.Max(maxBubble, value.Value);
+            }
+        }
+
+        if (maxBubble <= 0)
+            maxBubble = 1;
+
+        double maxBubbleRadius = Math.Min(plot.Width, plot.Height) / 8.0;
+        var bubbles = new List<ChartBubblePrimitive>();
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            int pointCount = Math.Max(series.XValues.Count, series.Values.Count);
+            for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+            {
+                double? xValue = pointIndex < series.XValues.Count ? series.XValues[pointIndex] : null;
+                double? yValue = pointIndex < series.Values.Count ? series.Values[pointIndex] : null;
+                double? bubbleValue = pointIndex < series.BubbleSizes.Count ? series.BubbleSizes[pointIndex] : null;
+                if (!xValue.HasValue || !yValue.HasValue)
+                    continue;
+
+                double radius = bubbleValue.HasValue
+                    ? Math.Sqrt(bubbleValue.Value / maxBubble) * maxBubbleRadius
+                    : maxBubbleRadius * 0.3;
+                radius = Math.Max(2, radius);
+
+                bubbles.Add(new ChartBubblePrimitive(
+                    seriesIndex,
+                    pointIndex,
+                    new ChartPlanPoint(
+                        plot.X + (xValue.Value - xMin) / xRange * plot.Width,
+                        plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height),
+                    radius));
+            }
+        }
+
+        var (gridLines, xLabels, yLabels) = BuildScatterAxisPrimitives(
+            plot,
+            xMin,
+            xRange,
+            xUnit,
+            yMin,
+            yRange,
+            yUnit);
+
+        return new ChartBubblePrimitivePlan(
+            gridLines,
+            xLabels,
+            yLabels,
+            bubbles);
+    }
+
+    public static ChartRadarPrimitivePlan BuildRadarPrimitivePlan(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+            return EmptyRadarPrimitivePlan();
+
+        int categoryCount = Math.Max(3, chart.Categories.Count > 0
+            ? chart.Categories.Count
+            : chart.Series[0].Values.Count > 0
+                ? chart.Series[0].Values.Count
+                : 3);
+
+        var center = new ChartPlanPoint(plot.X + plot.Width / 2, plot.Y + plot.Height / 2);
+        double radius = Math.Min(plot.Width, plot.Height) / 2 * 0.75;
+        double dataMax = 0;
+        foreach (var series in chart.Series)
+        {
+            foreach (var value in series.Values)
+            {
+                if (value.HasValue)
+                    dataMax = Math.Max(dataMax, Math.Abs(value.Value));
+            }
+        }
+
+        if (dataMax <= 0)
+            dataMax = 1;
+
+        var rings = new List<ChartRadarRingPrimitive>();
+        for (int ring = 1; ring <= 4; ring++)
+        {
+            double ringRadius = radius * ring / 4;
+            var points = new ChartPlanPoint[categoryCount];
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                double angle = GetRadarAngle(categoryIndex, categoryCount);
+                points[categoryIndex] = new ChartPlanPoint(
+                    center.X + ringRadius * Math.Cos(angle),
+                    center.Y + ringRadius * Math.Sin(angle));
+            }
+
+            rings.Add(new ChartRadarRingPrimitive(points));
+        }
+
+        var spokes = new List<ChartGridLinePlan>(categoryCount);
+        for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            double angle = GetRadarAngle(categoryIndex, categoryCount);
+            spokes.Add(new ChartGridLinePlan(
+                center,
+                new ChartPlanPoint(
+                    center.X + radius * Math.Cos(angle),
+                    center.Y + radius * Math.Sin(angle))));
+        }
+
+        var labels = new List<ChartTextPlan>();
+        for (int categoryIndex = 0; categoryIndex < chart.Categories.Count && categoryIndex < categoryCount; categoryIndex++)
+        {
+            double angle = GetRadarAngle(categoryIndex, categoryCount);
+            double labelX = center.X + (radius + 6) * Math.Cos(angle);
+            double labelY = center.Y + (radius + 6) * Math.Sin(angle);
+            labels.Add(new ChartTextPlan(
+                chart.Categories[categoryIndex],
+                new ChartPlanRect(labelX - 20, labelY - 6, 40, 12),
+                IsBold: false,
+                FontSize: 6.5,
+                Alignment: ChartPlanTextAlignment.Center));
+        }
+
+        bool withMarkers = chart.RadarStyle == RadarStyle.Marker;
+        bool filled = chart.RadarStyle == RadarStyle.Filled;
+        var seriesPrimitives = new List<ChartRadarSeriesPrimitive>();
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            var points = new ChartPlanPoint[categoryCount];
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                double? value = categoryIndex < series.Values.Count ? series.Values[categoryIndex] : null;
+                double fraction = Math.Clamp((value ?? 0) / dataMax, 0, 1);
+                double angle = GetRadarAngle(categoryIndex, categoryCount);
+                points[categoryIndex] = new ChartPlanPoint(
+                    center.X + radius * fraction * Math.Cos(angle),
+                    center.Y + radius * fraction * Math.Sin(angle));
+            }
+
+            seriesPrimitives.Add(new ChartRadarSeriesPrimitive(
+                seriesIndex,
+                filled,
+                withMarkers,
+                points));
+        }
+
+        return new ChartRadarPrimitivePlan(
+            rings,
+            spokes,
+            labels,
+            seriesPrimitives);
+    }
+
     public static IReadOnlyList<ChartPieSlicePrimitive> BuildPieSlicePrimitives(
         ChartShape chart,
         ChartPlanRect plot)
@@ -855,6 +1184,91 @@ public static class ChartRenderPlanner
 
         return primitives;
     }
+
+    private static (
+        IReadOnlyList<ChartGridLinePlan> gridLines,
+        IReadOnlyList<ChartTextPlan> xLabels,
+        IReadOnlyList<ChartTextPlan> yLabels) BuildScatterAxisPrimitives(
+            ChartPlanRect plot,
+            double xMin,
+            double xRange,
+            double xUnit,
+            double yMin,
+            double yRange,
+            double yUnit)
+    {
+        double xSteps = xRange / xUnit;
+        double ySteps = yRange / yUnit;
+        if (xSteps <= 0 || ySteps <= 0)
+            return (
+                Array.Empty<ChartGridLinePlan>(),
+                Array.Empty<ChartTextPlan>(),
+                Array.Empty<ChartTextPlan>());
+
+        int xTickCount = (int)Math.Round(xSteps);
+        int yTickCount = (int)Math.Round(ySteps);
+        var gridLines = new List<ChartGridLinePlan>(xTickCount + yTickCount + 2);
+        var xLabels = new List<ChartTextPlan>(xTickCount + 1);
+        var yLabels = new List<ChartTextPlan>(yTickCount + 1);
+
+        for (int tickIndex = 0; tickIndex <= xTickCount; tickIndex++)
+        {
+            double x = plot.X + plot.Width * tickIndex / xSteps;
+            gridLines.Add(new ChartGridLinePlan(
+                new ChartPlanPoint(x, plot.Y),
+                new ChartPlanPoint(x, plot.Bottom)));
+
+            double value = xMin + xUnit * tickIndex;
+            xLabels.Add(new ChartTextPlan(
+                FormatAxisValue(value),
+                new ChartPlanRect(x - 20, plot.Bottom + 2, 40, 12),
+                IsBold: false,
+                FontSize: 6.5,
+                Alignment: ChartPlanTextAlignment.Center));
+        }
+
+        for (int tickIndex = 0; tickIndex <= yTickCount; tickIndex++)
+        {
+            double y = plot.Bottom - plot.Height * tickIndex / ySteps;
+            gridLines.Add(new ChartGridLinePlan(
+                new ChartPlanPoint(plot.X, y),
+                new ChartPlanPoint(plot.Right, y)));
+
+            double value = yMin + yUnit * tickIndex;
+            yLabels.Add(new ChartTextPlan(
+                FormatAxisValue(value),
+                new ChartPlanRect(plot.X - 38, y - 6, 36, 12),
+                IsBold: false,
+                FontSize: 6.5,
+                Alignment: ChartPlanTextAlignment.Right));
+        }
+
+        return (gridLines, xLabels, yLabels);
+    }
+
+    private static double GetRadarAngle(int categoryIndex, int categoryCount) =>
+        -Math.PI / 2 + 2 * Math.PI * categoryIndex / categoryCount;
+
+    private static ChartScatterPrimitivePlan EmptyScatterPrimitivePlan() =>
+        new(
+            Array.Empty<ChartGridLinePlan>(),
+            Array.Empty<ChartTextPlan>(),
+            Array.Empty<ChartTextPlan>(),
+            Array.Empty<ChartScatterSeriesPrimitive>());
+
+    private static ChartBubblePrimitivePlan EmptyBubblePrimitivePlan() =>
+        new(
+            Array.Empty<ChartGridLinePlan>(),
+            Array.Empty<ChartTextPlan>(),
+            Array.Empty<ChartTextPlan>(),
+            Array.Empty<ChartBubblePrimitive>());
+
+    private static ChartRadarPrimitivePlan EmptyRadarPrimitivePlan() =>
+        new(
+            Array.Empty<ChartRadarRingPrimitive>(),
+            Array.Empty<ChartGridLinePlan>(),
+            Array.Empty<ChartTextPlan>(),
+            Array.Empty<ChartRadarSeriesPrimitive>());
 
     private static IReadOnlyList<ChartDataLabelPlan> BuildColumnDataLabelPlans(
         ChartShape chart,

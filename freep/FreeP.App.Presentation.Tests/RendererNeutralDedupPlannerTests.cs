@@ -189,6 +189,29 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralAreaScatterBubbleAndRadarPlanning()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ChartRenderPlanner.BuildAreaSeriesPrimitives");
+            source.Should().Contain("ChartRenderPlanner.BuildScatterPrimitivePlan");
+            source.Should().Contain("ChartRenderPlanner.BuildBubblePrimitivePlan");
+            source.Should().Contain("ChartRenderPlanner.BuildRadarPrimitivePlan");
+            source.Should().NotContain("ComputeNiceScatterAxisRange(chart, useX: true)");
+            source.Should().NotContain("double maxBubble =");
+            source.Should().NotContain("chart.ScatterStyle is");
+            source.Should().NotContain("catCount = Math.Max(3");
+            source.Should().NotContain("ringR =");
+        }
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
