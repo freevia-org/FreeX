@@ -30,7 +30,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
         source.Should().NotContain("request.Status is QuickAnalysisShellRequestStatus");
         source.Should().NotContain("if (!request.CanOpen)");
-        source.Should().Contain("var issue = openPlan.Issue");
+        source.Should().Contain("QuickAnalysisShellOpenPlanner.FormatIssueText(");
+        source.Should().Contain("QuickAnalysisShellOpenIssueTextTarget.Dialog");
+        source.Should().NotContain("var issue = openPlan.Issue");
         source.Should().NotContain("openPlan.Decision == QuickAnalysisShellOpenDecision");
         source.Should().Contain("Text = UiText.Get(group.TitleResourceKey)");
         source.Should().Contain("foreach (var group in shellPlan.Groups)");
