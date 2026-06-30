@@ -25,7 +25,7 @@ internal static class XlsxDrawingColorWriter
         {
             var colorElement = new XElement(drawingNs + "schemeClr",
                 new XAttribute("val", ToSchemeColorValue(theme.Slot)));
-            ApplyTint(colorElement, theme.Tint, drawingNs);
+            XlsxDrawingColorTint.ApplyTo(colorElement, theme.Tint, drawingNs);
             return colorElement;
         }
 
@@ -39,21 +39,6 @@ internal static class XlsxDrawingColorWriter
 
     public static string FormatRgb(CellColor color) =>
         $"{color.R:X2}{color.G:X2}{color.B:X2}";
-
-    private static void ApplyTint(XElement colorElement, double tint, XNamespace drawingNs)
-    {
-        if (tint > 0)
-        {
-            colorElement.Add(
-                new XElement(drawingNs + "lumMod", new XAttribute("val", Math.Clamp((int)Math.Round((1 - tint) * 100000), 0, 100000))),
-                new XElement(drawingNs + "lumOff", new XAttribute("val", Math.Clamp((int)Math.Round(tint * 100000), 0, 100000))));
-        }
-        else if (tint < 0)
-        {
-            colorElement.Add(new XElement(drawingNs + "lumMod",
-                new XAttribute("val", Math.Clamp((int)Math.Round((1 + tint) * 100000), 0, 100000))));
-        }
-    }
 
     private static string ToSchemeColorValue(WorkbookThemeColorSlot slot) =>
         slot switch
