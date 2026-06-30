@@ -327,11 +327,12 @@ public partial class MainWindow
     {
         if (e.Key == Key.F2 && Keyboard.Modifiers == ModifierKeys.None && _inlineEditor is not null)
         {
-            _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(_inlineEditor.Text, _formulaRangeEntryMode);
-            if (!_formulaRangeEntryMode)
+            var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(_inlineEditor.Text, _formulaRangeEntryMode);
+            _formulaRangeEntryMode = togglePlan.PointMode;
+            if (togglePlan.ClearReferenceSpan)
                 ClearFormulaReferenceEntrySpan();
-            SetFormulaEditStatusBarMode(_formulaRangeEntryMode);
-            e.Handled = FormulaEditInteractionPlanner.IsFormulaText(_inlineEditor.Text);
+            ApplyFormulaEditStatusBarPlan(togglePlan.StatusBarPlan);
+            e.Handled = togglePlan.Handled;
             return;
         }
 
@@ -553,7 +554,7 @@ public partial class MainWindow
         _selectionMode = mode;
         if (mode != ExcelSelectionMode.Normal)
             _endMode = false;
-        SetStatusBarModeText(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(mode)));
+        SetStatusBarModeResourceKey(ExcelSelectionModePlanner.StatusBarModeResourceKey(mode));
     }
 
     private void SetEndMode(bool enabled)
@@ -561,7 +562,12 @@ public partial class MainWindow
         _endMode = enabled;
         if (enabled)
             _selectionMode = ExcelSelectionMode.Normal;
-        SetStatusBarModeText(UiText.Get(ExcelSelectionModePlanner.EndModeStatusBarResourceKey(enabled)));
+        SetStatusBarModeResourceKey(ExcelSelectionModePlanner.EndModeStatusBarResourceKey(enabled));
+    }
+
+    private void SetStatusBarModeResourceKey(string resourceKey)
+    {
+        SetStatusBarModeText(UiText.Get(resourceKey));
     }
 
     private void SetStatusBarModeText(string text)
@@ -577,23 +583,30 @@ public partial class MainWindow
 
     private void SetFormulaEditStatusBarMode(bool pointMode)
     {
-        SetStatusBarModeText(UiText.Get(FormulaEditInteractionPlanner.EditModeStatusBarResourceKey(pointMode)));
+        ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode));
     }
 
-    private void SetFormulaEnterStatusBarMode()
+    private void ApplyFormulaEditStatusBarPlan(FormulaEditStatusBarPlan plan)
     {
-        SetStatusBarModeText(UiText.Get(FormulaEditInteractionPlanner.EnterModeStatusBarResourceKey));
+        SetStatusBarModeResourceKey(plan.ResourceKey);
+    }
+
+    private void ApplyFormulaEditStatusBarPlan(FormulaEditStatusBarPlan? plan)
+    {
+        if (plan is { } statusBarPlan)
+            ApplyFormulaEditStatusBarPlan(statusBarPlan);
     }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
         {
-            _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(FormulaBar.Text, _formulaRangeEntryMode);
-            if (!_formulaRangeEntryMode)
+            var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(FormulaBar.Text, _formulaRangeEntryMode);
+            _formulaRangeEntryMode = togglePlan.PointMode;
+            if (togglePlan.ClearReferenceSpan)
                 ClearFormulaReferenceEntrySpan();
-            SetFormulaEditStatusBarMode(_formulaRangeEntryMode);
-            e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
+            ApplyFormulaEditStatusBarPlan(togglePlan.StatusBarPlan);
+            e.Handled = togglePlan.Handled;
         }
         else if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
                      FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
