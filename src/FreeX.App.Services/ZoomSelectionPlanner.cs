@@ -45,6 +45,13 @@ public static class ZoomSelectionPlanner
             ZoomLevelMapper.MaxZoomPercent);
     }
 
+    public static int CalculateFitWholePercent(
+        double gridWidth,
+        double gridHeight,
+        uint selectedColumns,
+        uint selectedRows) =>
+        (int)Math.Round(CalculateFitPercent(gridWidth, gridHeight, selectedColumns, selectedRows));
+
     private static double CalculateAxisFitPercent(double viewportPixels, uint selectedCount, double defaultCellPixels)
     {
         var selectionPixels = Math.Max(1, selectedCount * defaultCellPixels);

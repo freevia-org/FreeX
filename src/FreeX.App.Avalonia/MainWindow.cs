@@ -313,8 +313,6 @@ public sealed partial class MainWindow : Window
     private const double SheetTabStripLeadingInset = 4;
     private const uint PortablePdfColumnsPerPage = 8;
     private const uint PortablePdfRowsPerPage = 28;
-    private const double ZoomToSelectionDefaultColumnWidth = 80;
-    private const double ZoomToSelectionDefaultRowHeight = 20;
     private const string WorkbookShareSheetLabel = "macOS Share Sheet";
     private const string NativeWorkbookExtension = ".fxl";
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
@@ -8484,21 +8482,11 @@ public sealed partial class MainWindow : Window
             return 100;
 
         var range = _session.SelectedRange;
-        var widthFit = CalculateZoomAxisFitPercent(
+        return ZoomSelectionPlanner.CalculateFitWholePercent(
             viewportWidth,
-            range.ColCount,
-            ZoomToSelectionDefaultColumnWidth);
-        var heightFit = CalculateZoomAxisFitPercent(
             viewportHeight,
-            range.RowCount,
-            ZoomToSelectionDefaultRowHeight);
-        return StatusBarZoomSliderPlanner.ClampZoomPercent((int)Math.Round(Math.Min(widthFit, heightFit)));
-    }
-
-    private static double CalculateZoomAxisFitPercent(double viewportPixels, uint selectedCount, double defaultCellPixels)
-    {
-        var selectionPixels = Math.Max(1, selectedCount * defaultCellPixels);
-        return viewportPixels / selectionPixels * 100;
+            range.ColCount,
+            range.RowCount);
     }
 
     private void ToggleShowFormulas()

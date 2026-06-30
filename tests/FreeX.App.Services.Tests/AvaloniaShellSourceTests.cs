@@ -791,7 +791,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.SetZoomPercent(zoomPercent);");
         source.Should().Contain("RefreshShell($\"Zoom {StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)}\");");
         source.Should().Contain("private int CalculateZoomToSelectionPercent()");
-        source.Should().Contain("CalculateZoomAxisFitPercent(");
+        source.Should().Contain("ZoomSelectionPlanner.CalculateFitWholePercent(");
         source.Should().Contain("_zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);");
         catalogSource.Should().Contain("new(NativeMenuItemId.ShowFormulas, context.IsIdle, context.IsShowingFormulas)");
         source.Should().Contain("IsShowingFormulas: _session.IsShowingFormulas");

@@ -882,6 +882,18 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void ZoomToSelection_DelegatesFitMathToSharedPlanner()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("ZoomSelectionPlanner.CalculateFitWholePercent(");
+        source.Should().NotContain("ZoomToSelectionDefaultColumnWidth");
+        source.Should().NotContain("ZoomToSelectionDefaultRowHeight");
+        source.Should().NotContain("CalculateZoomAxisFitPercent(");
+        source.Should().NotContain("selectedCount * defaultCellPixels");
+    }
+
+    [Fact]
     public void StatusBarZoomSlider_UsesIdenticalMinMiddleMaxMarks()
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
