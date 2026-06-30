@@ -663,7 +663,12 @@ public sealed class MainWindow : Window
     /// which already run synchronously on the UI thread.
     /// </summary>
     private SaveChangesPrompt PromptSaveChangesSync(string action) =>
-        SaveChangesDialog.ShowAsync(this, _fileWorkflow.DisplayName, action)
+        AvaloniaSaveChangesDialog.ShowAsync(
+                this,
+                AvaloniaSaveChangesPromptText.ForDocumentAction(
+                    "FreeW",
+                    _fileWorkflow.DisplayName,
+                    action))
             .GetAwaiter().GetResult();
 
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
