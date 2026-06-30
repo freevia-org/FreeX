@@ -23,6 +23,27 @@ public sealed class QuickAnalysisPreviewIconRenderPlannerTests
         sink.TextElements.Should().BeEmpty();
     }
 
+    [Fact]
+    public void RenderAdapter_AddsPlatformPrimitivesInSharedOrder()
+    {
+        var renderer = new QuickAnalysisPreviewIconRenderAdapter<RecordingRoot, string>(
+            new RecordingPrimitives());
+
+        var plan = QuickAnalysisPreviewIconRenderPlanner.Render(
+            new QuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind.ClearFormat),
+            renderer);
+
+        renderer.Root.Plan.Should().BeSameAs(plan);
+        renderer.Root.Children.Should().Equal(
+            "rectangle",
+            "rectangle",
+            "rectangle",
+            "rectangle",
+            "rectangle",
+            "rectangle",
+            "line");
+    }
+
     private sealed class RecordingSink : IQuickAnalysisPreviewIconRenderSink
     {
         public QuickAnalysisPreviewIconPlan? BeginPlan { get; private set; }
@@ -65,6 +86,40 @@ public sealed class QuickAnalysisPreviewIconRenderPlannerTests
         public void AddText(QuickAnalysisPreviewIconText text)
         {
             TextElements.Add(text);
+        }
+    }
+
+    private sealed class RecordingRoot(QuickAnalysisPreviewIconPlan plan)
+    {
+        public QuickAnalysisPreviewIconPlan Plan { get; } = plan;
+
+        public List<string> Children { get; } = [];
+    }
+
+    private sealed class RecordingPrimitives
+        : IQuickAnalysisPreviewIconRenderPrimitives<RecordingRoot, string>
+    {
+        public RecordingRoot CreateRoot(QuickAnalysisPreviewIconPlan plan) =>
+            new(plan);
+
+        public string CreateRectangle(QuickAnalysisPreviewIconRectangle rectangle) =>
+            "rectangle";
+
+        public string CreateEllipse(QuickAnalysisPreviewIconEllipse ellipse) =>
+            "ellipse";
+
+        public string CreateLine(QuickAnalysisPreviewIconLine line) =>
+            "line";
+
+        public string CreatePolygon(QuickAnalysisPreviewIconPolygon polygon) =>
+            "polygon";
+
+        public string CreateText(QuickAnalysisPreviewIconText text) =>
+            "text";
+
+        public void AddChild(RecordingRoot root, string element)
+        {
+            root.Children.Add(element);
         }
     }
 }
