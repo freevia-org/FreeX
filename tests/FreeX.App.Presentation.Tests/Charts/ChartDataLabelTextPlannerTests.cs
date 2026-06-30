@@ -106,7 +106,7 @@ public sealed class ChartDataLabelTextPlannerTests
         var layoutEngine = File.ReadAllText(Path.Combine(presentationRoot, "Charts", "ChartLayoutEngine.cs"));
         var wpfAxes = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.UI", "ChartRenderer.Axes.cs"));
         var wpfFormatter = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.UI", "ChartDataLabelFormatter.cs"));
-        var printOverlays = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "PrintRenderer.ChartTextOverlays.cs"));
+        var printOverlays = File.ReadAllText(Path.Combine(presentationRoot, "PageLayout", "PrintChartTextOverlayPlanner.cs"));
 
         layoutEngine.Should().Contain("ChartDataLabelTextPlanner.FormatPieDataLabel");
         layoutEngine.Should().Contain("ChartDataLabelTextPlanner.FormatDataLabel");
