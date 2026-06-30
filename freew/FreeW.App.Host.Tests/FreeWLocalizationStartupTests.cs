@@ -74,7 +74,8 @@ public sealed class FreeWLocalizationStartupTests : IDisposable
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Program.cs"));
 
         source.Should().Contain("InstallSharedSeams = AppLocalization.InstallSharedSeams");
-        source.Should().Contain("AppLocalization.ApplyAppLanguage(options.UiLanguage)");
+        source.Should().Contain("ApplyUiLanguage: AppLocalization.ApplyAppLanguage");
+        source.Should().Contain("ApplyCurrentCultureToWpf: AppLocalization.ApplyCurrentCultureToWpf");
         source.Should().NotContain("DefaultShellStrings.Instance");
         source.Should().NotContain("DefaultBackstageStrings.Instance");
     }

@@ -1,4 +1,3 @@
-using System.Windows;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 
@@ -6,7 +5,7 @@ namespace FreeW.App.Host;
 
 /// <summary>
 /// FreeW entry point. Installs FreeW identity/seams, then delegates the common WPF options,
-/// diagnostics, and application-run lifecycle to the shared startup runner.
+/// diagnostics, theme/language startup, and application-run lifecycle to the shared startup runner.
 /// </summary>
 public static class Program
 {
@@ -20,26 +19,22 @@ public static class Program
     public static void Main()
         => WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreeWOptions>(
             new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW"),
-            (options, optionsStore) =>
-            {
-                // Apply the brand theme early — before the main window loads — so that
-                // DynamicResource references in the chrome pick up the correct brushes.
-                // The theme values are BYTE-IDENTICAL to FreeW's current chrome palette,
-                // so the visual result is unchanged.  FREEW_THEME=midnight swaps in the
-                // alternate palette (currently reuses FreeXMidnight as a demo).
-                var theme = string.Equals(
-                    System.Environment.GetEnvironmentVariable("FREEW_THEME"),
-                    "midnight",
-                    StringComparison.OrdinalIgnoreCase)
-                    ? BrandThemes.FreeXMidnight
-                    : BrandThemes.FreeW;
-                ActiveTheme = theme;
-                WpfThemeApplier.Apply(Application.Current, theme, "FreeW");
-                AppLocalization.ApplyAppLanguage(options.UiLanguage);
-                AppLocalization.ApplyCurrentCultureToWpf();
-                return new MainWindow(options, optionsStore);
-            })
+            (options, optionsStore) => new MainWindow(options, optionsStore))
         {
-            InstallSharedSeams = AppLocalization.InstallSharedSeams
+            InstallSharedSeams = AppLocalization.InstallSharedSeams,
+            Theme = new WpfApplicationThemeStartupSpec<Theme>(
+                EnvironmentVariableName: "FREEW_THEME",
+                AlternateThemeValue: "midnight",
+                DefaultTheme: BrandThemes.FreeW,
+                AlternateTheme: BrandThemes.FreeXMidnight,
+                ResourceKeyPrefix: "FreeW",
+                ApplyTheme: WpfThemeApplier.Apply)
+            {
+                SetActiveTheme = theme => ActiveTheme = theme
+            },
+            Localization = new WpfApplicationLocalizationStartupSpec<FreeWOptions>(
+                SelectUiLanguage: options => options.UiLanguage,
+                ApplyUiLanguage: AppLocalization.ApplyAppLanguage,
+                ApplyCurrentCultureToWpf: AppLocalization.ApplyCurrentCultureToWpf)
         });
 }
