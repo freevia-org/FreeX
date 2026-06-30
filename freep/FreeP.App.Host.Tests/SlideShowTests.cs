@@ -522,7 +522,7 @@ public sealed class SlideShowMainWindowTests
     public void MainWindow_Presentation_CanConstructSlideShowWindow_FromStart()
     {
         // Verify SlideShowWindow can be constructed with the main window's presentation at index 0.
-        var mainWindow = new MainWindow();
+        var mainWindow = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             var slideShow = new SlideShowWindow(mainWindow.Editor.Presentation, startIndex: 0);
@@ -544,7 +544,7 @@ public sealed class SlideShowMainWindowTests
     [StaFact]
     public void MainWindow_Presentation_CanConstructSlideShowWindow_FromCurrent()
     {
-        var mainWindow = new MainWindow();
+        var mainWindow = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             mainWindow.Editor.InsertSlide();  // now on slide 1
@@ -569,7 +569,7 @@ public sealed class SlideShowMainWindowTests
     [StaFact]
     public void MainWindow_StartSlideShow_EmptyPresentation_DoesNotThrow()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             // Clear all slides

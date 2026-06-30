@@ -202,7 +202,7 @@ public sealed class SlidePaneTests
     [StaFact]
     public void MainWindow_SlidePaneHost_HasSlidePaneChild()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.SlidePaneHost.Child.Should().BeOfType<SlidePane>(

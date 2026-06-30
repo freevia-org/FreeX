@@ -17,7 +17,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void MainWindow_ConstructsWithSharedChrome()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.Should().NotBeNull();
@@ -33,7 +33,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void MainWindow_TitleReflectsApplicationName()
     {
-        var window = new MainWindow(new FreePOptions());
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             // WindowTitlePlanner composes "<doc> — FreeP"; the untitled deck still ends in the app name.
@@ -50,7 +50,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void MainWindow_Editor_IsNotNull()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.Editor.Should().NotBeNull();
@@ -64,7 +64,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void MainWindow_Editor_HasCurrentSlide()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             // CreateEmpty starts with 1 slide — Editor should reflect it.
@@ -80,7 +80,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void MainWindow_SlidePaneHost_IsPresent()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             // 3B seam: the pane host container must exist.
@@ -95,7 +95,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void MainWindow_SlideCanvas_IsPresent()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             // 3C seam: the canvas must be accessible.
@@ -110,7 +110,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void Editor_InsertSlide_IncreasesSlideCount()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             var before = window.Editor.Presentation.Slides.Count;
@@ -126,7 +126,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void Editor_DuplicateCurrentSlide_IncreasesSlideCount()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             var before = window.Editor.Presentation.Slides.Count;
@@ -142,7 +142,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void Editor_DeleteCurrentSlide_DecreasesSlideCount()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.Editor.InsertSlide(); // ensure 2 slides
@@ -159,7 +159,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void Editor_InsertThenUndo_RestoresPreviousCount()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             var before = window.Editor.Presentation.Slides.Count;
@@ -176,7 +176,7 @@ public sealed class ShellConstructionTests
     [StaFact]
     public void Editor_InsertDefaultRectangle_AddsShapeToCurrentSlide()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             var before = window.Editor.CurrentSlide!.Shapes.Count;
