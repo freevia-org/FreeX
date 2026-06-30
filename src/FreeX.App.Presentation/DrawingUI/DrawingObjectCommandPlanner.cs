@@ -64,7 +64,7 @@ public static class DrawingObjectCommandPlanner
         bool? flipHorizontal = null,
         bool? flipVertical = null) =>
         new CompositeWorkbookCommand(
-            "Resize Object",
+            DrawingObjectActionPlanner.ResizeObjectCommandTitle,
             [
                 BuildMoveCommand(sheetId, kind, objectId, anchor),
                 BuildResizeCommand(sheetId, kind, objectId, width, height, flipHorizontal, flipVertical)

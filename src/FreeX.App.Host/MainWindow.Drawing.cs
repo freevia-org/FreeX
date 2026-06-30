@@ -260,7 +260,7 @@ public partial class MainWindow
         var anchor = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
         AddTextBoxCommand? currentSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Insert Text Box",
+                DrawingObjectActionPlanner.InsertTextBoxCommandTitle,
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
@@ -291,7 +291,7 @@ public partial class MainWindow
         var anchor = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
         AddDrawingShapeCommand? currentSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Insert Shape",
+                DrawingObjectActionPlanner.InsertShapeCommandTitle,
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
@@ -340,7 +340,7 @@ public partial class MainWindow
             return;
         }
 
-        var title = forward ? "Bring Forward" : "Send Backward";
+        var title = DrawingObjectActionPlanner.ZOrderCommandTitle(forward);
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 title,
                 sheetId =>
@@ -376,7 +376,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Object Size",
+                DrawingObjectActionPlanner.ObjectSizeCommandTitle,
                 sheetId =>
                 {
                     var groupedTarget = GetTargetTransformDrawingObject(sheetId, target.Kind);
@@ -410,7 +410,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Rotate Object",
+                DrawingObjectActionPlanner.RotateObjectCommandTitle,
                 sheetId =>
                 {
                     var groupedTarget = GetTargetTransformDrawingObject(sheetId, target.Kind);
@@ -449,7 +449,7 @@ public partial class MainWindow
         var hasFill = selectedColor is not null;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                hasFill ? "Object Fill" : "Object No Fill",
+                DrawingObjectActionPlanner.FillCommandTitle(hasFill),
                 sheetId =>
                 {
                     var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
@@ -490,7 +490,9 @@ public partial class MainWindow
         RememberCurrentShapeColor(target.Kind, isFill, color);
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                isFill ? "Object Fill" : "Object Outline",
+                isFill
+                    ? DrawingObjectActionPlanner.ObjectFillCommandTitle
+                    : DrawingObjectActionPlanner.ObjectOutlineCommandTitle,
                 sheetId =>
                 {
                     var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
@@ -570,7 +572,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Shape Gradient",
+                DrawingObjectActionPlanner.ShapeGradientCommandTitle,
                 sheetId => new SetDrawingShapeGradientCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
@@ -623,7 +625,7 @@ public partial class MainWindow
             return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Shape Effects",
+                DrawingObjectActionPlanner.ShapeEffectsCommandTitle,
                 sheetId => new SetDrawingShapeEffectCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
@@ -736,7 +738,7 @@ public partial class MainWindow
         var targetKind = ToDrawingObjectTargetKind(kind);
         if (targetKind is null) return;
         var cmd = DrawingObjectCommandPlanner.BuildMoveCommand(_currentSheetId, targetKind.Value, id, anchor);
-        TryExecuteCommand(cmd, "Move Object");
+        TryExecuteCommand(cmd, DrawingObjectActionPlanner.MoveObjectCommandTitle);
         UpdateViewport();
     }
 
@@ -768,7 +770,7 @@ public partial class MainWindow
             height,
             flipHorizontal,
             flipVertical);
-        TryExecuteCommand(cmd, "Resize Object");
+        TryExecuteCommand(cmd, DrawingObjectActionPlanner.ResizeObjectCommandTitle);
         UpdateViewport();
     }
 
@@ -796,7 +798,7 @@ public partial class MainWindow
                 height,
                 flipHorizontal,
                 flipVertical),
-            "Resize Object");
+            DrawingObjectActionPlanner.ResizeObjectCommandTitle);
         UpdateViewport();
     }
 
@@ -806,7 +808,7 @@ public partial class MainWindow
         if (targetKind is null) return;
         TryExecuteCommand(
             DrawingObjectCommandPlanner.BuildRotateCommand(_currentSheetId, targetKind.Value, id, degrees),
-            "Rotate Object");
+            DrawingObjectActionPlanner.RotateObjectCommandTitle);
         UpdateViewport();
     }
 
@@ -829,7 +831,7 @@ public partial class MainWindow
                     crop.Top,
                     crop.Right,
                     crop.Bottom),
-                "Crop Picture"))
+                DrawingObjectActionPlanner.CropPictureCommandTitle))
         {
             return;
         }

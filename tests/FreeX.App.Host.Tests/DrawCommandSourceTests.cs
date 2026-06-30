@@ -87,7 +87,7 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("hasFill: ResolveCurrentShapeHasFill()");
         source.Should().Contain("outlineColor: ResolveCurrentShapeOutlineColor()");
         source.Should().Contain("TryShowColorPicker(title, initial, allowNoColor: true, out var selectedColor, UiText.Get(\"FormatCells_NoFill\"))");
-        source.Should().Contain("hasFill ? \"Object Fill\" : \"Object No Fill\"");
+        source.Should().Contain("DrawingObjectActionPlanner.FillCommandTitle(hasFill)");
         source.Should().Contain("RememberCurrentShapeFill(target.Kind, selectedColor);");
         source.Should().Contain("RememberCurrentShapeColor(target.Kind, isFill, color);");
         source.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveFillColor(");

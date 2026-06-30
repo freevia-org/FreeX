@@ -682,8 +682,10 @@ public sealed partial class MainWindow
         var result = ShapeGradientPlanner.CreateResult(startColor, endColor, SelectedDirection());
         RunDrawingObjectCommand(
             new SetDrawingShapeGradientCommand(_session.ActiveSheet.Id, current.Id, result.StartColor, result.EndColor, result.Direction),
-            UiText.Format("ShapeGradient_Applied", FormatHex(result.StartColor), FormatHex(result.EndColor)),
-            "Shape Gradient");
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ShapeGradientSuccess(
+                FormatHex(result.StartColor),
+                FormatHex(result.EndColor))),
+            DrawingObjectActionPlanner.ShapeGradientCommandTitle);
 
         async System.Threading.Tasks.Task ChooseGradientColorAsync(string title, Action<CellColor> apply)
         {
