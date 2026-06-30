@@ -677,7 +677,7 @@ public sealed class CanvasGestureHandler
         => new(point.X, point.Y);
 
     private static SlideTransformCore ToCoreTransform(SlideTransform xf)
-        => new(xf.Scale, xf.OffsetX, xf.OffsetY, xf.SlideWidthDip, xf.SlideHeightDip);
+        => xf.Core;
 
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransform xf)
     {
@@ -691,10 +691,9 @@ public sealed class CanvasGestureHandler
 
     private static Rect BoundsToScreenRect(long offX, long offY, long cx, long cy, SlideTransform xf)
     {
-        double x = SlideTransform.EmuToDip(offX) * xf.Scale + xf.OffsetX;
-        double y = SlideTransform.EmuToDip(offY) * xf.Scale + xf.OffsetY;
-        double w = SlideTransform.EmuToDip(cx) * xf.Scale;
-        double h = SlideTransform.EmuToDip(cy) * xf.Scale;
-        return new Rect(x, y, Math.Max(0, w), Math.Max(0, h));
+        var topLeft = xf.SlideToScreen(SlideTransform.EmuToDip(offX), SlideTransform.EmuToDip(offY));
+        double width = xf.ScaleDipToScreen(SlideTransform.EmuToDip(cx));
+        double height = xf.ScaleDipToScreen(SlideTransform.EmuToDip(cy));
+        return new Rect(topLeft.X, topLeft.Y, Math.Max(0, width), Math.Max(0, height));
     }
 }
