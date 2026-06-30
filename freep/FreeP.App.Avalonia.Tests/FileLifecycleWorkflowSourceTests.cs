@@ -18,23 +18,33 @@ public sealed class FileLifecycleWorkflowSourceTests
             "freep",
             "FreeP.App.Avalonia",
             "FreeP.App.Avalonia.csproj"));
+        var sharedShellWorkflow = File.ReadAllText(Path.Combine(
+            root,
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAvaloniaFileCommandWorkflow.cs"));
 
-        source.Should().Contain("private readonly FileCommandWorkflow _fileWorkflow;");
-        source.Should().Contain("new FileCommandWorkflow(");
+        source.Should().Contain("private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;");
+        source.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
+        source.Should().Contain("new SisterAvaloniaFileTitleSpec(");
         source.Should().Contain("_fileWorkflow.New(");
         source.Should().Contain("_fileWorkflow.OpenAsync(");
         source.Should().Contain("_fileWorkflow.SaveAsync(");
         source.Should().Contain("_fileWorkflow.MarkSavedWithoutPath()");
         source.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false)");
         source.Should().Contain("_fileWorkflow.MarkDirty();");
-        source.Should().Contain("PromptSaveChangesSync");
-        source.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
-        source.Should().Contain("AvaloniaSaveChangesPromptText.ForDocumentAction(");
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
+        sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");
+        sharedShellWorkflow.Should().Contain("WindowTitlePlanner.Compose(");
+        sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
+        sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesPromptText.ForDocumentAction(");
+        sharedShellWorkflow.Should().Contain("RecentEntries => _workflow.RecentEntries");
         source.Should().NotContain("private string? _currentPath");
         source.Should().NotContain("private bool _isDirty");
         source.Should().NotContain("private async Task<SaveChangesPrompt> ShowSaveChangesPromptAsync");
+        source.Should().NotContain("PromptSaveChangesSync");
+        source.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
         source.Should().NotContain("Do you want to save changes to");
         source.Should().NotContain("Content = \"Don't save\"");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");

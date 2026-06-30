@@ -64,14 +64,26 @@ public class RibbonAndDocumentTests
         project.Should().Contain(@"..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj");
 
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
-        mainWindow.Should().Contain("private readonly FileCommandWorkflow _fileWorkflow;");
-        mainWindow.Should().Contain("new FileCommandWorkflow(");
+        var sharedShellWorkflow = File.ReadAllText(FindRepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAvaloniaFileCommandWorkflow.cs"));
+
+        mainWindow.Should().Contain("private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;");
+        mainWindow.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
+        mainWindow.Should().Contain("new SisterAvaloniaFileTitleSpec(");
         mainWindow.Should().Contain("_fileWorkflow.New(");
         mainWindow.Should().Contain("_fileWorkflow.OpenAsync(");
         mainWindow.Should().Contain("_fileWorkflow.SaveAsync(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
         // suppressRecentFiles was true (stub) and is now false so files register in the store.
         mainWindow.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles:");
+        sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");
+        sharedShellWorkflow.Should().Contain("WindowTitlePlanner.Compose(");
+        sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
+        sharedShellWorkflow.Should().Contain("RecentEntries => _workflow.RecentEntries");
+        mainWindow.Should().NotContain("PromptSaveChangesSync");
+        mainWindow.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
         mainWindow.Should().NotContain("new FileCommandSession");
         mainWindow.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         mainWindow.Should().NotContain("WorkbookDocumentState");

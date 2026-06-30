@@ -67,9 +67,12 @@ public sealed class SharedSaveChangesDialogTests
     {
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
         var sharedDialog = File.ReadAllText(FindRepoFile("shared", "Free.Shared.Shell.Avalonia", "AvaloniaSaveChangesDialog.cs"));
+        var sharedWorkflow = File.ReadAllText(FindRepoFile("shared", "Free.Shared.Shell.Avalonia", "SisterAvaloniaFileCommandWorkflow.cs"));
 
-        mainWindow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
-        mainWindow.Should().Contain("AvaloniaSaveChangesPromptText.ForDocumentAction(");
+        mainWindow.Should().Contain("SisterAvaloniaFileCommandWorkflow");
+        mainWindow.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
+        sharedWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
+        sharedWorkflow.Should().Contain("AvaloniaSaveChangesPromptText.ForDocumentAction(");
         File.Exists(FindRepoFile("freew", "FreeW.App.Avalonia", "SaveChangesDialog.cs"))
             .Should()
             .BeFalse("the Avalonia dirty-save prompt should be owned by the shared sister shell");

@@ -60,7 +60,7 @@ public sealed class MainWindow : Window
     // ── Presentation model ─────────────────────────────────────────────────────
 
     private Presentation _presentation = Presentation.CreateEmpty();
-    private readonly FileCommandWorkflow _fileWorkflow;
+    private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
 
     // ── Editing session ────────────────────────────────────────────────────────
 
@@ -158,10 +158,13 @@ public sealed class MainWindow : Window
         _notesBox.TextChanged += OnNotesTextChanged;
 
         _statusText = SisterAppStatusBarChrome.CreateInfoText(foreground: Brushes.White, margin: new Thickness(8, 0));
-        _fileWorkflow = new FileCommandWorkflow(
+        _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
+            owner: this,
+            titleSpec: new SisterAvaloniaFileTitleSpec(
+                ApplicationName: DefaultTitle,
+                Separator: " \u2014 "),
             maxRecentEntries: () => DefaultRecentFilesCap,
-            onChanged: UpdateTitle,
-            promptSaveChanges: PromptSaveChangesSync,
+            onChanged: UpdateStatus,
             save: () => FileSaveAsync().GetAwaiter().GetResult(),
             loadRecentFilesStore: loadRecentFilesStore);
 
@@ -446,15 +449,6 @@ public sealed class MainWindow : Window
         dialog.Show();
     }
 
-    private SaveChangesPrompt PromptSaveChangesSync(string action) =>
-        AvaloniaSaveChangesDialog.ShowAsync(
-                this,
-                AvaloniaSaveChangesPromptText.ForDocumentAction(
-                    DefaultTitle,
-                    _fileWorkflow.DisplayName,
-                    action))
-            .GetAwaiter().GetResult();
-
     private void FileNew()
     {
         _fileWorkflow.New(
@@ -729,14 +723,7 @@ public sealed class MainWindow : Window
         UpdateStatus();
     }
 
-    // ── Status / title ─────────────────────────────────────────────────────────
-
-    private void UpdateTitle()
-    {
-        var filename = _fileWorkflow.CurrentFileName ?? "Untitled";
-        var dirty    = _fileWorkflow.IsDirty ? " *" : string.Empty;
-        Title = $"FreeP — {filename}{dirty}";
-    }
+    // ── Status ─────────────────────────────────────────────────────────────────
 
     private void UpdateStatus()
     {

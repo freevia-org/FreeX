@@ -196,6 +196,7 @@ public sealed class MainWindowHeadlessTests
 
         string? currentPath = null;
         var isDirty = true;
+        string? title = null;
         IReadOnlyList<RecentFileEntry> recentEntries = [];
 
         try
@@ -205,12 +206,14 @@ public sealed class MainWindowHeadlessTests
                 var window = new MainWindow([deckPath], () => RecentFilesStore.Load(recentPath));
                 currentPath = window.CurrentPath;
                 isDirty = window.IsDirty;
+                title = window.Title;
                 recentEntries = window.RecentEntries;
             });
 
             if (!ran) return;
             currentPath.Should().Be(deckPath);
             isDirty.Should().BeFalse("opened presentations should be marked saved through FileCommandWorkflow");
+            title.Should().Be($"FreeP \u2014 {Path.GetFileName(deckPath)}");
             recentEntries.Select(entry => entry.Path).Should().Contain(deckPath);
         }
         finally

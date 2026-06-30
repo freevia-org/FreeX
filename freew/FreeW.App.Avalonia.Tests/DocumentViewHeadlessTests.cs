@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Themes.Fluent;
 using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
@@ -224,14 +225,17 @@ public sealed class DocumentViewHeadlessTests
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
-            var workflow = GetPrivateField<FileCommandWorkflow>(window, "_fileWorkflow");
+            var shellWorkflow = GetPrivateField<SisterAvaloniaFileCommandWorkflow>(window, "_fileWorkflow");
+            var workflow = shellWorkflow.Workflow;
 
             workflow.IsDirty.Should().BeFalse();
             workflow.CurrentPath.Should().BeNull();
             workflow.DisplayName.Should().Be("Untitled");
+            window.Title.Should().Be("FreeW");
 
             window.Editor.InsertText("draft ");
             workflow.IsDirty.Should().BeTrue();
+            window.Title.Should().Be("FreeW - Untitled *");
 
             InvokePrivate(window, "NewDocument");
 

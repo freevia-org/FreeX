@@ -53,7 +53,7 @@ public sealed class MainWindow : Window
     private readonly Button _btnPrintLayout  = MakeViewModeButton("Print");
     private readonly Button _btnWebLayout    = MakeViewModeButton("Web");
     private readonly Button _btnDraftView    = MakeViewModeButton("Draft");
-    private readonly FileCommandWorkflow _fileWorkflow;
+    private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
     private readonly ReviewingPane _reviewingPane;
@@ -78,12 +78,16 @@ public sealed class MainWindow : Window
         MinWidth = 720;
         MinHeight = 480;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
-        _fileWorkflow = new FileCommandWorkflow(
+        _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
+            owner: this,
+            titleSpec: new SisterAvaloniaFileTitleSpec(
+                ApplicationName: DefaultTitle,
+                Separator: " - ",
+                CollapseCleanUntitledTitle: true),
             maxRecentEntries: () => DefaultRecentFilesCap,
             onChanged: UpdateStatus,
-            promptSaveChanges: action => PromptSaveChangesSync(action),
             save: () => SaveAsync().GetAwaiter().GetResult());
-        _autosave = new AutosaveAdapter(_editor, _fileWorkflow);
+        _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
         _navPane = new NavigationPane(_editor);
         _reviewingPane = new ReviewingPane(_editor);
         _revealPane = new RevealFormattingPane(_editor);
@@ -657,23 +661,6 @@ public sealed class MainWindow : Window
 
     // ── Closing gate ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Synchronous bridge called by <see cref="FileCommandWorkflow"/> when it needs a save-changes
-    /// answer. Because the workflow's dirty-gate is synchronous, we block the UI thread here by
-    /// getting the async dialog result via GetAwaiter().GetResult(). This is safe because
-    /// <see cref="OnWindowClosing"/> always cancels the OS close first and then re-invokes
-    /// the async path — the sync call here only happens from the New/Open dirty-gate paths
-    /// which already run synchronously on the UI thread.
-    /// </summary>
-    private SaveChangesPrompt PromptSaveChangesSync(string action) =>
-        AvaloniaSaveChangesDialog.ShowAsync(
-                this,
-                AvaloniaSaveChangesPromptText.ForDocumentAction(
-                    DefaultTitle,
-                    _fileWorkflow.DisplayName,
-                    action))
-            .GetAwaiter().GetResult();
-
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         // If we already ran the async gate and decided it's OK to close, let it through.
@@ -690,9 +677,8 @@ public sealed class MainWindow : Window
 
     private async Task ConfirmAndCloseAsync()
     {
-        // ConfirmCloseAllowed runs on the UI thread because PromptSaveChangesSync shows
-        // an Avalonia dialog. It blocks the UI thread briefly via GetAwaiter().GetResult()
-        // on the dialog task — acceptable for a synchronous dirty-gate path.
+        // ConfirmCloseAllowed runs on the UI thread because the shared Avalonia workflow
+        // shows the save-changes dialog synchronously for the dirty-gate path.
         var allowed = _fileWorkflow.ConfirmCloseAllowed("closing");
         if (!allowed)
             return;
@@ -714,8 +700,7 @@ public sealed class MainWindow : Window
     {
         _fileWorkflow.New(
             FileText.NewAction,
-            () => LoadDocumentContent(TextDocument.CreateEmpty()),
-            () => Title = DefaultTitle);
+            () => LoadDocumentContent(TextDocument.CreateEmpty()));
     }
 
     private void ToggleFindBar(bool show)
@@ -830,12 +815,10 @@ public sealed class MainWindow : Window
             {
                 // Templates seed a new untitled document: clearing the path makes the next Save a Save-As.
                 LoadDocumentAsSaved(document, path: null);
-                Title = DefaultTitle;
             }
             else
             {
                 LoadDocumentAsSaved(document, path);
-                Title = $"{DefaultTitle} - {Path.GetFileName(path)}";
             }
 
             return Task.FromResult(true);
@@ -890,7 +873,6 @@ public sealed class MainWindow : Window
             using (var stream = File.Create(path))
                 adapter.Save(_editor.Document, stream);
             MarkDocumentSavedWithPath(path);
-            Title = $"{DefaultTitle} - {Path.GetFileName(path)}";
             _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(path));
             return Task.FromResult(true);
         }
@@ -1187,8 +1169,7 @@ public sealed class MainWindow : Window
             NewDocument: NewDocument,
             OpenRecent: path =>
             {
-                // Run the dirty-gate synchronously (ConfirmDiscardOrSave calls PromptSaveChangesSync
-                // which is safe because we block the UI thread only briefly for the dialog).
+                // Run the dirty-gate synchronously through the shared Avalonia workflow.
                 if (_fileWorkflow.Open(FileText.OpenAction, () => path, p =>
                     {
                         _ = OpenPathAsync(p);
