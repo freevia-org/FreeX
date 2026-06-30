@@ -97,22 +97,27 @@ public sealed class WorkbookSessionFactory
         double viewportWidth,
         bool includeObjects = false,
         IEnumerable<IFileAdapter>? adapters = null,
-        IViewportService? viewportService = null)
+        IViewportService? viewportService = null,
+        WorkbookOpenCompletionPlan? completionPlan = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(result);
 
-        result.Workbook.Name = Path.GetFileName(target.Path);
+        var plan = completionPlan ?? WorkbookFileCompletionPlanner.PlanOpen(
+            target,
+            result,
+            displayName: Path.GetFileName(target.Path));
+        plan.Workbook.Name = plan.DisplayName;
         var source = new StartupWorkbookLoadResult(
-            result.Workbook,
-            result.Workbook.Name,
-            $"Opened {FileFormatResolver.NormalizeExtension(target.Extension)}.",
+            plan.Workbook,
+            plan.DisplayName,
+            plan.Status,
             IsFallback: false,
-            SourcePath: target.Path,
-            OpenedAsTemplate: result.OpenedAsTemplate,
-            FeatureReport: result.FeatureReport,
+            SourcePath: plan.SourcePath,
+            OpenedAsTemplate: plan.OpenedAsTemplate,
+            FeatureReport: plan.FeatureReport,
             LoadWarnings: result.LoadWarnings,
-            SourceFileAccessIdentity: target.FileAccessIdentity ?? WorkbookFileAccessIdentity.FromLocalPath(target.Path));
+            SourceFileAccessIdentity: plan.SourceFileAccessIdentity);
 
         return Create(
             source,

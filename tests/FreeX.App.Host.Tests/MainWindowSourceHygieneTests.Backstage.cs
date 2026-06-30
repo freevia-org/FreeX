@@ -124,8 +124,10 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildSaveDialogPlan(");
         pickerPlannerSource.Should().Contain("FileDialogRequestPlanner.BuildOpenDialogPlan(");
         pickerPlannerSource.Should().Contain("FileDialogRequestPlanner.BuildSaveDialogPlan(");
-        backstageSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format)");
-        backstageSource.Should().Contain("_currentFilePath = result.OpenedAsTemplate ? null : path;");
+        backstageSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path");
+        backstageSource.Should().Contain("WorkbookFileCompletionPlanner.PlanOpen(");
+        backstageSource.Should().Contain("new FreeX.App.Services.WorkbookOpenResult(");
+        backstageSource.Should().Contain("_currentFilePath = plan.CurrentFilePath;");
     }
 
     [Fact]
@@ -173,7 +175,7 @@ public sealed partial class MainWindowSourceHygieneTests
             .BeLessThan(openMethod.IndexOf("var loader = new OpenWorkbookLoader", StringComparison.Ordinal));
         openMethod.IndexOf("CanProceedAfterSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(openMethod.IndexOf("_workbook = result.Workbook;", StringComparison.Ordinal));
+            .BeLessThan(openMethod.IndexOf("_workbook = plan.Workbook;", StringComparison.Ordinal));
 
         // P2b: SaveButton_Click defers the Save-vs-Save-As resolution to the shared SaveResolvedAsync
         // helper (asserted below against MainWindow.WorkbookLifecycle.cs) — the same single resolution path
@@ -202,6 +204,10 @@ public sealed partial class MainWindowSourceHygieneTests
         saveTargetMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
         saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(true);");
         saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
+        saveTargetMethod.Should().Contain("SaveCompletionPlanner.Plan(");
+        saveTargetMethod.Should().Contain("plan.FileContext is { } fileContext");
+        saveTargetMethod.Should().Contain("_currentFilePath = fileContext.Path;");
+        saveTargetMethod.Should().Contain("_workbook.Name = fileContext.DisplayName;");
         saveTargetMethod.Should().Contain("UiText.Format(\"MainWindowMessage_SaveFileFailed\", ex.Message)");
         saveTargetMethod.Should().Contain("UiText.Get(\"MainWindowMessage_SaveErrorTitle\")");
         saveTargetMethod.Should().Contain("finally");
@@ -510,7 +516,10 @@ public sealed partial class MainWindowSourceHygieneTests
 
         openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"preparing\", TimeSpan.Zero, 1));");
         openMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
-        openMethod.Should().Contain("loader.LoadAsync(path, adapter, ext, format!, progress, operationCancellation.Token)");
+        openMethod.Should().Contain("loader.LoadAsync(");
+        openMethod.Should().Contain("target.Path,");
+        openMethod.Should().Contain("target.Adapter,");
+        openMethod.Should().Contain("target.Format,");
         openMethod.Should().Contain("ShowOpenProgress(update.Title, update.Detail, update.Percent)");
         openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"preparing view\", TimeSpan.Zero, null));");
         openMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
