@@ -212,6 +212,24 @@ public static class ExcelComAutomation
             .Except(baselineExcelPids)
             .ToHashSet();
 
+    public static void WaitForExcelProcessesToExit(
+        IEnumerable<int> processIds,
+        int timeoutMilliseconds)
+    {
+        var candidatePids = processIds.ToHashSet();
+        if (candidatePids.Count == 0)
+            return;
+
+        var deadline = Environment.TickCount64 + timeoutMilliseconds;
+        while (Environment.TickCount64 < deadline)
+        {
+            if (!GetExcelProcessIds().Overlaps(candidatePids))
+                return;
+
+            Thread.Sleep(250);
+        }
+    }
+
     public static int? TryGetExcelProcessId(object excel)
     {
         try

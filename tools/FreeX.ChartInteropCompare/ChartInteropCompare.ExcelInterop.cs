@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Threading;
 using FreeX.Core.IO;
 using FreeX.ToolsShared.Wpf;
 using static FreeX.ToolsShared.Wpf.ExcelComAutomation;
@@ -14,7 +11,6 @@ internal static partial class ChartInteropCompare
 {
     private const int XlOpenXmlWorkbook = 51;
     private const double ExcelPointsPerPixel = 72.0 / 96.0;
-    private const string ExcelProcessName = "EXCEL";
 
     private static object CreateExcelApplication()
     {
@@ -308,46 +304,6 @@ internal static partial class ChartInteropCompare
         {
             error = $"{ex.GetType().Name}: {ex.Message}";
             return false;
-        }
-    }
-
-    private static void WaitForExcelProcessesToExit(HashSet<int> excelPids, int timeoutMilliseconds)
-    {
-        if (excelPids.Count == 0)
-            return;
-
-        var deadline = Environment.TickCount64 + timeoutMilliseconds;
-        while (Environment.TickCount64 < deadline)
-        {
-            var running = Process.GetProcessesByName(ExcelProcessName)
-                .Any(process => excelPids.Contains(process.Id));
-            if (!running)
-                return;
-
-            Thread.Sleep(250);
-        }
-    }
-
-    private static void KillExcelProcesses(HashSet<int> excelPids)
-    {
-        if (excelPids.Count == 0)
-            return;
-
-        foreach (var process in Process.GetProcessesByName(ExcelProcessName))
-        {
-            if (!excelPids.Contains(process.Id))
-                continue;
-
-            try
-            {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit(5000);
-                Console.WriteLine($"Killed owned EXCEL PID {process.Id}.");
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Failed to kill owned EXCEL PID {process.Id}: {ex.Message}");
-            }
         }
     }
 
