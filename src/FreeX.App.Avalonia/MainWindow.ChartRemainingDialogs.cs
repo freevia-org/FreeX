@@ -215,34 +215,19 @@ public sealed partial class MainWindow
         var newSheetTarget = ChartMovePlanner.GetTargetChoices().Single(choice => choice.TargetKind == ChartMoveTargetKind.NewSheet);
         var targetField = ChartMovePlanner.GetTargetNameField();
 
-        var objectRadio = new RadioButton
-        {
-            Content = StripDisplayMnemonic(UiText.Get(objectTarget.LabelResourceKey)),
-            GroupName = ChartMovePlanner.TargetGroupName,
-            IsChecked = current.TargetKind == ChartMoveTargetKind.ObjectInSheet,
-            MinHeight = 20,
-            MaxHeight = 20,
-        };
-        ApplyChartRadioButtonChrome(objectRadio);
+        var objectRadio = CreateChartRadioButton(
+            StripDisplayMnemonic(UiText.Get(objectTarget.LabelResourceKey)),
+            ChartMovePlanner.TargetGroupName,
+            current.TargetKind == ChartMoveTargetKind.ObjectInSheet);
         AutomationProperties.SetAutomationId(objectRadio, objectTarget.AutomationId);
 
-        var newSheetRadio = new RadioButton
-        {
-            Content = StripDisplayMnemonic(UiText.Get(newSheetTarget.LabelResourceKey)),
-            GroupName = ChartMovePlanner.TargetGroupName,
-            IsChecked = current.TargetKind == ChartMoveTargetKind.NewSheet,
-            MinHeight = 20,
-            MaxHeight = 20,
-        };
-        ApplyChartRadioButtonChrome(newSheetRadio);
+        var newSheetRadio = CreateChartRadioButton(
+            StripDisplayMnemonic(UiText.Get(newSheetTarget.LabelResourceKey)),
+            ChartMovePlanner.TargetGroupName,
+            current.TargetKind == ChartMoveTargetKind.NewSheet);
         AutomationProperties.SetAutomationId(newSheetRadio, newSheetTarget.AutomationId);
 
-        var targetBox = new TextBox
-        {
-            Text = current.TargetName,
-            Width = 260,
-        };
-        ApplyChartTextBoxChrome(targetBox);
+        var targetBox = CreateChartTextBox(current.TargetName, 260);
         AutomationProperties.SetName(targetBox, StripDisplayMnemonic(UiText.Get(targetField.AutomationNameResourceKey!)));
         AutomationProperties.SetAutomationId(targetBox, targetField.AutomationId);
         AutomationProperties.SetHelpText(targetBox, UiText.Get(targetField.HelpResourceKey!));
@@ -397,14 +382,9 @@ public sealed partial class MainWindow
             .GetLegendPositionChoices()
             .Select(position => new ChartLegendPositionChoice(position, ChartLegendPlanner.DisplayName(position)))
             .ToList();
-        var positionCombo = new ComboBox
-        {
-            Width = ControlWidth,
-            ItemsSource = positionChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName)),
-        };
+        var positionCombo = CreateChartComboBox(ControlWidth, positionChoices);
+        positionCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName));
         ApplyAreaDescriptorAutomation(positionCombo, ChartAreaFormatDialogFieldId.LegendPosition);
-        ApplyChartComboBoxChrome(positionCombo);
         positionCombo.SelectedItem =
             positionChoices.FirstOrDefault(c => c.Position == current.LegendPosition)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
@@ -554,12 +534,7 @@ public sealed partial class MainWindow
 
         CheckBox MakeAreaDescriptorCheck(ChartAreaFormatDialogFieldId fieldId, bool isChecked)
         {
-            var checkBox = new CheckBox
-            {
-                Content = AreaFieldLabel(fieldId),
-                IsChecked = isChecked,
-            };
-            ApplyChartCheckBoxChrome(checkBox);
+            var checkBox = CreateChartCheckBox(AreaFieldLabel(fieldId), isChecked);
             ApplyAreaDescriptorAutomation(checkBox, fieldId);
             return checkBox;
         }
@@ -576,24 +551,14 @@ public sealed partial class MainWindow
         Button MakeAreaColorButton(ChartAreaFormatDialogFieldId fieldId, CellColor? color)
         {
             var label = AreaFieldLabel(fieldId);
-            var button = new Button
-            {
-                Content = DescribeColor(label, color),
-                Width = ControlWidth,
-            };
-            ApplyChartButtonChrome(button, ControlWidth);
+            var button = CreateChartButton(DescribeColor(label, color), ControlWidth);
             ApplyAreaDescriptorAutomation(button, fieldId);
             return button;
         }
 
         TextBox MakeAreaNumberBox(ChartAreaFormatDialogFieldId fieldId, string text, double width)
         {
-            var box = new TextBox
-            {
-                Text = text,
-                Width = width,
-            };
-            ApplyChartTextBoxChrome(box);
+            var box = CreateChartTextBox(text, width);
             ApplyAreaDescriptorAutomation(box, fieldId);
             return box;
         }

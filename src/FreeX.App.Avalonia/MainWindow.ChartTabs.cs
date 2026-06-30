@@ -382,21 +382,14 @@ public sealed partial class MainWindow
         var hiddenEmptyAction = SelectDataSourcePlanner.GetHiddenEmptyCellsAction();
 
         // ---- Range text box -------------------------------------------------------------------
-        var rangeBox = new TextBox
-        {
-            Text = initialRange,
-            Width = 380,
-            PlaceholderText = UiText.Get("ChartLoc_RangePlaceholder"),
-        };
+        var rangeBox = CreateChartTextBox(initialRange, 380, UiText.Get("ChartLoc_RangePlaceholder"));
         AutomationProperties.SetName(rangeBox, UiText.Get(rangeField.AutomationNameResourceKey!));
         AutomationProperties.SetAutomationId(rangeBox, rangeField.AutomationId);
-        ApplyChartTextBoxChrome(rangeBox);
 
         // Reference-picker ("...") button to the left of the range box, matching the WPF
         // DialogReferencePicker editor. In this in-dialog shell it focuses the range box for editing
         // rather than driving a collapse-to-grid pick, but keeps the layout at parity with Windows.
-        var rangePickButton = new Button { Content = "...", Width = 30 };
-        ApplyChartButtonChrome(rangePickButton, 30);
+        var rangePickButton = CreateChartButton("...", 30);
         AutomationProperties.SetName(rangePickButton, UiText.Get(SelectDataSourcePlanner.SelectRangeAutomationNameResourceKey));
         AutomationProperties.SetAutomationId(rangePickButton, "SelectChartDataRangePickButton");
         rangePickButton.Click += (_, _) => rangeBox.Focus();
@@ -409,12 +402,8 @@ public sealed partial class MainWindow
         };
 
         // ---- Switch Row/Column checkbox -------------------------------------------------------
-        var switchRowColumnCheck = new CheckBox
-        {
-            Content = UiText.Get(switchField.LabelResourceKey),
-            IsChecked = false,
-            Margin = new Thickness(0, 4, 0, 0),
-        };
+        var switchRowColumnCheck = CreateChartCheckBox(UiText.Get(switchField.LabelResourceKey), false);
+        switchRowColumnCheck.Margin = new Thickness(0, 4, 0, 0);
         AutomationProperties.SetAutomationId(switchRowColumnCheck, switchField.AutomationId);
 
         // ---- Series ListBox + buttons ---------------------------------------------------------
@@ -429,19 +418,18 @@ public sealed partial class MainWindow
         AutomationProperties.SetHelpText(seriesList, UiText.Get(seriesPanel.ListField.HelpResourceKey!));
 
         var addSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.AddSeries);
-        var addSeriesButton = new Button { Content = UiText.Get(addSeriesAction.LabelResourceKey), Width = 100 };
+        var addSeriesButton = CreateChartButton(UiText.Get(addSeriesAction.LabelResourceKey), 100);
         AutomationProperties.SetAutomationId(addSeriesButton, addSeriesAction.AutomationId);
-        ApplyChartButtonChrome(addSeriesButton, 100);
 
         var editSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.EditSeries);
-        var editSeriesButton = new Button { Content = UiText.Get(editSeriesAction.LabelResourceKey), Width = 100, IsEnabled = false };
+        var editSeriesButton = CreateChartButton(UiText.Get(editSeriesAction.LabelResourceKey), 100);
+        editSeriesButton.IsEnabled = false;
         AutomationProperties.SetAutomationId(editSeriesButton, editSeriesAction.AutomationId);
-        ApplyChartButtonChrome(editSeriesButton, 100);
 
         var removeSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.RemoveSeries);
-        var removeSeriesButton = new Button { Content = UiText.Get(removeSeriesAction.LabelResourceKey), Width = 100, IsEnabled = false };
+        var removeSeriesButton = CreateChartButton(UiText.Get(removeSeriesAction.LabelResourceKey), 100);
+        removeSeriesButton.IsEnabled = false;
         AutomationProperties.SetAutomationId(removeSeriesButton, removeSeriesAction.AutomationId);
-        ApplyChartButtonChrome(removeSeriesButton, 100);
 
         // ---- Axis Labels ListBox + button -----------------------------------------------------
         var axisLabelsList = new ListBox
@@ -455,17 +443,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetHelpText(axisLabelsList, UiText.Get(axisLabelsPanel.ListField.HelpResourceKey!));
 
         var editAxisLabelsAction = axisLabelsPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.EditAxisLabels);
-        var editAxisLabelsButton = new Button { Content = UiText.Get(editAxisLabelsAction.LabelResourceKey), Width = 100, IsEnabled = false };
+        var editAxisLabelsButton = CreateChartButton(UiText.Get(editAxisLabelsAction.LabelResourceKey), 100);
+        editAxisLabelsButton.IsEnabled = false;
         AutomationProperties.SetAutomationId(editAxisLabelsButton, editAxisLabelsAction.AutomationId);
-        ApplyChartButtonChrome(editAxisLabelsButton, 100);
 
         // ---- First column contains category labels checkbox -----------------------------------
-        var categoriesCheck = new CheckBox
-        {
-            Content = UiText.Get(firstColumnField.LabelResourceKey),
-            IsChecked = firstColumnIsCategories,
-            Margin = new Thickness(0, 4, 0, 0),
-        };
+        var categoriesCheck = CreateChartCheckBox(UiText.Get(firstColumnField.LabelResourceKey), firstColumnIsCategories);
+        categoriesCheck.Margin = new Thickness(0, 4, 0, 0);
         AutomationProperties.SetAutomationId(categoriesCheck, firstColumnField.AutomationId);
 
         // ---- State management helpers --------------------------------------------------------
@@ -613,22 +597,16 @@ public sealed partial class MainWindow
         }
 
         // ---- Hidden and Empty Cells info button -----------------------------------------------
-        var hiddenEmptyButton = new Button
-        {
-            Content = UiText.Get(hiddenEmptyAction.LabelResourceKey),
-            Width = 180,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            Margin = new Thickness(0, 0, 0, 8),
-        };
+        var hiddenEmptyButton = CreateChartButton(UiText.Get(hiddenEmptyAction.LabelResourceKey), 180);
+        hiddenEmptyButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+        hiddenEmptyButton.Margin = new Thickness(0, 0, 0, 8);
         AutomationProperties.SetAutomationId(hiddenEmptyButton, hiddenEmptyAction.AutomationId);
-        ApplyChartButtonChrome(hiddenEmptyButton, 180);
         hiddenEmptyButton.Click += async (_, _) =>
         {
             var infoDialog = NewChartDialog(
                 UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey),
                 "SelectChartDataHiddenEmptyDialog");
-            var closeBtn = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
-            ApplyChartButtonChrome(closeBtn, 80, isDefault: true);
+            var closeBtn = CreateChartButton(UiText.Get("Common_Ok"), 80, isDefault: true);
             closeBtn.Click += (_, _) => infoDialog.Close();
             infoDialog.Content = new StackPanel
             {
@@ -723,15 +701,12 @@ public sealed partial class MainWindow
         string xAxisTitle,
         string yAxisTitle)
     {
-        var chartTitleBox = new TextBox { Text = chartTitle, Width = 260 };
+        var chartTitleBox = CreateChartTextBox(chartTitle, 260);
         AutomationProperties.SetAutomationId(chartTitleBox, "ChartTitleBox");
-        ApplyChartTextBoxChrome(chartTitleBox);
-        var xAxisBox = new TextBox { Text = xAxisTitle, Width = 260 };
+        var xAxisBox = CreateChartTextBox(xAxisTitle, 260);
         AutomationProperties.SetAutomationId(xAxisBox, "ChartXAxisTitleBox");
-        ApplyChartTextBoxChrome(xAxisBox);
-        var yAxisBox = new TextBox { Text = yAxisTitle, Width = 260 };
+        var yAxisBox = CreateChartTextBox(yAxisTitle, 260);
         AutomationProperties.SetAutomationId(yAxisBox, "ChartYAxisTitleBox");
-        ApplyChartTextBoxChrome(yAxisBox);
 
         var dialog = NewChartDialog(UiText.Get("ChartLoc_ChartTitlesTitle"), "ChartTitlesDialog");
 
@@ -790,23 +765,14 @@ public sealed partial class MainWindow
 
     private async Task<ChartLegendInput?> ShowChartLegendDialogAsync(bool showLegend, ChartLegendPosition position)
     {
-        var showCheck = new CheckBox
-        {
-            Content = UiText.Get("ChartLoc_ShowLegend"),
-            IsChecked = showLegend,
-        };
+        var showCheck = CreateChartCheckBox(UiText.Get("ChartLoc_ShowLegend"), showLegend);
         AutomationProperties.SetAutomationId(showCheck, "ChartLegendShowCheck");
 
         var positionChoices = ChartLegendPlanner.GetPositionChoices();
-        var positionCombo = new ComboBox
-        {
-            Width = 260,
-            ItemsSource = positionChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName)),
-        };
+        var positionCombo = CreateChartComboBox(260, positionChoices);
+        positionCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName));
         AutomationProperties.SetName(positionCombo, "Legend position");
         AutomationProperties.SetAutomationId(positionCombo, "ChartLegendPositionCombo");
-        ApplyChartComboBoxChrome(positionCombo);
         positionCombo.SelectedItem =
             positionChoices.FirstOrDefault(c => c.Position == position)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);

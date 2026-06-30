@@ -53,36 +53,21 @@ public sealed partial class MainWindow
         var state = ChartDataLabelsPlanner.Normalize(current);
 
         var positionChoices = ChartDataLabelsPlanner.GetPositionChoices();
-        var positionCombo = new ComboBox
-        {
-            Width = 260,
-            ItemsSource = positionChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartDataLabelPositionChoice.DisplayName)),
-        };
+        var positionCombo = CreateChartComboBox(260, positionChoices);
+        positionCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartDataLabelPositionChoice.DisplayName));
         ApplyDescriptorAutomation(positionCombo, ChartDataLabelsDialogFieldId.Position);
-        ApplyChartComboBoxChrome(positionCombo);
         positionCombo.SelectedItem =
             positionChoices.FirstOrDefault(c => c.Position == state.Position)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
 
         var separatorChoices = ChartDataLabelsPlanner.GetSeparatorChoices();
-        var separatorCombo = new ComboBox
-        {
-            Width = 260,
-            ItemsSource = separatorChoices,
-        };
+        var separatorCombo = CreateChartComboBox(260, separatorChoices);
         ApplyDescriptorAutomation(separatorCombo, ChartDataLabelsDialogFieldId.Separator);
-        ApplyChartComboBoxChrome(separatorCombo);
         separatorCombo.SelectedItem = state.Separator ?? ChartDataLabelSeparator.Comma;
 
         var numberFormatChoices = ChartDataLabelsPlanner.GetNumberFormatChoices();
-        var numberFormatCombo = new ComboBox
-        {
-            Width = 260,
-            ItemsSource = numberFormatChoices,
-        };
+        var numberFormatCombo = CreateChartComboBox(260, numberFormatChoices);
         ApplyDescriptorAutomation(numberFormatCombo, ChartDataLabelsDialogFieldId.NumberFormat);
-        ApplyChartComboBoxChrome(numberFormatCombo);
         numberFormatCombo.SelectedItem = state.NumberFormat ?? ChartDataLabelNumberFormat.General;
 
         var showCheck = MakeDescriptorCheck(ChartDataLabelsDialogFieldId.ShowDataLabels, state.ShowDataLabels);
@@ -265,11 +250,7 @@ public sealed partial class MainWindow
 
         static CheckBox MakeDescriptorCheck(ChartDataLabelsDialogFieldId fieldId, bool isChecked)
         {
-            var checkBox = new CheckBox
-            {
-                Content = FieldLabel(fieldId),
-                IsChecked = isChecked,
-            };
+            var checkBox = CreateChartCheckBox(FieldLabel(fieldId), isChecked);
             ApplyDescriptorAutomation(checkBox, fieldId);
             return checkBox;
         }
@@ -283,12 +264,7 @@ public sealed partial class MainWindow
 
         TextBox MakeDescriptorNumberBox(ChartDataLabelsDialogFieldId fieldId, string text)
         {
-            var box = new TextBox
-            {
-                Text = text,
-                Width = 260,
-            };
-            ApplyChartTextBoxChrome(box);
+            var box = CreateChartTextBox(text, 260);
             ApplyDescriptorAutomation(box, fieldId);
             return box;
         }
@@ -296,12 +272,7 @@ public sealed partial class MainWindow
         Button MakeColorButton(ChartDataLabelsDialogFieldId fieldId, CellColor? color)
         {
             var label = FieldLabel(fieldId);
-            var button = new Button
-            {
-                Content = DescribeColor(label, color),
-                Width = 260,
-            };
-            ApplyChartButtonChrome(button, 260);
+            var button = CreateChartButton(DescribeColor(label, color), 260);
             ApplyDescriptorAutomation(button, fieldId);
             return button;
         }
@@ -374,14 +345,9 @@ public sealed partial class MainWindow
         var logCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.LogScale, state.LogScale);
 
         var numberFormatChoices = ChartAxisPlanner.GetNumberFormatChoices();
-        var numberFormatCombo = new ComboBox
-        {
-            Width = ControlWidth,
-            ItemsSource = numberFormatChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartAxisNumberFormatChoice.DisplayName)),
-        };
+        var numberFormatCombo = CreateChartComboBox(ControlWidth, numberFormatChoices);
+        numberFormatCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartAxisNumberFormatChoice.DisplayName));
         ApplyAxisDescriptorAutomation(numberFormatCombo, ChartAxisDialogFieldId.NumberFormat);
-        ApplyChartComboBoxChrome(numberFormatCombo);
         numberFormatCombo.SelectedItem =
             numberFormatChoices.FirstOrDefault(c => c.NumberFormat == state.NumberFormat)
             ?? (numberFormatChoices.Count > 0 ? numberFormatChoices[0] : null);
@@ -621,11 +587,7 @@ public sealed partial class MainWindow
 
         CheckBox MakeAxisDescriptorCheck(ChartAxisDialogFieldId fieldId, bool isChecked)
         {
-            var checkBox = new CheckBox
-            {
-                Content = AxisFieldLabel(fieldId),
-                IsChecked = isChecked,
-            };
+            var checkBox = CreateChartCheckBox(AxisFieldLabel(fieldId), isChecked);
             ApplyAxisDescriptorAutomation(checkBox, fieldId);
             return checkBox;
         }
@@ -640,37 +602,22 @@ public sealed partial class MainWindow
 
         TextBox MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId fieldId, string text)
         {
-            var box = new TextBox
-            {
-                Text = text,
-                Width = ControlWidth,
-            };
-            ApplyChartTextBoxChrome(box);
+            var box = CreateChartTextBox(text, ControlWidth);
             ApplyAxisDescriptorAutomation(box, fieldId);
             return box;
         }
 
         ComboBox MakeAxisTickStyleCombo(ChartAxisDialogFieldId fieldId)
         {
-            var combo = new ComboBox
-            {
-                Width = ControlWidth,
-                ItemsSource = tickStyleChoices,
-            };
+            var combo = CreateChartComboBox(ControlWidth, tickStyleChoices);
             ApplyAxisDescriptorAutomation(combo, fieldId);
-            ApplyChartComboBoxChrome(combo);
             return combo;
         }
 
         Button MakeAxisColorButton(ChartAxisDialogFieldId fieldId, CellColor? color)
         {
             var label = AxisFieldLabel(fieldId);
-            var button = new Button
-            {
-                Content = DescribeColor(label, color),
-                Width = ControlWidth,
-            };
-            ApplyChartButtonChrome(button, ControlWidth);
+            var button = CreateChartButton(DescribeColor(label, color), ControlWidth);
             ApplyAxisDescriptorAutomation(button, fieldId);
             return button;
         }
@@ -739,9 +686,8 @@ public sealed partial class MainWindow
     {
         var noneText = UiText.Get("Common_NoneParenthetical");
         var seriesNames = Enumerable.Range(0, seriesCount).Select(i => UiText.Format("SelectDataSource_SeriesNameFormat", i + 1)).ToArray();
-        var seriesCombo = new ComboBox { Width = 260, ItemsSource = seriesNames };
+        var seriesCombo = CreateChartComboBox(260, seriesNames);
         ApplySeriesDescriptorAutomation(seriesCombo, ChartSeriesFormatDialogFieldId.Series);
-        ApplyChartComboBoxChrome(seriesCombo);
         seriesCombo.SelectedIndex = Math.Clamp(current.SeriesIndex, 0, seriesCount - 1);
 
         // Per-series edit state, re-read from the chart whenever the chosen series changes so the dialog
@@ -755,14 +701,12 @@ public sealed partial class MainWindow
             FormatNullableDouble(current.StrokeThickness));
 
         var dashChoices = ChartSeriesFormatPlanner.GetDashStyleChoices().Cast<object>().Prepend(noneText).ToArray();
-        var dashCombo = new ComboBox { Width = 260, ItemsSource = dashChoices };
+        var dashCombo = CreateChartComboBox(260, dashChoices);
         ApplySeriesDescriptorAutomation(dashCombo, ChartSeriesFormatDialogFieldId.DashStyle);
-        ApplyChartComboBoxChrome(dashCombo);
 
         var markerChoices = ChartSeriesFormatPlanner.GetMarkerStyleChoices().Cast<object>().Prepend(noneText).ToArray();
-        var markerCombo = new ComboBox { Width = 260, ItemsSource = markerChoices };
+        var markerCombo = CreateChartComboBox(260, markerChoices);
         ApplySeriesDescriptorAutomation(markerCombo, ChartSeriesFormatDialogFieldId.MarkerStyle);
-        ApplyChartComboBoxChrome(markerCombo);
 
         var markerSizeBox = MakeSeriesDescriptorNumberBox(
             ChartSeriesFormatDialogFieldId.MarkerSize,
@@ -913,13 +857,7 @@ public sealed partial class MainWindow
 
         TextBox MakeSeriesDescriptorNumberBox(ChartSeriesFormatDialogFieldId fieldId, string text)
         {
-            var box = new TextBox
-            {
-                Text = text,
-                Width = 260,
-                PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder"),
-            };
-            ApplyChartTextBoxChrome(box);
+            var box = CreateChartTextBox(text, 260, UiText.Get("ChartLoc_AutoPlaceholder"));
             ApplySeriesDescriptorAutomation(box, fieldId);
             return box;
         }
@@ -927,12 +865,7 @@ public sealed partial class MainWindow
         Button MakeSeriesColorButton(ChartSeriesFormatDialogFieldId fieldId, CellColor? color)
         {
             var label = SeriesFieldLabel(fieldId);
-            var button = new Button
-            {
-                Content = DescribeColor(label, color),
-                Width = 260,
-            };
-            ApplyChartButtonChrome(button, 260);
+            var button = CreateChartButton(DescribeColor(label, color), 260);
             ApplySeriesDescriptorAutomation(button, fieldId);
             return button;
         }
@@ -980,14 +913,9 @@ public sealed partial class MainWindow
         var showCheck = MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId.ShowTrendline, current.ShowTrendline);
 
         var typeChoices = ChartTrendlinePlanner.GetTypeChoices();
-        var typeCombo = new ComboBox
-        {
-            Width = 260,
-            ItemsSource = typeChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartTrendlineTypeChoice.DisplayName)),
-        };
+        var typeCombo = CreateChartComboBox(260, typeChoices);
+        typeCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartTrendlineTypeChoice.DisplayName));
         ApplyTrendlineDescriptorAutomation(typeCombo, ChartTrendlineDialogFieldId.Type);
-        ApplyChartComboBoxChrome(typeCombo);
         typeCombo.SelectedItem =
             typeChoices.FirstOrDefault(c => c.Type == current.Type)
             ?? (typeChoices.Count > 0 ? typeChoices[0] : null);
@@ -1007,13 +935,8 @@ public sealed partial class MainWindow
             ChartTrendlineDialogFieldId.LineThickness,
             (current.Thickness ?? 1.5).ToString(CultureInfo.InvariantCulture));
         var dashChoices = ChartTrendlinePlanner.GetDashStyleChoices();
-        var dashCombo = new ComboBox
-        {
-            Width = 260,
-            ItemsSource = dashChoices,
-        };
+        var dashCombo = CreateChartComboBox(260, dashChoices);
         ApplyTrendlineDescriptorAutomation(dashCombo, ChartTrendlineDialogFieldId.DashStyle);
-        ApplyChartComboBoxChrome(dashCombo);
         dashCombo.SelectedItem = current.DashStyle ?? ChartLineDashStyle.Solid;
 
         colorButton.Click += async (_, _) =>
@@ -1126,11 +1049,7 @@ public sealed partial class MainWindow
 
         static CheckBox MakeTrendlineDescriptorCheck(ChartTrendlineDialogFieldId fieldId, bool isChecked)
         {
-            var checkBox = new CheckBox
-            {
-                Content = TrendlineFieldLabel(fieldId),
-                IsChecked = isChecked,
-            };
+            var checkBox = CreateChartCheckBox(TrendlineFieldLabel(fieldId), isChecked);
             ApplyTrendlineDescriptorAutomation(checkBox, fieldId);
             return checkBox;
         }
@@ -1144,12 +1063,7 @@ public sealed partial class MainWindow
 
         TextBox MakeTrendlineDescriptorNumberBox(ChartTrendlineDialogFieldId fieldId, string text)
         {
-            var box = new TextBox
-            {
-                Text = text,
-                Width = 260,
-            };
-            ApplyChartTextBoxChrome(box);
+            var box = CreateChartTextBox(text, 260);
             ApplyTrendlineDescriptorAutomation(box, fieldId);
             return box;
         }
@@ -1157,12 +1071,7 @@ public sealed partial class MainWindow
         Button MakeTrendlineColorButton(ChartTrendlineDialogFieldId fieldId, CellColor? color)
         {
             var label = TrendlineFieldLabel(fieldId);
-            var button = new Button
-            {
-                Content = DescribeColor(label, color),
-                Width = 260,
-            };
-            ApplyChartButtonChrome(button, 260);
+            var button = CreateChartButton(DescribeColor(label, color), 260);
             ApplyTrendlineDescriptorAutomation(button, fieldId);
             return button;
         }
@@ -1209,27 +1118,17 @@ public sealed partial class MainWindow
         var showCheck = MakeErrorBarsDescriptorCheck(ChartErrorBarsDialogFieldId.ShowErrorBars, current.ShowErrorBars);
 
         var kindChoices = ChartErrorBarsPlanner.GetKindChoices();
-        var kindCombo = new ComboBox
-        {
-            Width = 260,
-            ItemsSource = kindChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartErrorBarKindChoice.DisplayName)),
-        };
+        var kindCombo = CreateChartComboBox(260, kindChoices);
+        kindCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartErrorBarKindChoice.DisplayName));
         ApplyErrorBarsDescriptorAutomation(kindCombo, ChartErrorBarsDialogFieldId.Kind);
-        ApplyChartComboBoxChrome(kindCombo);
         kindCombo.SelectedItem =
             kindChoices.FirstOrDefault(c => c.Kind == current.Kind)
             ?? (kindChoices.Count > 0 ? kindChoices[0] : null);
 
         var directionChoices = ChartErrorBarsPlanner.GetDirectionChoices();
-        var directionCombo = new ComboBox
-        {
-            Width = 260,
-            ItemsSource = directionChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartErrorBarDirectionChoice.DisplayName)),
-        };
+        var directionCombo = CreateChartComboBox(260, directionChoices);
+        directionCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartErrorBarDirectionChoice.DisplayName));
         ApplyErrorBarsDescriptorAutomation(directionCombo, ChartErrorBarsDialogFieldId.Direction);
-        ApplyChartComboBoxChrome(directionCombo);
         directionCombo.SelectedItem =
             directionChoices.FirstOrDefault(c => c.Direction == current.Direction)
             ?? (directionChoices.Count > 0 ? directionChoices[0] : null);
@@ -1317,11 +1216,7 @@ public sealed partial class MainWindow
 
         static CheckBox MakeErrorBarsDescriptorCheck(ChartErrorBarsDialogFieldId fieldId, bool isChecked)
         {
-            var checkBox = new CheckBox
-            {
-                Content = ErrorBarsFieldLabel(fieldId),
-                IsChecked = isChecked,
-            };
+            var checkBox = CreateChartCheckBox(ErrorBarsFieldLabel(fieldId), isChecked);
             ApplyErrorBarsDescriptorAutomation(checkBox, fieldId);
             return checkBox;
         }
@@ -1335,12 +1230,7 @@ public sealed partial class MainWindow
 
         TextBox MakeErrorBarsDescriptorNumberBox(ChartErrorBarsDialogFieldId fieldId, string text)
         {
-            var box = new TextBox
-            {
-                Text = text,
-                Width = 260,
-            };
-            ApplyChartTextBoxChrome(box);
+            var box = CreateChartTextBox(text, 260);
             ApplyErrorBarsDescriptorAutomation(box, fieldId);
             return box;
         }
@@ -1377,6 +1267,66 @@ public sealed partial class MainWindow
     private static void ApplyChartRadioButtonChrome(RadioButton radioButton) =>
         AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, ChartDialogChromeStyle);
 
+    private static Button CreateChartButton(object? content, double width, bool isDefault = false)
+    {
+        var button = new Button
+        {
+            Content = content,
+            Width = width,
+            IsDefault = isDefault,
+        };
+        ApplyChartButtonChrome(button, width, isDefault);
+        return button;
+    }
+
+    private static TextBox CreateChartTextBox(string text, double width, string? placeholderText = null)
+    {
+        var textBox = new TextBox
+        {
+            Text = text,
+            Width = width,
+            PlaceholderText = placeholderText,
+        };
+        ApplyChartTextBoxChrome(textBox);
+        return textBox;
+    }
+
+    private static ComboBox CreateChartComboBox(double width, System.Collections.IEnumerable? itemsSource = null)
+    {
+        var comboBox = new ComboBox
+        {
+            Width = width,
+            ItemsSource = itemsSource,
+        };
+        ApplyChartComboBoxChrome(comboBox);
+        return comboBox;
+    }
+
+    private static CheckBox CreateChartCheckBox(object? content, bool isChecked)
+    {
+        var checkBox = new CheckBox
+        {
+            Content = content,
+            IsChecked = isChecked,
+        };
+        ApplyChartCheckBoxChrome(checkBox);
+        return checkBox;
+    }
+
+    private static RadioButton CreateChartRadioButton(object? content, string groupName, bool isChecked)
+    {
+        var radioButton = new RadioButton
+        {
+            Content = content,
+            GroupName = groupName,
+            IsChecked = isChecked,
+            MinHeight = 20,
+            MaxHeight = 20,
+        };
+        ApplyChartRadioButtonChrome(radioButton);
+        return radioButton;
+    }
+
     private static Window NewChartDialog(string title, string automationId)
     {
         var dialog = new Window
@@ -1394,12 +1344,11 @@ public sealed partial class MainWindow
 
     private static (Button Ok, Button Cancel, StackPanel Row) CreateChartDialogButtons(string idPrefix)
     {
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
+        var okButton = CreateChartButton(UiText.Get("Common_Ok"), 80, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, $"{idPrefix}OkButton");
-        ApplyChartButtonChrome(okButton, 80, isDefault: true);
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
+        var cancelButton = CreateChartButton(UiText.Get("Common_Cancel"), 80);
+        cancelButton.IsCancel = true;
         AutomationProperties.SetAutomationId(cancelButton, $"{idPrefix}CancelButton");
-        ApplyChartButtonChrome(cancelButton, 80);
         var row = CreateChartDialogActionRow([okButton, cancelButton], new Thickness(0, 8, 0, 0));
         return (okButton, cancelButton, row);
     }
