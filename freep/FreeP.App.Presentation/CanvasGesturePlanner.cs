@@ -90,7 +90,7 @@ public readonly record struct CanvasMovePlan(
 
 public static class CanvasGesturePlanner
 {
-    public const long MinimumShapeSizeEmu = 91440L;
+    public const long MinimumShapeSizeEmu = DrawingMlCoordinateUnits.EmuPerInch / 10;
 
     public static IReadOnlyList<CanvasMoveShapeState> CaptureMoveState(
         Slide slide,

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Drawing;
 
 namespace FreeP.App.Compositor;
 
@@ -50,9 +51,9 @@ public sealed record SlideSizeDialogResultPlan(
 
 public static class SlideSizeDialogPlanner
 {
-    public const long EmuPerInch = 914_400L;
+    public const long EmuPerInch = DrawingMlCoordinateUnits.EmuPerInch;
     public const long EmuPerCm = 360_000L;
-    public const long MinimumSlideSizeEmu = 457_200L;
+    public const long MinimumSlideSizeEmu = EmuPerInch / 2;
 
     public const string InvalidSizeCaption = "Invalid Size";
     public const string InvalidPositiveNumbersMessage =
@@ -60,10 +61,10 @@ public static class SlideSizeDialogPlanner
     public const string MinimumSizeMessage =
         "Slide dimensions must be at least 0.5 inches (1.27 cm).";
 
-    private const long Standard43CxEmu = 9_144_000L;
-    private const long Standard43CyEmu = 6_858_000L;
-    private const long Widescreen169CxEmu = 12_192_000L;
-    private const long Widescreen169CyEmu = 6_858_000L;
+    private const long Standard43CxEmu = EmuPerInch * 10;
+    private const long Standard43CyEmu = EmuPerInch * 15 / 2;
+    private const long Widescreen169CxEmu = EmuPerInch * 40 / 3;
+    private const long Widescreen169CyEmu = Standard43CyEmu;
 
     private const NumberStyles UnitChangeNumberStyles =
         NumberStyles.Float | NumberStyles.AllowThousands;

@@ -1,3 +1,4 @@
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -156,7 +157,7 @@ public sealed record SlideShowHostCommand
 
 public static class SlideShowHostPlanner
 {
-    public const double EmusPerDip = 9525.0;
+    public const double EmusPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
     public const string NoSlidesStatusText = "No slides";
 
     public static SlideShowHostIntent IntentFromKeyName(string? keyName) =>

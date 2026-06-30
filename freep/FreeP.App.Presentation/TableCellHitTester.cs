@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -9,8 +10,8 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class TableCellHitTester
 {
-    // 1 EMU = 1/9525 DIP
-    private const double EmuPerDip = 9525.0;
+    // DrawingML EMU per 96-DPI DIP.
+    private const double EmuPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
 
     /// <summary>
     /// Returns the (row, col) of the cell that contains (<paramref name="slidePtX"/>, <paramref name="slidePtY"/>),
