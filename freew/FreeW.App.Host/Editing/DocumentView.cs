@@ -4698,9 +4698,8 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Rebuild the floating-image overlay canvas to match the current model state. Called at the end
     /// of <see cref="Render"/> and when layout changes. Clears and repopulates the canvas children
-    /// from every floating <see cref="InlineImage"/> in the model, sorted by <see cref="InlineImage.ZOrderIndex"/>.
-    /// Each child element's position is computed from the image's anchor and offset in points (converted
-    /// to DIP via <see cref="PageLayout.DipPerPoint"/>). Inline images are never placed here.
+    /// from the shared floating-object layout snapshots so WPF and Avalonia honor the same placement
+    /// and z-order rules. Inline images are never placed here.
     /// </summary>
     internal void SyncFloatingObjectsCanvas()
     {
@@ -4709,74 +4708,63 @@ public sealed class DocumentView : RichTextBox
 
         canvas.Children.Clear();
 
-        // Gather all floating objects (images + shapes + charts + smartArt + wordArt + groups) sorted by z-order.
-        var floating = new List<(int ZOrder, double HOffPt, double VOffPt, HorizontalAnchor HAnchor, VerticalAnchor VAnchor, Func<FrameworkElement> BuildVisual)>();
-        foreach (var block in _model.Blocks)
-        {
-            if (block is not ModelParagraph para) continue;
-            foreach (var run in para.Runs)
-            {
-                if (run.Image is { IsFloating: true } img)
-                {
-                    floating.Add((img.ZOrderIndex, img.HorizontalOffsetPt, img.VerticalOffsetPt,
-                        img.HorizontalAnchor, img.VerticalAnchor,
-                        () => BuildFloatingImageVisual(img)));
-                }
-                else if (run.Shape is { IsFloating: true } shape && shape.Placement is { } sp)
-                {
-                    floating.Add((sp.ZOrderIndex, sp.HorizontalOffsetPt, sp.VerticalOffsetPt,
-                        sp.HorizontalAnchor, sp.VerticalAnchor,
-                        () => BuildFloatingObjectVisual(shape, shape.WidthPt, shape.HeightPt, sp)));
-                }
-                else if (run.Chart is { IsFloating: true } chart && chart.Placement is { } cp)
-                {
-                    floating.Add((cp.ZOrderIndex, cp.HorizontalOffsetPt, cp.VerticalOffsetPt,
-                        cp.HorizontalAnchor, cp.VerticalAnchor,
-                        () => BuildFloatingObjectVisual(chart, chart.WidthPt, chart.HeightPt, cp)));
-                }
-                else if (run.SmartArt is { IsFloating: true } smartArt && smartArt.Placement is { } sap)
-                {
-                    floating.Add((sap.ZOrderIndex, sap.HorizontalOffsetPt, sap.VerticalOffsetPt,
-                        sap.HorizontalAnchor, sap.VerticalAnchor,
-                        () => BuildFloatingObjectVisual(smartArt, smartArt.WidthPt, smartArt.HeightPt, sap)));
-                }
-                else if (run.WordArt is { IsFloating: true } wordArt && wordArt.Placement is { } wap)
-                {
-                    floating.Add((wap.ZOrderIndex, wap.HorizontalOffsetPt, wap.VerticalOffsetPt,
-                        wap.HorizontalAnchor, wap.VerticalAnchor,
-                        () => BuildFloatingObjectVisual(wordArt, EstimateWordArtWidth(wordArt), EstimateWordArtHeight(wordArt), wap)));
-                }
-                else if (run.DrawingGroup is { } grp)
-                {
-                    floating.Add((grp.Placement.ZOrderIndex,
-                        grp.Placement.HorizontalOffsetPt, grp.Placement.VerticalOffsetPt,
-                        grp.Placement.HorizontalAnchor, grp.Placement.VerticalAnchor,
-                        () => BuildFloatingGroupVisual(grp)));
-                }
-            }
-        }
-        floating.Sort((a, b) => a.ZOrder.CompareTo(b.ZOrder));
-
         var surface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
             _model.Page,
             PrintLayoutEnabled,
             PlainPadding.Left);
 
-        foreach (var (_, hOffPt, vOffPt, hAnchor, vAnchor, buildVisual) in floating)
+        var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+            _model,
+            surface,
+            columnCount: 1);
+        var drawOrder = DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: true)
+            .Concat(DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: false));
+
+        foreach (var snapshot in drawOrder)
         {
-            var visual = buildVisual();
-            var placement = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
-                surface,
-                anchorContentYDip: 0,
-                columnCount: 1,
-                hAnchor,
-                hOffPt,
-                vAnchor,
-                vOffPt);
-            Canvas.SetLeft(visual, placement.XDip);
-            Canvas.SetTop(visual, placement.YDip);
+            if (!TryBuildFloatingObjectVisual(snapshot, out var visual))
+                continue;
+
+            Canvas.SetLeft(visual, snapshot.Rect.XDip);
+            Canvas.SetTop(visual, snapshot.Rect.YDip);
             canvas.Children.Add(visual);
         }
+    }
+
+    private bool TryBuildFloatingObjectVisual(
+        DocumentFloatingObjectSnapshot snapshot,
+        out FrameworkElement visual)
+    {
+        visual = null!;
+
+        if (snapshot.BlockIndex < 0
+            || snapshot.BlockIndex >= _model.Blocks.Count
+            || _model.Blocks[snapshot.BlockIndex] is not ModelParagraph paragraph
+            || snapshot.RunIndex < 0
+            || snapshot.RunIndex >= paragraph.Runs.Count)
+        {
+            return false;
+        }
+
+        var run = paragraph.Runs[snapshot.RunIndex];
+        visual = snapshot.Kind switch
+        {
+            DocumentFloatingObjectKind.Image when run.Image is { IsFloating: true } image =>
+                BuildFloatingImageVisual(image, snapshot.Rect),
+            DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape =>
+                BuildFloatingObjectVisual(shape, snapshot.Rect),
+            DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart =>
+                BuildFloatingObjectVisual(chart, snapshot.Rect),
+            DocumentFloatingObjectKind.SmartArt when run.SmartArt is { IsFloating: true } smartArt =>
+                BuildFloatingObjectVisual(smartArt, snapshot.Rect),
+            DocumentFloatingObjectKind.WordArt when run.WordArt is { IsFloating: true } wordArt =>
+                BuildFloatingObjectVisual(wordArt, snapshot.Rect),
+            DocumentFloatingObjectKind.Group when run.DrawingGroup is { } group =>
+                BuildFloatingGroupVisual(group, snapshot.Rect),
+            _ => null!,
+        };
+
+        return visual is not null;
     }
 
     /// <summary>
@@ -4785,10 +4773,10 @@ public sealed class DocumentView : RichTextBox
     /// to inline images rendered in the FlowDocument. The root element is tagged with the model image
     /// so click-selection can recover it.
     /// </summary>
-    private FrameworkElement BuildFloatingImageVisual(InlineImage image)
+    private FrameworkElement BuildFloatingImageVisual(InlineImage image, DocumentFloatRect rect)
     {
-        var widthPx = image.WidthPt * PxPerPoint;
-        var heightPx = image.HeightPt * PxPerPoint;
+        var widthPx = rect.WidthDip;
+        var heightPx = rect.HeightDip;
         // DecodeImage returns ImageSource?; placeholder is always BitmapSource. Cast for pixel-adjust.
         var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
         // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency/recolor).
@@ -4872,10 +4860,10 @@ public sealed class DocumentView : RichTextBox
     /// Builds a simple placeholder visual for a floating non-image object (Shape, Chart, SmartArt,
     /// WordArt) on the overlay canvas. Tagged with the model object for click-selection.
     /// </summary>
-    private FrameworkElement BuildFloatingObjectVisual(object modelObject, double widthPt, double heightPt, FloatingPlacement placement)
+    private FrameworkElement BuildFloatingObjectVisual(object modelObject, DocumentFloatRect rect)
     {
-        var widthPx = widthPt * PxPerPoint;
-        var heightPx = heightPt * PxPerPoint;
+        var widthPx = rect.WidthDip;
+        var heightPx = rect.HeightDip;
 
         var label = modelObject switch
         {
@@ -4943,10 +4931,10 @@ public sealed class DocumentView : RichTextBox
     /// as a sub-Border inside a Canvas at its local offset. The group is tagged with the FreeW.Core.Model.DrawingGroup
     /// model object for click-selection.
     /// </summary>
-    private FrameworkElement BuildFloatingGroupVisual(FreeW.Core.Model.DrawingGroup group)
+    private FrameworkElement BuildFloatingGroupVisual(FreeW.Core.Model.DrawingGroup group, DocumentFloatRect rect)
     {
-        var widthPx = group.WidthPt * PxPerPoint;
-        var heightPx = group.HeightPt * PxPerPoint;
+        var widthPx = rect.WidthDip;
+        var heightPx = rect.HeightDip;
 
         var isSelected = _selectedFloatingObjects.Contains(group);
         var borderColor = isSelected

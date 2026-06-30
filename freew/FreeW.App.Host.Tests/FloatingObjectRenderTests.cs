@@ -32,6 +32,37 @@ public sealed class FloatingObjectRenderTests
         return doc;
     }
 
+    private static TextDocument DocWithMixedFloatingBands(out Shape behindShape, out Shape frontShape)
+    {
+        behindShape = new Shape(ShapeKind.Rectangle, 72, 36)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Behind,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 99
+            }
+        };
+        frontShape = new Shape(ShapeKind.Ellipse, 72, 36)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 72,
+                VerticalOffsetPt = 36,
+                ZOrderIndex = 1
+            }
+        };
+
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromShape(frontShape));
+        para.Runs.Add(Run.FromShape(behindShape));
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
     [StaFact]
     public void FloatingShape_SurvivesCommitToModel()
     {
@@ -63,5 +94,22 @@ public sealed class FloatingObjectRenderTests
         var shape = para.Runs[0].Shape;
         shape.Should().NotBeNull();
         shape!.IsFloating.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void FloatingOverlay_UsesPlannerBandDrawOrder()
+    {
+        var original = DocWithMixedFloatingBands(out var behindShape, out var frontShape);
+        var view = new DocumentView();
+        var canvas = new System.Windows.Controls.Canvas();
+
+        view.LoadModel(original);
+        view.SetFloatingCanvas(canvas);
+
+        canvas.Children
+            .OfType<System.Windows.FrameworkElement>()
+            .Select(child => child.Tag)
+            .Should()
+            .Equal(behindShape, frontShape);
     }
 }
