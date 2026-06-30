@@ -884,9 +884,11 @@ public partial class MainWindow
         var catalogId = GetRibbonGroupCatalogId(snapshot.Group);
         var fullWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.Full);
         var smallWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.SmallWithLabels);
-        var iconWidth = RibbonAdaptiveStateApplicator.ShouldUseFullLayoutForIconOnlyGroup(catalogId, availableWidth: double.PositiveInfinity)
+        var iconWidth = RibbonCollapsedGroupCatalogPlanner.ShouldUseFullLayoutForIconOnlyGroup(
+            catalogId,
+            availableWidth: double.PositiveInfinity)
             ? fullWidth
-            : RibbonAdaptiveStateApplicator.ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
+            : RibbonCollapsedGroupCatalogPlanner.ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
             ? smallWidth
             : MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.IconOnly);
         collapsedButton.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -1029,8 +1031,11 @@ public partial class MainWindow
     private static Button CreateRibbonCollapsedGroupButton(FrameworkElement group, ISet<string>? usedKeyTips = null)
     {
         var groupName = GetRibbonGroupName(group);
-        var displayName = GetCollapsedRibbonGroupDisplayName(group);
-        var iconKey = GetCollapsedRibbonGroupIconKey(group, groupName);
+        var presentation = RibbonCollapsedGroupCatalogPlanner.PlanPresentation(
+            GetRibbonGroupCatalogId(group),
+            groupName);
+        var displayName = presentation.ResolveDisplayName(UiText.Get);
+        var iconKey = presentation.IconKey;
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(iconKey);
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
         var label = new TextBlock
@@ -1099,34 +1104,6 @@ public partial class MainWindow
         };
         return button;
     }
-
-    private static string GetCollapsedRibbonGroupDisplayName(FrameworkElement group) =>
-        GetRibbonGroupCatalogId(group) switch
-        {
-            "TableDesignStyleOptionsGroup" => UiText.Get("MainWindow_Content_Options"),
-            "TableDesignStylesGroup" => UiText.Get("MainWindow_Content_Styles"),
-            "PivotTableAnalyzeActiveFieldGroup" => GetRibbonGroupName(group),
-            "PivotTableAnalyzeCalculationsGroup" => GetRibbonGroupName(group),
-            "PivotTableDesignStyleOptionsGroup" => UiText.Get("MainWindow_Content_Options"),
-            "PivotTableDesignStylesGroup" => UiText.Get("MainWindow_Content_Styles"),
-            _ => GetRibbonGroupName(group)
-        };
-
-    private static string GetCollapsedRibbonGroupIconKey(FrameworkElement group, string groupName) =>
-        GetRibbonGroupCatalogId(group) switch
-        {
-            "DataSortFilterGroup" => "Sort & Filter",
-            "DataToolsGroup" => "Data Tools",
-            "FormulasFormulaAuditingGroup" => "Formula Auditing",
-            "ReviewCommentsGroup" => "Comments",
-            "ViewWindowGroup" => "Window",
-            "TableDesignStyleOptionsGroup" => "Table Style Options",
-            "TableDesignStylesGroup" => "Table Styles",
-            "PivotTableAnalyzeCalculationsGroup" => "Calculations",
-            "PivotTableDesignStyleOptionsGroup" => "PivotTable Style Options",
-            "PivotTableDesignStylesGroup" => "PivotTable Styles",
-            _ => groupName
-        };
 
     private static void EnsureCollapsedGroupChevronAdorner(Button button)
     {

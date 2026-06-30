@@ -131,21 +131,6 @@ internal static class RibbonAdaptiveStateApplicator
         }
     }
 
-    public static bool ShouldUseSmallWithLabelsForIconOnlyGroup(string? catalogId) =>
-        catalogId is
-            "DataToolsGroup" or
-            "InsertChartsGroup" or
-            "FormulasFormulaAuditingGroup" or
-            "ReviewCommentsGroup" or
-            "ViewWindowGroup" or
-            "TableDesignStyleOptionsGroup" or
-            "PivotTableAnalyzeCalculationsGroup" or
-            "PivotTableDesignStyleOptionsGroup";
-
-    public static bool ShouldUseFullLayoutForIconOnlyGroup(string? catalogId, double availableWidth) =>
-        availableWidth > 760 &&
-        catalogId is "DataToolsGroup";
-
     public static void ApplyButton(
         MainWindow.RibbonCompactButtonSnapshot snapshot,
         MainWindow.RibbonCompactLevel level)
@@ -292,9 +277,10 @@ internal static class RibbonAdaptiveStateApplicator
         MainWindow.RibbonCompactGroupSnapshot snapshot,
         RibbonAdaptiveGroupState plannedState,
         double availableWidth) =>
-        plannedState == RibbonAdaptiveGroupState.IconOnly &&
-        availableWidth > 820 &&
-        string.Equals(GetRibbonGroupName(snapshot.Group), "Tables", StringComparison.Ordinal);
+        RibbonCollapsedGroupCatalogPlanner.ShouldKeepLabelsAtIconWidth(
+            GetRibbonGroupName(snapshot.Group),
+            plannedState,
+            availableWidth);
 
     private static RibbonAdaptiveGroupState NormalizePlannedState(
         MainWindow.RibbonCompactGroupSnapshot snapshot,
@@ -307,15 +293,7 @@ internal static class RibbonAdaptiveStateApplicator
             return plannedState;
         }
 
-        if (ShouldCollapseIconOnlyGroup(catalogId, availableWidth))
-            return RibbonAdaptiveGroupState.Collapsed;
-
-        if (ShouldUseFullLayoutForIconOnlyGroup(catalogId, availableWidth))
-            return RibbonAdaptiveGroupState.Full;
-
-        return ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
-            ? RibbonAdaptiveGroupState.SmallWithLabels
-            : plannedState;
+        return RibbonCollapsedGroupCatalogPlanner.NormalizeIconOnlyState(catalogId, plannedState, availableWidth);
     }
 
     private static int ApplyState(
@@ -363,10 +341,6 @@ internal static class RibbonAdaptiveStateApplicator
 
         return 1;
     }
-
-    private static bool ShouldCollapseIconOnlyGroup(string? catalogId, double availableWidth) =>
-        availableWidth <= 1300 &&
-        catalogId is "DataSortFilterGroup";
 
     private static CollapsedButtonFootprintTargets GetCollapsedButtonFootprintTargets(Button button)
     {
