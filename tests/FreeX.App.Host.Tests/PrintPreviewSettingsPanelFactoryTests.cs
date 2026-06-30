@@ -16,6 +16,23 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
     //   0 ignorePrintAreaBox  1 gridlinesBox  2 headingsBox
 
     [Fact]
+    public void Build_DelegatesPageLayoutCommandConstructionToSharedPlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PrintPreviewSettingsPanelFactory.cs");
+
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildOrientationCommand(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildMarginsCommand(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintOptionsCommand(");
+        source.Should().NotContain("new SetPageOrientationCommand(");
+        source.Should().NotContain("new SetPaperSizeCommand(");
+        source.Should().NotContain("new SetPageMarginsCommand(");
+        source.Should().NotContain("new SetScaleToFitCommand(");
+        source.Should().NotContain("new SetPrintOptionsCommand(");
+    }
+
+    [Fact]
     public void Build_InitializesOrientationPaperMarginScaleFromSheetPrintSettings()
     {
         StaTestRunner.Run(() =>

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Windows;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -304,24 +305,27 @@ public partial class MainWindow
 
         if (!TryExecuteGroupedSheetCommand(
                 "Header & Footer",
-                sheetId => new SetHeaderFooterCommand(
+                sheetId => PageSetupCommandFactory.BuildHeaderFooterCommand(
                     sheetId,
-                    dialog.Header,
-                    dialog.Footer,
-                    dialog.FirstPageHeader,
-                    dialog.FirstPageFooter,
-                    dialog.EvenPageHeader,
-                    dialog.EvenPageFooter,
-                    dialog.DifferentFirstPage,
-                    dialog.DifferentOddEvenPages,
-                    dialog.ScaleWithDocument,
-                    dialog.AlignWithMargins,
-                    dialog.HeaderPictures,
-                    dialog.FooterPictures,
-                    dialog.FirstPageHeaderPictures,
-                    dialog.FirstPageFooterPictures,
-                    dialog.EvenPageHeaderPictures,
-                    dialog.EvenPageFooterPictures)))
+                    new PageSetupHeaderFooterRequest
+                    {
+                        Header = dialog.Header,
+                        Footer = dialog.Footer,
+                        FirstPageHeader = dialog.FirstPageHeader,
+                        FirstPageFooter = dialog.FirstPageFooter,
+                        EvenPageHeader = dialog.EvenPageHeader,
+                        EvenPageFooter = dialog.EvenPageFooter,
+                        DifferentFirstPage = dialog.DifferentFirstPage,
+                        DifferentOddEvenPages = dialog.DifferentOddEvenPages,
+                        ScaleHeaderFooterWithDocument = dialog.ScaleWithDocument,
+                        AlignHeaderFooterWithMargins = dialog.AlignWithMargins,
+                        HeaderPictures = dialog.HeaderPictures,
+                        FooterPictures = dialog.FooterPictures,
+                        FirstPageHeaderPictures = dialog.FirstPageHeaderPictures,
+                        FirstPageFooterPictures = dialog.FirstPageFooterPictures,
+                        EvenPageHeaderPictures = dialog.EvenPageHeaderPictures,
+                        EvenPageFooterPictures = dialog.EvenPageFooterPictures
+                    })))
             return;
 
         UpdateViewport();

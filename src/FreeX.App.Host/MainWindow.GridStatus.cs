@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Automation.Peers;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -411,7 +412,9 @@ public partial class MainWindow
 
     private void OnPageMarginsChanged(WorksheetPageMargins margins)
     {
-        if (!TryExecuteGroupedSheetCommand("Page Margins", sheetId => new SetPageMarginsCommand(sheetId, margins)))
+        if (!TryExecuteGroupedSheetCommand(
+                PageLayoutRibbonActionPlanner.PageMarginsCommandLabel,
+                sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, margins)))
             return;
 
         UpdateViewport();
