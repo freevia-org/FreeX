@@ -599,25 +599,32 @@ public sealed class MainWindow : Window
         {
             _slidePaneList.Items.Clear();
 
-            for (int i = 0; i < _presentation.Slides.Count; i++)
+            var entries = SlidePanePlanner.BuildEntries(_presentation.Slides, _presentation.Sections);
+            foreach (var entry in entries)
             {
-                var slideIdx = i;
-                var slide    = _presentation.Slides[i];
+                if (entry.Kind == SlidePaneEntryKind.SectionHeader)
+                {
+                    _slidePaneList.Items.Add(BuildSlidePaneSectionHeader(entry));
+                    continue;
+                }
 
-                // Small SlideCanvas thumbnail (148 × 84 px letterboxed).
+                var slideIdx = entry.SlideIndex;
+                var slide    = _presentation.Slides[entry.SlideIndex];
+
+                // Small SlideCanvas thumbnail using the shared slide pane metrics.
                 var thumb = new SlideCanvas
                 {
                     Presentation = _presentation,
                     Slide        = slide,
                     SlideIndex   = slideIdx,
-                    Width        = 148,
-                    Height       = 84,
+                    Width        = SlidePanePlanner.DefaultThumbnailWidth,
+                    Height       = SlidePanePlanner.DefaultThumbnailHeight,
                 };
 
                 // Slide number label beneath thumbnail.
                 var label = new TextBlock
                 {
-                    Text                = $"{slideIdx + 1}",
+                    Text                = entry.Text,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     FontSize            = 10,
                     Margin              = new Thickness(0, 2, 0, 0),
@@ -629,13 +636,15 @@ public sealed class MainWindow : Window
                     Children = { thumb, label },
                 };
 
-                _slidePaneList.Items.Add(new ListBoxItem { Content = panel, Padding = new Thickness(2) });
+                _slidePaneList.Items.Add(new ListBoxItem
+                {
+                    Tag     = entry.SlideIndex,
+                    Content = panel,
+                    Padding = new Thickness(2),
+                });
             }
 
-            // Restore selection.
-            var current = Editor.CurrentSlideIndex;
-            if (current >= 0 && current < _slidePaneList.Items.Count)
-                _slidePaneList.SelectedIndex = current;
+            SelectSlidePaneItem(Editor.CurrentSlideIndex);
         }
         finally
         {
@@ -643,12 +652,58 @@ public sealed class MainWindow : Window
         }
     }
 
+    private static ListBoxItem BuildSlidePaneSectionHeader(SlidePaneEntry entry)
+    {
+        var label = new TextBlock
+        {
+            Text              = entry.Text,
+            FontSize          = 11,
+            FontWeight        = FontWeight.SemiBold,
+            Foreground        = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming      = TextTrimming.CharacterEllipsis,
+        };
+
+        return new ListBoxItem
+        {
+            Content = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                Padding    = new Thickness(10, 4),
+                Child      = label,
+            },
+            Padding   = new Thickness(0),
+            Margin    = new Thickness(0, 6, 0, 2),
+            Focusable = false,
+            IsEnabled = false,
+        };
+    }
+
+    private void SelectSlidePaneItem(int slideIndex)
+    {
+        var itemIndex = 0;
+        foreach (var item in _slidePaneList.Items)
+        {
+            if (item is ListBoxItem { Tag: int itemSlideIndex } && itemSlideIndex == slideIndex)
+            {
+                _slidePaneList.SelectedIndex = itemIndex;
+                return;
+            }
+
+            itemIndex++;
+        }
+
+        _slidePaneList.SelectedIndex = -1;
+    }
+
     private void OnSlidePaneSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_slidePaneRefreshing)
             return;
 
-        var idx = _slidePaneList.SelectedIndex;
+        if (_slidePaneList.SelectedItem is not ListBoxItem { Tag: int idx })
+            return;
+
         if (idx < 0 || idx >= _presentation.Slides.Count)
             return;
 
@@ -696,7 +751,7 @@ public sealed class MainWindow : Window
     {
         // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
         _slidePaneRefreshing = true;
-        try { _slidePaneList.SelectedIndex = Editor.CurrentSlideIndex; }
+        try { SelectSlidePaneItem(Editor.CurrentSlideIndex); }
         finally { _slidePaneRefreshing = false; }
 
         RefreshCanvas();

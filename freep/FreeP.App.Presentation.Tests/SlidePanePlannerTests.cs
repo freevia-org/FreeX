@@ -70,6 +70,13 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void DefaultThumbnailMetrics_UseSixteenByNineSlideAspect()
+    {
+        SlidePanePlanner.DefaultThumbnailWidth.Should().Be(150.0);
+        SlidePanePlanner.DefaultThumbnailHeight.Should().BeApproximately(84.375, 0.0001);
+    }
+
+    [Fact]
     public void HitTestInsertionPoint_SkipsNonSlideRows()
     {
         var layout = new[] { false, true, true, false };
