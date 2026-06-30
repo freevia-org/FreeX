@@ -7,18 +7,12 @@ public static class SheetProtectionWorkflow
 {
     public static SheetProtectionUiText GetUiText(Sheet sheet)
     {
-        if (sheet.IsProtected)
-        {
-            return new SheetProtectionUiText(
-                UiText.Get("Protection_UnprotectSheetButton"),
-                UiText.Get("Protection_UnprotectSheetTitle"),
-                UiText.Get("Protection_UnprotectSheetDescription"));
-        }
+        var plan = ProtectionWorkflowPlanner.CreateSheetChromePlan(sheet.IsProtected);
 
         return new SheetProtectionUiText(
-            UiText.Get("MainWindow_Content_ProtectSheet"),
-            UiText.Get("MainWindow_TooltipTitle_ProtectSheet"),
-            UiText.Get("MainWindow_TooltipDescription_SetSheetProtectionForLockedCellsWithAnOptionalPassword"));
+            UiText.Get(plan.ButtonContentResourceKey),
+            UiText.Get(plan.TooltipTitleResourceKey),
+            UiText.Get(plan.TooltipDescriptionResourceKey));
     }
 
     public static SheetProtectionAction CreateCommand(Sheet sheet, string? password)
@@ -32,24 +26,29 @@ public static class SheetProtectionWorkflow
 
     public static SheetProtectionAction CreateCommand(Sheet sheet, ProtectionDialogResult result)
     {
-        if (sheet.IsProtected)
-        {
-            return new SheetProtectionAction(
-                new UnprotectSheetCommand(sheet.Id, result.Password),
-                UiText.Get("Protection_UnprotectSheetTitle"),
-                UiText.Get("Protection_SheetUnprotectedMessage"),
-                []);
-        }
+        var plan = ProtectionWorkflowPlanner.CreateSheetCommandPlan(
+            sheet.Id,
+            sheet.IsProtected,
+            result.Password,
+            SheetProtectionPermissionLabels.ParseSheetPermissions(result.SelectedSheetPermissions));
 
         return new SheetProtectionAction(
-            new ProtectSheetCommand(
-                sheet.Id,
-                result.Password,
-                SheetProtectionPermissionLabels.ParseSheetPermissions(result.SelectedSheetPermissions)),
-            UiText.Get("MainWindowMessage_ProtectSheetTitle"),
-            UiText.Get("Protection_SheetProtectedMessage"),
+            CreateCommand(plan),
+            UiText.Get(plan.TitleResourceKey),
+            UiText.Get(plan.SuccessMessageResourceKey),
             result.SelectedSheetPermissions);
     }
+
+    private static IWorkbookCommand CreateCommand(SheetProtectionCommandPlan plan) =>
+        plan.CommandIntent switch
+        {
+            ProtectionCommandIntent.ProtectSheet => new ProtectSheetCommand(
+                plan.SheetId,
+                plan.Password,
+                plan.Permissions),
+            ProtectionCommandIntent.UnprotectSheet => new UnprotectSheetCommand(plan.SheetId, plan.Password),
+            _ => throw new ArgumentOutOfRangeException(nameof(plan), plan.CommandIntent, "Unsupported sheet protection intent.")
+        };
 }
 
 public sealed record SheetProtectionAction(

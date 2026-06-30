@@ -240,6 +240,9 @@ public sealed class PresentationPortabilityGuardTests
         File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionDialogPlanner.cs"))
             .Should()
             .BeTrue("protect/unprotect result creation should be shared by renderers");
+        File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionWorkflowPlanner.cs"))
+            .Should()
+            .BeTrue("protect/unprotect command intents and message resource keys should be shared by renderers");
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionInputParser.cs"))
             .Should()
             .BeFalse("WPF host should use the shared protection parser instead of carrying a renderer-local copy");
