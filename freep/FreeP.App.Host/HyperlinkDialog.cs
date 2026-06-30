@@ -17,7 +17,7 @@ namespace FreeP.App.Host;
 /// OK calls <see cref="EditingSession.SetShapeHyperlink"/> (undoable).
 /// Cancel discards.
 /// </summary>
-public sealed class HyperlinkDialog : Window
+public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     // ── Controls ──────────────────────────────────────────────────────────────────
 

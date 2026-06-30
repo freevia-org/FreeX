@@ -9,7 +9,7 @@ namespace FreeP.App.Host;
 /// Modal slide-size dialog. WPF owns the controls and localization shell; shared
 /// presentation policy lives in <see cref="SlideSizeDialogPlanner"/>.
 /// </summary>
-public sealed class SlideSizeDialog : Window
+public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly EditingSession _editor;
 
