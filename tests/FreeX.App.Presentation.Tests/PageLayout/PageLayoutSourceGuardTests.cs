@@ -20,4 +20,18 @@ public sealed class PageLayoutSourceGuardTests
             source.Should().NotContain("FreeX.App.Avalonia");
         }
     }
+
+    [Fact]
+    public void WpfPrintRenderer_DelegatesWorksheetPrintPlanningToPresentation()
+    {
+        var directory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Host");
+        var source = File.ReadAllText(Path.Combine(directory, "PrintRenderer.cs"));
+
+        source.Should().Contain("WorksheetPrintRenderPlanner.TryBuild(");
+        source.Should().NotContain("sheet.PrintAreas");
+        source.Should().NotContain("sheet.GetUsedRange()");
+        source.Should().NotContain("PagePaginationPlanner.BuildPlan(");
+        source.Should().NotContain("PrintPageGridPlanner.Build(");
+        source.Should().NotContain("WorksheetPageLayout.GetPageSizeInches(");
+    }
 }

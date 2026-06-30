@@ -11,7 +11,11 @@ public sealed partial class PrintRendererPageSetupTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("PrintRenderer.cs");
 
-        source.Should().Contain("PagePaginationPlanner.BuildPlan(");
+        source.Should().Contain("WorksheetPrintRenderPlanner.TryBuild(");
+        source.Should().NotContain("PagePaginationPlanner.BuildPlan(");
+        source.Should().NotContain("PrintPageGridPlanner.Build(");
+        source.Should().NotContain("sheet.PrintAreas");
+        source.Should().NotContain("sheet.GetUsedRange()");
         source.Should().NotContain("ApplyScaleToFitCapacity(");
         source.Should().NotContain("GetPaperSizeInches(");
         source.Should().NotContain("MinimumPrintColumnWidth");
