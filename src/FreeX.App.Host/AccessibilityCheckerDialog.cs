@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.Localization;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -311,11 +312,6 @@ public sealed class AccessibilityCheckerDialog : Window
         Keyboard.Focus(_messageBox);
     }
 
-    // Routes through the localization catalog but falls back to the supplied English default when a
-    // key has not yet been added to the resx (the catalog renders missing keys as "[[Key]]").
-    private static string Text(string key, string fallback)
-    {
-        var value = UiText.Get(key);
-        return value == "[[" + key + "]]" ? fallback : value;
-    }
+    private static string Text(string key, string fallback) =>
+        LocalizedFallbackTextResolver.Resolve(key, fallback, UiText.Get);
 }

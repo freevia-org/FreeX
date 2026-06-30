@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
     <ProjectReference Include="..\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
     <!-- Single source of the pseudo-localization Expand() rules (also used by the portable catalog). -->
     <ProjectReference Include="..\FreeX.App.Localization\FreeX.App.Localization.csproj" />
     <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />

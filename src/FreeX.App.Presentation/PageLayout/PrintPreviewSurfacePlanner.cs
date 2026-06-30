@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
@@ -189,15 +190,9 @@ public static class PrintPreviewSurfacePlanner
         string.IsNullOrWhiteSpace(printerName) ? "Windows print dialog" : printerName.Trim();
 
     private static string Text(PrintSettingsTextResolver? textResolver, string key, string fallback)
-    {
-        var text = textResolver?.Get(key, fallback) ?? fallback;
-        if (IsMissingResourceToken(text))
-            text = fallback;
-
-        return text.Replace("_", string.Empty, StringComparison.Ordinal);
-    }
-
-    private static bool IsMissingResourceToken(string text) =>
-        text.StartsWith("[[", StringComparison.Ordinal) &&
-        text.EndsWith("]]", StringComparison.Ordinal);
+        => LocalizedFallbackTextResolver.Resolve(
+            key,
+            fallback,
+            textResolver is null ? null : candidate => textResolver.Get(candidate, fallback),
+            stripMnemonics: true);
 }

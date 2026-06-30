@@ -68,7 +68,7 @@ public sealed class LocalizedTextCatalog(ResourceManager resourceManager)
         string.Equals(cultureName, PseudoLocalizationCultureName, StringComparison.OrdinalIgnoreCase);
 
     public static string CreateAutomationName(string textWithAccessKey) =>
-        textWithAccessKey.Replace("_", string.Empty, StringComparison.Ordinal);
+        LocalizedFallbackTextResolver.StripMnemonicMarkers(textWithAccessKey);
 
     public static string CreateMissingText(string key) => "[[" + key + "]]";
 }

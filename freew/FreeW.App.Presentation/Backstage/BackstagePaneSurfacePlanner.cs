@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.Localization;
 using Free.Shared.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -360,18 +361,9 @@ public sealed record BackstageExportPaneSurfaceText(
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        if (getText is not null)
-        {
-            var resolved = getText(descriptor.ResourceKey);
-            if (IsResolvedText(descriptor, resolved))
-                return resolved!;
-        }
-
-        return descriptor.FallbackText;
+        return LocalizedFallbackTextResolver.Resolve(
+            descriptor.ResourceKey,
+            descriptor.FallbackText,
+            getText);
     }
-
-    private static bool IsResolvedText(ResourceTextDescriptor descriptor, string? value) =>
-        !string.IsNullOrEmpty(value) &&
-        !string.Equals(value, descriptor.ResourceKey, StringComparison.Ordinal) &&
-        !string.Equals(value, "[[" + descriptor.ResourceKey + "]]", StringComparison.Ordinal);
 }
