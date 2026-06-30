@@ -40,6 +40,8 @@ public sealed class QuickAnalysisSourceGuardTests
         shellSources.Should().NotContain("openPlan.Decision == QuickAnalysisShellOpenDecision");
         shellSources.Should().NotContain("QuickAnalysisGroup.Formatting =>");
         shellSources.Should().NotContain("QuickAnalysisCommandKind.");
+        shellSources.Should().NotContain("QuickAnalysisSelectionReader.Describe(");
+        shellSources.Should().NotContain("QuickAnalysisSparklinePlanner.BuildCommands(");
 
         hostSource.Should().Contain("QuickAnalysisMenuPlacementPlanner.BuildAnchor(");
         hostSource.Should().NotContain("FindLastVisibleRowInSelection");

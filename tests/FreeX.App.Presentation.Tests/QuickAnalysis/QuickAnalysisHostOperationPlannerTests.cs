@@ -1,12 +1,21 @@
 using FluentAssertions;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.QuickAnalysis;
 
 public sealed class QuickAnalysisHostOperationPlannerTests
 {
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
+    }
+
     [Fact]
     public void Plan_DialogBackedConditionalFormat_CarriesDialogTitle()
     {
@@ -78,6 +87,69 @@ public sealed class QuickAnalysisHostOperationPlannerTests
 
         operation.Kind.Should().Be(QuickAnalysisHostOperationKind.Deferred);
         operation.DeferredNote.Should().Be("Converting to a PivotTable is not yet available on macOS.");
+    }
+
+    [Fact]
+    public void TryBuildSparklineCommands_PlansDirectApplyCommandsWithSharedHeaderDetection()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Q2"));
+        for (uint row = 2; row <= 4; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 10));
+        }
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        var operation = Plan("sparkline.line", QuickAnalysisShellCapabilities.DirectApplyLimited);
+
+        var planned = QuickAnalysisHostOperationPlanner.TryBuildSparklineCommands(
+            operation,
+            sheet,
+            range,
+            out var commands);
+
+        planned.Should().BeTrue();
+        commands.Should().HaveCount(3);
+
+        var context = new TestCommandContext(workbook);
+        foreach (var command in commands)
+            command.Apply(context).Success.Should().BeTrue();
+
+        sheet.Sparklines.Select(sparkline => sparkline.Location)
+            .Should()
+            .Equal(
+                new CellAddress(sheet.Id, 2, 3),
+                new CellAddress(sheet.Id, 3, 3),
+                new CellAddress(sheet.Id, 4, 3));
+        sheet.Sparklines.Select(sparkline => sparkline.DataRange.Start.Row)
+            .Should()
+            .Equal(2u, 3u, 4u);
+        sheet.Sparklines.Should().OnlyContain(sparkline => sparkline.Kind == SparklineKind.Line);
+    }
+
+    [Fact]
+    public void TryBuildSparklineCommands_ReturnsFalseForNonSparklineOperation()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+        var operation = Plan("total.sum", QuickAnalysisShellCapabilities.DirectApplyLimited);
+
+        var planned = QuickAnalysisHostOperationPlanner.TryBuildSparklineCommands(
+            operation,
+            sheet,
+            range,
+            out var commands);
+
+        planned.Should().BeFalse();
+        commands.Should().BeEmpty();
     }
 
     private static QuickAnalysisHostOperation Plan(
