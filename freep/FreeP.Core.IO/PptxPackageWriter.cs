@@ -769,8 +769,8 @@ public static class PptxPackageWriter
                 new XAttribute("cy", p.SlideSizeCyEmu),
                 new XAttribute("type", "screen16x9")),
             new XElement(P + "notesSz",
-                new XAttribute("cx", 6858000),
-                new XAttribute("cy", 9144000)));
+                new XAttribute("cx", DrawingMlUnits.EmuPerInch * 15 / 2),
+                new XAttribute("cy", DrawingMlUnits.EmuPerInch * 10)));
 
         // Emit p14:sectionLst inside p:extLst when sections are present.
         if (p.Sections.Count > 0)

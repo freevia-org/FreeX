@@ -22,8 +22,8 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class SlideCompositor
 {
-    // 1 inch = 914400 EMU; 1 inch = 96 DIP -> 1 DIP = 9525 EMU
-    private const double EmuPerDip = 9525.0;
+    // DrawingML EMU per 96-DPI DIP.
+    private const double EmuPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
 
     // Default text insets matching PowerPoint defaults (in DIP)
     private const double DefaultInsetHorzDip = 9.14;  // ~7pt
@@ -1301,7 +1301,7 @@ public static class SlideCompositor
             LnSpcReduction = lnSpcReduc,      // Wave 19A
             // Wave 22B: text columns
             ColumnCount = Math.Max(1, body.ColumnCount),
-            ColumnSpacingDip = body.ColumnSpacingEmu > 0 ? body.ColumnSpacingEmu / 9525.0 : 0.0,
+            ColumnSpacingDip = body.ColumnSpacingEmu > 0 ? body.ColumnSpacingEmu / EmuPerDip : 0.0,
         };
     }
 

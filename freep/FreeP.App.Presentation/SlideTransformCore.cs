@@ -1,3 +1,5 @@
+using Free.Shared.Drawing;
+
 namespace FreeP.App.Compositor;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace FreeP.App.Compositor;
 /// the WPF and Avalonia renderers.
 ///
 /// Slide DIP space: origin (0,0) at top-left of the slide, axes in 96-DPI device-independent
-/// pixels (1 EMU = 1/9525 DIP).
+/// pixels using the shared DrawingML EMU-per-DIP unit.
 ///
 /// Screen / element space: the coordinate system of the rendered control.
 ///
@@ -56,9 +58,9 @@ public sealed class SlideTransformCore
     public double ScaleScreenToDip(double px) => Scale == 0 ? 0 : px / Scale;
 
     // ── EMU ↔ screen helpers ───────────────────────────────────────────────────────────────────
-    // 1 DIP = 9525 EMU
+    // DrawingML EMU per 96-DPI DIP.
 
-    private const double EmuPerDip = 9525.0;
+    private const double EmuPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
 
     /// <summary>Converts a DIP value to EMU (rounds to nearest long).</summary>
     public static long DipToEmu(double dip) => (long)Math.Round(dip * EmuPerDip);
