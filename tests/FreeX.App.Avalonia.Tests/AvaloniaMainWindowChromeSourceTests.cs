@@ -767,12 +767,16 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("SelectValidationRoute(plan.InitialRoute)");
         source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheet.Id)");
         source.Should().Contain("SelectValidationRoute(validation.Route)");
-        source.Should().Contain("ResolvePageSetupValidationIssue(validation)");
+        source.Should().Contain("PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(");
+        source.Should().Contain("PageLayoutStatusPlanner.PageSetupSubmission");
+        source.Should().Contain("PageLayoutStatusPlanner.PlanPageBreakPreviewToggle(");
         source.Should().NotContain("PageSetupDialogModel.ChoiceIndex(");
         source.Should().NotContain("PageSetupDialogModel.ChoiceValue(");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields)");
         source.Should().NotContain("ExecuteReviewCommand(plan.PageSetupCommand)");
         source.Should().NotContain("ExecuteReviewCommand(plan.HeaderFooterCommand)");
+        source.Should().NotContain("UiText.Get(\"ShellLoc_PageSetupFailed\")");
+        source.Should().NotContain("UiText.Get(\"ShellLoc_PageBreakPreviewOn\")");
         source.Should().NotContain("private bool ApplyPrintArea(");
         source.Should().NotContain("headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().NotContain("footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
@@ -821,11 +825,16 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset)");
         wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset)");
         wireSource.Should().Contain("PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset)");
+        wireSource.Should().Contain("PageLayoutStatusPlanner.ForPreset(plan)");
+        wireSource.Should().Contain("PageLayoutStatusPlanner.PrintAreaSet");
+        wireSource.Should().Contain("PageLayoutStatusPlanner.PrintAreaClear");
 
         mainSource.Should().NotContain("[\"pageLayout.printArea\"] = () => _ = ShowPageSetupDialogAsync()");
         mainSource.Should().NotContain("[\"Normal\"] = () => ApplyPageMargins(");
         mainSource.Should().NotContain("[\"Portrait\"] = () => ApplyPageOrientation(");
         mainSource.Should().NotContain("[\"Letter\"] = () => ApplyPaperSize(");
+        wireSource.Should().NotContain("UiText.Get(\"RibbonWire_PrintAreaSet\")");
+        wireSource.Should().NotContain("UiText.Get(\"RibbonWire_PrintAreaClearFailed\")");
     }
 
     [Fact]

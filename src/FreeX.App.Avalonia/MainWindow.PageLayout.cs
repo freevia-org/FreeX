@@ -68,29 +68,31 @@ public sealed partial class MainWindow
         var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields);
         if (!submission.Success)
         {
-            ShowEditIssue(ResolvePageSetupValidationIssue(submission.Validation!));
+            ShowEditIssue(PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(submission.Validation!, UiText.Get));
             return;
         }
 
         var commandBuild = submission.Submission!.TryBuildCompositeCommandForTarget(sheet, sheet.Id);
         if (!commandBuild.Success)
         {
-            ShowEditIssue(ResolvePageSetupValidationIssue(commandBuild.Validation!));
+            ShowEditIssue(PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(commandBuild.Validation!, UiText.Get));
             return;
         }
 
         var result = _session.ExecuteReviewCommand(commandBuild.Command!);
+        var status = PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.PageSetupSubmission,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PageSetupFailed"));
+            ShowEditIssue(status);
             return;
         }
 
-        RefreshShell(UiText.Get("ShellLoc_PageSetupUpdated"));
+        RefreshShell(status);
     }
-
-    private static string ResolvePageSetupValidationIssue(PageSetupSubmissionValidation validation) =>
-        validation.Message.Resolve(UiText.Get, "ShellLoc_PageSetupInvalid");
 
     private void TogglePageBreakPreview()
     {
@@ -101,19 +103,20 @@ public sealed partial class MainWindow
             return;
 
         ClearSelectedDrawingObject();
-        var viewMode = _session.ActiveSheet.ViewMode == WorksheetViewMode.PageBreakPreview
-            ? WorksheetViewMode.Normal
-            : WorksheetViewMode.PageBreakPreview;
-        var result = _session.SetWorksheetViewMode(viewMode);
+        var plan = PageLayoutStatusPlanner.PlanPageBreakPreviewToggle(_session.ActiveSheet.ViewMode);
+        var result = _session.SetWorksheetViewMode(plan.TargetViewMode);
+        var status = PageLayoutStatusPlanner.ResolveCommandStatus(
+            plan.Status,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PageBreakPreviewOff"));
+            ShowEditIssue(status);
             return;
         }
 
-        RefreshShell(viewMode == WorksheetViewMode.PageBreakPreview
-            ? UiText.Get("ShellLoc_PageBreakPreviewOn")
-            : UiText.Get("ShellLoc_PageBreakPreviewOff"));
+        RefreshShell(status);
     }
 
     private Canvas? BuildPageBreakPreviewOverlay(ViewportModel viewport, bool showHeadings, double zoomFactor)
@@ -829,7 +832,7 @@ public sealed partial class MainWindow
             {
                 var validation = submission.Validation!;
                 SelectValidationRoute(validation.Route);
-                validationText.Text = ResolvePageSetupValidationIssue(validation);
+                validationText.Text = PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(validation, UiText.Get);
                 validationText.IsVisible = true;
                 return;
             }

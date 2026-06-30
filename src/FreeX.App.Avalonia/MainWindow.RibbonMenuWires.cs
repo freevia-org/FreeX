@@ -256,9 +256,11 @@ public sealed partial class MainWindow
         var plan = PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset);
         var result = _session.ExecuteReviewCommand(
             PageLayoutRibbonCommandPlanner.BuildMarginsCommand(_session.ActiveSheet.Id, plan.Value));
-        RefreshShell(result.Success
-            ? UiText.Get(plan.StatusResourceKey)
-            : result.ErrorMessage ?? UiText.Get(plan.StatusResourceKey));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.ForPreset(plan),
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
     private void ApplyPageOrientationPreset(PageLayoutOrientationPreset preset)
@@ -266,9 +268,11 @@ public sealed partial class MainWindow
         var plan = PageLayoutRibbonActionPlanner.PlanOrientationPreset(preset);
         var result = _session.ExecuteReviewCommand(
             PageLayoutRibbonCommandPlanner.BuildOrientationCommand(_session.ActiveSheet.Id, plan.Value));
-        RefreshShell(result.Success
-            ? UiText.Get(plan.StatusResourceKey)
-            : result.ErrorMessage ?? UiText.Get(plan.StatusResourceKey));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.ForPreset(plan),
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
     private void ApplyPaperSizePreset(PageLayoutPaperSizePreset preset)
@@ -276,27 +280,33 @@ public sealed partial class MainWindow
         var plan = PageLayoutRibbonActionPlanner.PlanPaperSizePreset(preset);
         var result = _session.ExecuteReviewCommand(
             PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(_session.ActiveSheet.Id, plan.Value));
-        RefreshShell(result.Success
-            ? UiText.Get(plan.StatusResourceKey)
-            : result.ErrorMessage ?? UiText.Get(plan.StatusResourceKey));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.ForPreset(plan),
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
     private void SetPrintAreaFromSelection()
     {
         var result = _session.ExecuteReviewCommand(
             PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(_session.ActiveSheet.Id, _session.SelectedRange));
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_PrintAreaSet")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_PrintAreaSetFailed"));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.PrintAreaSet,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
     private void ClearPrintArea()
     {
         var result = _session.ExecuteReviewCommand(
             PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(_session.ActiveSheet.Id));
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_PrintAreaCleared")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_PrintAreaClearFailed"));
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            PageLayoutStatusPlanner.PrintAreaClear,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
     }
 
     // ── Page Layout ▸ Page Setup ▸ Background (Choose / Delete) ──────────────────

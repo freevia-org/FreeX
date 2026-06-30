@@ -46,6 +46,8 @@ public sealed class PageLayoutCommandSourceTests
         actionSource.Should().Contain("PageMarginsCommandLabel");
         actionSource.Should().Contain("PrintAreaCommandLabel");
         actionSource.Should().Contain("PageBreaksCommandLabel");
+        actionSource.Should().Contain("PrintGridlinesCommandLabel");
+        actionSource.Should().Contain("PrintHeadingsCommandLabel");
         policySource.Should().Contain("PageLayoutMarginPreset.Wide => WorksheetPageMargins.Wide");
         policySource.Should().Contain("PageLayoutOrientationPreset.Landscape");
         policySource.Should().Contain("PageLayoutPaperSizePreset.Letter => WorksheetPaperSize.Letter");
@@ -93,6 +95,10 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog(this)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked)");
+        source.Should().Contain("PageLayoutRibbonActionPlanner.PrintGridlinesCommandLabel");
+        source.Should().Contain("PageLayoutRibbonActionPlanner.PrintHeadingsCommandLabel");
+        source.Should().NotContain("\"Print Gridlines\");");
+        source.Should().NotContain("\"Print Headings\");");
     }
 
 }
