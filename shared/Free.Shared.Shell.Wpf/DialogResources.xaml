@@ -23,9 +23,9 @@
     <SolidColorBrush x:Key="DialogFieldBorder" Color="#B7BCC2"/>
     <!-- ACCENT-DERIVED — tokenized (WS-G round 9).  ThemeAccent*Brush keys are registered by
          WpfThemeApplier.BuildResources with per-app values: FreeX/FreeW teal, FreeP brick.
-         The Dialog* aliases re-expose the tokens so downstream {StaticResource Dialog*} bindings
-         in this file continue to work unchanged.  Fallback is FreeX teal (resolved by DynamicResource
-         when the theme key is present; dialogs opened without an applied theme keep the teal value). -->
+         The Dialog* aliases remain available for callers that bind dynamically by key. Styles in this
+         dictionary bind directly to the Theme* keys so dialogs opened before an app theme is attached
+         do not receive WPF's ResourceReferenceExpression alias object as a Brush value. -->
     <DynamicResource x:Key="DialogAccent"     ResourceKey="ThemeAccentBrush"/>
     <DynamicResource x:Key="DialogAccentDark" ResourceKey="ThemeAccentDarkBrush"/>
     <DynamicResource x:Key="DialogHover"      ResourceKey="ThemeAccentSoftBrush"/>
@@ -39,7 +39,7 @@
         <Setter Property="Margin" Value="6,0,0,0"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="Background" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
@@ -58,15 +58,15 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource DialogHover}"/>
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource DialogAccent}"/>
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource ThemeAccentSoftBrush}"/>
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource DialogPressed}"/>
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource DialogAccent}"/>
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource ThemeAccentPressedBrush}"/>
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsDefaulted" Value="True">
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource DialogAccent}"/>
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <!-- #9AA0A6 and #E0E0E0: structural disabled shades with no exact theme role. -->
@@ -84,8 +84,8 @@
     <!-- Accent primary button (OK / Insert / Apply): teal fill, white text. -->
     <Style x:Key="DialogPrimaryButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
-        <Setter Property="Background" Value="{StaticResource DialogAccent}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource DialogAccent}"/>
+        <Setter Property="Background" Value="{DynamicResource ThemeAccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -100,8 +100,8 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource DialogAccentDark}"/>
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource DialogAccentDark}"/>
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource ThemeAccentDarkBrush}"/>
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ThemeAccentDarkBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="bd" Property="Background" Value="#093F52"/>
@@ -123,7 +123,7 @@
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="MinHeight" Value="24"/>
         <Setter Property="Padding" Value="5,3"/>
-        <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="Background" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogFieldBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
@@ -131,10 +131,10 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Style.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter Property="BorderBrush" Value="{StaticResource DialogAccent}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="BorderBrush" Value="{StaticResource DialogAccent}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -145,7 +145,7 @@
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="MinHeight" Value="24"/>
         <Setter Property="Padding" Value="5,2"/>
-        <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
@@ -154,14 +154,14 @@
     <Style TargetType="{x:Type CheckBox}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Padding" Value="4,0,0,0"/>
     </Style>
     <Style TargetType="{x:Type RadioButton}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Padding" Value="4,0,0,0"/>
     </Style>
@@ -170,12 +170,12 @@
     <Style TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
     </Style>
     <Style TargetType="{x:Type Label}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralTextBrush}"/>
         <Setter Property="Padding" Value="0,0,0,0"/>
     </Style>
 
@@ -183,7 +183,7 @@
     <Style TargetType="{x:Type GroupBox}">
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource DialogAccent}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Margin" Value="0,4"/>

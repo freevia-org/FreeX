@@ -75,8 +75,8 @@ public sealed class UnhideWindowDialogTests
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_windowBox.Focus();");
-        source.Should().Contain("Keyboard.Focus(_windowBox);");
+        source.Should().Contain("DialogFocus.Focus(_windowBox);");
+        source.Should().NotContain("Keyboard.Focus(_windowBox);");
     }
 
     [Fact]

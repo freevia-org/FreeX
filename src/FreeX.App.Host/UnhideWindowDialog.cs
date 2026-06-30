@@ -2,17 +2,18 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Free.Shared.Shell.Wpf;
 using WorkbookWindowSelectionTarget = FreeX.App.Presentation.Shell.WorkbookWindowSelectionTarget<FreeX.App.Host.IWorkbookWindow>;
 
 namespace FreeX.App.Host;
 
 public sealed record UnhideWindowDialogResult(IWorkbookWindow Window);
 
-public sealed class UnhideWindowDialog : Window
+public sealed class UnhideWindowDialog : DialogWindow
 {
     private readonly ListBox _windowBox = new();
-    private readonly Button _okButton = new() { Content = UiText.Ok, Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-    private readonly Button _cancelButton = new() { Content = UiText.Cancel, Width = 72, IsCancel = true };
+    private readonly Button _okButton = new() { Content = UiText.Ok, Width = 72 };
+    private readonly Button _cancelButton = new() { Content = UiText.Cancel, Width = 72 };
 
     public UnhideWindowDialogResult? Result { get; private set; }
 
@@ -25,9 +26,7 @@ public sealed class UnhideWindowDialog : Window
         Title = UiText.Get("UnhideWindow_Title");
         Width = 340;
         Height = 160;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
-        ShowInTaskbar = false;
 
         _windowBox.ItemsSource = targetList;
         _windowBox.SelectedItem = selected;
@@ -66,26 +65,13 @@ public sealed class UnhideWindowDialog : Window
         });
         _windowBox.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_windowBox);
-        stack.Children.Add(CreateButtonRow());
+        stack.Children.Add(DialogButtonRowFactory.Create(_okButton, _cancelButton));
         return stack;
     }
 
     private void FocusInitialKeyboardTarget()
     {
-        _windowBox.Focus();
-        Keyboard.Focus(_windowBox);
-    }
-
-    private UIElement CreateButtonRow()
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        row.Children.Add(_okButton);
-        row.Children.Add(_cancelButton);
-        return row;
+        DialogFocus.Focus(_windowBox);
     }
 
     private void UpdateButtonState()

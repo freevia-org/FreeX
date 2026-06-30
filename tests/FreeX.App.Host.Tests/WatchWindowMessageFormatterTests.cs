@@ -87,7 +87,8 @@ public sealed class WatchWindowDialogTests
         source.Should().Contain("AutomationProperties.SetName(add, UiText.Get(\"AddWatch_AddAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(add, \"AddWatchAddButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(add, UiText.Get(\"AddWatch_AddHelpText\"));");
-        source.Should().Contain("var cancel = new Button { Content = UiText.Cancel, Width = 76, IsCancel = true };");
+        source.Should().Contain("var cancel = new Button { Content = UiText.Cancel, Width = 76 };");
+        source.Should().Contain("DialogButtonRowFactory.Create(add, cancel, new Thickness(0, 12, 0, 0));");
         source.Should().Contain("AutomationProperties.SetName(cancel, UiText.Get(\"AddWatch_CancelAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancel, \"AddWatchCancelButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(cancel, UiText.Get(\"AddWatch_CancelHelpText\"));");
