@@ -9,8 +9,11 @@ public sealed class QuickAnalysisPreviewIconFactoryTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("QuickAnalysisPreviewIconFactory.cs");
 
-        source.Should().Contain("QuickAnalysisPreviewIconRenderPlanner.Render(visual, sink)");
-        source.Should().Contain("private sealed class WpfQuickAnalysisPreviewIconRenderSink");
+        source.Should().Contain("QuickAnalysisPreviewIconRenderPlanner.Render(visual, renderer)");
+        source.Should().Contain("QuickAnalysisPreviewIconRenderAdapter<Canvas, UIElement>");
+        source.Should().Contain("private sealed class WpfQuickAnalysisPreviewIconRenderPrimitives");
+        source.Should().NotContain("IQuickAnalysisPreviewIconRenderSink");
+        source.Should().NotContain("RootCanvas");
         source.Should().NotContain("QuickAnalysisPreviewIconPlanner.Plan(visual)");
         source.Should().NotContain("foreach (var element in plan.Elements)");
         source.Should().NotContain("switch (element)");

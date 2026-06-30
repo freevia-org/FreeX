@@ -10,29 +10,24 @@ public static class QuickAnalysisPreviewIconFactory
 {
     public static FrameworkElement Create(QuickAnalysisPreviewVisual visual)
     {
-        var sink = new WpfQuickAnalysisPreviewIconRenderSink();
-        QuickAnalysisPreviewIconRenderPlanner.Render(visual, sink);
-        return sink.RootCanvas;
+        var renderer = new QuickAnalysisPreviewIconRenderAdapter<Canvas, UIElement>(
+            new WpfQuickAnalysisPreviewIconRenderPrimitives());
+        QuickAnalysisPreviewIconRenderPlanner.Render(visual, renderer);
+        return renderer.Root;
     }
 
-    private sealed class WpfQuickAnalysisPreviewIconRenderSink : IQuickAnalysisPreviewIconRenderSink
+    private sealed class WpfQuickAnalysisPreviewIconRenderPrimitives
+        : IQuickAnalysisPreviewIconRenderPrimitives<Canvas, UIElement>
     {
-        private Canvas? _canvas;
-
-        public Canvas RootCanvas =>
-            _canvas ?? throw new InvalidOperationException("Quick Analysis icon rendering was not initialized.");
-
-        public void Begin(QuickAnalysisPreviewIconPlan plan)
-        {
-            _canvas = new Canvas
+        public Canvas CreateRoot(QuickAnalysisPreviewIconPlan plan) =>
+            new()
             {
                 Width = plan.Width,
                 Height = plan.Height,
                 Margin = new Thickness(0, 0, 6, 0)
             };
-        }
 
-        public void AddRectangle(QuickAnalysisPreviewIconRectangle rectangle)
+        public UIElement CreateRectangle(QuickAnalysisPreviewIconRectangle rectangle)
         {
             var rect = new Rectangle
             {
@@ -44,10 +39,10 @@ public static class QuickAnalysisPreviewIconFactory
             };
             Canvas.SetLeft(rect, rectangle.Left);
             Canvas.SetTop(rect, rectangle.Top);
-            RootCanvas.Children.Add(rect);
+            return rect;
         }
 
-        public void AddEllipse(QuickAnalysisPreviewIconEllipse ellipse)
+        public UIElement CreateEllipse(QuickAnalysisPreviewIconEllipse ellipse)
         {
             var ellipseShape = new Ellipse
             {
@@ -57,12 +52,11 @@ public static class QuickAnalysisPreviewIconFactory
             };
             Canvas.SetLeft(ellipseShape, ellipse.Left);
             Canvas.SetTop(ellipseShape, ellipse.Top);
-            RootCanvas.Children.Add(ellipseShape);
+            return ellipseShape;
         }
 
-        public void AddLine(QuickAnalysisPreviewIconLine line)
-        {
-            RootCanvas.Children.Add(new Line
+        public UIElement CreateLine(QuickAnalysisPreviewIconLine line) =>
+            new Line
             {
                 X1 = line.X1,
                 Y1 = line.Y1,
@@ -70,23 +64,22 @@ public static class QuickAnalysisPreviewIconFactory
                 Y2 = line.Y2,
                 Stroke = ToBrush(line.Stroke),
                 StrokeThickness = line.StrokeThickness
-            });
-        }
+            };
 
-        public void AddPolygon(QuickAnalysisPreviewIconPolygon polygon)
+        public UIElement CreatePolygon(QuickAnalysisPreviewIconPolygon polygon)
         {
             var points = new PointCollection();
             foreach (var point in polygon.Points)
                 points.Add(new Point(point.X, point.Y));
 
-            RootCanvas.Children.Add(new Polygon
+            return new Polygon
             {
                 Points = points,
                 Fill = ToBrush(polygon.Fill)
-            });
+            };
         }
 
-        public void AddText(QuickAnalysisPreviewIconText text)
+        public UIElement CreateText(QuickAnalysisPreviewIconText text)
         {
             var textBlock = new TextBlock
             {
@@ -97,8 +90,11 @@ public static class QuickAnalysisPreviewIconFactory
             };
             Canvas.SetLeft(textBlock, text.Left);
             Canvas.SetTop(textBlock, text.Top);
-            RootCanvas.Children.Add(textBlock);
+            return textBlock;
         }
+
+        public void AddChild(Canvas root, UIElement element) =>
+            root.Children.Add(element);
 
         private static Brush ToBrush(QuickAnalysisPreviewIconColor color) =>
             new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
