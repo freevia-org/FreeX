@@ -111,6 +111,11 @@ public sealed record DocumentViewSurfacePlan(
     }
 }
 
+public sealed record DocumentFloatingObjectPlacementPlan(
+    double XDip,
+    double YDip,
+    int AnchorPageIndex);
+
 public static class DocumentViewLayoutPlanner
 {
     public static DocumentPageMetricsPlan BuildPageMetrics(PageSettings page)
@@ -222,6 +227,61 @@ public static class DocumentViewLayoutPlanner
         for (var x = surface.PageLeftDip; x <= surface.PageLeftDip + surface.PageWidthDip + 0.01; x += tickStepDip)
             ticks.Add(x);
         return ticks;
+    }
+
+    public static DocumentFloatingObjectPlacementPlan BuildFloatingObjectPlacement(
+        DocumentViewSurfacePlan surface,
+        double anchorContentYDip,
+        int columnCount,
+        FloatingPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+
+        return BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip,
+            columnCount,
+            placement.HorizontalAnchor,
+            placement.HorizontalOffsetPt,
+            placement.VerticalAnchor,
+            placement.VerticalOffsetPt);
+    }
+
+    public static DocumentFloatingObjectPlacementPlan BuildFloatingObjectPlacement(
+        DocumentViewSurfacePlan surface,
+        double anchorContentYDip,
+        int columnCount,
+        HorizontalAnchor horizontalAnchor,
+        double horizontalOffsetPt,
+        VerticalAnchor verticalAnchor,
+        double verticalOffsetPt)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+
+        var horizontalOffsetDip = PageLayout.PointsToDip(horizontalOffsetPt);
+        var verticalOffsetDip = PageLayout.PointsToDip(verticalOffsetPt);
+        var anchorPageIndex = surface.IsPrintLayout && surface.TextAreaHeightDip > 0
+            ? Math.Max(0, (int)(anchorContentYDip / surface.TextAreaHeightDip))
+            : 0;
+        var anchorPageTopDip = surface.IsPrintLayout ? surface.PageTopDip(anchorPageIndex) : 0;
+        var paragraphYDip = surface.ContentYToPageSpaceY(anchorContentYDip, columnCount);
+
+        var xDip = horizontalAnchor switch
+        {
+            HorizontalAnchor.Page => surface.PageLeftDip + horizontalOffsetDip,
+            HorizontalAnchor.Margin => surface.ContentLeftDip + horizontalOffsetDip,
+            _ => surface.ContentLeftDip + horizontalOffsetDip,
+        };
+
+        var yDip = verticalAnchor switch
+        {
+            VerticalAnchor.Paragraph => paragraphYDip + verticalOffsetDip,
+            VerticalAnchor.Margin => anchorPageTopDip + surface.MarginTopDip + verticalOffsetDip,
+            VerticalAnchor.Page => anchorPageTopDip + verticalOffsetDip,
+            _ => paragraphYDip + verticalOffsetDip,
+        };
+
+        return new DocumentFloatingObjectPlacementPlan(xDip, yDip, anchorPageIndex);
     }
 
     private static DocumentViewSurfacePlan BuildPrintSurfacePlan(

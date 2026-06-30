@@ -4744,17 +4744,6 @@ public sealed class DocumentView : Control
     /// </summary>
     private void CollectFloatingImages(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
-        // Page index for the anchor paragraph.
-        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
-            ? (int)(anchorContentY / _layoutTextAreaHeight)
-            : 0;
-
-        // Page top in page-space (DeskPadding + pageIndex*(pageHeight+gap)).
-        double PageTop(int pi) =>
-            _viewMode == DocumentViewMode.PrintLayout
-                ? _surfacePlan.PageTopDip(pi)
-                : 0;
-
         for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
         {
             var run = paragraph.Runs[runIdx];
@@ -4764,33 +4753,16 @@ public sealed class DocumentView : Control
             var imgW = img.WidthPt  > 0 ? img.WidthPt  * PxPerPoint : 120;
             var imgH = img.HeightPt > 0 ? img.HeightPt * PxPerPoint :  80;
 
-            // ── Horizontal position ──────────────────────────────────────────────────
-            double x = img.HorizontalAnchor switch
-            {
-                HorizontalAnchor.Page   => _pageLeft  + img.HorizontalOffsetPt * PxPerPoint,
-                HorizontalAnchor.Margin => _contentLeft + img.HorizontalOffsetPt * PxPerPoint,
-                _                       => _contentLeft + img.HorizontalOffsetPt * PxPerPoint, // Column (default)
-            };
+            var placement = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+                _surfacePlan,
+                anchorContentY,
+                _colCount,
+                img.HorizontalAnchor,
+                img.HorizontalOffsetPt,
+                img.VerticalAnchor,
+                img.VerticalOffsetPt);
 
-            // ── Vertical position ────────────────────────────────────────────────────
-            double y = img.VerticalAnchor switch
-            {
-                // Paragraph anchor: offset from the page-space Y of the anchor paragraph.
-                VerticalAnchor.Paragraph =>
-                    ContentYToPageSpaceY(anchorContentY) + img.VerticalOffsetPt * PxPerPoint,
-
-                // Margin anchor: offset from the top-margin edge on the anchor's page.
-                VerticalAnchor.Margin =>
-                    PageTop(anchorPageIndex) + _marginTopDip + img.VerticalOffsetPt * PxPerPoint,
-
-                // Page anchor: offset from the physical page top on the anchor's page.
-                VerticalAnchor.Page =>
-                    PageTop(anchorPageIndex) + img.VerticalOffsetPt * PxPerPoint,
-
-                _ => ContentYToPageSpaceY(anchorContentY) + img.VerticalOffsetPt * PxPerPoint,
-            };
-
-            var rect = new Rect(x, y, imgW, imgH);
+            var rect = new Rect(placement.XDip, placement.YDip, imgW, imgH);
             var behindText = img.Wrapping == ImageWrapping.Behind;
             // AV-FLSEL: BlockIndex/RunIndex stored for hit-test.
             _floatingImages.Add((rect, DecodeBitmap(img), behindText, img.ZOrderIndex, blockIndex, runIdx));
@@ -4806,15 +4778,6 @@ public sealed class DocumentView : Control
     /// </summary>
     private void CollectFloatingShapes(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
-        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
-            ? (int)(anchorContentY / _layoutTextAreaHeight)
-            : 0;
-
-        double PageTop(int pi) =>
-            _viewMode == DocumentViewMode.PrintLayout
-                ? _surfacePlan.PageTopDip(pi)
-                : 0;
-
         for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
         {
             var run = paragraph.Runs[runIdx];
@@ -4826,30 +4789,13 @@ public sealed class DocumentView : Control
             var shapeW = shape.WidthPt  > 0 ? shape.WidthPt  * PxPerPoint : 120;
             var shapeH = shape.HeightPt > 0 ? shape.HeightPt * PxPerPoint :  80;
 
-            // ── Horizontal position ──────────────────────────────────────────────────
-            double x = pl.HorizontalAnchor switch
-            {
-                HorizontalAnchor.Page   => _pageLeft    + pl.HorizontalOffsetPt * PxPerPoint,
-                HorizontalAnchor.Margin => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
-                _                       => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint, // Column
-            };
+            var placement = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+                _surfacePlan,
+                anchorContentY,
+                _colCount,
+                pl);
 
-            // ── Vertical position ────────────────────────────────────────────────────
-            double y = pl.VerticalAnchor switch
-            {
-                VerticalAnchor.Paragraph =>
-                    ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
-
-                VerticalAnchor.Margin =>
-                    PageTop(anchorPageIndex) + _marginTopDip + pl.VerticalOffsetPt * PxPerPoint,
-
-                VerticalAnchor.Page =>
-                    PageTop(anchorPageIndex) + pl.VerticalOffsetPt * PxPerPoint,
-
-                _ => ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
-            };
-
-            var rect = new Rect(x, y, shapeW, shapeH);
+            var rect = new Rect(placement.XDip, placement.YDip, shapeW, shapeH);
             var behindText = pl.Wrapping == ImageWrapping.Behind;
 
             // ── Fill brush ───────────────────────────────────────────────────────────
@@ -11010,37 +10956,16 @@ public sealed class DocumentView : Control
 
     // ── FO3 collection helpers ────────────────────────────────────────────────────────────────────
 
-    /// <summary>Resolves floating-placement page-space position. Mirrors CollectFloatingShapes anchor logic.</summary>
+    /// <summary>Resolves floating-placement page-space position through the neutral layout planner.</summary>
     private (double X, double Y) ResolveFloatingPos(FloatingPlacement pl, double anchorContentY)
     {
-        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
-            ? (int)(anchorContentY / _layoutTextAreaHeight)
-            : 0;
+        var placement = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            _surfacePlan,
+            anchorContentY,
+            _colCount,
+            pl);
 
-        double PageTop(int pi) =>
-            _viewMode == DocumentViewMode.PrintLayout
-                ? _surfacePlan.PageTopDip(pi)
-                : 0;
-
-        double x = pl.HorizontalAnchor switch
-        {
-            HorizontalAnchor.Page   => _pageLeft    + pl.HorizontalOffsetPt * PxPerPoint,
-            HorizontalAnchor.Margin => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
-            _                       => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
-        };
-
-        double y = pl.VerticalAnchor switch
-        {
-            VerticalAnchor.Paragraph =>
-                ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
-            VerticalAnchor.Margin =>
-                PageTop(anchorPageIndex) + _marginTopDip + pl.VerticalOffsetPt * PxPerPoint,
-            VerticalAnchor.Page =>
-                PageTop(anchorPageIndex) + pl.VerticalOffsetPt * PxPerPoint,
-            _ => ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
-        };
-
-        return (x, y);
+        return (placement.XDip, placement.YDip);
     }
 
     /// <summary>Collects floating charts anchored to <paramref name="paragraph"/>.</summary>
