@@ -18,6 +18,7 @@ public sealed class DialogSharedHelperDedupTests
     [InlineData("ImageSizeDialog.cs")]
     [InlineData("PropertiesDialog.cs")]
     [InlineData("DateTimeDialog.cs")]
+    [InlineData("PasswordPromptDialog.cs")]
     [InlineData("StyleDialog.cs")]
     [InlineData("ZoomDialog.cs")]
     public void DialogsWithOkCancelRows_UseSharedButtonRowFactory(string fileName)
@@ -88,6 +89,15 @@ public sealed class DialogSharedHelperDedupTests
 
         source.Should().Contain("DialogFocus.FocusAndSelect(");
         source.Should().NotContain("_widthBox.SelectAll();");
+    }
+
+    [Fact]
+    public void PasswordPromptDialog_UsesSharedFocusHelper()
+    {
+        var source = ReadDialogSource("PasswordPromptDialog.cs");
+
+        source.Should().Contain("DialogFocus.Focus(_passwordBox)");
+        source.Should().NotContain("_passwordBox.Focus();");
     }
 
     private static string ReadDialogSource(string fileName)
