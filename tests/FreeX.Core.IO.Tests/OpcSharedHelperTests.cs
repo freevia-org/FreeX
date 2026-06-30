@@ -656,6 +656,34 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void CoreDocumentPropertiesDedupSourceGuard_UsesSharedModelReaderWriterAcrossApps()
+    {
+        var sharedModelSource = TestWorkspaceFiles.ReadRepoText("shared", "Free.Shared.Opc", "DocumentProperties.cs");
+        var sharedOpcSource = TestWorkspaceFiles.ReadRepoText("shared", "Free.Shared.Opc", "OpcDocumentProperties.cs");
+        var textDocumentSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.Model", "TextDocument.cs");
+        var docxReaderSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxReader.cs");
+        var docxWriterSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxWriter.cs");
+        var presentationSource = TestWorkspaceFiles.ReadRepoText("freep", "FreeP.Core.Model", "Presentation.cs");
+        var pptxReaderSource = TestWorkspaceFiles.ReadRepoText("freep", "FreeP.Core.IO", "PptxPackageReader.cs");
+        var pptxWriterSource = TestWorkspaceFiles.ReadRepoText("freep", "FreeP.Core.IO", "PptxPackageWriter.cs");
+        var xlsxPropertiesSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDocumentPropertiesPreserver.cs");
+
+        sharedModelSource.Should().Contain("CoreDocumentProperties ToCoreProperties()");
+        sharedModelSource.Should().Contain("ApplyCoreProperties(CoreDocumentProperties properties");
+        sharedOpcSource.Should().Contain("CoreDocumentProperties ReadCoreProperties(");
+        sharedOpcSource.Should().Contain("BuildCorePropertiesDocument(");
+
+        textDocumentSource.Should().Contain("public DocumentProperties Properties { get; } = new();");
+        presentationSource.Should().Contain("public DocumentProperties Properties { get; } = new();");
+
+        docxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(archive)");
+        docxWriterSource.Should().Contain("OpcDocumentProperties.BuildCorePropertiesDocument(");
+        pptxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(archive, path)");
+        pptxWriterSource.Should().Contain("OpcDocumentProperties.BuildCorePropertiesDocument(");
+        xlsxPropertiesSource.Should().Contain("OpcDocumentProperties.PreservePropertyElements(");
+    }
+
+    [Fact]
     public void PreservePropertyElements_CopiesOnlyRequestedOpcPropertyElements()
     {
         var source = new XElement(

@@ -1,7 +1,7 @@
 namespace Free.Shared.Opc;
 
 /// <summary>
-/// Mutable in-memory model for OPC core document properties shared by FreeW and FreeP.
+/// Mutable in-memory model for OPC core document properties shared by FreeX, FreeW, and FreeP.
 /// </summary>
 public sealed class DocumentProperties
 {
