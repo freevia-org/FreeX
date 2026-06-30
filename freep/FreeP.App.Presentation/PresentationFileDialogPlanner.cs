@@ -7,8 +7,8 @@ namespace FreeP.App.Compositor;
 /// </summary>
 public static class PresentationFileDialogPlanner
 {
-    public const string DefaultPresentationExtension = ".pptx";
-    public const string LegacyFxpExtension = ".fxp";
+    public const string DefaultPresentationExtension = PresentationFilePersistenceWorkflow.DefaultPresentationExtension;
+    public const string LegacyFxpExtension = PresentationFilePersistenceWorkflow.LegacyFxpExtension;
     public const string PdfExportExtension = ".pdf";
 
     private const string FallbackPresentationName = "Presentation";
@@ -55,5 +55,5 @@ public static class PresentationFileDialogPlanner
             preferredFirstExtension: DefaultPresentationExtension);
 
     public static bool IsLegacyPresentationPath(string path) =>
-        string.Equals(Path.GetExtension(path), LegacyFxpExtension, StringComparison.OrdinalIgnoreCase);
+        PresentationFilePersistenceWorkflow.IsLegacyPresentationPath(path);
 }

@@ -16,7 +16,8 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenDialogPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSaveAsDialogPlan(");
         source.Should().Contain("PresentationFileDialogPlanner.BuildPdfExportDialogPlan(");
-        source.Should().Contain("PresentationFileDialogPlanner.IsLegacyPresentationPath(path)");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getModel())");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         source.Should().Contain("IUserMessageService? messageService = null");
@@ -27,6 +28,10 @@ public sealed class FileCommandsSourceTests
         source.Should().NotContain("FileDialogRequestPlanner.");
         source.Should().NotContain("FileDialogFilterBuilder.BuildPerFormatFilter(Formats)");
         source.Should().NotContain("FileDialogFilterBuilder.GetDefaultExtension(Formats)");
+        source.Should().NotContain("FxpFormat.");
+        source.Should().NotContain("PptxPackageReader.");
+        source.Should().NotContain("PptxPackageWriter.");
+        source.Should().NotContain("SerializePresentation(");
         source.Should().NotContain("FileCommandMessageBox.PromptSaveChanges(");
         source.Should().NotContain("FileCommandMessageBox.ShowError(");
         source.Should().NotContain("PromptSaveChanges(DisplayName, action");

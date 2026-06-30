@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
@@ -88,8 +87,9 @@ internal sealed class FileCommands
     {
         try
         {
-            _loadModel(ReadPresentation(path));
-            SetSaved(path, suppressRecentFiles);
+            var result = PresentationFilePersistenceWorkflow.Open(path);
+            _loadModel(result.Presentation);
+            SetSaved(result.SavedPath, suppressRecentFiles || result.SuppressRecentFiles);
             return true;
         }
         catch (Exception ex)
@@ -144,11 +144,8 @@ internal sealed class FileCommands
     {
         try
         {
-            // Write through a sibling temp file and atomically replace the target, mirroring the
-            // ExportPdf path — so a mid-write failure (disk full, serialization error, AV lock)
-            // never truncates the previously-saved presentation.
-            ExportAtomicWriter.WriteAllBytes(path, SerializePresentation(path, _getModel()));
-            SetSaved(path, suppressRecentFiles: false);
+            var result = PresentationFilePersistenceWorkflow.Save(path, _getModel());
+            SetSaved(result.SavedPath, result.SuppressRecentFiles);
             return true;
         }
         catch (Exception ex)
@@ -158,27 +155,12 @@ internal sealed class FileCommands
         }
     }
 
-    private void SetSaved(string path, bool suppressRecentFiles)
+    private void SetSaved(string? path, bool suppressRecentFiles)
     {
-        _workflow.MarkSavedWithPath(path, suppressRecentFiles);
-    }
-
-    private static Presentation ReadPresentation(string path) =>
-        PresentationFileDialogPlanner.IsLegacyPresentationPath(path)
-            ? FxpFormat.Read(path)
-            : PptxPackageReader.Read(path);
-
-    private static byte[] SerializePresentation(string path, Presentation presentation)
-    {
-        if (PresentationFileDialogPlanner.IsLegacyPresentationPath(path))
-        {
-            var json = FxpFormat.Serialize(presentation);
-            return new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
-        }
-
-        using var stream = new MemoryStream();
-        PptxPackageWriter.Write(presentation, stream);
-        return stream.ToArray();
+        if (path is null)
+            _workflow.MarkSavedWithoutPath();
+        else
+            _workflow.MarkSavedWithPath(path, suppressRecentFiles);
     }
 
     private string? PromptOpenPath()
