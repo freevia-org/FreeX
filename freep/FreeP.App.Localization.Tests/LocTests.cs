@@ -339,6 +339,37 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void GetNeutralResourceKeys_CoversFileTextResources()
+    {
+        Loc.GetNeutralResourceKeys().Should().Contain([
+            "File_OpenPresentationPickerTitle",
+            "File_SavePresentationPickerTitle",
+            "File_PresentationFallbackDisplayName",
+            "File_NewPresentationAction",
+            "File_OpenPresentationAction",
+            "File_OpenCommand",
+            "File_SaveCommand",
+            "File_InsertPictureCommand",
+            "File_InsertPicturePickerTitle",
+            "File_PictureFileTypeName",
+            "File_CommandUnavailableFormat",
+            "File_SelectedFileNotLocalPathFormat",
+            "File_UnsupportedFileTypeFormat",
+            "File_UnsupportedExtensionFormat",
+            "File_CommandFailedFormat",
+            "File_OpenedFormat",
+            "File_SavedFormat",
+            "File_InsertedFormat",
+            "File_SaveAsTitleFormat"
+        ]);
+
+        WithUiCulture("en-US", () => Loc.Get("File_OpenPresentationPickerTitle"))
+            .Should().Be("Open Presentation");
+        WithUiCulture("en-US", () => Loc.Format("File_CommandFailedFormat", "Save", "Denied"))
+            .Should().Be("Save failed: Denied");
+    }
+
+    [Fact]
     public void SharedHelpers_ExposeCatalogContracts()
     {
         Loc.PseudoLocalizationCultureName.Should().Be(LocalizedTextCatalog.PseudoLocalizationCultureName);

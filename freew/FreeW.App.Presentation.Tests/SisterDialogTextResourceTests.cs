@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Dialogs;
 
@@ -20,7 +21,31 @@ public sealed class SisterDialogTextResourceTests
     [Fact]
     public void FreeWFileTextResources_FormatPdfExportStatus()
     {
+        var documentText = FreeWFileTextResources.Document;
+
+        documentText.OpenPickerTitle.Should().Be("Open document");
+        documentText.SavePickerTitle.Should().Be("Save document");
+        documentText.FallbackDisplayName.Should().Be("Document");
+        documentText.NewAction.Should().Be("replace the current document");
+        documentText.OpenAction.Should().Be("opening another document");
+        documentText.OpenCommand.Should().Be("Open");
+        documentText.SaveCommand.Should().Be("Save");
+        documentText.InsertPictureCommand.Should().Be("Insert picture");
+        documentText.InsertPicturePickerTitle.Should().Be("Insert Picture");
         FreeWFileTextResources.PdfFileTypeName.Should().Be("PDF document");
+        FreeWFileTextResources.PictureFileTypeName.Should().Be("Pictures");
+        FreeWFileTextResources.TextFromFileTypeName.Should().Be("Documents");
+        FreeWFileTextResources.ExportPdfPickerTitle.Should().Be("Export to PDF");
+        FreeWFileTextResources.PdfExportCommand.Should().Be("PDF export");
+        FreeWFileTextResources.InsertTextCommand.Should().Be("Insert text");
+        FreeWFileTextResources.NewWindowCommand.Should().Be("New window");
+        SisterAppFileTextPlanner.FormatUnsupportedFileType(documentText, documentText.OpenCommand, ".zip")
+            .Should().Be("Open failed: unsupported file type \".zip\".");
+        SisterAppFileTextPlanner.FormatCommandFailed(documentText, FreeWFileTextResources.InsertTextCommand, "No adapter")
+            .Should().Be("Insert text failed: No adapter");
+        SisterAppFileTextPlanner.Document.OpenPickerTitle.Should().Be(documentText.OpenPickerTitle);
+        SisterAppFileTextPlanner.FormatCommandFailed(FreeWFileTextResources.InsertTextCommand, "No adapter")
+            .Should().Be("Insert text failed: No adapter");
         FreeWFileTextResources.FormatPdfExported(1, "Skia", "Draft.pdf")
             .Should().Be("Exported PDF (1 page, Skia): Draft.pdf");
         FreeWFileTextResources.FormatPdfExported(3, "Portable", "Draft.pdf")
