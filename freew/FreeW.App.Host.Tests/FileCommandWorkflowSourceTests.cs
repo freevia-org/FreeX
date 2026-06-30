@@ -15,15 +15,14 @@ public sealed class FileCommandWorkflowSourceTests
             projectFolder,
             "FileCommands.cs"));
 
-        source.Should().Contain("FileCommandWorkflow");
+        source.Should().Contain("SisterWpfFileCommandWorkflow");
         source.Should().Contain("_workflow.New(");
         source.Should().Contain("_workflow.Open(");
         source.Should().Contain("_workflow.Save(");
         source.Should().Contain("_workflow.ConfirmCloseAllowed(");
         source.Should().Contain("IUserMessageService? messageService = null");
-        source.Should().Contain("_messageService = messageService ?? new WpfUserMessageService();");
-        source.Should().Contain("_messageService.PromptSaveChanges(DisplayName, action");
-        source.Should().Contain("_messageService.ShowFileCommandError(summary, ex");
+        source.Should().Contain("messageService);");
+        source.Should().Contain("_workflow.ShowError(summary, ex");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         if (appFolder == "freew")
@@ -41,11 +40,31 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().NotContain(".ConfirmDiscardOrSave(action");
         source.Should().NotContain("FileCommandMessageBox.PromptSaveChanges(");
         source.Should().NotContain("FileCommandMessageBox.ShowError(");
+        source.Should().NotContain("PromptSaveChanges(DisplayName, action");
+        source.Should().NotContain("ShowFileCommandError(summary, ex");
         source.Should().NotContain("UserMessageButtons.YesNoCancel");
         source.Should().NotContain("UserMessageButtons.Ok");
         source.Should().NotContain("MessageBox.Show(");
         source.Should().NotContain("new OpenFileDialog");
         source.Should().NotContain("new SaveFileDialog");
+    }
+
+    [Fact]
+    public void SharedWpfShellOwnsSisterFileCommandPromptWiring()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "shared",
+            "Free.Shared.Shell.Wpf",
+            "SisterWpfFileCommandWorkflow.cs"));
+
+        source.Should().Contain("public sealed class SisterWpfFileCommandWorkflow");
+        source.Should().Contain("new WpfUserMessageService()");
+        source.Should().Contain("new FileCommandWorkflow(");
+        source.Should().Contain("PromptSaveChanges,");
+        source.Should().Contain("_messageService.PromptSaveChanges(DisplayName, action, _applicationName)");
+        source.Should().Contain("_messageService.ShowFileCommandError(summary, exception, _applicationName)");
+        source.Should().Contain("public void ShowError(string summary, Exception exception)");
     }
 
     [Fact]
