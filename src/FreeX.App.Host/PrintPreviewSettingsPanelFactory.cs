@@ -81,6 +81,36 @@ internal static class PrintPreviewSettingsPanelFactory
             refreshPreview();
         }
 
+        void ApplyAction(PrintPreviewSettingsPanelActionPlan action)
+        {
+            switch (action.Kind)
+            {
+                case PrintPreviewSettingsPanelActionKind.UpdatePreviewSettings:
+                    if (setPrintPreviewSettings is null || action.Settings is null)
+                        return;
+
+                    ApplySettings(action.Settings);
+                    break;
+
+                case PrintPreviewSettingsPanelActionKind.ExecuteCommand:
+                    if (executeCommand is null || action.Command is null)
+                        return;
+
+                    executeCommand(action.Command);
+                    if (action.RefreshPreview)
+                        refreshPreview();
+                    break;
+
+                case PrintPreviewSettingsPanelActionKind.OpenCustomMargins:
+                    showCustomMargins?.Invoke();
+                    break;
+
+                case PrintPreviewSettingsPanelActionKind.OpenPageSetup:
+                    showPageSetup?.Invoke();
+                    break;
+            }
+        }
+
         // 1. Copies
         var copiesUpDown = new TextBox
         {
@@ -95,13 +125,9 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PrintPreview_CopiesSectionLabel"), copiesUpDown);
         copiesUpDown.TextChanged += (_, _) =>
         {
-            if (setPrintPreviewSettings is null)
-                return;
-            if (int.TryParse(copiesUpDown.Text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-                && parsed is >= 1 and <= 999)
-            {
-                ApplySettings(currentSettings with { Copies = parsed });
-            }
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreateCopiesAction(
+                currentSettings,
+                copiesUpDown.Text));
         };
         panel.Children.Add(copiesUpDown);
 
@@ -120,10 +146,8 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PrintPreview_PrinterSectionLabel"), printerBox);
         printerBox.SelectionChanged += (_, _) =>
         {
-            if (setPrintPreviewSettings is null)
-                return;
             var name = printerBox.SelectedItem is PrintQueue q ? q.FullName : null;
-            ApplySettings(currentSettings with { PrinterName = name });
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePrinterAction(currentSettings, name));
         };
         panel.Children.Add(printerBox);
 
@@ -150,14 +174,10 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PrintPreview_PrintWhatLabel"), printWhatBox);
         printWhatBox.SelectionChanged += (_, _) =>
         {
-            if (setPrintPreviewSettings is null || printWhatBox.SelectedIndex < 0)
-                return;
-
-            var option = panelPlan.PrintWhatOptions[printWhatBox.SelectedIndex];
-            if (!option.IsEnabled)
-                return;
-
-            ApplySettings(currentSettings with { PrintWhat = option.Value });
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePrintWhatAction(
+                panelPlan,
+                currentSettings,
+                printWhatBox.SelectedIndex));
         };
         panel.Children.Add(printWhatBox);
 
@@ -198,10 +218,10 @@ internal static class PrintPreviewSettingsPanelFactory
 
         void ApplyPageRange()
         {
-            if (setPrintPreviewSettings is null)
-                return;
-            var pageRange = PrintPreviewSettingsPanelPlanner.CreatePageRangePlan(fromBox.Text, toBox.Text);
-            ApplySettings(currentSettings with { PageFrom = pageRange.FromPage, PageTo = pageRange.ToPage });
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePageRangeAction(
+                currentSettings,
+                fromBox.Text,
+                toBox.Text));
         }
 
         fromBox.TextChanged += (_, _) => ApplyPageRange();
@@ -219,10 +239,10 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PrintPreview_SidesSectionLabel"), sidesBox);
         sidesBox.SelectionChanged += (_, _) =>
         {
-            if (setPrintPreviewSettings is null || sidesBox.SelectedIndex < 0)
-                return;
-
-            ApplySettings(currentSettings with { Sides = panelPlan.SidesOptions[sidesBox.SelectedIndex].Value });
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreateSidesAction(
+                panelPlan,
+                currentSettings,
+                sidesBox.SelectedIndex));
         };
         panel.Children.Add(sidesBox);
 
@@ -235,10 +255,10 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PrintPreview_CollatedSectionLabel"), collatedBox);
         collatedBox.SelectionChanged += (_, _) =>
         {
-            if (setPrintPreviewSettings is null || collatedBox.SelectedIndex < 0)
-                return;
-
-            ApplySettings(currentSettings with { Collated = panelPlan.CollationOptions[collatedBox.SelectedIndex].Value });
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreateCollationAction(
+                panelPlan,
+                currentSettings,
+                collatedBox.SelectedIndex));
         };
         panel.Children.Add(collatedBox);
 
@@ -247,12 +267,10 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PrintPreview_OrientationLabel"), orientBox);
         orientBox.SelectionChanged += (_, _) =>
         {
-            if (orientBox.SelectedIndex < 0 || executeCommand is null)
-                return;
-
-            var orient = panelPlan.OrientationOptions[orientBox.SelectedIndex].Value;
-            executeCommand(PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, orient));
-            refreshPreview();
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreateOrientationAction(
+                sheetId,
+                panelPlan,
+                orientBox.SelectedIndex));
         };
         panel.Children.Add(orientBox);
 
@@ -261,12 +279,10 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PageSetup_PaperSize"), paperBox);
         paperBox.SelectionChanged += (_, _) =>
         {
-            if (paperBox.SelectedIndex < 0 || executeCommand is null)
-                return;
-
-            var size = panelPlan.PaperSizeOptions[paperBox.SelectedIndex].Value;
-            executeCommand(PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, size));
-            refreshPreview();
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePaperSizeAction(
+                sheetId,
+                panelPlan,
+                paperBox.SelectedIndex));
         };
         panel.Children.Add(paperBox);
 
@@ -275,21 +291,13 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PageSetup_Margins"), marginsBox);
         marginsBox.SelectionChanged += (_, _) =>
         {
-            if (marginsBox.SelectedIndex < 0 || executeCommand is null)
-                return;
-
-            // The placeholder opens Page Setup on the Margins tab and then resets the combo.
-            var option = panelPlan.MarginOptions[marginsBox.SelectedIndex];
-            if (option.IsPlaceholder)
-            {
-                showCustomMargins?.Invoke();
-                // Reset to neutral selection so if user cancels, combo doesn't stay on placeholder.
+            var action = PrintPreviewSettingsPanelPlanner.CreateMarginsAction(
+                sheetId,
+                panelPlan,
+                marginsBox.SelectedIndex);
+            ApplyAction(action);
+            if (action.ResetSelection)
                 marginsBox.SelectedIndex = panelPlan.MarginsSelectedIndex;
-                return;
-            }
-
-            executeCommand(PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, option.Value));
-            refreshPreview();
         };
         panel.Children.Add(marginsBox);
 
@@ -298,20 +306,13 @@ internal static class PrintPreviewSettingsPanelFactory
         AddLabel(UiText.Get("PrintPreview_ScalingLabel"), scaleBox);
         scaleBox.SelectionChanged += (_, _) =>
         {
-            if (scaleBox.SelectedIndex < 0 || executeCommand is null)
-                return;
-
-            // The placeholder opens Page Setup and then resets the combo.
-            var option = panelPlan.ScalingOptions[scaleBox.SelectedIndex];
-            if (option.IsPlaceholder)
-            {
-                showPageSetup?.Invoke();
+            var action = PrintPreviewSettingsPanelPlanner.CreateScalingAction(
+                sheetId,
+                panelPlan,
+                scaleBox.SelectedIndex);
+            ApplyAction(action);
+            if (action.ResetSelection)
                 scaleBox.SelectedIndex = panelPlan.ScalingSelectedIndex;
-                return;
-            }
-
-            executeCommand(PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, option.Value));
-            refreshPreview();
         };
         panel.Children.Add(scaleBox);
 
@@ -326,18 +327,10 @@ internal static class PrintPreviewSettingsPanelFactory
         };
         AutomationProperties.SetName(ignorePrintAreaBox, UiText.Get("PrintPreview_IgnorePrintAreaAutomationName"));
         AutomationProperties.SetHelpText(ignorePrintAreaBox, UiText.Get("PrintPreview_IgnorePrintAreaHelpText"));
-        ignorePrintAreaBox.Checked += (_, _) =>
-        {
-            if (setPrintPreviewSettings is null)
-                return;
-            ApplySettings(currentSettings with { IgnorePrintArea = true });
-        };
-        ignorePrintAreaBox.Unchecked += (_, _) =>
-        {
-            if (setPrintPreviewSettings is null)
-                return;
-            ApplySettings(currentSettings with { IgnorePrintArea = false });
-        };
+        ignorePrintAreaBox.Checked += (_, _) => ApplyAction(
+            PrintPreviewSettingsPanelPlanner.CreateIgnorePrintAreaAction(currentSettings, true));
+        ignorePrintAreaBox.Unchecked += (_, _) => ApplyAction(
+            PrintPreviewSettingsPanelPlanner.CreateIgnorePrintAreaAction(currentSettings, false));
         panel.Children.Add(ignorePrintAreaBox);
 
         // Print options
@@ -357,10 +350,10 @@ internal static class PrintPreviewSettingsPanelFactory
 
         void ApplyPrintOptions(bool printGridlines, bool printHeadings)
         {
-            if (executeCommand is null)
-                return;
-            executeCommand(PageLayoutRibbonCommandPlanner.BuildPrintOptionsCommand(sheetId, printGridlines, printHeadings));
-            refreshPreview();
+            ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePrintOptionsAction(
+                sheetId,
+                printGridlines,
+                printHeadings));
         }
 
         gridlinesBox.Checked += (_, _) => ApplyPrintOptions(true, headingsBox.IsChecked == true);

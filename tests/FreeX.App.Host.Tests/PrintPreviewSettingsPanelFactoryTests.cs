@@ -20,11 +20,12 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("PrintPreviewSettingsPanelFactory.cs");
 
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildOrientationCommand(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildMarginsCommand(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(");
-        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintOptionsCommand(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreateOrientationAction(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreatePaperSizeAction(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreateMarginsAction(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreateScalingAction(");
+        source.Should().Contain("PrintPreviewSettingsPanelPlanner.CreatePrintOptionsAction(");
+        source.Should().NotContain("PageLayoutRibbonCommandPlanner.Build");
         source.Should().NotContain("new SetPageOrientationCommand(");
         source.Should().NotContain("new SetPaperSizeCommand(");
         source.Should().NotContain("new SetPageMarginsCommand(");

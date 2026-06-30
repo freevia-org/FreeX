@@ -1,7 +1,28 @@
 using System.Globalization;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
+
+public enum PrintPreviewSettingsPanelActionKind
+{
+    None,
+    UpdatePreviewSettings,
+    ExecuteCommand,
+    OpenCustomMargins,
+    OpenPageSetup
+}
+
+public sealed record PrintPreviewSettingsPanelActionPlan(
+    PrintPreviewSettingsPanelActionKind Kind,
+    PrintPreviewSettings? Settings = null,
+    IWorkbookCommand? Command = null,
+    bool ResetSelection = false,
+    bool RefreshPreview = false)
+{
+    public static PrintPreviewSettingsPanelActionPlan None { get; } =
+        new(PrintPreviewSettingsPanelActionKind.None);
+}
 
 public sealed record PrintPreviewSettingsPanelPlan(
     int Copies,
@@ -134,6 +155,139 @@ public static class PrintPreviewSettingsPanelPlanner
         new(
             ParseOptionalPageNumber(fromPageText),
             ParseOptionalPageNumber(toPageText));
+
+    public static PrintPreviewSettingsPanelActionPlan CreateCopiesAction(
+        PrintPreviewSettings currentSettings,
+        string? copiesText) =>
+        int.TryParse(copiesText?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            && parsed is >= 1 and <= 999
+                ? UpdateSettings(currentSettings with { Copies = parsed })
+                : PrintPreviewSettingsPanelActionPlan.None;
+
+    public static PrintPreviewSettingsPanelActionPlan CreatePrinterAction(
+        PrintPreviewSettings currentSettings,
+        string? printerName) =>
+        UpdateSettings(currentSettings with { PrinterName = printerName });
+
+    public static PrintPreviewSettingsPanelActionPlan CreatePrintWhatAction(
+        PrintPreviewSettingsPanelPlan panelPlan,
+        PrintPreviewSettings currentSettings,
+        int selectedIndex)
+    {
+        if (!TryGetChoice(panelPlan.PrintWhatOptions, selectedIndex, out var option) || !option.IsEnabled)
+            return PrintPreviewSettingsPanelActionPlan.None;
+
+        return UpdateSettings(currentSettings with { PrintWhat = option.Value });
+    }
+
+    public static PrintPreviewSettingsPanelActionPlan CreatePageRangeAction(
+        PrintPreviewSettings currentSettings,
+        string? fromPageText,
+        string? toPageText)
+    {
+        var pageRange = CreatePageRangePlan(fromPageText, toPageText);
+        return UpdateSettings(currentSettings with { PageFrom = pageRange.FromPage, PageTo = pageRange.ToPage });
+    }
+
+    public static PrintPreviewSettingsPanelActionPlan CreateSidesAction(
+        PrintPreviewSettingsPanelPlan panelPlan,
+        PrintPreviewSettings currentSettings,
+        int selectedIndex) =>
+        TryGetChoice(panelPlan.SidesOptions, selectedIndex, out var option)
+            ? UpdateSettings(currentSettings with { Sides = option.Value })
+            : PrintPreviewSettingsPanelActionPlan.None;
+
+    public static PrintPreviewSettingsPanelActionPlan CreateCollationAction(
+        PrintPreviewSettingsPanelPlan panelPlan,
+        PrintPreviewSettings currentSettings,
+        int selectedIndex) =>
+        TryGetChoice(panelPlan.CollationOptions, selectedIndex, out var option)
+            ? UpdateSettings(currentSettings with { Collated = option.Value })
+            : PrintPreviewSettingsPanelActionPlan.None;
+
+    public static PrintPreviewSettingsPanelActionPlan CreateOrientationAction(
+        SheetId sheetId,
+        PrintPreviewSettingsPanelPlan panelPlan,
+        int selectedIndex) =>
+        TryGetChoice(panelPlan.OrientationOptions, selectedIndex, out var option)
+            ? ExecuteCommand(PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, option.Value))
+            : PrintPreviewSettingsPanelActionPlan.None;
+
+    public static PrintPreviewSettingsPanelActionPlan CreatePaperSizeAction(
+        SheetId sheetId,
+        PrintPreviewSettingsPanelPlan panelPlan,
+        int selectedIndex) =>
+        TryGetChoice(panelPlan.PaperSizeOptions, selectedIndex, out var option)
+            ? ExecuteCommand(PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, option.Value))
+            : PrintPreviewSettingsPanelActionPlan.None;
+
+    public static PrintPreviewSettingsPanelActionPlan CreateMarginsAction(
+        SheetId sheetId,
+        PrintPreviewSettingsPanelPlan panelPlan,
+        int selectedIndex)
+    {
+        if (!TryGetChoice(panelPlan.MarginOptions, selectedIndex, out var option))
+            return PrintPreviewSettingsPanelActionPlan.None;
+
+        return option.IsPlaceholder
+            ? new PrintPreviewSettingsPanelActionPlan(
+                PrintPreviewSettingsPanelActionKind.OpenCustomMargins,
+                ResetSelection: true)
+            : ExecuteCommand(PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, option.Value));
+    }
+
+    public static PrintPreviewSettingsPanelActionPlan CreateScalingAction(
+        SheetId sheetId,
+        PrintPreviewSettingsPanelPlan panelPlan,
+        int selectedIndex)
+    {
+        if (!TryGetChoice(panelPlan.ScalingOptions, selectedIndex, out var option))
+            return PrintPreviewSettingsPanelActionPlan.None;
+
+        return option.IsPlaceholder
+            ? new PrintPreviewSettingsPanelActionPlan(
+                PrintPreviewSettingsPanelActionKind.OpenPageSetup,
+                ResetSelection: true)
+            : ExecuteCommand(PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, option.Value));
+    }
+
+    public static PrintPreviewSettingsPanelActionPlan CreateIgnorePrintAreaAction(
+        PrintPreviewSettings currentSettings,
+        bool ignorePrintArea) =>
+        UpdateSettings(currentSettings with { IgnorePrintArea = ignorePrintArea });
+
+    public static PrintPreviewSettingsPanelActionPlan CreatePrintOptionsAction(
+        SheetId sheetId,
+        bool printGridlines,
+        bool printHeadings) =>
+        ExecuteCommand(PageLayoutRibbonCommandPlanner.BuildPrintOptionsCommand(sheetId, printGridlines, printHeadings));
+
+    private static PrintPreviewSettingsPanelActionPlan UpdateSettings(PrintPreviewSettings settings) =>
+        new(
+            PrintPreviewSettingsPanelActionKind.UpdatePreviewSettings,
+            Settings: settings,
+            RefreshPreview: true);
+
+    private static PrintPreviewSettingsPanelActionPlan ExecuteCommand(IWorkbookCommand command) =>
+        new(
+            PrintPreviewSettingsPanelActionKind.ExecuteCommand,
+            Command: command,
+            RefreshPreview: true);
+
+    private static bool TryGetChoice<T>(
+        IReadOnlyList<PrintPreviewChoice<T>> choices,
+        int index,
+        out PrintPreviewChoice<T> choice)
+    {
+        if (index >= 0 && index < choices.Count)
+        {
+            choice = choices[index];
+            return true;
+        }
+
+        choice = default!;
+        return false;
+    }
 
     private static int PrintWhatToIndex(PrintWhat printWhat, bool hasSelection) =>
         printWhat == PrintWhat.Selection && !hasSelection
