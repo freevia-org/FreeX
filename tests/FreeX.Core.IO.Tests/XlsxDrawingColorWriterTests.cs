@@ -51,4 +51,40 @@ public sealed class XlsxDrawingColorWriterTests
         color.Should().NotBeNull();
         color!.Attribute("val")!.Value.Should().Be("0A141E");
     }
+
+    [Theory]
+    [InlineData(0.25, "75000", "25000")]
+    [InlineData(-0.4, "60000", null)]
+    [InlineData(2.0, "0", "100000")]
+    [InlineData(-2.0, "0", null)]
+    public void DrawingColorTint_AppliesSameClampedDrawingMlPercentages(
+        double tint,
+        string expectedLumMod,
+        string? expectedLumOff)
+    {
+        var color = new XElement(DrawingNs + "schemeClr", new XAttribute("val", "accent1"));
+
+        XlsxDrawingColorTint.ApplyTo(color, tint, DrawingNs);
+
+        color.Element(DrawingNs + "lumMod")!.Attribute("val")!.Value.Should().Be(expectedLumMod);
+        color.Element(DrawingNs + "lumOff")?.Attribute("val")?.Value.Should().Be(expectedLumOff);
+    }
+
+    [Theory]
+    [InlineData("<a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/>", 0.4)]
+    [InlineData("<a:lumMod val=\"75000\"/>", -0.25)]
+    [InlineData("<a:tint val=\"65000\"/>", 0.35)]
+    [InlineData("<a:shade val=\"65000\"/>", -0.35)]
+    public void DrawingColorTint_ReadsDrawingMlTintVariants(string children, double expectedTint)
+    {
+        var color = XElement.Parse($"""
+            <a:schemeClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="accent1">
+              {children}
+            </a:schemeClr>
+            """);
+
+        XlsxDrawingColorTint.ReadFrom(color, DrawingNs)
+            .Should()
+            .BeApproximately(expectedTint, 0.000001);
+    }
 }
