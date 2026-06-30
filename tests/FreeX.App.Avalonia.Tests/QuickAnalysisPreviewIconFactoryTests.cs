@@ -28,9 +28,11 @@ public sealed class QuickAnalysisPreviewIconFactoryTests
         source.Should().NotContain("QuickAnalysisPreviewIconPlanner.Plan(");
         source.Should().NotContain("QuickAnalysisPreviewVisualKind.");
 
-        factorySource.Should().Contain("QuickAnalysisPreviewIconPlanner.Plan(visual)");
-        factorySource.Should().Contain("foreach (var element in plan.Elements)");
-        factorySource.Should().Contain("switch (element)");
+        factorySource.Should().Contain("QuickAnalysisPreviewIconRenderPlanner.Render(visual, sink)");
+        factorySource.Should().Contain("private sealed class AvaloniaQuickAnalysisPreviewIconRenderSink");
+        factorySource.Should().NotContain("QuickAnalysisPreviewIconPlanner.Plan(visual)");
+        factorySource.Should().NotContain("foreach (var element in plan.Elements)");
+        factorySource.Should().NotContain("switch (element)");
         factorySource.Should().NotContain("switch (visual.Kind)");
         factorySource.Should().NotContain("QuickAnalysisPreviewVisualKind.");
         factorySource.Should().NotContain("QuickAnalysisPreviewIconGlyph.");
