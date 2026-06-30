@@ -250,81 +250,24 @@ public partial class MainWindow
         var vp = SheetGrid.Viewport;
         if (vp == null) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var frozenRows = sheet?.FrozenRows ?? 0;
-        var frozenCols = sheet?.FrozenCols ?? 0;
 
-        var rows = GetScrollableRowWindow(vp, frozenRows, addr.Row);
-        if (addr.Row > frozenRows && rows.Count > 0 && !rows.ContainsTarget)
+        var plan = ViewportScrollCalculator.PlanCellReveal(
+            vp,
+            sheet,
+            addr,
+            VerticalScroll.Maximum,
+            HorizontalScroll.Maximum);
+        if (plan.Vertical.ShouldScroll)
         {
-            var scrollValue = CalculateScrollValueToRevealCell(
-                WorksheetIndexToScrollbarValue(addr.Row, frozenRows),
-                WorksheetIndexToScrollbarValue(rows.First, frozenRows),
-                WorksheetIndexToScrollbarValue(rows.Last, frozenRows),
-                GetScrollableRowLimit(sheet),
-                (uint)rows.Count);
-            VerticalScroll.Maximum = CalculateScrollbarMaximumForKeyboardReveal(
-                VerticalScroll.Maximum,
-                scrollValue,
-                GetScrollableRowLimit(sheet));
-            VerticalScroll.Value = scrollValue;
+            VerticalScroll.Maximum = plan.Vertical.Maximum;
+            VerticalScroll.Value = plan.Vertical.Value;
         }
 
-        var cols = GetScrollableColumnWindow(vp, frozenCols, addr.Col);
-        if (addr.Col > frozenCols && cols.Count > 0 && !cols.ContainsTarget)
+        if (plan.Horizontal.ShouldScroll)
         {
-            var scrollValue = CalculateScrollValueToRevealCell(
-                WorksheetIndexToScrollbarValue(addr.Col, frozenCols),
-                WorksheetIndexToScrollbarValue(cols.First, frozenCols),
-                WorksheetIndexToScrollbarValue(cols.Last, frozenCols),
-                GetScrollableColumnLimit(sheet),
-                (uint)cols.Count);
-            HorizontalScroll.Maximum = CalculateScrollbarMaximumForKeyboardReveal(
-                HorizontalScroll.Maximum,
-                scrollValue,
-                GetScrollableColumnLimit(sheet));
-            HorizontalScroll.Value = scrollValue;
+            HorizontalScroll.Maximum = plan.Horizontal.Maximum;
+            HorizontalScroll.Value = plan.Horizontal.Value;
         }
-    }
-
-    private static ScrollableMetricWindow GetScrollableRowWindow(ViewportModel viewport, uint frozenRows, uint targetRow)
-    {
-        var result = new ScrollableMetricWindow();
-        foreach (var metric in viewport.RowMetrics)
-        {
-            if (metric.Row <= frozenRows)
-                continue;
-
-            result = result.Include(metric.Row, metric.Row == targetRow);
-        }
-
-        return result;
-    }
-
-    private static ScrollableMetricWindow GetScrollableColumnWindow(ViewportModel viewport, uint frozenCols, uint targetCol)
-    {
-        var result = new ScrollableMetricWindow();
-        foreach (var metric in viewport.ColMetrics)
-        {
-            if (metric.Col <= frozenCols)
-                continue;
-
-            result = result.Include(metric.Col, metric.Col == targetCol);
-        }
-
-        return result;
-    }
-
-    private readonly record struct ScrollableMetricWindow(uint First, uint Last, int Count, bool ContainsTarget)
-    {
-        public ScrollableMetricWindow Include(uint index, bool isTarget) =>
-            Count == 0
-                ? new ScrollableMetricWindow(index, index, 1, isTarget)
-                : this with
-                {
-                    Last = index,
-                    Count = Count + 1,
-                    ContainsTarget = ContainsTarget || isTarget
-                };
     }
 
     private readonly record struct TableContextRefreshKey(

@@ -48,6 +48,7 @@ public sealed class WorkbookViewportScrollPlannerDedupTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ViewportScrollCalculator.cs");
 
+        source.Should().Contain("WorkbookViewportScrollPlanner.PlanCellReveal");
         source.Should().Contain("WorkbookViewportScrollPlanner.CalculateScrollValueToRevealCell");
         source.Should().Contain("WorkbookViewportScrollPlanner.CalculateWheelScroll");
         source.Should().Contain("WorkbookViewportScrollPlanner.CalculateDragAutoScroll");

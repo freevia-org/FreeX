@@ -15,6 +15,15 @@ public readonly record struct WorkbookViewportScrollState(
     WorkbookViewportScrollAxis Vertical,
     WorkbookViewportScrollAxis Horizontal);
 
+public readonly record struct WorkbookViewportCellRevealAxisPlan(
+    bool ShouldScroll,
+    double Maximum,
+    double Value);
+
+public readonly record struct WorkbookViewportCellRevealPlan(
+    WorkbookViewportCellRevealAxisPlan Vertical,
+    WorkbookViewportCellRevealAxisPlan Horizontal);
+
 public static class WorkbookViewportScrollPlanner
 {
     private const double MinimumScrollValue = 1;
@@ -131,6 +140,32 @@ public static class WorkbookViewportScrollPlanner
     {
         var worksheetIndex = Math.Clamp(savedTopLeftIndex ?? fallbackIndex, 1, absoluteLimit);
         return WorksheetIndexToScrollbarValue(worksheetIndex, frozenCount);
+    }
+
+    public static WorkbookViewportCellRevealPlan PlanCellReveal(
+        ViewportModel viewport,
+        Sheet? sheet,
+        CellAddress target,
+        double currentVerticalMaximum,
+        double currentHorizontalMaximum)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+
+        var frozenRows = sheet?.FrozenRows ?? 0;
+        var frozenColumns = sheet?.FrozenCols ?? 0;
+        return new WorkbookViewportCellRevealPlan(
+            PlanCellRevealAxis(
+                target.Row,
+                frozenRows,
+                CellAddress.MaxRow,
+                currentVerticalMaximum,
+                GetScrollableRowWindow(viewport, frozenRows, target.Row)),
+            PlanCellRevealAxis(
+                target.Col,
+                frozenColumns,
+                CellAddress.MaxCol,
+                currentHorizontalMaximum,
+                GetScrollableColumnWindow(viewport, frozenColumns, target.Col)));
     }
 
     public static uint CalculateScrollValueToRevealCell(
@@ -274,6 +309,36 @@ public static class WorkbookViewportScrollPlanner
             : (usedRange.Value.End.Row, usedRange.Value.End.Col);
     }
 
+    private static WorkbookViewportCellRevealAxisPlan PlanCellRevealAxis(
+        uint targetIndex,
+        uint frozenCount,
+        uint absoluteLimit,
+        double currentMaximum,
+        ScrollableMetricWindow window)
+    {
+        if (targetIndex <= frozenCount || window.Count == 0 || window.ContainsTarget)
+            return new WorkbookViewportCellRevealAxisPlan(
+                ShouldScroll: false,
+                Maximum: currentMaximum,
+                Value: 0);
+
+        var scrollableLimit = CalculateScrollableLimit(absoluteLimit, frozenCount);
+        var scrollValue = CalculateScrollValueToRevealCell(
+            WorksheetIndexToScrollbarValue(targetIndex, frozenCount),
+            WorksheetIndexToScrollbarValue(window.First, frozenCount),
+            WorksheetIndexToScrollbarValue(window.Last, frozenCount),
+            scrollableLimit,
+            (uint)window.Count);
+        var maximum = CalculateScrollbarMaximumForKeyboardReveal(
+            currentMaximum,
+            scrollValue,
+            scrollableLimit);
+        return new WorkbookViewportCellRevealAxisPlan(
+            ShouldScroll: true,
+            Maximum: maximum,
+            Value: scrollValue);
+    }
+
     private static WorkbookViewportScrollAxis CreateAxis(
         uint worksheetOrigin,
         uint frozenCount,
@@ -326,6 +391,53 @@ public static class WorkbookViewportScrollPlanner
 
     private static uint GetScrollableColumnStart(Sheet sheet) =>
         Math.Min(CellAddress.MaxCol, Math.Max(1, sheet.FrozenCols + 1));
+
+    private static ScrollableMetricWindow GetScrollableRowWindow(
+        ViewportModel viewport,
+        uint frozenRows,
+        uint targetRow)
+    {
+        var result = new ScrollableMetricWindow();
+        foreach (var metric in viewport.RowMetrics)
+        {
+            if (metric.Row <= frozenRows)
+                continue;
+
+            result = result.Include(metric.Row, metric.Row == targetRow);
+        }
+
+        return result;
+    }
+
+    private static ScrollableMetricWindow GetScrollableColumnWindow(
+        ViewportModel viewport,
+        uint frozenColumns,
+        uint targetColumn)
+    {
+        var result = new ScrollableMetricWindow();
+        foreach (var metric in viewport.ColMetrics)
+        {
+            if (metric.Col <= frozenColumns)
+                continue;
+
+            result = result.Include(metric.Col, metric.Col == targetColumn);
+        }
+
+        return result;
+    }
+
+    private readonly record struct ScrollableMetricWindow(uint First, uint Last, int Count, bool ContainsTarget)
+    {
+        public ScrollableMetricWindow Include(uint index, bool isTarget) =>
+            Count == 0
+                ? new ScrollableMetricWindow(index, index, 1, isTarget)
+                : this with
+                {
+                    Last = index,
+                    Count = Count + 1,
+                    ContainsTarget = ContainsTarget || isTarget
+                };
+    }
 
     private static uint ToVisibleSpan(double visibleSpan)
     {
