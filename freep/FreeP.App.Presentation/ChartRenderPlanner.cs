@@ -31,10 +31,28 @@ public enum ChartPlanTextAlignment
 
 public readonly record struct ChartFillPlan(SrgbColor Color, byte Alpha);
 
+public readonly record struct ChartStrokePlan(SrgbColor Color, byte Alpha, double Thickness);
+
 public readonly record struct ChartPathPrimitive(
     IReadOnlyList<ChartPlanPoint> Points,
     bool IsClosed,
     ChartFillPlan? Fill);
+
+public readonly record struct ChartLineSegmentPrimitive(
+    int SeriesIndex,
+    int StartPointIndex,
+    int EndPointIndex,
+    ChartPlanPoint Start,
+    ChartPlanPoint End,
+    ChartStrokePlan Stroke);
+
+public readonly record struct ChartCirclePrimitive(
+    int SeriesIndex,
+    int PointIndex,
+    ChartPlanPoint Center,
+    double Radius,
+    ChartFillPlan? Fill,
+    ChartStrokePlan? Stroke);
 
 public readonly record struct ChartFramePlan(
     ChartPlanRect Bounds,
@@ -84,13 +102,17 @@ public readonly record struct ChartScatterSeriesPrimitive(
     int SeriesIndex,
     bool DrawLines,
     bool DrawMarkers,
-    IReadOnlyList<ChartPlanPoint?> Points);
+    IReadOnlyList<ChartPlanPoint?> Points,
+    IReadOnlyList<ChartLineSegmentPrimitive> LineSegments,
+    IReadOnlyList<ChartCirclePrimitive> Markers);
 
 public readonly record struct ChartScatterPrimitivePlan(
     IReadOnlyList<ChartGridLinePlan> GridLines,
+    ChartStrokePlan GridLineStroke,
     IReadOnlyList<ChartTextPlan> XAxisLabels,
     IReadOnlyList<ChartTextPlan> YAxisLabels,
-    IReadOnlyList<ChartScatterSeriesPrimitive> Series);
+    IReadOnlyList<ChartScatterSeriesPrimitive> Series,
+    IReadOnlyList<ChartDataLabelPlan> DataLabels);
 
 public readonly record struct ChartBubblePrimitive(
     int SeriesIndex,
@@ -160,6 +182,10 @@ public static class ChartRenderPlanner
     public const double BarCategoryLabelWidth = 44.0;
     public const double GridlinePad = 2.0;
     public const byte AreaFillAlpha = 200;
+    public const double ScatterLineThickness = 1.5;
+    public const double ScatterMarkerRadius = 3.5;
+    public const double ScatterDataLabelWidth = 40.0;
+    public const double ScatterDataLabelHeight = 11.0;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -739,7 +765,8 @@ public static class ChartRenderPlanner
 
     public static ChartScatterPrimitivePlan BuildScatterPrimitivePlan(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
     {
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return EmptyScatterPrimitivePlan();
@@ -771,6 +798,7 @@ public static class ChartRenderPlanner
             yUnit);
 
         var seriesPrimitives = new List<ChartScatterSeriesPrimitive>();
+        var dataLabels = new List<ChartDataLabelPlan>();
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
         {
             var series = chart.Series[seriesIndex];
@@ -779,6 +807,11 @@ public static class ChartRenderPlanner
                 continue;
 
             var points = new ChartPlanPoint?[pointCount];
+            var lineSegments = new List<ChartLineSegmentPrimitive>();
+            var markers = new List<ChartCirclePrimitive>();
+            var color = ResolveSeriesColor(seriesIndex, seriesColors);
+            var stroke = new ChartStrokePlan(color, Alpha: 255, Thickness: ScatterLineThickness);
+            var markerFill = new ChartFillPlan(color, Alpha: 255);
             for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
             {
                 double? xValue = pointIndex < series.XValues.Count ? series.XValues[pointIndex] : null;
@@ -791,18 +824,62 @@ public static class ChartRenderPlanner
                     plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height);
             }
 
+            int? previousPointIndex = null;
+            ChartPlanPoint? previousPoint = null;
+            for (int pointIndex = 0; pointIndex < points.Length; pointIndex++)
+            {
+                var point = points[pointIndex];
+                if (!point.HasValue)
+                {
+                    previousPointIndex = null;
+                    previousPoint = null;
+                    continue;
+                }
+
+                if (drawLines && previousPoint.HasValue && previousPointIndex.HasValue)
+                {
+                    lineSegments.Add(new ChartLineSegmentPrimitive(
+                        seriesIndex,
+                        previousPointIndex.Value,
+                        pointIndex,
+                        previousPoint.Value,
+                        point.Value,
+                        stroke));
+                }
+
+                if (drawMarkers)
+                {
+                    markers.Add(new ChartCirclePrimitive(
+                        seriesIndex,
+                        pointIndex,
+                        point.Value,
+                        ScatterMarkerRadius,
+                        markerFill,
+                        Stroke: null));
+                }
+
+                previousPointIndex = pointIndex;
+                previousPoint = point.Value;
+            }
+
+            dataLabels.AddRange(BuildScatterDataLabelPlans(chart, seriesIndex, points));
+
             seriesPrimitives.Add(new ChartScatterSeriesPrimitive(
                 seriesIndex,
                 drawLines,
                 drawMarkers,
-                points));
+                points,
+                lineSegments,
+                markers));
         }
 
         return new ChartScatterPrimitivePlan(
             gridLines,
+            DefaultGridLineStroke(),
             xLabels,
             yLabels,
-            seriesPrimitives);
+            seriesPrimitives,
+            dataLabels);
     }
 
     public static ChartBubblePrimitivePlan BuildBubblePrimitivePlan(
@@ -1298,9 +1375,11 @@ public static class ChartRenderPlanner
     private static ChartScatterPrimitivePlan EmptyScatterPrimitivePlan() =>
         new(
             Array.Empty<ChartGridLinePlan>(),
+            DefaultGridLineStroke(),
             Array.Empty<ChartTextPlan>(),
             Array.Empty<ChartTextPlan>(),
-            Array.Empty<ChartScatterSeriesPrimitive>());
+            Array.Empty<ChartScatterSeriesPrimitive>(),
+            Array.Empty<ChartDataLabelPlan>());
 
     private static ChartBubblePrimitivePlan EmptyBubblePrimitivePlan() =>
         new(
@@ -1315,6 +1394,94 @@ public static class ChartRenderPlanner
             Array.Empty<ChartGridLinePlan>(),
             Array.Empty<ChartTextPlan>(),
             Array.Empty<ChartRadarSeriesPrimitive>());
+
+    private static ChartStrokePlan DefaultGridLineStroke() =>
+        new(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
+
+    private static IReadOnlyList<ChartDataLabelPlan> BuildScatterDataLabelPlans(
+        ChartShape chart,
+        int seriesIndex,
+        IReadOnlyList<ChartPlanPoint?> points)
+    {
+        var labels = ResolveEffectiveLabels(chart, seriesIndex);
+        if (labels is null || seriesIndex < 0 || seriesIndex >= chart.Series.Count)
+            return Array.Empty<ChartDataLabelPlan>();
+
+        var series = chart.Series[seriesIndex];
+        double total = ComputeDataLabelTotal(chart, series, categoryIndex: 0, stacked: false, labels);
+        var plans = new List<ChartDataLabelPlan>();
+
+        for (int pointIndex = 0; pointIndex < points.Count; pointIndex++)
+        {
+            var point = points[pointIndex];
+            double? value = pointIndex < series.Values.Count ? series.Values[pointIndex] : null;
+            if (!point.HasValue || !value.HasValue)
+                continue;
+
+            string categoryName = pointIndex < chart.Categories.Count
+                ? chart.Categories[pointIndex]
+                : pointIndex < series.XValues.Count && series.XValues[pointIndex].HasValue
+                    ? FormatAxisValue(series.XValues[pointIndex]!.Value)
+                    : string.Empty;
+            string text = FormatDataLabel(labels, value.Value, total, categoryName, series.Name);
+            if (string.IsNullOrEmpty(text))
+                continue;
+
+            plans.Add(new ChartDataLabelPlan(
+                seriesIndex,
+                pointIndex,
+                text,
+                PlanScatterDataLabelBounds(point.Value, labels.Position ?? DataLabelPosition.Above),
+                IsBold: false,
+                FontSize: 6.5,
+                Alignment: ChartPlanTextAlignment.Center));
+        }
+
+        return plans;
+    }
+
+    private static ChartPlanRect PlanScatterDataLabelBounds(
+        ChartPlanPoint point,
+        DataLabelPosition position)
+    {
+        const double gap = 3.0;
+        double centeredX = point.X - ScatterDataLabelWidth / 2;
+        double centeredY = point.Y - ScatterDataLabelHeight / 2;
+
+        return position switch
+        {
+            DataLabelPosition.Below or DataLabelPosition.InsideBase =>
+                new ChartPlanRect(
+                    centeredX,
+                    point.Y + gap,
+                    ScatterDataLabelWidth,
+                    ScatterDataLabelHeight),
+            DataLabelPosition.Left =>
+                new ChartPlanRect(
+                    point.X - ScatterDataLabelWidth - gap,
+                    centeredY,
+                    ScatterDataLabelWidth,
+                    ScatterDataLabelHeight),
+            DataLabelPosition.Right =>
+                new ChartPlanRect(
+                    point.X + gap,
+                    centeredY,
+                    ScatterDataLabelWidth,
+                    ScatterDataLabelHeight),
+            DataLabelPosition.Center or DataLabelPosition.BestFit =>
+                new ChartPlanRect(
+                    centeredX,
+                    centeredY,
+                    ScatterDataLabelWidth,
+                    ScatterDataLabelHeight),
+            _ =>
+                new ChartPlanRect(
+                    centeredX,
+                    point.Y - ScatterDataLabelHeight - gap,
+                    ScatterDataLabelWidth,
+                    ScatterDataLabelHeight)
+        };
+    }
 
     private static IReadOnlyList<ChartDataLabelPlan> BuildColumnDataLabelPlans(
         ChartShape chart,

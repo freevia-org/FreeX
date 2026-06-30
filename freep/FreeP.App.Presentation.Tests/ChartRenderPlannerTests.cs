@@ -253,9 +253,14 @@ public sealed class ChartRenderPlannerTests
 
         var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(
             chart,
-            new ChartPlanRect(0, 0, 200, 100));
+            new ChartPlanRect(0, 0, 200, 100),
+            new[] { new SrgbColor(0x12, 0x34, 0x56) });
 
         plan.GridLines.Should().HaveCount(11);
+        plan.GridLineStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0xD9, 0xD9, 0xD9),
+            Alpha: 255,
+            Thickness: 0.5));
         plan.XAxisLabels.Should().HaveCount(6);
         plan.YAxisLabels.Should().HaveCount(5);
         plan.Series.Should().ContainSingle();
@@ -265,6 +270,62 @@ public sealed class ChartRenderPlannerTests
         plan.Series[0].Points[1].Should().BeNull();
         plan.Series[0].Points[2]!.Value.X.Should().BeApproximately(160, 0.0001);
         plan.Series[0].Points[2]!.Value.Y.Should().BeApproximately(25, 0.0001);
+        plan.Series[0].LineSegments.Should().BeEmpty();
+        plan.Series[0].Markers.Should().HaveCount(2);
+        plan.Series[0].Markers[0].Fill.Should().Be(new ChartFillPlan(
+            new SrgbColor(0x12, 0x34, 0x56),
+            Alpha: 255));
+        plan.Series[0].Markers[0].Radius.Should().Be(ChartRenderPlanner.ScatterMarkerRadius);
+        plan.DataLabels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildScatterPrimitivePlan_PlansRendererNeutralSegmentsMarkersAndLabels()
+    {
+        var series = new ChartSeries { Name = "XY" };
+        series.XValues.AddRange(new double?[] { 0, 50 });
+        series.Values.AddRange(new double?[] { 10, 20 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Scatter,
+            ScatterStyle = ScatterStyle.LineMarker,
+            DataLabels = new ChartDataLabels
+            {
+                ShowValue = true,
+                Position = DataLabelPosition.Right
+            }
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 100, 100),
+            new[] { new SrgbColor(0x20, 0x40, 0x60) });
+
+        var primitive = plan.Series.Single();
+        primitive.LineSegments.Should().ContainSingle();
+        primitive.LineSegments[0].Start.Should().Be(new ChartPlanPoint(0, 60));
+        primitive.LineSegments[0].End.X.Should().BeApproximately(83.3333, 0.0001);
+        primitive.LineSegments[0].End.Y.Should().BeApproximately(20, 0.0001);
+        primitive.LineSegments[0].Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x20, 0x40, 0x60),
+            Alpha: 255,
+            Thickness: ChartRenderPlanner.ScatterLineThickness));
+        primitive.Markers.Should().HaveCount(2);
+        primitive.Markers[0].Center.Should().Be(new ChartPlanPoint(0, 60));
+        primitive.Markers[0].Radius.Should().Be(ChartRenderPlanner.ScatterMarkerRadius);
+        primitive.Markers[0].Fill.Should().Be(new ChartFillPlan(
+            new SrgbColor(0x20, 0x40, 0x60),
+            Alpha: 255));
+
+        plan.DataLabels.Should().HaveCount(2);
+        plan.DataLabels[0].Text.Should().Be("10");
+        plan.DataLabels[0].Bounds.Should().Be(new ChartPlanRect(
+            3,
+            54.5,
+            ChartRenderPlanner.ScatterDataLabelWidth,
+            ChartRenderPlanner.ScatterDataLabelHeight));
     }
 
     [Fact]
