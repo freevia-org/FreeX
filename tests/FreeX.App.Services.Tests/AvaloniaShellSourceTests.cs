@@ -995,7 +995,8 @@ public sealed class AvaloniaShellSourceTests
         commandPlanner.Should().Contain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildOpenPickerPlan(");
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildSavePickerPlan(");
-        pickerPlanner.Should().Contain("IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes");
+        pickerPlanner.Should().Contain("FileOpenPickerPlan BuildOpenPickerPlan");
+        pickerPlanner.Should().Contain("FileSavePickerPlan BuildSavePickerPlan");
         source.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(openPlan.FileTypes)");
         source.Should().NotContain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
         adapter.Should().Contain("Patterns = descriptor.Patterns.ToArray()");

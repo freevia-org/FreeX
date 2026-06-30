@@ -14,7 +14,7 @@ public sealed record WorkbookFileCommandReadinessPlan(
 
 public sealed record WorkbookOpenCommandPickerPlan(
     WorkbookFileCommandReadinessPlan Readiness,
-    WorkbookOpenPickerPlan Picker)
+    FileOpenPickerPlan Picker)
 {
     public bool CanShowPicker => Readiness.CanContinue;
 
@@ -25,7 +25,7 @@ public sealed record WorkbookOpenCommandPickerPlan(
 
 public sealed record WorkbookSaveAsCommandPickerPlan(
     WorkbookFileCommandReadinessPlan Readiness,
-    WorkbookSavePickerPlan Picker)
+    FileSavePickerPlan Picker)
 {
     public bool CanShowPicker => Readiness.CanContinue;
 
@@ -58,7 +58,7 @@ public static class WorkbookFileCommandPlanner
         if (!canOpen)
             return new WorkbookOpenCommandPickerPlan(
                 WorkbookFileCommandReadinessPlan.Blocked(OpenUnavailableMessage),
-                new WorkbookOpenPickerPlan([]));
+                new FileOpenPickerPlan([]));
 
         var picker = WorkbookFilePickerPlanner.BuildOpenPickerPlan(openFormats);
         return picker.FileTypes.Count == 0
@@ -98,16 +98,20 @@ public static class WorkbookFileCommandPlanner
                 picker);
     }
 
-    private static WorkbookSavePickerPlan EmptySavePicker(
+    private static FileSavePickerPlan EmptySavePicker(
         string sourceName,
         string fallbackDisplayName,
         string preferredExtension)
     {
-        var defaultExtension = FileFormatResolver.NormalizeExtension(preferredExtension).TrimStart('.');
+        var normalizedExtension = FileFormatResolver.NormalizeExtension(preferredExtension);
         var suggestedName = WorkbookFilePickerPlanner.BuildSuggestedSaveAsFileName(
             sourceName,
             fallbackDisplayName,
             preferredExtension);
-        return new WorkbookSavePickerPlan([], suggestedName, defaultExtension);
+        return new FileSavePickerPlan(
+            [],
+            suggestedName,
+            normalizedExtension,
+            normalizedExtension.TrimStart('.'));
     }
 }

@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.IO;
 
 namespace FreeX.App.Services;
 
@@ -69,10 +70,10 @@ public static class WorkbookFileDialogSurfacePlanner
         FileNameLabel: "File name:",
         FileTypeLabel: "Save as type:");
 
-    public static WorkbookFileDialogSurfacePlan CreateOpenPlan(WorkbookOpenPickerPlan pickerPlan) =>
+    public static WorkbookFileDialogSurfacePlan CreateOpenPlan(FileOpenPickerPlan pickerPlan) =>
         new(FileDialogSurfacePlanner.CreateOpenPlan(OpenChrome, pickerPlan.FileTypes, AutomationIds));
 
-    public static WorkbookFileDialogSurfacePlan CreateSaveAsPlan(WorkbookSavePickerPlan pickerPlan) =>
+    public static WorkbookFileDialogSurfacePlan CreateSaveAsPlan(FileSavePickerPlan pickerPlan) =>
         new(FileDialogSurfacePlanner.CreateSaveAsPlan(
             SaveAsChrome,
             pickerPlan.FileTypes,

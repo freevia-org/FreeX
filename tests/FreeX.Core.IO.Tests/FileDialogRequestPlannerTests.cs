@@ -107,10 +107,67 @@ public sealed class FileDialogRequestPlannerTests
             .Equal(".xlsx", ".pdf");
     }
 
+    [Fact]
+    public void SaveSelectionResolver_UsesMatchingFilterRowForDuplicateExtensions()
+    {
+        var standardDocx = new TestSaveAdapter(
+            "standard",
+            [new FileFormatDescriptor(".docx", "Word Document")]);
+        var strictDocx = new TestSaveAdapter(
+            "strict",
+            [new FileFormatDescriptor(".docx", "Strict Open XML Document")]);
+
+        var resolved = FileDialogSaveSelectionResolver.ResolveAdapter(
+            [standardDocx, strictDocx],
+            static adapter => adapter.Formats,
+            FindSaveAdapterByExtension,
+            ".DOCX",
+            filterIndex: 2);
+
+        resolved.Should().BeSameAs(strictDocx);
+    }
+
+    [Fact]
+    public void SaveSelectionResolver_FallsBackToTypedExtensionWhenFilterRowDiffers()
+    {
+        var docx = new TestSaveAdapter(
+            "docx",
+            [new FileFormatDescriptor(".docx", "Word Document")]);
+        var html = new TestSaveAdapter(
+            "html",
+            [new FileFormatDescriptor(".htm", "Web Page")]);
+
+        var resolved = FileDialogSaveSelectionResolver.ResolveAdapter(
+            [docx, html],
+            static adapter => adapter.Formats,
+            FindSaveAdapterByExtension,
+            ".htm",
+            filterIndex: 1);
+
+        resolved.Should().BeSameAs(html);
+    }
+
     private static FileDialogFormatDescriptor[] Formats() =>
     [
         new(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
         new(".pdf", "PDF", CanOpen: true, CanSave: false),
         new(".csv", "CSV", CanOpen: true, CanSave: true),
     ];
+
+    private static TestSaveAdapter? FindSaveAdapterByExtension(
+        IEnumerable<TestSaveAdapter> adapters,
+        string extension)
+    {
+        var normalizedExtension = Free.Shared.IO.FileDialogFilterBuilder.NormalizeExtension(extension);
+        return adapters.FirstOrDefault(adapter => adapter.Formats.Any(format =>
+            format.CanSave &&
+            string.Equals(
+                Free.Shared.IO.FileDialogFilterBuilder.NormalizeExtension(format.Extension),
+                normalizedExtension,
+                StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private sealed record TestSaveAdapter(
+        string Name,
+        IReadOnlyList<FileFormatDescriptor> Formats);
 }
