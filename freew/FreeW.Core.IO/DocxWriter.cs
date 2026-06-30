@@ -193,7 +193,12 @@ public static class DocxWriter
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps, hasExtendedProps));
-        WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
+        WritePart(
+            archive,
+            "docProps/core.xml",
+            OpcDocumentProperties.BuildCorePropertiesDocument(
+                document.Properties,
+                includeDcmiTypeNamespace: true));
         if (hasCustomProps)
             WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
@@ -913,12 +918,6 @@ public static class DocxWriter
             properties.SetBoolean(MarkAsFinalPropertyName, true);
         return properties.ToXDocument();
     }
-
-    /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>
-    private static XDocument BuildCoreProperties(DocumentProperties properties) =>
-        OpcDocumentProperties.BuildCorePropertiesDocument(
-            properties.ToCoreProperties(),
-            includeDcmiTypeNamespace: true);
 
     private static XDocument BuildDocumentRels(
         IReadOnlyList<ImagePart> images,

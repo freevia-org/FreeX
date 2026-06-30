@@ -29,7 +29,10 @@ public static class DocxReader
             ?? throw new InvalidDataException("Not a Word document: word/document.xml is missing.");
 
         var document = new TextDocument();
-        ReadCoreProperties(archive, document);
+        OpcDocumentProperties.ReadCoreProperties(
+            archive,
+            document.Properties,
+            emptyStringsAsNull: true);
         ReadCustomProperties(archive, document);
         ReadStyles(archive, document);
         var imageRelationships = ReadImageRelationships(archive);
@@ -4312,14 +4315,6 @@ public static class DocxReader
             CharacterShadingPattern = charShadingHex is not null ? shdPattern : ShadingPattern.Clear,
             LanguageTag = string.IsNullOrEmpty(langTag) ? null : langTag,
         };
-    }
-
-    /// <summary>Parses docProps/core.xml into <see cref="TextDocument.Properties"/>; a missing part is fine.</summary>
-    private static void ReadCoreProperties(ZipArchive archive, TextDocument document)
-    {
-        document.Properties.ApplyCoreProperties(
-            OpcDocumentProperties.ReadCoreProperties(archive),
-            emptyStringsAsNull: true);
     }
 
     /// <summary>

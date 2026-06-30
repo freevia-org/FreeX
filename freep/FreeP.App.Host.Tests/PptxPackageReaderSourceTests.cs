@@ -55,10 +55,10 @@ public sealed class PptxPackageReaderSourceTests
             "FreeP.Core.IO",
             "PptxPackageReader.cs"));
 
-        ExtractMethod(source, "private static void ReadCoreProperties(")
-            .Should()
-            .Contain("OpcDocumentProperties.ReadCoreProperties(archive, path)")
-            .And.NotContain("Element(")
+        source.Should()
+            .Contain("OpcDocumentProperties.ReadCoreProperties(")
+            .And.Contain("presentation.Properties,")
+            .And.NotContain("private static void ReadCoreProperties(")
             .And.NotContain("XDocument.Load(");
     }
 
