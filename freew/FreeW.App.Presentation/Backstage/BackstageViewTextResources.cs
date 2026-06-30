@@ -1,7 +1,6 @@
-namespace FreeW.App.Presentation.Backstage;
+using Free.Shared.Shell;
 
-public sealed record BackstagePaneText(string Title, string Description);
-public sealed record BackstageRailEntryText(string PaneKey, string Label);
+namespace FreeW.App.Presentation.Backstage;
 
 public static class BackstageViewTextResources
 {
@@ -25,8 +24,9 @@ public static class BackstageViewTextResources
     public const string SizeLabel = "Size";
     public const string ModifiedLabel = "Modified";
     public const string ProductName = "FreeW";
+    public const string PinnedRecentSuffix = "  (pinned)";
 
-    public static readonly IReadOnlyList<BackstageRailEntryText> RailEntries =
+    public static readonly IReadOnlyList<BackstageRailEntryDescriptor> RailEntries =
     [
         new(nameof(Home), "Home"),
         new(nameof(Open), "Open"),
@@ -38,35 +38,35 @@ public static class BackstageViewTextResources
         new(nameof(Account), "Account"),
     ];
 
-    public static BackstagePaneText Home { get; } = new(
+    public static BackstagePaneDescriptor Home { get; } = new(
         Title: "Home",
         Description: "Start with a new document or reopen a recent file.");
 
-    public static BackstagePaneText Open { get; } = new(
+    public static BackstagePaneDescriptor Open { get; } = new(
         Title: "Open",
         Description: "Open a document from your recent files or browse your PC.");
 
-    public static BackstagePaneText SaveAs { get; } = new(
+    public static BackstagePaneDescriptor SaveAs { get; } = new(
         Title: "Save As",
         Description: "Save this document in a different format.");
 
-    public static BackstagePaneText Print { get; } = new(
+    public static BackstagePaneDescriptor Print { get; } = new(
         Title: "Print",
         Description: "Review print settings for this document.");
 
-    public static BackstagePaneText Share { get; } = new(
+    public static BackstagePaneDescriptor Share { get; } = new(
         Title: "Share",
         Description: "Share this document or send a copy.");
 
-    public static BackstagePaneText Export { get; } = new(
+    public static BackstagePaneDescriptor Export { get; } = new(
         Title: "Export",
         Description: "Export this document to a different file format.");
 
-    public static BackstagePaneText Info { get; } = new(
+    public static BackstagePaneDescriptor Info { get; } = new(
         Title: "Info",
         Description: "Protect, inspect, and review document information.");
 
-    public static BackstagePaneText Account { get; } = new(
+    public static BackstagePaneDescriptor Account { get; } = new(
         Title: "Account",
         Description: "Account settings and product information.");
 }

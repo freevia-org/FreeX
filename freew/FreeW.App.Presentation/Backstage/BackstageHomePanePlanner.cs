@@ -1,4 +1,3 @@
-using System.IO;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
 
@@ -7,6 +6,7 @@ namespace FreeW.App.Presentation.Backstage;
 public static class BackstageHomePanePlanner
 {
     private const int MaxRecentDocuments = 6;
+    private static readonly BackstageRecentActionRowText RecentText = new(BackstageViewTextResources.PinnedRecentSuffix);
 
     public static IReadOnlyList<BackstageActionGroup> Build(
         IEnumerable<RecentFileEntry> recentEntries,
@@ -29,16 +29,13 @@ public static class BackstageHomePanePlanner
             ]),
         };
 
-        var recentRows = recentEntries
-            .Where(entry => !string.IsNullOrWhiteSpace(entry.Path))
-            .Select(entry => new BackstageActionRow(
-                FileNameOrPath(entry.Path),
-                entry.IsPinned ? entry.Path + "  (pinned)" : entry.Path,
-                () => openRecent(entry.Path)))
-            .Take(MaxRecentDocuments)
-            .ToArray();
+        var recentRows = BackstageRecentActionRowsPlanner.BuildDocumentRows(
+            recentEntries,
+            MaxRecentDocuments,
+            RecentText,
+            openRecent);
 
-        if (recentRows.Length > 0)
+        if (recentRows.Count > 0)
             groups.Add(new BackstageActionGroup("Recent Documents", recentRows));
 
         groups.Add(new BackstageActionGroup("Open",
@@ -48,11 +45,5 @@ public static class BackstageHomePanePlanner
         ]));
 
         return groups;
-    }
-
-    private static string FileNameOrPath(string path)
-    {
-        var fileName = Path.GetFileName(path);
-        return string.IsNullOrWhiteSpace(fileName) ? path : fileName;
     }
 }
