@@ -460,8 +460,9 @@ public static class AccessibilityChecker
     private static double LinearizeChannel(double channel) =>
         channel <= 0.03928 ? channel / 12.92 : Math.Pow((channel + 0.055) / 1.055, 2.4);
 
-    // Parse an "#RRGGBB" or "RRGGBB" hex colour to its 0..255 channels. Falls back to black for anything
-    // it cannot parse, so a malformed colour degrades to the most-contrasting (safe) assumption.
+    // Parse an "#RRGGBB" or "RRGGBB" hex colour to its 0..255 channels. This WCAG helper intentionally
+    // stays local: malformed values fall back to black so the checker remains conservative, unlike the
+    // shared DrawingML/theme helpers that reject invalid text for serialization boundaries.
     private static (int R, int G, int B) ParseRgb(string hex)
     {
         var span = hex.AsSpan().Trim();

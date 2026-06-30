@@ -108,6 +108,24 @@ public sealed class ImageDialogPlannerTests
         validation.Should().Be(new ImageBorderValidation(expectedField, expectedMessage));
     }
 
+    [Theory]
+    [InlineData("#abc")]
+    [InlineData("11223344")]
+    public void ImageBorder_RejectsWatermarkStyleShorthandOrAlphaHex(string colorText)
+    {
+        ImageBorderDialogPlanner.TryBuildResult(
+                new ImageBorderDialogInput(colorText, "1", 0),
+                CultureInfo.InvariantCulture,
+                out var result,
+                out var validation)
+            .Should().BeFalse();
+
+        result.Should().BeNull();
+        validation.Should().Be(new ImageBorderValidation(
+            ImageBorderDialogField.Color,
+            ImageBorderDialogPlanner.ColorValidationMessage));
+    }
+
     [Fact]
     public void ImageCrop_FormatsFractionsAsPercentAndBuildsFractionResult()
     {

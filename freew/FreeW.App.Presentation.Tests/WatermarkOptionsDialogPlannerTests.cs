@@ -66,6 +66,29 @@ public sealed class WatermarkOptionsDialogPlannerTests
     }
 
     [Theory]
+    [InlineData("abc", "#abc")]
+    [InlineData("#abcd", "#abcd")]
+    [InlineData("80ff0000", "#80ff0000")]
+    [InlineData("#00AAee", "#00AAee")]
+    public void TryBuildTextResult_PreservesWatermarkUiHexContract(string input, string expected)
+    {
+        WatermarkOptionsDialogPlanner.TryBuildTextResult(
+                new WatermarkTextDialogInput(
+                    Text: "Draft",
+                    FontFamily: "Calibri",
+                    ColorText: input,
+                    IsHorizontal: false,
+                    IsSemitransparent: true),
+                out var result,
+                out var validation)
+            .Should().BeTrue();
+
+        validation.Should().BeNull();
+        result.Should().NotBeNull();
+        result!.FontColorHex.Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("", "#808080", WatermarkDialogValidationTarget.Text, WatermarkOptionsDialogPlanner.TextValidationMessage)]
     [InlineData("Draft", "not-hex", WatermarkDialogValidationTarget.Color, WatermarkOptionsDialogPlanner.ColorValidationMessage)]
     public void TryBuildTextResult_ReportsValidationTarget(

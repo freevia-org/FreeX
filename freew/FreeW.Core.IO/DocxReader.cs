@@ -4262,6 +4262,8 @@ public static class DocxReader
 
         // w:shd on a run: when val is "clear" (or absent, which defaults to clear) it is a solid highlight;
         // any other val token means a pattern-based character shading. Map the two cases to distinct fields.
+        // Keep this WordprocessingML color boundary local: "auto", named w:highlight tokens, and nullable
+        // model "#RRGGBB" fields are not the same contract as strict DrawingML srgbClr/theme helpers.
         var shdPattern = ShadingPatterns.FromToken(shdVal);
         var isSolidHighlight = shdVal is null or "clear";
         var fillHex = highlight is null or "auto" ? null : "#" + highlight.TrimStart('#');

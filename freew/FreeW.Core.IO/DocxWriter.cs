@@ -4583,6 +4583,8 @@ public static class DocxWriter
         // w:highlight (Word's highlighter) precedes w:u in CT_RPr (EG_RPrBase). Emitted only for a
         // HighlightColorHex that maps to a named gallery token, and only when CharacterShadingHex (which
         // owns the single w:shd slot) is not set — Word's highlight gallery only recognises named tokens.
+        // Keep this WordprocessingML color boundary local: named highlight tokens, w:shd fallback, "auto"
+        // attributes, and nullable model "#RRGGBB" fields are not strict DrawingML srgbClr normalization.
         if (f.CharacterShadingHex is not { Length: > 0 }
             && f.HighlightColorHex is { Length: > 0 } highlightToken
             && HexToHighlightToken(highlightToken) is { } namedHighlight)
