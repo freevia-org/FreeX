@@ -76,6 +76,29 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
     }
 
     [Fact]
+    public void InsertFunctionDialogs_DelegateCompactControlChromeToSharedHelper()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InsertFunction.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("private static AvaloniaCompactDialogChromeStyle InsertFunctionDialogChromeStyle => new(FormulaBarFontFamily);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, InsertFunctionDialogChromeStyle, minWidth, isDefault);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, InsertFunctionDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, InsertFunctionDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, InsertFunctionDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
+
+        source.Should().NotContain("button.Height = 24;");
+        source.Should().NotContain("textBox.Height = 24;");
+        source.Should().NotContain("comboBox.Height = 24;");
+        source.Should().NotContain("button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);");
+        source.Should().NotContain("textBox.BorderBrush = Brush(130, 130, 130);");
+        source.Should().NotContain("comboBox.BorderBrush = Brush(130, 130, 130);");
+        source.Should().NotContain("new Style(x => x.OfType<ListBoxItem>())");
+        source.Should().NotContain("new Setter(Layoutable.MinHeightProperty, 24.0)");
+    }
+
+    [Fact]
     public void SharedCompactChrome_CarriesTheExistingDialogMetrics()
     {
         var source = File.ReadAllText(RepoFile(

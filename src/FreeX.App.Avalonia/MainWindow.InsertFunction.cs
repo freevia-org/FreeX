@@ -1,16 +1,12 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Styling;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Dialogs;
-
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
-using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -22,6 +18,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle InsertFunctionDialogChromeStyle => new(FormulaBarFontFamily);
+
     // The Most Recently Used list shown in the Insert Function category dropdown. Promoted whenever a
     // function is inserted (most recent first) and seeded from the catalog defaults.
     private IReadOnlyList<string> _insertFunctionMostRecentlyUsed = InsertFunctionCatalogPlanner.DefaultMostRecentlyUsed;
@@ -178,14 +176,9 @@ public sealed partial class MainWindow
             }
         };
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [cancelButton, okButton],
+            new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         var helpPanel = new StackPanel
@@ -329,14 +322,9 @@ public sealed partial class MainWindow
             }
         };
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { cancelButton, okButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [cancelButton, okButton],
+            new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         UpdatePreview();
@@ -416,67 +404,23 @@ public sealed partial class MainWindow
     /// <paramref name="minWidth"/> sets MinWidth; <paramref name="isDefault"/> uses blue border for the OK button.
     /// </summary>
     private static void ApplyFnButtonChrome(Button button, double minWidth = 80, bool isDefault = false)
-    {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, InsertFunctionDialogChromeStyle, minWidth, isDefault);
 
     /// <summary>
     /// Applies standard Function-dialog text-box chrome (Height=24, Padding=(4,1), FontSize=12, grey border).
     /// </summary>
     private static void ApplyFnTextBoxChrome(TextBox textBox)
-    {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, InsertFunctionDialogChromeStyle);
 
     /// <summary>
     /// Applies standard Function-dialog combo-box chrome (Height=24, Padding=(5,0,4,0), FontSize=12, grey border).
     /// </summary>
     private static void ApplyFnComboBoxChrome(ComboBox comboBox)
-    {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, InsertFunctionDialogChromeStyle);
 
     /// <summary>
     /// Applies standard Function-dialog list-box row chrome (MinHeight=24 per row, FontSize=12).
     /// </summary>
     private static void ApplyFnListBoxStyle(ListBox listBox)
-    {
-        listBox.FontSize = 12;
-        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
-        {
-            Setters =
-            {
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
-                new Setter(Layoutable.MinHeightProperty, 24.0),
-                new Setter(TemplatedControl.FontSizeProperty, 12.0),
-            },
-        });
-    }
+        => AvaloniaCompactDialogChrome.ApplyListBox(listBox, InsertFunctionDialogChromeStyle);
 }
