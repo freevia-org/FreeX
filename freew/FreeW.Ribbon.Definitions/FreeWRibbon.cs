@@ -77,6 +77,19 @@ public static class FreeWRibbon
         var characterShadingCommand = FreeWRibbonText.CharacterShadingCommand;
         var clearAllFormattingCommand = FreeWRibbonText.ClearAllFormattingCommand;
         var fontDialogCommand = FreeWRibbonText.FontDialogCommand;
+        var paragraphGroup = FreeWRibbonText.ParagraphGroup;
+        var bulletsCommand = FreeWRibbonText.BulletsCommand;
+        var numberingCommand = FreeWRibbonText.NumberingCommand;
+        var multilevelListCommand = FreeWRibbonText.MultilevelListCommand;
+        var multilevelPromoteCommand = FreeWRibbonText.MultilevelPromoteCommand;
+        var multilevelDemoteCommand = FreeWRibbonText.MultilevelDemoteCommand;
+        var multilevelDefineCommand = FreeWRibbonText.MultilevelDefineCommand;
+        var symbolsGroup = FreeWRibbonText.SymbolsGroup;
+        var symbolCommand = FreeWRibbonText.SymbolCommand;
+        var pageBackgroundGroup = FreeWRibbonText.PageBackgroundGroup;
+        var watermarkCommand = FreeWRibbonText.WatermarkCommand;
+        var pageColorCommand = FreeWRibbonText.PageColorCommand;
+        var pageBordersCommand = FreeWRibbonText.PageBordersCommand;
 
         var definition = new RibbonDefinitionBuilder()
             .Tab("home", homeTab.Label, homeTab.KeyTip, tab =>
@@ -129,20 +142,20 @@ public static class FreeWRibbon
                     // character spacing, kerning, position, ligatures, stylistic sets, number form/spacing).
                     g.Icon("freew.font-dialog", fontDialogCommand.Label, RibbonCommandIconKind.Font);
                 });
-                tab.Group("paragraph", "Paragraph", "P", 80, g =>
+                tab.Group("paragraph", paragraphGroup.Label, paragraphGroup.KeyTip, 80, g =>
                 {
                     // Row 1: list + indent + spacing. Row 2: alignment + shading/borders. Compact icon-only, Word-style.
-                    g.Icon("freew.bullets", "Bullets", RibbonCommandIconKind.Bullets, dropdown: true);
-                    g.Icon("freew.numbering", "Numbering", RibbonCommandIconKind.NumberedList, dropdown: true);
-                    g.Icon("freew.multilevel-list", "Multilevel List", RibbonCommandIconKind.MultilevelList, dropdown: true, menu: m =>
+                    g.Icon("freew.bullets", bulletsCommand.Label, RibbonCommandIconKind.Bullets, dropdown: true);
+                    g.Icon("freew.numbering", numberingCommand.Label, RibbonCommandIconKind.NumberedList, dropdown: true);
+                    g.Icon("freew.multilevel-list", multilevelListCommand.Label, RibbonCommandIconKind.MultilevelList, dropdown: true, menu: m =>
                     {
-                        m.Item("freew.multilevel-promote", "Decrease List Level", "P");
-                        m.Item("freew.multilevel-demote", "Increase List Level", "D");
+                        m.Item("freew.multilevel-promote", multilevelPromoteCommand.Label, multilevelPromoteCommand.KeyTip);
+                        m.Item("freew.multilevel-demote", multilevelDemoteCommand.Label, multilevelDemoteCommand.KeyTip);
                         // Predefined multilevel list presets (mirrors Word's gallery of 3 presets).
                         foreach (var (preset, idx) in FreeWRibbonDefinitionData.MultilevelListPresetNames.Select((p, i) => (p, i)))
                             m.Item($"freew.multilevel-preset-{idx}", preset, (idx + 1).ToString());
                         // Define New Multilevel List: opens a dialog to configure levels and start-at.
-                        m.Item("freew.multilevel-define", "Define New Multilevel List…", "N");
+                        m.Item("freew.multilevel-define", multilevelDefineCommand.Label, multilevelDefineCommand.KeyTip);
                     });
                     g.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
                     g.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
@@ -312,7 +325,7 @@ public static class FreeWRibbon
                     g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);
                 });
-                tab.Group("symbols", "Symbols", "Y", 50, g =>
+                tab.Group("symbols", symbolsGroup.Label, symbolsGroup.KeyTip, 50, g =>
                 {
                     // Equation gallery: the top-level id inserts the default sample equation (E = mc^2),
                     // and the dropdown offers Word's common structure presets.
@@ -332,7 +345,7 @@ public static class FreeWRibbon
                         m.Item("freew.equation-func", "Function (sin)", "C");
                         m.Item("freew.equation-groupchr", "Group (brace)", "G");
                     });
-                    g.Medium("freew.symbol", "Symbol", RibbonCommandIconKind.Symbol);
+                    g.Medium("freew.symbol", symbolCommand.Label, RibbonCommandIconKind.Symbol);
                 });
             })
             .Tab("references", "References", "R", tab =>
@@ -540,12 +553,12 @@ public static class FreeWRibbon
                 // Design > Page Background: set the whole-page background colour (Word's Page Color). The
                 // command opens a swatch palette (+ No Color + More Colors...) and writes the model's page
                 // BackgroundColorHex, which already round-trips as w:background in docx.
-                tab.Group("page-background", "Page Background", "B", 90, g =>
+                tab.Group("page-background", pageBackgroundGroup.Label, pageBackgroundGroup.KeyTip, 90, g =>
                 {
-                    g.Medium("freew.watermark", "Watermark", RibbonCommandIconKind.Watermark);
-                    g.Medium("freew.page-color", "Page Color", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
+                    g.Medium("freew.watermark", watermarkCommand.Label, RibbonCommandIconKind.Watermark);
+                    g.Medium("freew.page-color", pageColorCommand.Label, RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, dropdown: true);
                     // Word's Design > Page Background > Page Borders: opens the full Borders and Shading dialog.
-                    g.Medium("freew.page-border", "Page Borders", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
+                    g.Medium("freew.page-border", pageBordersCommand.Label, RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                 });
             })
             .Tab("view", "View", "W", tab =>
@@ -559,7 +572,7 @@ public static class FreeWRibbon
                         m.Item("freew.read-mode-column-default", "Default Column Width",  "D");
                         m.Item("freew.read-mode-column-wide",    "Wide Column Width",     "W");
                         m.Separator();
-                        m.Item("freew.read-mode-color-none",    "No Page Color",         "O");
+                        m.Item("freew.read-mode-color-none",    FreeWRibbonText.PageColorNoColorOption, "O");
                         m.Item("freew.read-mode-color-sepia",   "Sepia",                 "S");
                         m.Item("freew.read-mode-color-inverse", "Inverse (Dark Mode)",   "I");
                     });

@@ -28,47 +28,47 @@ public static class FreeWRibbonDefinitionData
         ("freew.font-color.white", Loc.Get("Ribbon_Palette_FontColor_White_Label")),
     ];
 
-    public static readonly (string CommandId, string Label)[] PageColors =
+    public static (string CommandId, string Label)[] PageColors =>
     [
-        ("freew.page-color.none", "No Color"),
-        ("freew.page-color.white", "White"),
-        ("freew.page-color.light-gray", "Light Gray"),
-        ("freew.page-color.tan", "Tan"),
-        ("freew.page-color.light-blue", "Light Blue"),
-        ("freew.page-color.light-green", "Light Green"),
-        ("freew.page-color.light-yellow", "Light Yellow"),
-        ("freew.page-color.rose", "Rose"),
+        ("freew.page-color.none", Loc.Get("Ribbon_Palette_PageColor_NoColor_Label")),
+        ("freew.page-color.white", Loc.Get("Ribbon_Palette_PageColor_White_Label")),
+        ("freew.page-color.light-gray", Loc.Get("Ribbon_Palette_PageColor_LightGray_Label")),
+        ("freew.page-color.tan", Loc.Get("Ribbon_Palette_PageColor_Tan_Label")),
+        ("freew.page-color.light-blue", Loc.Get("Ribbon_Palette_PageColor_LightBlue_Label")),
+        ("freew.page-color.light-green", Loc.Get("Ribbon_Palette_PageColor_LightGreen_Label")),
+        ("freew.page-color.light-yellow", Loc.Get("Ribbon_Palette_PageColor_LightYellow_Label")),
+        ("freew.page-color.rose", Loc.Get("Ribbon_Palette_PageColor_Rose_Label")),
     ];
 
-    public static readonly string[] MultilevelListPresetNames =
+    public static string[] MultilevelListPresetNames =>
     [
-        "Outline: 1. / 1.1. / 1.1.1.",
-        "Outline: 1. / a. / i.",
-        "Outline (Headings): link to Heading styles",
+        Loc.Get("Ribbon_Palette_MultilevelList_OutlineDecimal_Label"),
+        Loc.Get("Ribbon_Palette_MultilevelList_OutlineMixed_Label"),
+        Loc.Get("Ribbon_Palette_MultilevelList_OutlineHeadings_Label"),
     ];
 
-    public static readonly IReadOnlyList<(string Id, string Glyph, string Label)> Symbols =
+    public static IReadOnlyList<(string Id, string Glyph, string Label)> Symbols =>
     [
-        ("freew.symbol.euro", "€", "Euro Sign"),
-        ("freew.symbol.pound", "£", "Pound Sign"),
-        ("freew.symbol.yen", "¥", "Yen Sign"),
-        ("freew.symbol.cent", "¢", "Cent Sign"),
-        ("freew.symbol.copyright", "©", "Copyright"),
-        ("freew.symbol.registered", "®", "Registered"),
-        ("freew.symbol.trademark", "™", "Trademark"),
-        ("freew.symbol.degree", "°", "Degree Sign"),
-        ("freew.symbol.plusminus", "±", "Plus-Minus"),
-        ("freew.symbol.multiply", "×", "Multiplication"),
-        ("freew.symbol.divide", "÷", "Division"),
-        ("freew.symbol.notequal", "≠", "Not Equal"),
-        ("freew.symbol.lessequal", "≤", "Less-Or-Equal"),
-        ("freew.symbol.greaterequal", "≥", "Greater-Or-Equal"),
-        ("freew.symbol.bullet", "•", "Bullet"),
-        ("freew.symbol.ellipsis", "…", "Ellipsis"),
-        ("freew.symbol.emdash", "—", "Em Dash"),
-        ("freew.symbol.endash", "–", "En Dash"),
-        ("freew.symbol.arrow-right", "→", "Right Arrow"),
-        ("freew.symbol.arrow-left", "←", "Left Arrow"),
+        ("freew.symbol.euro", "€", Loc.Get("Ribbon_Palette_Symbol_Euro_Label")),
+        ("freew.symbol.pound", "£", Loc.Get("Ribbon_Palette_Symbol_Pound_Label")),
+        ("freew.symbol.yen", "¥", Loc.Get("Ribbon_Palette_Symbol_Yen_Label")),
+        ("freew.symbol.cent", "¢", Loc.Get("Ribbon_Palette_Symbol_Cent_Label")),
+        ("freew.symbol.copyright", "©", Loc.Get("Ribbon_Palette_Symbol_Copyright_Label")),
+        ("freew.symbol.registered", "®", Loc.Get("Ribbon_Palette_Symbol_Registered_Label")),
+        ("freew.symbol.trademark", "™", Loc.Get("Ribbon_Palette_Symbol_Trademark_Label")),
+        ("freew.symbol.degree", "°", Loc.Get("Ribbon_Palette_Symbol_Degree_Label")),
+        ("freew.symbol.plusminus", "±", Loc.Get("Ribbon_Palette_Symbol_PlusMinus_Label")),
+        ("freew.symbol.multiply", "×", Loc.Get("Ribbon_Palette_Symbol_Multiplication_Label")),
+        ("freew.symbol.divide", "÷", Loc.Get("Ribbon_Palette_Symbol_Division_Label")),
+        ("freew.symbol.notequal", "≠", Loc.Get("Ribbon_Palette_Symbol_NotEqual_Label")),
+        ("freew.symbol.lessequal", "≤", Loc.Get("Ribbon_Palette_Symbol_LessOrEqual_Label")),
+        ("freew.symbol.greaterequal", "≥", Loc.Get("Ribbon_Palette_Symbol_GreaterOrEqual_Label")),
+        ("freew.symbol.bullet", "•", Loc.Get("Ribbon_Palette_Symbol_Bullet_Label")),
+        ("freew.symbol.ellipsis", "…", Loc.Get("Ribbon_Palette_Symbol_Ellipsis_Label")),
+        ("freew.symbol.emdash", "—", Loc.Get("Ribbon_Palette_Symbol_EmDash_Label")),
+        ("freew.symbol.endash", "–", Loc.Get("Ribbon_Palette_Symbol_EnDash_Label")),
+        ("freew.symbol.arrow-right", "→", Loc.Get("Ribbon_Palette_Symbol_RightArrow_Label")),
+        ("freew.symbol.arrow-left", "←", Loc.Get("Ribbon_Palette_Symbol_LeftArrow_Label")),
     ];
 
     public static string StyleCommandId(string styleId) => $"freew.style.{styleId}";

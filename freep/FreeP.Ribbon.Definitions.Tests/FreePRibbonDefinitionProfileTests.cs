@@ -162,6 +162,107 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Wpf_only_residual_ribbon_text_resolves_from_freep_localization_resources()
+    {
+        var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+            var values = new List<string>
+            {
+                wpf.FindTab("design")!.Header,
+                wpf.FindTab("design")!.KeyTip!,
+                RequiredGroup(wpf, "home", "arrange").Header,
+                RequiredGroup(wpf, "home", "arrange").KeyTip!,
+                RequiredGroup(wpf, "design", "themes").Header,
+                RequiredGroup(wpf, "design", "themes").KeyTip!,
+                RequiredGroup(wpf, "design", "customize").Header,
+                RequiredGroup(wpf, "design", "customize").KeyTip!,
+                wpf.FindTab("transitions")!.Header,
+                wpf.FindTab("transitions")!.KeyTip!,
+                RequiredGroup(wpf, "transitions", "transition-gallery").Header,
+                RequiredGroup(wpf, "transitions", "transition-gallery").KeyTip!,
+                RequiredGroup(wpf, "transitions", "transition-timing").Header,
+                RequiredGroup(wpf, "transitions", "transition-timing").KeyTip!,
+                wpf.FindTab("animations")!.Header,
+                wpf.FindTab("animations")!.KeyTip!,
+                RequiredGroup(wpf, "animations", "animation-effects").Header,
+                RequiredGroup(wpf, "animations", "animation-effects").KeyTip!,
+                RequiredGroup(wpf, "animations", "animation-timing").Header,
+                RequiredGroup(wpf, "animations", "animation-timing").KeyTip!,
+                RequiredGroup(wpf, "animations", "animation-pane").Header,
+                RequiredGroup(wpf, "animations", "animation-pane").KeyTip!,
+                RequiredCombo(wpf, "freep.transition.advance-after").Items[0],
+            };
+
+            values.AddRange(ControlText(wpf,
+                "freep.arrange.group",
+                "freep.arrange.ungroup",
+                "freep.arrange.bring-to-front",
+                "freep.arrange.bring-forward",
+                "freep.arrange.send-backward",
+                "freep.arrange.send-to-back",
+                "freep.arrange.align-left",
+                "freep.arrange.align-center-h",
+                "freep.arrange.align-right",
+                "freep.arrange.align-top",
+                "freep.arrange.align-middle",
+                "freep.arrange.align-bottom",
+                "freep.arrange.distribute-h",
+                "freep.arrange.distribute-v",
+                "freep.theme.office",
+                "freep.theme.berlin",
+                "freep.theme.facet",
+                "freep.theme.ion",
+                "freep.theme.slice",
+                "freep.slide-size-16x9",
+                "freep.slide-size-4x3",
+                "freep.slide-size-custom",
+                "freep.transition.none",
+                "freep.transition.fade",
+                "freep.transition.push",
+                "freep.transition.wipe",
+                "freep.transition.split",
+                "freep.transition.cut",
+                "freep.transition.cover",
+                "freep.transition.uncover",
+                "freep.transition.blinds",
+                "freep.transition.dissolve",
+                "freep.transition.zoom",
+                "freep.transition.wheel",
+                "freep.transition.duration",
+                "freep.transition.advance-on-click",
+                "freep.transition.advance-after",
+                "freep.transition.apply-all",
+                "freep.anim.entrance.appear",
+                "freep.anim.entrance.fade",
+                "freep.anim.entrance.fly-in",
+                "freep.anim.entrance.wipe",
+                "freep.anim.entrance.zoom",
+                "freep.anim.entrance.split",
+                "freep.anim.emphasis.pulse",
+                "freep.anim.emphasis.spin",
+                "freep.anim.emphasis.grow-shrink",
+                "freep.anim.exit.disappear",
+                "freep.anim.exit.fade-out",
+                "freep.anim.exit.fly-out",
+                "freep.anim.none",
+                "freep.anim.trigger",
+                "freep.anim.duration",
+                "freep.anim.delay",
+                "freep.anim.move-earlier",
+                "freep.anim.move-later",
+                "freep.anim.pane"));
+            values.AddRange(RequiredCombo(wpf, "freep.anim.trigger").Items);
+
+            return values.ToArray();
+        });
+
+        text.Should().OnlyContain(value =>
+            value.StartsWith("[[", StringComparison.Ordinal) &&
+            value.EndsWith("]]", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Profile_tab_ids_match_except_named_capability_deltas()
     {
         var wpfTabIds = FreePRibbon.Build(FreePRibbonCapabilities.Wpf).Tabs.Select(tab => tab.Id).ToArray();
@@ -242,6 +343,16 @@ public sealed class FreePRibbonDefinitionProfileTests
         source.Should().Contain("FreePRibbonText.FontGroupLabel");
         source.Should().Contain("FreePRibbonText.EditingGroupLabel");
         source.Should().Contain("FreePRibbonText.FindLabel");
+        source.Should().Contain("FreePRibbonText.ArrangeGroup");
+        source.Should().Contain("FreePRibbonText.DesignTab");
+        source.Should().Contain("FreePRibbonText.TransitionsTab");
+        source.Should().Contain("FreePRibbonText.AnimationsTab");
+        source.Should().NotContain("tab.Group(\"arrange\", \"Arrange\"");
+        source.Should().NotContain(".Tab(\"design\", \"Design\"");
+        source.Should().NotContain(".Tab(\"transitions\", \"Transitions\"");
+        source.Should().NotContain(".Tab(\"animations\", \"Animations\"");
+        source.Should().NotContain("g.Medium(\"freep.transition.fade\",     \"Fade\"");
+        source.Should().NotContain("g.Medium(\"freep.anim.none\", \"No Animation\"");
         foreach (var literal in new[]
                  {
                      "\"Home\"",
@@ -398,6 +509,21 @@ public sealed class FreePRibbonDefinitionProfileTests
         }
 
         throw new InvalidOperationException($"Could not find ribbon control '{commandId}'.");
+    }
+
+    private static RibbonComboBox RequiredCombo(RibbonDefinition definition, string commandId) =>
+        RequiredControl(definition, commandId) as RibbonComboBox
+        ?? throw new InvalidOperationException($"Ribbon control '{commandId}' is not a combo box.");
+
+    private static IEnumerable<string> ControlText(RibbonDefinition definition, params string[] commandIds)
+    {
+        foreach (var commandId in commandIds)
+        {
+            var control = RequiredControl(definition, commandId);
+            yield return control.Label;
+            if (control.KeyTip is { } keyTip)
+                yield return keyTip;
+        }
     }
 
     private static string RepoFile(params string[] parts) =>

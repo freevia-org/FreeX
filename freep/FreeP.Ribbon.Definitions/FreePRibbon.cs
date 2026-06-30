@@ -49,29 +49,29 @@ public static class FreePRibbon
                     g.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline, FreePRibbonText.UnderlineKeyTip);
                 });
                 // ── Wave 12A: Arrange group ───────────────────────────────────────────────
-                tab.Group("arrange", "Arrange", "R", 70, g =>
+                tab.Group("arrange", FreePRibbonText.ArrangeGroup.Label, FreePRibbonText.ArrangeGroup.KeyTip, 70, g =>
                 {
                     // Group / Ungroup
-                    g.Large("freep.arrange.group",   "Group",   RibbonCommandIconKind.Group,   "G");
-                    g.Medium("freep.arrange.ungroup", "Ungroup", RibbonCommandIconKind.Ungroup, "U");
+                    g.Large("freep.arrange.group", FreePRibbonText.ArrangeGroupCommand.Label, RibbonCommandIconKind.Group, FreePRibbonText.ArrangeGroupCommand.KeyTip);
+                    g.Medium("freep.arrange.ungroup", FreePRibbonText.ArrangeUngroupCommand.Label, RibbonCommandIconKind.Ungroup, FreePRibbonText.ArrangeUngroupCommand.KeyTip);
                     g.Separator();
                     // Z-order
-                    g.Medium("freep.arrange.bring-to-front",  "Bring to Front",  RibbonCommandIconKind.ArrowUp,   "F");
-                    g.Medium("freep.arrange.bring-forward",   "Bring Forward",   RibbonCommandIconKind.ArrowUp,   "O");
-                    g.Medium("freep.arrange.send-backward",   "Send Backward",   RibbonCommandIconKind.ArrowDown, "K");
-                    g.Medium("freep.arrange.send-to-back",    "Send to Back",    RibbonCommandIconKind.ArrowDown, "B");
+                    g.Medium("freep.arrange.bring-to-front", FreePRibbonText.ArrangeBringToFrontCommand.Label, RibbonCommandIconKind.ArrowUp, FreePRibbonText.ArrangeBringToFrontCommand.KeyTip);
+                    g.Medium("freep.arrange.bring-forward", FreePRibbonText.ArrangeBringForwardCommand.Label, RibbonCommandIconKind.ArrowUp, FreePRibbonText.ArrangeBringForwardCommand.KeyTip);
+                    g.Medium("freep.arrange.send-backward", FreePRibbonText.ArrangeSendBackwardCommand.Label, RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeSendBackwardCommand.KeyTip);
+                    g.Medium("freep.arrange.send-to-back", FreePRibbonText.ArrangeSendToBackCommand.Label, RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeSendToBackCommand.KeyTip);
                     g.Separator();
                     // Align (six buttons — vertical reuse arrow/effects icons as fallback)
-                    g.Medium("freep.arrange.align-left",      "Align Left",     RibbonCommandIconKind.AlignLeft,    "L");
-                    g.Medium("freep.arrange.align-center-h",  "Center Horiz.",  RibbonCommandIconKind.AlignCenter,  "H");
-                    g.Medium("freep.arrange.align-right",     "Align Right",    RibbonCommandIconKind.AlignRight,   "R");
-                    g.Medium("freep.arrange.align-top",       "Align Top",      RibbonCommandIconKind.ArrowUp,      "T");
-                    g.Medium("freep.arrange.align-middle",    "Center Vert.",   RibbonCommandIconKind.Align,        "M");
-                    g.Medium("freep.arrange.align-bottom",    "Align Bottom",   RibbonCommandIconKind.ArrowDown,    "E");
+                    g.Medium("freep.arrange.align-left", FreePRibbonText.ArrangeAlignLeftCommand.Label, RibbonCommandIconKind.AlignLeft, FreePRibbonText.ArrangeAlignLeftCommand.KeyTip);
+                    g.Medium("freep.arrange.align-center-h", FreePRibbonText.ArrangeAlignCenterHorizontalCommand.Label, RibbonCommandIconKind.AlignCenter, FreePRibbonText.ArrangeAlignCenterHorizontalCommand.KeyTip);
+                    g.Medium("freep.arrange.align-right", FreePRibbonText.ArrangeAlignRightCommand.Label, RibbonCommandIconKind.AlignRight, FreePRibbonText.ArrangeAlignRightCommand.KeyTip);
+                    g.Medium("freep.arrange.align-top", FreePRibbonText.ArrangeAlignTopCommand.Label, RibbonCommandIconKind.ArrowUp, FreePRibbonText.ArrangeAlignTopCommand.KeyTip);
+                    g.Medium("freep.arrange.align-middle", FreePRibbonText.ArrangeAlignMiddleCommand.Label, RibbonCommandIconKind.Align, FreePRibbonText.ArrangeAlignMiddleCommand.KeyTip);
+                    g.Medium("freep.arrange.align-bottom", FreePRibbonText.ArrangeAlignBottomCommand.Label, RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeAlignBottomCommand.KeyTip);
                     g.Separator();
                     // Distribute
-                    g.Medium("freep.arrange.distribute-h",    "Distribute Horiz.", RibbonCommandIconKind.AlignCenter, "D");
-                    g.Medium("freep.arrange.distribute-v",    "Distribute Vert.",  RibbonCommandIconKind.Align,       "V");
+                    g.Medium("freep.arrange.distribute-h", FreePRibbonText.ArrangeDistributeHorizontalCommand.Label, RibbonCommandIconKind.AlignCenter, FreePRibbonText.ArrangeDistributeHorizontalCommand.KeyTip);
+                    g.Medium("freep.arrange.distribute-v", FreePRibbonText.ArrangeDistributeVerticalCommand.Label, RibbonCommandIconKind.Align, FreePRibbonText.ArrangeDistributeVerticalCommand.KeyTip);
                 });
                 // Wave 12B: Editing group — Find & Replace.
                 tab.Group("editing", FreePRibbonText.EditingGroupLabel, FreePRibbonText.EditingGroupKeyTip, 70, g =>
@@ -118,65 +118,65 @@ public static class FreePRibbon
                 });
             })
             // ── Wave 5B: Design tab ───────────────────────────────────────────────────
-            .Tab("design", "Design", "G", tab =>
+            .Tab("design", FreePRibbonText.DesignTab.Label, FreePRibbonText.DesignTab.KeyTip, tab =>
             {
                 // Themes group — one button per built-in theme.
-                tab.Group("themes", "Themes", "T", 100, g =>
+                tab.Group("themes", FreePRibbonText.ThemesGroup.Label, FreePRibbonText.ThemesGroup.KeyTip, 100, g =>
                 {
-                    g.Large("freep.theme.office",  "Office",  RibbonCommandIconKind.Color, "O");
-                    g.Medium("freep.theme.berlin",  "Berlin",  RibbonCommandIconKind.Color, "B");
-                    g.Medium("freep.theme.facet",   "Facet",   RibbonCommandIconKind.Color, "F");
-                    g.Medium("freep.theme.ion",     "Ion",     RibbonCommandIconKind.Color, "I");
-                    g.Medium("freep.theme.slice",   "Slice",   RibbonCommandIconKind.Color, "S");
+                    g.Large("freep.theme.office", FreePRibbonText.ThemeOfficeCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeOfficeCommand.KeyTip);
+                    g.Medium("freep.theme.berlin", FreePRibbonText.ThemeBerlinCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeBerlinCommand.KeyTip);
+                    g.Medium("freep.theme.facet", FreePRibbonText.ThemeFacetCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeFacetCommand.KeyTip);
+                    g.Medium("freep.theme.ion", FreePRibbonText.ThemeIonCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeIonCommand.KeyTip);
+                    g.Medium("freep.theme.slice", FreePRibbonText.ThemeSliceCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.ThemeSliceCommand.KeyTip);
                 });
                 // Customize group — slide size options.
                 // Wave 10B: "Slide Size…" button opens the custom-size dialog.
-                tab.Group("customize", "Customize", "Z", 90, g =>
+                tab.Group("customize", FreePRibbonText.CustomizeGroup.Label, FreePRibbonText.CustomizeGroup.KeyTip, 90, g =>
                 {
-                    g.Large("freep.slide-size-16x9",  "Widescreen (16:9)", RibbonCommandIconKind.Page, "W");
-                    g.Large("freep.slide-size-4x3",   "Standard (4:3)",   RibbonCommandIconKind.Page, "S");
-                    g.Medium("freep.slide-size-custom", "Slide Size…",     RibbonCommandIconKind.Page, "C");
+                    g.Large("freep.slide-size-16x9", FreePRibbonText.SlideSizeWidescreenCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeWidescreenCommand.KeyTip);
+                    g.Large("freep.slide-size-4x3", FreePRibbonText.SlideSizeStandardCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeStandardCommand.KeyTip);
+                    g.Medium("freep.slide-size-custom", FreePRibbonText.SlideSizeCustomCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.SlideSizeCustomCommand.KeyTip);
                 });
             })
             // ── Wave 4C: Transitions tab ───────────────────────────────────────────────
-            .Tab("transitions", "Transitions", "K", tab =>
+            .Tab("transitions", FreePRibbonText.TransitionsTab.Label, FreePRibbonText.TransitionsTab.KeyTip, tab =>
             {
                 // "Transition to This Slide" group — gallery of transition kinds via Medium buttons.
-                tab.Group("transition-gallery", "Transition to This Slide", "T", 100, g =>
+                tab.Group("transition-gallery", FreePRibbonText.TransitionGalleryGroup.Label, FreePRibbonText.TransitionGalleryGroup.KeyTip, 100, g =>
                 {
-                    g.Medium("freep.transition.none",     "None",     RibbonCommandIconKind.Clear,   "0");
-                    g.Medium("freep.transition.fade",     "Fade",     RibbonCommandIconKind.Effects, "F");
-                    g.Medium("freep.transition.push",     "Push",     RibbonCommandIconKind.ArrowRight, "U");
-                    g.Medium("freep.transition.wipe",     "Wipe",     RibbonCommandIconKind.ArrowLeft,  "W");
-                    g.Medium("freep.transition.split",    "Split",    RibbonCommandIconKind.ArrowLeftRight, "S");
-                    g.Medium("freep.transition.cut",      "Cut",      RibbonCommandIconKind.Flash,   "C");
-                    g.Medium("freep.transition.cover",    "Cover",    RibbonCommandIconKind.Page,    "V");
-                    g.Medium("freep.transition.uncover",  "Uncover",  RibbonCommandIconKind.Expand,  "N");
-                    g.Medium("freep.transition.blinds",   "Blinds",   RibbonCommandIconKind.View,    "B");
-                    g.Medium("freep.transition.dissolve", "Dissolve", RibbonCommandIconKind.Color,   "D");
-                    g.Medium("freep.transition.zoom",     "Zoom",     RibbonCommandIconKind.Zoom,    "Z");
-                    g.Medium("freep.transition.wheel",    "Wheel",    RibbonCommandIconKind.Rotate,  "H");
+                    g.Medium("freep.transition.none", FreePRibbonText.TransitionNoneCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.TransitionNoneCommand.KeyTip);
+                    g.Medium("freep.transition.fade", FreePRibbonText.TransitionFadeCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.TransitionFadeCommand.KeyTip);
+                    g.Medium("freep.transition.push", FreePRibbonText.TransitionPushCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.TransitionPushCommand.KeyTip);
+                    g.Medium("freep.transition.wipe", FreePRibbonText.TransitionWipeCommand.Label, RibbonCommandIconKind.ArrowLeft, FreePRibbonText.TransitionWipeCommand.KeyTip);
+                    g.Medium("freep.transition.split", FreePRibbonText.TransitionSplitCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.TransitionSplitCommand.KeyTip);
+                    g.Medium("freep.transition.cut", FreePRibbonText.TransitionCutCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.TransitionCutCommand.KeyTip);
+                    g.Medium("freep.transition.cover", FreePRibbonText.TransitionCoverCommand.Label, RibbonCommandIconKind.Page, FreePRibbonText.TransitionCoverCommand.KeyTip);
+                    g.Medium("freep.transition.uncover", FreePRibbonText.TransitionUncoverCommand.Label, RibbonCommandIconKind.Expand, FreePRibbonText.TransitionUncoverCommand.KeyTip);
+                    g.Medium("freep.transition.blinds", FreePRibbonText.TransitionBlindsCommand.Label, RibbonCommandIconKind.View, FreePRibbonText.TransitionBlindsCommand.KeyTip);
+                    g.Medium("freep.transition.dissolve", FreePRibbonText.TransitionDissolveCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.TransitionDissolveCommand.KeyTip);
+                    g.Medium("freep.transition.zoom", FreePRibbonText.TransitionZoomCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.TransitionZoomCommand.KeyTip);
+                    g.Medium("freep.transition.wheel", FreePRibbonText.TransitionWheelCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.TransitionWheelCommand.KeyTip);
                 });
 
                 // Timing group — duration, advance options, apply to all.
-                tab.Group("transition-timing", "Timing", "I", 90, g =>
+                tab.Group("transition-timing", FreePRibbonText.TransitionTimingGroup.Label, FreePRibbonText.TransitionTimingGroup.KeyTip, 90, g =>
                 {
-                    g.ComboBox("freep.transition.duration", "Duration", c => c with
+                    g.ComboBox("freep.transition.duration", FreePRibbonText.TransitionDurationCommand.Label, c => c with
                     {
                         Items = FreePRibbonDefinitionData.TransitionDurations,
                         Icon  = new RibbonCommandIcon(RibbonCommandIconKind.History),
                         Width = 90
                     });
-                    g.MediumToggle("freep.transition.advance-on-click", "On Mouse Click",
-                        RibbonCommandIconKind.Next, "M");
-                    g.ComboBox("freep.transition.advance-after", "After", c => c with
+                    g.MediumToggle("freep.transition.advance-on-click", FreePRibbonText.TransitionAdvanceOnClickCommand.Label,
+                        RibbonCommandIconKind.Next, FreePRibbonText.TransitionAdvanceOnClickCommand.KeyTip);
+                    g.ComboBox("freep.transition.advance-after", FreePRibbonText.TransitionAdvanceAfterCommand.Label, c => c with
                     {
                         Items = FreePRibbonDefinitionData.TransitionAdvanceAfterOptions,
                         Icon  = new RibbonCommandIcon(RibbonCommandIconKind.History),
                         Width = 90
                     });
-                    g.Medium("freep.transition.apply-all", "Apply To All",
-                        RibbonCommandIconKind.Refresh, "A");
+                    g.Medium("freep.transition.apply-all", FreePRibbonText.TransitionApplyAllCommand.Label,
+                        RibbonCommandIconKind.Refresh, FreePRibbonText.TransitionApplyAllCommand.KeyTip);
                 });
 
                 // Slide Show buttons live here for quick access from the Transitions tab.
@@ -187,62 +187,62 @@ public static class FreePRibbon
                 });
             })
             // ── Wave 4C: Animations tab ───────────────────────────────────────────────
-            .Tab("animations", "Animations", "A", tab =>
+            .Tab("animations", FreePRibbonText.AnimationsTab.Label, FreePRibbonText.AnimationsTab.KeyTip, tab =>
             {
                 // "Animation" group — Entrance, Emphasis, Exit effect buttons for selected shape.
-                tab.Group("animation-effects", "Animation", "N", 100, g =>
+                tab.Group("animation-effects", FreePRibbonText.AnimationEffectsGroup.Label, FreePRibbonText.AnimationEffectsGroup.KeyTip, 100, g =>
                 {
                     // Entrance effects
-                    g.Medium("freep.anim.entrance.appear",    "Appear",     RibbonCommandIconKind.Flash,   "A");
-                    g.Medium("freep.anim.entrance.fade",      "Fade In",    RibbonCommandIconKind.Effects, "F");
-                    g.Medium("freep.anim.entrance.fly-in",    "Fly In",     RibbonCommandIconKind.ArrowUp, "Y");
-                    g.Medium("freep.anim.entrance.wipe",      "Wipe",       RibbonCommandIconKind.ArrowRight, "W");
-                    g.Medium("freep.anim.entrance.zoom",      "Zoom In",    RibbonCommandIconKind.Zoom,    "Z");
-                    g.Medium("freep.anim.entrance.split",     "Split",      RibbonCommandIconKind.ArrowLeftRight, "S");
+                    g.Medium("freep.anim.entrance.appear", FreePRibbonText.AnimationEntranceAppearCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEntranceAppearCommand.KeyTip);
+                    g.Medium("freep.anim.entrance.fade", FreePRibbonText.AnimationEntranceFadeCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationEntranceFadeCommand.KeyTip);
+                    g.Medium("freep.anim.entrance.fly-in", FreePRibbonText.AnimationEntranceFlyInCommand.Label, RibbonCommandIconKind.ArrowUp, FreePRibbonText.AnimationEntranceFlyInCommand.KeyTip);
+                    g.Medium("freep.anim.entrance.wipe", FreePRibbonText.AnimationEntranceWipeCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.AnimationEntranceWipeCommand.KeyTip);
+                    g.Medium("freep.anim.entrance.zoom", FreePRibbonText.AnimationEntranceZoomCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.AnimationEntranceZoomCommand.KeyTip);
+                    g.Medium("freep.anim.entrance.split", FreePRibbonText.AnimationEntranceSplitCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.AnimationEntranceSplitCommand.KeyTip);
                     g.Separator();
                     // Emphasis effects
-                    g.Medium("freep.anim.emphasis.pulse",      "Pulse",      RibbonCommandIconKind.Flash,   "P");
-                    g.Medium("freep.anim.emphasis.spin",       "Spin",       RibbonCommandIconKind.Rotate,  "I");
-                    g.Medium("freep.anim.emphasis.grow-shrink","Grow/Shrink", RibbonCommandIconKind.Scale,   "G");
+                    g.Medium("freep.anim.emphasis.pulse", FreePRibbonText.AnimationEmphasisPulseCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEmphasisPulseCommand.KeyTip);
+                    g.Medium("freep.anim.emphasis.spin", FreePRibbonText.AnimationEmphasisSpinCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.AnimationEmphasisSpinCommand.KeyTip);
+                    g.Medium("freep.anim.emphasis.grow-shrink", FreePRibbonText.AnimationEmphasisGrowShrinkCommand.Label, RibbonCommandIconKind.Scale, FreePRibbonText.AnimationEmphasisGrowShrinkCommand.KeyTip);
                     g.Separator();
                     // Exit effects
-                    g.Medium("freep.anim.exit.disappear",  "Disappear", RibbonCommandIconKind.Delete,    "D");
-                    g.Medium("freep.anim.exit.fade-out",   "Fade Out",  RibbonCommandIconKind.Effects,   "O");
-                    g.Medium("freep.anim.exit.fly-out",    "Fly Out",   RibbonCommandIconKind.ArrowDown, "X");
+                    g.Medium("freep.anim.exit.disappear", FreePRibbonText.AnimationExitDisappearCommand.Label, RibbonCommandIconKind.Delete, FreePRibbonText.AnimationExitDisappearCommand.KeyTip);
+                    g.Medium("freep.anim.exit.fade-out", FreePRibbonText.AnimationExitFadeOutCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationExitFadeOutCommand.KeyTip);
+                    g.Medium("freep.anim.exit.fly-out", FreePRibbonText.AnimationExitFlyOutCommand.Label, RibbonCommandIconKind.ArrowDown, FreePRibbonText.AnimationExitFlyOutCommand.KeyTip);
                     g.Separator();
                     // Remove all animations from selected shape
-                    g.Medium("freep.anim.none", "No Animation", RibbonCommandIconKind.Clear, "E");
+                    g.Medium("freep.anim.none", FreePRibbonText.AnimationNoneCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.AnimationNoneCommand.KeyTip);
                 });
 
                 // Timing group — trigger, duration, delay, reorder.
-                tab.Group("animation-timing", "Timing", "T", 90, g =>
+                tab.Group("animation-timing", FreePRibbonText.AnimationTimingGroup.Label, FreePRibbonText.AnimationTimingGroup.KeyTip, 90, g =>
                 {
-                    g.ComboBox("freep.anim.trigger", "Start", c => c with
+                    g.ComboBox("freep.anim.trigger", FreePRibbonText.AnimationTriggerCommand.Label, c => c with
                     {
                         Items = FreePRibbonDefinitionData.AnimationTriggers,
                         Icon  = new RibbonCommandIcon(RibbonCommandIconKind.Next),
                         Width = 130
                     });
-                    g.ComboBox("freep.anim.duration", "Duration", c => c with
+                    g.ComboBox("freep.anim.duration", FreePRibbonText.AnimationDurationCommand.Label, c => c with
                     {
                         Items = FreePRibbonDefinitionData.AnimationDurations,
                         Icon  = new RibbonCommandIcon(RibbonCommandIconKind.History),
                         Width = 90
                     });
-                    g.ComboBox("freep.anim.delay", "Delay", c => c with
+                    g.ComboBox("freep.anim.delay", FreePRibbonText.AnimationDelayCommand.Label, c => c with
                     {
                         Items = FreePRibbonDefinitionData.AnimationDelays,
                         Icon  = new RibbonCommandIcon(RibbonCommandIconKind.History),
                         Width = 90
                     });
-                    g.Medium("freep.anim.move-earlier", "Move Earlier", RibbonCommandIconKind.Previous, "U");
-                    g.Medium("freep.anim.move-later",   "Move Later",   RibbonCommandIconKind.Next,     "L");
+                    g.Medium("freep.anim.move-earlier", FreePRibbonText.AnimationMoveEarlierCommand.Label, RibbonCommandIconKind.Previous, FreePRibbonText.AnimationMoveEarlierCommand.KeyTip);
+                    g.Medium("freep.anim.move-later", FreePRibbonText.AnimationMoveLaterCommand.Label, RibbonCommandIconKind.Next, FreePRibbonText.AnimationMoveLaterCommand.KeyTip);
                 });
 
                 // Animation Pane toggle stub.
-                tab.Group("animation-pane", "Advanced Animation", "V", 80, g =>
+                tab.Group("animation-pane", FreePRibbonText.AdvancedAnimationGroup.Label, FreePRibbonText.AdvancedAnimationGroup.KeyTip, 80, g =>
                 {
-                    g.MediumToggle("freep.anim.pane", "Animation Pane", RibbonCommandIconKind.List, "P");
+                    g.MediumToggle("freep.anim.pane", FreePRibbonText.AnimationPaneCommand.Label, RibbonCommandIconKind.List, FreePRibbonText.AnimationPaneCommand.KeyTip);
                 });
             })
             .Build();

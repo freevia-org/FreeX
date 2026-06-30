@@ -256,6 +256,171 @@
   <data name="Ribbon_Palette_FontColor_White_Label" xml:space="preserve">
     <value>White</value>
   </data>
+  <data name="Ribbon_Group_Paragraph_Label" xml:space="preserve">
+    <value>Paragraph</value>
+  </data>
+  <data name="Ribbon_Group_Paragraph_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_Bullets_Label" xml:space="preserve">
+    <value>Bullets</value>
+  </data>
+  <data name="Ribbon_Command_Numbering_Label" xml:space="preserve">
+    <value>Numbering</value>
+  </data>
+  <data name="Ribbon_Command_MultilevelList_Label" xml:space="preserve">
+    <value>Multilevel List</value>
+  </data>
+  <data name="Ribbon_Command_MultilevelPromote_Label" xml:space="preserve">
+    <value>Decrease List Level</value>
+  </data>
+  <data name="Ribbon_Command_MultilevelPromote_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_MultilevelDemote_Label" xml:space="preserve">
+    <value>Increase List Level</value>
+  </data>
+  <data name="Ribbon_Command_MultilevelDemote_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_MultilevelDefine_Label" xml:space="preserve">
+    <value>Define New Multilevel List&#x2026;</value>
+  </data>
+  <data name="Ribbon_Command_MultilevelDefine_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Palette_MultilevelList_OutlineDecimal_Label" xml:space="preserve">
+    <value>Outline: 1. / 1.1. / 1.1.1.</value>
+  </data>
+  <data name="Ribbon_Palette_MultilevelList_OutlineMixed_Label" xml:space="preserve">
+    <value>Outline: 1. / a. / i.</value>
+  </data>
+  <data name="Ribbon_Palette_MultilevelList_OutlineHeadings_Label" xml:space="preserve">
+    <value>Outline (Headings): link to Heading styles</value>
+  </data>
+  <data name="Ribbon_Group_Symbols_Label" xml:space="preserve">
+    <value>Symbols</value>
+  </data>
+  <data name="Ribbon_Group_Symbols_KeyTip" xml:space="preserve">
+    <value>Y</value>
+  </data>
+  <data name="Ribbon_Command_Symbol_Label" xml:space="preserve">
+    <value>Symbol</value>
+  </data>
+  <data name="Ribbon_Group_PageBackground_Label" xml:space="preserve">
+    <value>Page Background</value>
+  </data>
+  <data name="Ribbon_Group_PageBackground_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_Watermark_Label" xml:space="preserve">
+    <value>Watermark</value>
+  </data>
+  <data name="Ribbon_Command_PageColor_Label" xml:space="preserve">
+    <value>Page Color</value>
+  </data>
+  <data name="Ribbon_Command_PageBorders_Label" xml:space="preserve">
+    <value>Page Borders</value>
+  </data>
+  <data name="Ribbon_Palette_PageColor_NoColor_Label" xml:space="preserve">
+    <value>No Color</value>
+  </data>
+  <data name="Ribbon_Palette_PageColor_White_Label" xml:space="preserve">
+    <value>White</value>
+  </data>
+  <data name="Ribbon_Palette_PageColor_LightGray_Label" xml:space="preserve">
+    <value>Light Gray</value>
+  </data>
+  <data name="Ribbon_Palette_PageColor_Tan_Label" xml:space="preserve">
+    <value>Tan</value>
+  </data>
+  <data name="Ribbon_Palette_PageColor_LightBlue_Label" xml:space="preserve">
+    <value>Light Blue</value>
+  </data>
+  <data name="Ribbon_Palette_PageColor_LightGreen_Label" xml:space="preserve">
+    <value>Light Green</value>
+  </data>
+  <data name="Ribbon_Palette_PageColor_LightYellow_Label" xml:space="preserve">
+    <value>Light Yellow</value>
+  </data>
+  <data name="Ribbon_Palette_PageColor_Rose_Label" xml:space="preserve">
+    <value>Rose</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Euro_Label" xml:space="preserve">
+    <value>Euro Sign</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Pound_Label" xml:space="preserve">
+    <value>Pound Sign</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Yen_Label" xml:space="preserve">
+    <value>Yen Sign</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Cent_Label" xml:space="preserve">
+    <value>Cent Sign</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Copyright_Label" xml:space="preserve">
+    <value>Copyright</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Registered_Label" xml:space="preserve">
+    <value>Registered</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Trademark_Label" xml:space="preserve">
+    <value>Trademark</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Degree_Label" xml:space="preserve">
+    <value>Degree Sign</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_PlusMinus_Label" xml:space="preserve">
+    <value>Plus-Minus</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Multiplication_Label" xml:space="preserve">
+    <value>Multiplication</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Division_Label" xml:space="preserve">
+    <value>Division</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_NotEqual_Label" xml:space="preserve">
+    <value>Not Equal</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_LessOrEqual_Label" xml:space="preserve">
+    <value>Less-Or-Equal</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_GreaterOrEqual_Label" xml:space="preserve">
+    <value>Greater-Or-Equal</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Bullet_Label" xml:space="preserve">
+    <value>Bullet</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_Ellipsis_Label" xml:space="preserve">
+    <value>Ellipsis</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_EmDash_Label" xml:space="preserve">
+    <value>Em Dash</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_EnDash_Label" xml:space="preserve">
+    <value>En Dash</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_RightArrow_Label" xml:space="preserve">
+    <value>Right Arrow</value>
+  </data>
+  <data name="Ribbon_Palette_Symbol_LeftArrow_Label" xml:space="preserve">
+    <value>Left Arrow</value>
+  </data>
+  <data name="Ribbon_Dialog_PageColor_Title" xml:space="preserve">
+    <value>Page Color</value>
+  </data>
+  <data name="Ribbon_Dialog_PageColor_MoreColors_Label" xml:space="preserve">
+    <value>More Colors&#x2026;</value>
+  </data>
+  <data name="Ribbon_Dialog_PageColor_MoreColors_Title" xml:space="preserve">
+    <value>More Colors</value>
+  </data>
+  <data name="Ribbon_Dialog_PageColor_HexPrompt" xml:space="preserve">
+    <value>Hex colour (e.g. #FFCC00):</value>
+  </data>
+  <data name="Ribbon_Dialog_PageColor_InvalidHexWarning" xml:space="preserve">
+    <value>Enter a colour as a 6-digit hex value, e.g. #FFCC00.</value>
+  </data>
   <data name="Backstage_GreetingMorning" xml:space="preserve">
     <value>Good morning</value>
   </data>

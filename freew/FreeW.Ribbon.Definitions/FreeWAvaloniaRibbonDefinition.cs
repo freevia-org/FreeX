@@ -251,10 +251,8 @@ internal static class FreeWAvaloniaRibbonDefinition
     /// AV-DESIGN: Design &gt; Page Color swatch palette + No Color. Command ids are
     /// <c>freew.page-color.&lt;name&gt;</c>; "No Color" clears the background.
     /// </summary>
-    private static readonly (string CommandId, string Label)[] PageColors = FreeWRibbonDefinitionData.PageColors;
-
     private static RibbonMenu BuildPageColorMenu() =>
-        new(PageColors
+        new(FreeWRibbonDefinitionData.PageColors
             .Select(pc => new RibbonMenuItem(pc.Label, new RibbonCommandId(pc.CommandId)))
             .ToArray());
 
@@ -319,10 +317,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Button("freew.change-case",     FreeWRibbonText.ChangeCaseCompactCommand.Label);
                     g.Button("freew.font-dialog",     FreeWRibbonText.FontDialogCommand.Label);
                 });
-                tab.Group("paragraph", "Paragraph", null, 80, g =>
+                tab.Group("paragraph", FreeWRibbonText.ParagraphGroup.Label, null, 80, g =>
                 {
-                    g.Toggle("freew.bullets",           "Bullets");
-                    g.Toggle("freew.numbering",         "Numbering");
+                    g.Toggle("freew.bullets",           FreeWRibbonText.BulletsCommand.Label);
+                    g.Toggle("freew.numbering",         FreeWRibbonText.NumberingCommand.Label);
                     g.Button("freew.increase-indent",   "→");
                     g.Button("freew.decrease-indent",   "←");
                     g.Button("freew.align-left",        "Left");
@@ -397,9 +395,9 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Dropdown("freew.drop-cap",    "Drop Cap",    BuildDropCapMenu());
                     g.Button("freew.text-from-file", "Text from File");
                 });
-                tab.Group("symbols", "Symbols", null, 92, g =>
+                tab.Group("symbols", FreeWRibbonText.SymbolsGroup.Label, null, 92, g =>
                 {
-                    g.Dropdown("freew.symbol", "Symbol", BuildSymbolMenu());
+                    g.Dropdown("freew.symbol", FreeWRibbonText.SymbolCommand.Label, BuildSymbolMenu());
                     // AV-INSERT2: Equation — default (E=mc²) opener + a few common OMML presets.
                     g.Dropdown("freew.equation", "Equation", BuildEquationMenu());
                 });
@@ -432,11 +430,11 @@ internal static class FreeWAvaloniaRibbonDefinition
                     g.Dropdown("freew.para-spacing", "Paragraph Spacing", BuildParaSpacingMenu());
                 });
                 // AV-DESIGN: Page Background — Watermark, Page Color, Page Borders.
-                tab.Group("page-background", "Page Background", null, 90, g =>
+                tab.Group("page-background", FreeWRibbonText.PageBackgroundGroup.Label, null, 90, g =>
                 {
-                    g.Dropdown("freew.watermark",  "Watermark",  BuildWatermarkMenu());
-                    g.Dropdown("freew.page-color", "Page Color", BuildPageColorMenu());
-                    g.Button("freew.page-borders", "Page Borders");
+                    g.Dropdown("freew.watermark",  FreeWRibbonText.WatermarkCommand.Label,  BuildWatermarkMenu());
+                    g.Dropdown("freew.page-color", FreeWRibbonText.PageColorCommand.Label, BuildPageColorMenu());
+                    g.Button("freew.page-borders", FreeWRibbonText.PageBordersCommand.Label);
                 });
             })
             .Tab("view", "View", "V", tab =>

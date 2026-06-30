@@ -490,6 +490,101 @@ public sealed class FreeWRibbonDefinitionProfileTests
         avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.FontColors");
     }
 
+    [Fact]
+    public void Home_paragraph_list_text_is_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            AssertParagraphListSurfaceUsesResources(ParagraphListSurface(FreeWRibbonCapabilities.Wpf), includesMultilevel: true);
+            AssertParagraphListSurfaceUsesResources(ParagraphListSurface(FreeWRibbonCapabilities.Avalonia), includesMultilevel: false);
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var wpf = ParagraphListSurface(FreeWRibbonCapabilities.Wpf);
+            var avalonia = ParagraphListSurface(FreeWRibbonCapabilities.Avalonia);
+
+            AssertParagraphListSurfaceUsesResources(wpf, includesMultilevel: true);
+            AssertParagraphListSurfaceUsesResources(avalonia, includesMultilevel: false);
+            wpf.ParagraphHeader.Should().Be("[[PPaarraaggrraapphh]]");
+            wpf.BulletsLabel.Should().Be("[[BBuulllleettss]]");
+            avalonia.NumberingLabel.Should().Be("[[NNuummbbeerriinngg]]");
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Insert_symbols_and_design_page_color_text_are_resource_backed_for_wpf_and_avalonia_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Wpf), includesMenu: false);
+            AssertSymbolSurfaceUsesResources(SymbolSurface(FreeWRibbonCapabilities.Avalonia), includesMenu: true);
+            AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Wpf), includesPalette: false);
+            AssertPageBackgroundSurfaceUsesResources(PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia), includesPalette: true);
+
+            return true;
+        }).Should().BeTrue();
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () =>
+        {
+            var symbols = SymbolSurface(FreeWRibbonCapabilities.Avalonia);
+            var pageBackground = PageBackgroundSurface(FreeWRibbonCapabilities.Avalonia);
+
+            AssertSymbolSurfaceUsesResources(symbols, includesMenu: true);
+            AssertPageBackgroundSurfaceUsesResources(pageBackground, includesPalette: true);
+            symbols.SymbolMenuHeaders![0].Should().Be($"€   {Loc.Get("Ribbon_Palette_Symbol_Euro_Label")}");
+            pageBackground.PageColorMenuHeaders![0].Should().Be(Loc.Get("Ribbon_Palette_PageColor_NoColor_Label"));
+
+            return true;
+        }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void List_symbol_page_color_profile_sources_use_resource_descriptors()
+    {
+        var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
+        var hostCommands = ReadRepositoryFile("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+
+        wpfSource.Should().NotContain("g.Icon(\"freew.bullets\", \"Bullets\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.numbering\", \"Numbering\"");
+        wpfSource.Should().NotContain("g.Icon(\"freew.multilevel-list\", \"Multilevel List\"");
+        wpfSource.Should().NotContain("tab.Group(\"symbols\", \"Symbols\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.symbol\", \"Symbol\"");
+        wpfSource.Should().NotContain("tab.Group(\"page-background\", \"Page Background\"");
+        wpfSource.Should().NotContain("g.Medium(\"freew.page-color\", \"Page Color\"");
+        wpfSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
+        wpfSource.Should().Contain("FreeWRibbonText.SymbolsGroup");
+        wpfSource.Should().Contain("FreeWRibbonText.PageBackgroundGroup");
+
+        avaloniaSource.Should().NotContain("tab.Group(\"paragraph\", \"Paragraph\"");
+        avaloniaSource.Should().NotContain("g.Toggle(\"freew.bullets\",           \"Bullets\"");
+        avaloniaSource.Should().NotContain("g.Dropdown(\"freew.symbol\", \"Symbol\"");
+        avaloniaSource.Should().NotContain("g.Dropdown(\"freew.page-color\", \"Page Color\"");
+        avaloniaSource.Should().NotContain("private static readonly (string CommandId, string Label)[] PageColors");
+        avaloniaSource.Should().Contain("FreeWRibbonText.ParagraphGroup");
+        avaloniaSource.Should().Contain("FreeWRibbonText.SymbolCommand");
+        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.PageColors");
+        avaloniaSource.Should().Contain("FreeWRibbonDefinitionData.Symbols");
+
+        dataSource.Should().NotContain("(\"freew.page-color.none\", \"No Color\")");
+        dataSource.Should().NotContain("\"Outline: 1. / 1.1. / 1.1.1.\"");
+        dataSource.Should().NotContain("\"Euro Sign\"");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_PageColor_NoColor_Label\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_MultilevelList_OutlineDecimal_Label\")");
+        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_Symbol_Euro_Label\")");
+
+        hostCommands.Should().NotContain("Title = \"Page Color\"");
+        hostCommands.Should().NotContain("Content = \"More Colors");
+        hostCommands.Should().Contain("UiText.Get(\"Ribbon_Dialog_PageColor_Title\")");
+        hostCommands.Should().Contain("UiText.Get(\"Ribbon_Palette_PageColor_NoColor_Label\")");
+    }
+
     private static bool IsAllowed(CommandEntry entry, IReadOnlyList<DivergenceRule> rules) =>
         rules.Any(rule => rule.IsAllowed(entry));
 
@@ -674,6 +769,126 @@ public sealed class FreeWRibbonDefinitionProfileTests
         return dropdown.Menu.Items.Select(item => item.Header).ToArray();
     }
 
+    private static ParagraphListRibbonSurface ParagraphListSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var paragraph = RequiredGroup(FreeWRibbon.Build(capabilities), "home", "paragraph");
+        var bullets = RequiredControl(paragraph, "freew.bullets");
+        var numbering = RequiredControl(paragraph, "freew.numbering");
+        var multilevel = paragraph.Controls.SingleOrDefault(control => control.CommandId.Value == "freew.multilevel-list");
+
+        return new ParagraphListRibbonSurface(
+            paragraph.Header,
+            paragraph.KeyTip,
+            bullets.Label,
+            numbering.Label,
+            multilevel?.Label,
+            multilevel is RibbonDropdown dropdown
+                ? dropdown.Menu.Items.Select(item => item.Header).ToArray()
+                : null);
+    }
+
+    private static SymbolRibbonSurface SymbolSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var symbols = RequiredGroup(FreeWRibbon.Build(capabilities), "insert", "symbols");
+        var symbol = RequiredControl(symbols, "freew.symbol");
+
+        return new SymbolRibbonSurface(
+            symbols.Header,
+            symbols.KeyTip,
+            symbol.Label,
+            symbol is RibbonDropdown dropdown
+                ? dropdown.Menu.Items.Select(item => item.Header).ToArray()
+                : null);
+    }
+
+    private static PageBackgroundRibbonSurface PageBackgroundSurface(FreeWRibbonCapabilities capabilities)
+    {
+        var pageBackground = RequiredGroup(FreeWRibbon.Build(capabilities), "design", "page-background");
+        var watermark = RequiredControl(pageBackground, "freew.watermark");
+        var pageColor = RequiredControl(pageBackground, "freew.page-color");
+        var pageBorders = RequiredControl(pageBackground, capabilities.UseAvaloniaBackedSurface ? "freew.page-borders" : "freew.page-border");
+
+        return new PageBackgroundRibbonSurface(
+            pageBackground.Header,
+            pageBackground.KeyTip,
+            watermark.Label,
+            pageColor.Label,
+            pageBorders.Label,
+            pageColor is RibbonDropdown { Menu.Items.Count: > 0 } dropdown
+                ? dropdown.Menu.Items.Select(item => item.Header).ToArray()
+                : null);
+    }
+
+    private static RibbonGroup RequiredGroup(RibbonDefinition definition, string tabId, string groupId)
+    {
+        var tab = definition.FindTab(tabId);
+        tab.Should().NotBeNull();
+        var group = tab!.FindGroup(groupId);
+        group.Should().NotBeNull();
+
+        return group!;
+    }
+
+    private static void AssertParagraphListSurfaceUsesResources(ParagraphListRibbonSurface surface, bool includesMultilevel)
+    {
+        surface.ParagraphHeader.Should().Be(Loc.Get("Ribbon_Group_Paragraph_Label"));
+        if (surface.ParagraphKeyTip is not null)
+            surface.ParagraphKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_Paragraph_KeyTip"));
+        surface.BulletsLabel.Should().Be(Loc.Get("Ribbon_Command_Bullets_Label"));
+        surface.NumberingLabel.Should().Be(Loc.Get("Ribbon_Command_Numbering_Label"));
+
+        if (!includesMultilevel)
+        {
+            surface.MultilevelListLabel.Should().BeNull();
+            surface.MultilevelMenuHeaders.Should().BeNull();
+            return;
+        }
+
+        surface.MultilevelListLabel.Should().Be(Loc.Get("Ribbon_Command_MultilevelList_Label"));
+        surface.MultilevelMenuHeaders.Should().Equal(
+            Loc.Get("Ribbon_Command_MultilevelPromote_Label"),
+            Loc.Get("Ribbon_Command_MultilevelDemote_Label"),
+            Loc.Get("Ribbon_Palette_MultilevelList_OutlineDecimal_Label"),
+            Loc.Get("Ribbon_Palette_MultilevelList_OutlineMixed_Label"),
+            Loc.Get("Ribbon_Palette_MultilevelList_OutlineHeadings_Label"),
+            Loc.Get("Ribbon_Command_MultilevelDefine_Label"));
+    }
+
+    private static void AssertSymbolSurfaceUsesResources(SymbolRibbonSurface surface, bool includesMenu)
+    {
+        surface.SymbolsHeader.Should().Be(Loc.Get("Ribbon_Group_Symbols_Label"));
+        if (surface.SymbolsKeyTip is not null)
+            surface.SymbolsKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_Symbols_KeyTip"));
+        surface.SymbolLabel.Should().Be(Loc.Get("Ribbon_Command_Symbol_Label"));
+
+        if (!includesMenu)
+        {
+            surface.SymbolMenuHeaders.Should().BeNull();
+            return;
+        }
+
+        surface.SymbolMenuHeaders.Should().Equal(FreeWRibbonDefinitionData.Symbols
+            .Select(symbol => $"{symbol.Glyph}   {symbol.Label}"));
+    }
+
+    private static void AssertPageBackgroundSurfaceUsesResources(PageBackgroundRibbonSurface surface, bool includesPalette)
+    {
+        surface.PageBackgroundHeader.Should().Be(Loc.Get("Ribbon_Group_PageBackground_Label"));
+        if (surface.PageBackgroundKeyTip is not null)
+            surface.PageBackgroundKeyTip.Should().Be(Loc.GetNeutral("Ribbon_Group_PageBackground_KeyTip"));
+        surface.WatermarkLabel.Should().Be(Loc.Get("Ribbon_Command_Watermark_Label"));
+        surface.PageColorLabel.Should().Be(Loc.Get("Ribbon_Command_PageColor_Label"));
+        surface.PageBordersLabel.Should().Be(Loc.Get("Ribbon_Command_PageBorders_Label"));
+
+        if (!includesPalette)
+        {
+            surface.PageColorMenuHeaders.Should().BeNull();
+            return;
+        }
+
+        surface.PageColorMenuHeaders.Should().Equal(FreeWRibbonDefinitionData.PageColors.Select(color => color.Label));
+    }
+
     private static string ReadRepositoryFile(params string[] relativeParts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -781,6 +996,28 @@ public sealed class FreeWRibbonDefinitionProfileTests
         string? UnderlineKeyTip,
         string StrikethroughLabel,
         string FontDialogLabel);
+
+    private sealed record ParagraphListRibbonSurface(
+        string ParagraphHeader,
+        string? ParagraphKeyTip,
+        string BulletsLabel,
+        string NumberingLabel,
+        string? MultilevelListLabel,
+        IReadOnlyList<string>? MultilevelMenuHeaders);
+
+    private sealed record SymbolRibbonSurface(
+        string SymbolsHeader,
+        string? SymbolsKeyTip,
+        string SymbolLabel,
+        IReadOnlyList<string>? SymbolMenuHeaders);
+
+    private sealed record PageBackgroundRibbonSurface(
+        string PageBackgroundHeader,
+        string? PageBackgroundKeyTip,
+        string WatermarkLabel,
+        string PageColorLabel,
+        string PageBordersLabel,
+        IReadOnlyList<string>? PageColorMenuHeaders);
 
     private sealed record CommandEntry(string TabId, string GroupId, string CommandId)
     {
