@@ -1,24 +1,12 @@
 using FreeX.Core.IO;
 using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
+using FileOpenDialogPlan = Free.Shared.IO.FileOpenDialogPlan;
+using FileOpenPickerPlan = Free.Shared.IO.FileOpenPickerPlan;
 using FileDialogRequestPlanner = Free.Shared.IO.FileDialogRequestPlanner;
-using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
+using FileSaveDialogPlan = Free.Shared.IO.FileSaveDialogPlan;
+using FileSavePickerPlan = Free.Shared.IO.FileSavePickerPlan;
 
 namespace FreeX.App.Services;
-
-public sealed record WorkbookOpenDialogPlan(string Filter, string DefaultExtensionWithDot);
-
-public sealed record WorkbookSaveDialogPlan(
-    string Filter,
-    string SuggestedFileName,
-    string DefaultExtensionWithDot,
-    int FilterIndex);
-
-public sealed record WorkbookOpenPickerPlan(IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes);
-
-public sealed record WorkbookSavePickerPlan(
-    IReadOnlyList<FileDialogPickerTypeDescriptor> FileTypes,
-    string SuggestedFileName,
-    string DefaultExtensionWithoutDot);
 
 /// <summary>
 /// UI-free planning for workbook open/save picker requests. WPF and Avalonia still build native dialogs;
@@ -28,28 +16,20 @@ public static class WorkbookFilePickerPlanner
 {
     public const string AllSupportedWorkbooksName = "All supported workbooks";
 
-    public static WorkbookOpenDialogPlan BuildOpenDialogPlan(IEnumerable<IFileAdapter> adapters)
-    {
-        var plan = FileDialogRequestPlanner.BuildOpenDialogPlan(
+    public static FileOpenDialogPlan BuildOpenDialogPlan(IEnumerable<IFileAdapter> adapters) =>
+        FileDialogRequestPlanner.BuildOpenDialogPlan(
             FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(GetFormats(adapters)));
-        return new WorkbookOpenDialogPlan(plan.Filter, plan.DefaultExtensionWithDot);
-    }
 
-    public static WorkbookSaveDialogPlan BuildSaveDialogPlan(
+    public static FileSaveDialogPlan BuildSaveDialogPlan(
         IEnumerable<IFileAdapter> adapters,
         string workbookName,
         string? preferredDefaultFormat)
     {
         var defaultExtension = ResolveSaveDialogDefaultExtension(adapters, preferredDefaultFormat);
-        var plan = FileDialogRequestPlanner.BuildSaveDialogPlan(
+        return FileDialogRequestPlanner.BuildSaveDialogPlan(
             FileFormatDialogDescriptorAdapter.ToSaveDialogDescriptors(GetFormats(adapters)),
             workbookName,
             defaultExtension);
-        return new WorkbookSaveDialogPlan(
-            plan.Filter,
-            plan.SuggestedFileName,
-            plan.DefaultExtensionWithDot,
-            plan.FilterIndex);
     }
 
     public static bool TryResolveSaveDialogTarget(
@@ -58,15 +38,12 @@ public static class WorkbookFilePickerPlanner
         out FileSaveTarget? target) =>
         FileSavePlanner.TryResolveExistingPath(path, adapters, out target);
 
-    public static WorkbookOpenPickerPlan BuildOpenPickerPlan(IEnumerable<FileFormatDescriptor> openFormats)
-    {
-        var plan = FileDialogRequestPlanner.BuildOpenPickerPlan(
+    public static FileOpenPickerPlan BuildOpenPickerPlan(IEnumerable<FileFormatDescriptor> openFormats) =>
+        FileDialogRequestPlanner.BuildOpenPickerPlan(
             FileFormatDialogDescriptorAdapter.ToDialogDescriptors(openFormats),
             AllSupportedWorkbooksName);
-        return new WorkbookOpenPickerPlan(plan.FileTypes);
-    }
 
-    public static WorkbookSavePickerPlan BuildSavePickerPlan(
+    public static FileSavePickerPlan BuildSavePickerPlan(
         IEnumerable<FileFormatDescriptor> saveFormats,
         string sourceName,
         string fallbackDisplayName,
@@ -79,10 +56,7 @@ public static class WorkbookFilePickerPlanner
             fallbackDisplayName,
             normalizedExtension,
             preferredFirstExtension: normalizedExtension);
-        return new WorkbookSavePickerPlan(
-            plan.FileTypes,
-            plan.SuggestedFileName,
-            plan.DefaultExtensionWithoutDot);
+        return plan;
     }
 
     public static string BuildSuggestedSaveAsFileName(

@@ -93,6 +93,8 @@ public sealed class FileWorkflowDedupSourceTests
         plannerSource.Should().Contain("PlanSaveAsPicker(");
         plannerSource.Should().Contain("OpenUnavailableMessage");
         plannerSource.Should().Contain("NoSaveFormatsMessage");
+        plannerSource.Should().Contain("FileOpenPickerPlan Picker");
+        plannerSource.Should().Contain("FileSavePickerPlan Picker");
 
         avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats)");
         avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
@@ -104,6 +106,51 @@ public sealed class FileWorkflowDedupSourceTests
 
         wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
         wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(");
+    }
+
+    [Fact]
+    public void FreeXWorkbookPickerPlans_UseSharedDialogPlanRecords()
+    {
+        var pickerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFilePickerPlanner.cs"));
+        var surfaceSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileDialogSurfacePlanner.cs"));
+
+        pickerSource.Should().Contain("public static FileOpenDialogPlan BuildOpenDialogPlan");
+        pickerSource.Should().Contain("public static FileSaveDialogPlan BuildSaveDialogPlan");
+        pickerSource.Should().Contain("public static FileOpenPickerPlan BuildOpenPickerPlan");
+        pickerSource.Should().Contain("public static FileSavePickerPlan BuildSavePickerPlan");
+        pickerSource.Should().NotContain("record WorkbookOpenDialogPlan");
+        pickerSource.Should().NotContain("record WorkbookSaveDialogPlan");
+        pickerSource.Should().NotContain("record WorkbookOpenPickerPlan");
+        pickerSource.Should().NotContain("record WorkbookSavePickerPlan");
+
+        surfaceSource.Should().Contain("CreateOpenPlan(FileOpenPickerPlan pickerPlan)");
+        surfaceSource.Should().Contain("CreateSaveAsPlan(FileSavePickerPlan pickerPlan)");
+    }
+
+    [Fact]
+    public void SaveDialogSelectionPolicy_StaysInSharedIoResolver()
+    {
+        var resolverSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared",
+            "Free.Shared.IO",
+            "FileDialogSaveSelectionResolver.cs"));
+        var freewSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freew",
+            "FreeW.App.Host",
+            "FileCommands.cs"));
+
+        resolverSource.Should().Contain("ResolveAdapter");
+        resolverSource.Should().Contain("FindSelectedSaveFormat");
+        resolverSource.Should().Contain("resolveByExtension(adapterRows, chosenExtension)");
+        freewSource.Should().Contain("FileDialogSaveSelectionResolver.ResolveAdapter(");
+        freewSource.Should().NotContain("private IDocumentFileAdapter? ResolveSaveAdapter");
+        freewSource.Should().NotContain("savePairs");
     }
 
     [Fact]
