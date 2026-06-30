@@ -76,7 +76,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookFileAccessServiceFactory.Create(App.Diagnostics)");
         source.Should().Contain("ArgumentNullException.ThrowIfNull(workbookFileAccessService);");
         source.Should().Contain("_workbookFileAccessService = workbookFileAccessService;");
-        source.Should().Contain("_workbookFileAccessService.CreateIdentityAsync(path, storageFile)");
+        source.Should().Contain("pickedStorageFile.StorageFile");
         source.Should().Contain("TrySelectOpenableLocalWorkbookPath(files, out var path, out var storageItem, out var message)");
         source.Should().Contain("TrySelectDroppedWorkbookPath(e, out var path, out var storageItem, out var message)");
         source.Should().Contain("storageItem = candidates[plan.CandidateIndex].StorageItem;");
@@ -252,16 +252,15 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)");
         source.Should().Contain("private async Task ExportActiveSheetPdfAsync()");
         source.Should().Contain("var storageFile = await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
-        source.Should().Contain("private async Task<IStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
+        source.Should().Contain("private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
         source.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle)");
-        source.Should().Contain("var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes);");
-        source.Should().Contain("Title = title");
-        source.Should().Contain("SuggestedFileName = pickerPlan.SuggestedFileName");
-        source.Should().Contain("DefaultExtension = pickerPlan.DefaultExtensionWithoutDot");
-        source.Should().Contain("FileTypeChoices = fileTypes");
-        source.Should().Contain("SuggestedFileType = fileTypes[0]");
-        source.Should().Contain("ShowOverwritePrompt = true");
-        source.Should().Contain("storageFile.TryGetLocalPath()");
+        source.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromDescriptors(");
+        source.Should().Contain("pickerPlan.SuggestedFileName");
+        source.Should().Contain("pickerPlan.DefaultExtensionWithoutDot");
+        source.Should().Contain("showOverwritePrompt: true");
+        source.Should().Contain("suggestFirstFileType: true");
+        source.Should().Contain("storageFile.LocalPath");
         source.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
         source.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
         source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)");
@@ -358,9 +357,9 @@ public sealed class AvaloniaShellSourceTests
             "private async Task<bool> SaveWorkbookAsAsync()",
             "return await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);");
         saveAsBlock.Should().Contain("if (!TryBeginFileOperation())");
-        saveAsBlock.Should().Contain("var storageFile = await StorageProvider.SaveFilePickerAsync");
+        saveAsBlock.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
         saveAsBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
-            .Should().BeLessThan(saveAsBlock.IndexOf("StorageProvider.SaveFilePickerAsync", StringComparison.Ordinal));
+            .Should().BeLessThan(saveAsBlock.IndexOf("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync", StringComparison.Ordinal));
         saveAsBlock.Should().Contain("var pathPlan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
         saveAsBlock.Should().Contain("pathPlan.ShouldConfirmOverwrite");
         saveAsBlock.Should().Contain("!await ConfirmNormalizedWorkbookOverwriteAsync(pathPlan.Path)");
@@ -988,6 +987,7 @@ public sealed class AvaloniaShellSourceTests
         var commandPlanner = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookFileCommandPlanner.cs"));
         var pickerPlanner = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookFilePickerPlanner.cs"));
         var adapter = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaFilePickerTypeAdapter.cs"));
+        var pickerService = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaFilePickerService.cs"));
 
         source.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats)");
         source.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
@@ -999,9 +999,12 @@ public sealed class AvaloniaShellSourceTests
         pickerPlanner.Should().Contain("FileDialogRequestPlanner.BuildSavePickerPlan(");
         pickerPlanner.Should().Contain("FileOpenPickerPlan BuildOpenPickerPlan");
         pickerPlanner.Should().Contain("FileSavePickerPlan BuildSavePickerPlan");
-        source.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(openPlan.FileTypes)");
+        source.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(\"Open Workbook\", openPlan.FileTypes)");
+        source.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(");
+        pickerService.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(fileTypes)");
+        pickerService.Should().Contain("AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes)");
         source.Should().NotContain("private static FilePickerFileType CreateFilePickerFileType(FilePickerTypeDescriptor descriptor)");
-        adapter.Should().Contain("Patterns = descriptor.Patterns.ToArray()");
+        adapter.Should().Contain("CreateFileType(descriptor.DisplayName, descriptor.Patterns)");
     }
 
     [Fact]
@@ -5326,7 +5329,8 @@ public sealed class AvaloniaShellSourceTests
         // The dialog gathers options and previews via the portable ImportDataPlanner.
         getDataSource.Should().Contain("private void GetDataFromText() => _ = ShowGetDataDialogAsync();");
         getDataSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
-        getDataSource.Should().Contain("FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes)");
+        getDataSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
+        getDataSource.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(");
         getDataSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
         getDataSource.Should().Contain("ImportDataPlanner.DecodeBytes(bytes, encodingKind)");
         getDataSource.Should().Contain("ImportDataPlanner.PreviewText(decodedText, options");

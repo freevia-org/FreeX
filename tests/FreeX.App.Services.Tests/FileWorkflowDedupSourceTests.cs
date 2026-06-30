@@ -99,6 +99,8 @@ public sealed class FileWorkflowDedupSourceTests
         avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats)");
         avaloniaSource.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
         avaloniaSource.Should().Contain("StorageProvider.CanSave,");
+        avaloniaSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
+        avaloniaSource.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
         avaloniaSource.Should().NotContain("\"Open unavailable on this platform.\"");
         avaloniaSource.Should().NotContain("\"No open formats are available.\"");
         avaloniaSource.Should().NotContain("\"Save As unavailable on this platform.\"");
@@ -317,8 +319,45 @@ public sealed class FileWorkflowDedupSourceTests
         wpfSource.Should().NotContain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
 
         avaloniaSource.Should().Contain("ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get(\"GetData_FileTypeName\"))");
-        avaloniaSource.Should().Contain("FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes)");
+        avaloniaSource.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");
+        avaloniaSource.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(");
         avaloniaSource.Should().NotContain("Patterns = [\"*.csv\", \"*.tsv\", \"*.tab\", \"*.txt\"]");
+    }
+
+    [Fact]
+    public void AvaloniaStorageProviderPickerCalls_StayInSharedShellService()
+    {
+        var pickerService = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaFilePickerService.cs"));
+
+        pickerService.Should().Contain("OpenFilePickerAsync(");
+        pickerService.Should().Contain("SaveFilePickerAsync(");
+        pickerService.Should().Contain("FilePickerOpenOptions");
+        pickerService.Should().Contain("FilePickerSaveOptions");
+        pickerService.Should().Contain("TryGetLocalPath()");
+
+        var appSources = new[]
+        {
+            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.GetData.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuWires.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Print.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("freew", "FreeW.App.Avalonia", "MainWindow.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("freep", "FreeP.App.Avalonia", "MainWindow.cs")),
+        };
+
+        string.Concat(appSources).Should().Contain("AvaloniaFilePickerService.");
+
+        foreach (var source in appSources)
+        {
+            source.Should().NotContain(".OpenFilePickerAsync(");
+            source.Should().NotContain(".SaveFilePickerAsync(");
+            source.Should().NotContain("new FilePickerOpenOptions");
+            source.Should().NotContain("new FilePickerSaveOptions");
+        }
     }
 
     [Fact]

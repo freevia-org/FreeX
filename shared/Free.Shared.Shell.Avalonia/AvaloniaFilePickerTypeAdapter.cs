@@ -5,6 +5,25 @@ namespace Free.Shared.Shell.Avalonia;
 
 public static class AvaloniaFilePickerTypeAdapter
 {
+    public static FilePickerFileType CreateFileType(
+        string displayName,
+        IEnumerable<string> patterns,
+        IEnumerable<string>? mimeTypes = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        ArgumentNullException.ThrowIfNull(patterns);
+
+        var fileType = new FilePickerFileType(displayName)
+        {
+            Patterns = patterns.ToArray(),
+        };
+
+        if (mimeTypes is not null)
+            fileType.MimeTypes = mimeTypes.ToArray();
+
+        return fileType;
+    }
+
     public static IReadOnlyList<FilePickerFileType> ToFileTypes(
         IEnumerable<FileDialogPickerTypeDescriptor> descriptors)
     {
@@ -19,9 +38,6 @@ public static class AvaloniaFilePickerTypeAdapter
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        return new FilePickerFileType(descriptor.DisplayName)
-        {
-            Patterns = descriptor.Patterns.ToArray(),
-        };
+        return CreateFileType(descriptor.DisplayName, descriptor.Patterns);
     }
 }

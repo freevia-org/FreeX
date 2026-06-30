@@ -60,11 +60,11 @@ public sealed partial class MainWindow
         return menu;
     }
 
-    private static readonly FilePickerFileType PictureFileType = new("Images")
-    {
-        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff"],
-        MimeTypes = ["image/*"],
-    };
+    private static readonly FilePickerFileType PictureFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            "Images",
+            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff"],
+            ["image/*"]);
 
     /// <summary>
     /// Inserts a picture chosen from a file onto the active sheet at the active cell, through the shared
@@ -84,19 +84,11 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = UiText.Get("InsertLoc_InsertPictureTitle"),
-            AllowMultiple = false,
-            FileTypeFilter = [PictureFileType],
-        });
-
-        IStorageFile? file = null;
-        foreach (var candidate in files)
-        {
-            file = candidate;
-            break;
-        }
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                UiText.Get("InsertLoc_InsertPictureTitle"),
+                [PictureFileType]));
 
         if (file is null)
             return;
@@ -357,10 +349,8 @@ public sealed partial class MainWindow
         return result;
     }
 
-    private static readonly FilePickerFileType AnyFileType = new("All Files")
-    {
-        Patterns = ["*.*"],
-    };
+    private static readonly FilePickerFileType AnyFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType("All Files", ["*.*"]);
 
     /// <summary>
     /// Insert ▸ Object (create from file) — honest scope. The FreeX Core model has no editable embedded-OLE
@@ -403,17 +393,11 @@ public sealed partial class MainWindow
 
         browse.Click += async (_, _) =>
         {
-            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = UiText.Get("WfInsertObject_Title"),
-                AllowMultiple = false,
-                FileTypeFilter = [AnyFileType],
-            });
-            foreach (var candidate in files)
-            {
-                chosen = candidate;
-                break;
-            }
+            chosen = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+                StorageProvider,
+                AvaloniaFilePickerOpenRequest.FromFileTypes(
+                    UiText.Get("WfInsertObject_Title"),
+                    [AnyFileType]));
 
             if (chosen is not null)
             {
