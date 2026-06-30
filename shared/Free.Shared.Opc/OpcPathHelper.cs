@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text;
 
 namespace Free.Shared.Opc;
 
@@ -46,6 +47,44 @@ public static class OpcPathHelper
         return NormalizeZipEntryPath(string.IsNullOrEmpty(baseDirectory)
             ? normalizedTarget
             : $"{ToZipEntryPath(baseDirectory)}/{normalizedTarget}");
+    }
+
+    public static string GetRelativeZipPath(string baseDirectory, string targetPath)
+    {
+        var baseSegments = NormalizeZipEntryPath(baseDirectory)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var targetSegments = NormalizeZipEntryPath(targetPath)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        var common = 0;
+        while (common < baseSegments.Length &&
+               common < targetSegments.Length &&
+               string.Equals(baseSegments[common], targetSegments[common], StringComparison.OrdinalIgnoreCase))
+        {
+            common++;
+        }
+
+        var segments = Enumerable
+            .Repeat("..", baseSegments.Length - common)
+            .Concat(targetSegments.Skip(common))
+            .ToArray();
+        return segments.Length == 0 ? string.Empty : string.Join('/', segments);
+    }
+
+    public static string UnescapeRelationshipPathSegments(string path)
+    {
+        if (!path.Contains('%', StringComparison.Ordinal))
+            return path;
+
+        return string.Join('/', path.Split('/').Select(UnescapeRelationshipPathSegment));
+    }
+
+    public static string EscapeRelationshipPathSegments(string path)
+    {
+        if (!RelationshipPathNeedsEscaping(path))
+            return path;
+
+        return string.Join('/', path.Split('/').Select(EscapeRelationshipPathSegment));
     }
 
     public static string? ResolveAbsolutePartName(string baseFolder, string target)
@@ -113,4 +152,98 @@ public static class OpcPathHelper
 
         return string.Join('/', parts);
     }
+
+    private static bool RelationshipPathNeedsEscaping(string path)
+    {
+        for (var i = 0; i < path.Length; i++)
+        {
+            var value = path[i];
+            if (value == '/' || IsSafeRelationshipPathCharacter(value))
+                continue;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsSafeRelationshipPathCharacter(char value) =>
+        value is >= 'A' and <= 'Z'
+            or >= 'a' and <= 'z'
+            or >= '0' and <= '9'
+            or '.'
+            or '-'
+            or '_'
+            or '~';
+
+    private static string UnescapeRelationshipPathSegment(string segment)
+    {
+        try
+        {
+            if (IsEncodedDotControlSegment(segment))
+                return segment;
+
+            var separatorEscapeIndex = IndexOfEncodedPathSeparator(segment, 0);
+            if (separatorEscapeIndex >= 0)
+                return UnescapePathSegmentPreservingEncodedSeparators(segment, separatorEscapeIndex);
+
+            return Uri.UnescapeDataString(segment);
+        }
+        catch (UriFormatException)
+        {
+            return segment;
+        }
+    }
+
+    private static bool IsEncodedDotControlSegment(string segment)
+    {
+        if (!segment.Contains('%', StringComparison.Ordinal))
+            return false;
+
+        var unescaped = Uri.UnescapeDataString(segment);
+        return unescaped is "." or ".." && segment.All(IsDotControlSegmentCharacter);
+    }
+
+    private static bool IsDotControlSegmentCharacter(char value) =>
+        value is '.' or '%' or '2' or 'E' or 'e';
+
+    private static string UnescapePathSegmentPreservingEncodedSeparators(string segment, int firstSeparatorEscapeIndex)
+    {
+        var builder = new StringBuilder(segment.Length);
+        var segmentStart = 0;
+        var separatorEscapeIndex = firstSeparatorEscapeIndex;
+        while (separatorEscapeIndex >= 0)
+        {
+            builder.Append(Uri.UnescapeDataString(segment[segmentStart..separatorEscapeIndex]));
+            builder.Append(segment, separatorEscapeIndex, 3);
+            segmentStart = separatorEscapeIndex + 3;
+            separatorEscapeIndex = IndexOfEncodedPathSeparator(segment, segmentStart);
+        }
+
+        builder.Append(Uri.UnescapeDataString(segment[segmentStart..]));
+        return builder.ToString();
+    }
+
+    private static int IndexOfEncodedPathSeparator(string segment, int startIndex)
+    {
+        for (var i = startIndex; i <= segment.Length - 3; i++)
+        {
+            if (segment[i] != '%')
+                continue;
+
+            if (IsHexDigit(segment[i + 1], '2') && IsHexDigit(segment[i + 2], 'F') ||
+                IsHexDigit(segment[i + 1], '5') && IsHexDigit(segment[i + 2], 'C'))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool IsHexDigit(char value, char expected) =>
+        char.ToUpperInvariant(value) == expected;
+
+    private static string EscapeRelationshipPathSegment(string segment) =>
+        segment is "." or ".." ? segment : Uri.EscapeDataString(segment);
 }

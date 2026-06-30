@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Xml.Linq;
 
 namespace Free.Shared.Opc;
@@ -6,6 +7,8 @@ public static class OpcMediaTypes
 {
     public static readonly XNamespace ContentTypesNamespace =
         "http://schemas.openxmlformats.org/package/2006/content-types";
+
+    public const string ContentTypesPath = "[Content_Types].xml";
 
     public const string RelationshipsContentType =
         "application/vnd.openxmlformats-package.relationships+xml";
@@ -39,6 +42,134 @@ public static class OpcMediaTypes
 
     public static bool TryGetDefaultContentType(string extension, out string contentType) =>
         DefaultContentTypes.TryGetValue(extension.TrimStart('.'), out contentType!);
+
+    public static bool EnsureDefaultContentType(
+        ZipArchive archive,
+        string extension,
+        string contentType)
+    {
+        var contentTypesXml = OpcXml.LoadXmlOrNull(archive, ContentTypesPath);
+        var root = contentTypesXml?.Root;
+        if (root is null)
+            return false;
+
+        var normalizedExtension = extension.TrimStart('.');
+        var hasDefault = root
+            .Elements(ContentTypesNamespace + "Default")
+            .Any(element => string.Equals(
+                element.Attribute("Extension")?.Value,
+                normalizedExtension,
+                StringComparison.OrdinalIgnoreCase));
+        if (hasDefault)
+            return false;
+
+        root.Add(new XElement(
+            ContentTypesNamespace + "Default",
+            new XAttribute("Extension", normalizedExtension),
+            new XAttribute("ContentType", contentType)));
+        OpcXml.ReplaceXmlEntry(archive, ContentTypesPath, contentTypesXml!);
+        return true;
+    }
+
+    public static bool EnsureOverrideContentType(
+        ZipArchive archive,
+        string partName,
+        string contentType)
+    {
+        var contentTypesXml = OpcXml.LoadXmlOrNull(archive, ContentTypesPath);
+        var root = contentTypesXml?.Root;
+        if (root is null)
+            return false;
+
+        var normalizedPartName = NormalizePartName(partName);
+        var matches = FindOverrideContentTypes(root, normalizedPartName).ToList();
+        if (matches.Count == 1 &&
+            string.Equals(matches[0].Attribute("ContentType")?.Value, contentType, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (var match in matches)
+            match.Remove();
+
+        root.Add(new XElement(
+            ContentTypesNamespace + "Override",
+            new XAttribute("PartName", normalizedPartName),
+            new XAttribute("ContentType", contentType)));
+        OpcXml.ReplaceXmlEntry(archive, ContentTypesPath, contentTypesXml!);
+        return true;
+    }
+
+    public static bool RemoveOverrideContentTypes(ZipArchive archive, IEnumerable<string> partNames)
+    {
+        var normalizedPartNames = partNames
+            .Select(NormalizePartName)
+            .Where(partName => !string.IsNullOrWhiteSpace(partName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (normalizedPartNames.Count == 0)
+            return false;
+
+        var contentTypesXml = OpcXml.LoadXmlOrNull(archive, ContentTypesPath);
+        var root = contentTypesXml?.Root;
+        if (root is null)
+            return false;
+
+        var overrides = root
+            .Elements(ContentTypesNamespace + "Override")
+            .Where(element => normalizedPartNames.Contains(NormalizePartName(element.Attribute("PartName")?.Value)))
+            .ToList();
+        if (overrides.Count == 0)
+            return false;
+
+        foreach (var element in overrides)
+            element.Remove();
+        OpcXml.ReplaceXmlEntry(archive, ContentTypesPath, contentTypesXml!);
+        return true;
+    }
+
+    public static bool PruneMissingOverrideContentTypes(ZipArchive archive)
+    {
+        var contentTypesXml = OpcXml.LoadXmlOrNull(archive, ContentTypesPath);
+        var root = contentTypesXml?.Root;
+        if (root is null)
+            return false;
+
+        var changed = false;
+        foreach (var overrideElement in root.Elements(ContentTypesNamespace + "Override").ToList())
+        {
+            var zipPath = NormalizePartName(overrideElement.Attribute("PartName")?.Value).TrimStart('/');
+            if (!string.IsNullOrWhiteSpace(zipPath) && archive.GetEntry(zipPath) is null)
+            {
+                overrideElement.Remove();
+                changed = true;
+            }
+        }
+
+        if (!changed)
+            return false;
+
+        OpcXml.ReplaceXmlEntry(archive, ContentTypesPath, contentTypesXml!);
+        return true;
+    }
+
+    public static string NormalizePartName(string? partName)
+    {
+        if (string.IsNullOrWhiteSpace(partName))
+            return string.Empty;
+
+        return "/" + OpcPathHelper.NormalizeZipEntryPath(partName.Trim());
+    }
+
+    public static IEnumerable<XElement> FindOverrideContentTypes(XElement contentTypesRoot, string partName)
+    {
+        var normalizedPartName = NormalizePartName(partName);
+        return contentTypesRoot
+            .Elements(ContentTypesNamespace + "Override")
+            .Where(overrideElement => string.Equals(
+                NormalizePartName(overrideElement.Attribute("PartName")?.Value),
+                normalizedPartName,
+                StringComparison.OrdinalIgnoreCase));
+    }
 
     public static string GetImageContentType(string path)
     {

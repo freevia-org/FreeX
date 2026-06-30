@@ -44,6 +44,7 @@ public sealed class XlsxPackagePathTests
     [Theory]
     [InlineData("xl/worksheets/sheet1.xml", "xl/drawings/drawing1.xml", "../drawings/drawing1.xml")]
     [InlineData("xl/worksheets/sheet1.xml", "xl/media/image 1.png", "../media/image%201.png")]
+    [InlineData("xl/worksheets/sheet1.xml", "xl/webPublishItems.xml", "../webPublishItems.xml")]
     [InlineData("xl/drawings/drawing1.xml", "xl/charts/chart1.xml", "../charts/chart1.xml")]
     [InlineData("xl/drawings/drawing1.xml", "xl/media/image#1?.png", "../media/image%231%3F.png")]
     [InlineData("xl/workbook.xml", "xl/sharedStrings.xml", "sharedStrings.xml")]
@@ -63,20 +64,32 @@ public sealed class XlsxPackagePathTests
     [Fact]
     public void RelationshipPathEscaping_FastPathsSafeTargetsBeforeSplittingSegments()
     {
-        var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxPackagePath.cs");
+        var source = TestWorkspaceFiles.ReadWorkspaceText("shared", "Free.Shared.Opc", "OpcPathHelper.cs");
         var escapingHelpers = source[
-            source.IndexOf("private static string UnescapePathSegments", StringComparison.Ordinal)..
-            source.IndexOf("private static string UnescapePathSegment(string segment)", StringComparison.Ordinal)];
+            source.IndexOf("public static string UnescapeRelationshipPathSegments", StringComparison.Ordinal)..
+            source.IndexOf("private static bool RelationshipPathNeedsEscaping", StringComparison.Ordinal)];
 
         escapingHelpers.Should().Contain("if (!path.Contains('%', StringComparison.Ordinal))");
-        escapingHelpers.Should().Contain("if (!PathNeedsEscaping(path))");
-        escapingHelpers.Should().Contain("private static bool PathNeedsEscaping(string path)");
+        escapingHelpers.Should().Contain("if (!RelationshipPathNeedsEscaping(path))");
         escapingHelpers.IndexOf("if (!path.Contains('%', StringComparison.Ordinal))", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(escapingHelpers.IndexOf("path.Split('/').Select(UnescapePathSegment)", StringComparison.Ordinal));
-        escapingHelpers.IndexOf("if (!PathNeedsEscaping(path))", StringComparison.Ordinal)
+            .BeLessThan(escapingHelpers.IndexOf("path.Split('/').Select(UnescapeRelationshipPathSegment)", StringComparison.Ordinal));
+        escapingHelpers.IndexOf("if (!RelationshipPathNeedsEscaping(path))", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(escapingHelpers.IndexOf("path.Split('/').Select(EscapePathSegment)", StringComparison.Ordinal));
+            .BeLessThan(escapingHelpers.IndexOf("path.Split('/').Select(EscapeRelationshipPathSegment)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void XlsxPackagePath_DedupSourceGuard_DelegatesGenericPathWorkToSharedOpcHelper()
+    {
+        var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxPackagePath.cs");
+
+        source.Should().Contain("OpcPathHelper.GetDirectoryName");
+        source.Should().Contain("OpcPathHelper.GetRelativeZipPath");
+        source.Should().Contain("OpcPathHelper.UnescapeRelationshipPathSegments");
+        source.Should().Contain("OpcPathHelper.EscapeRelationshipPathSegments");
+        source.Should().NotContain("private static string UnescapePathSegments");
+        source.Should().NotContain("private static string EscapePathSegments");
     }
 
     [Theory]
@@ -161,8 +174,7 @@ public sealed class XlsxPackagePathTests
     {
         var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxPackagePath.cs");
         var mediaFileNameHelpers = source[
-            source.IndexOf("public static string GetWorksheetBackgroundMediaFileName", StringComparison.Ordinal)..
-            source.IndexOf("private static string UnescapePathSegments", StringComparison.Ordinal)];
+            source.IndexOf("public static string GetWorksheetBackgroundMediaFileName", StringComparison.Ordinal)..];
 
         mediaFileNameHelpers.Should().Contain("IsUnsafePackageMediaFileNameCharacter");
         mediaFileNameHelpers.Should().NotContain("Path.GetInvalidFileNameChars");

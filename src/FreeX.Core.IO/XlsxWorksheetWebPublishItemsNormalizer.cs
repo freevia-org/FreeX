@@ -8,10 +8,8 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private static readonly XNamespace ContentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace PackageRelNs = OpcRelationships.Namespace;
     private const string WebPublishItemsPath = "xl/webPublishItems.xml";
-    private const string WorksheetWebPublishItemsRelationshipTarget = "../webPublishItems.xml";
     private const string WebPublishItemsContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.webPublishItems+xml";
     private const string WebPublishItemsRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webPublishItems";
 
@@ -192,28 +190,9 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
             return;
         }
 
-        EnsureWebPublishItemsContentType(archive);
+        XlsxPackageXmlEditor.EnsureSpecificContentType(archive, WebPublishItemsPath, WebPublishItemsContentType);
         foreach (var worksheetPath in worksheetPathsWithWebPublishItems)
             EnsureWorksheetWebPublishItemsRelationship(archive, worksheetPath);
-    }
-
-    private static void EnsureWebPublishItemsContentType(ZipArchive archive)
-    {
-        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
-        if (contentTypesEntry is null)
-            return;
-
-        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
-        var hasCorrectOverride = contentTypesXml.Root?
-            .Elements(ContentTypeNs + "Override")
-            .Any(element =>
-                string.Equals(element.Attribute("PartName")?.Value, "/" + WebPublishItemsPath, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(element.Attribute("ContentType")?.Value, WebPublishItemsContentType, StringComparison.Ordinal))
-            == true;
-        if (hasCorrectOverride)
-            return;
-
-        XlsxPackageXmlEditor.EnsureSpecificContentType(archive, WebPublishItemsPath, WebPublishItemsContentType);
     }
 
     private static void EnsureWorksheetWebPublishItemsRelationship(ZipArchive archive, string worksheetPath)
@@ -221,7 +200,7 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
         var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var relationshipsXml = archive.GetEntry(relationshipsPath) is { } relationshipsEntry
             ? XlsxPackageXmlEditor.LoadXml(relationshipsEntry)
-            : new XDocument(new XElement(PackageRelNs + "Relationships"));
+            : OpcRelationships.CreateDocument();
 
         if (HasWebPublishItemsRelationship(relationshipsXml, worksheetPath))
             return;
@@ -230,11 +209,10 @@ internal static class XlsxWorksheetWebPublishItemsNormalizer
         if (root is null)
             return;
 
-        root.Add(new XElement(
-            PackageRelNs + "Relationship",
-            new XAttribute("Id", XlsxPackageXmlEditor.NextRelationshipId(relationshipsXml, PackageRelNs)),
-            new XAttribute("Type", WebPublishItemsRelationshipType),
-            new XAttribute("Target", WorksheetWebPublishItemsRelationshipTarget)));
+        root.Add(OpcRelationships.CreateRelationship(
+            OpcRelationships.NextRelationshipId(relationshipsXml, PackageRelNs),
+            WebPublishItemsRelationshipType,
+            XlsxPackagePath.GetRelationshipTarget(worksheetPath, WebPublishItemsPath)));
 
         XlsxPackageXmlEditor.ReplaceXml(archive, relationshipsPath, relationshipsXml);
     }
