@@ -64,10 +64,19 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs"));
 
         source.Should().Contain("ChartAxisPlanner.GetDialogField(fieldId)");
+        source.Should().Contain("ChartAxisPlanner.GetAxisOptionsSection()");
+        source.Should().Contain("ChartAxisPlanner.GetGridlinesSection()");
+        source.Should().Contain("ChartAxisPlanner.GetTickMarksSection()");
         source.Should().Contain("ChartAxisPlanner.TryParseDialogInput(");
         source.Should().Contain("MakeAxisDescriptorCheck(ChartAxisDialogFieldId.LogScale");
         source.Should().Contain("MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.Minimum");
+        source.Should().Contain("MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.MinorUnit");
         source.Should().Contain("MakeAxisDescriptorLabel(ChartAxisDialogFieldId.NumberFormat");
+        source.Should().Contain("MakeAxisColorButton(ChartAxisDialogFieldId.MajorGridlineColor");
+        source.Should().Contain("MakeAxisTickStyleCombo(ChartAxisDialogFieldId.MajorTickMarks");
+        source.Should().Contain("MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LineThickness");
+        source.Should().Contain("FormatOptionalColorText(state.LineColor)");
+        source.Should().Contain("MakeAxisDescriptorGroup(tickMarksSection");
         source.Should().NotContain("AutomationProperties.SetName(minimumBox, \"Axis minimum\")");
         source.Should().NotContain("UiText.Get(\"ChartAxis_MinimumLabel\")");
         source.Should().NotContain("UiText.Get(\"ChartAxis_ShowMajorGridlines\")");
