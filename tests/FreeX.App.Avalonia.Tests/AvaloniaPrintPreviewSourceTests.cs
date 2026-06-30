@@ -16,6 +16,10 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("PrintPreviewSurfacePlanner.CreateFindBarPlan(");
         source.Should().Contain("PrintPreviewSurfacePlanner.CreateSettingsRailPlan(");
         source.Should().Contain("PrintPreviewSettingsTextResolver");
+        source.Should().Contain("Content = topToolbarPlan.PrintButtonText");
+        source.Should().Contain("Content = topToolbarPlan.CloseButtonText");
+        source.Should().Contain("CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[0])");
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, plan.AutomationId)");
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.PrintWhatOptions, plan.Settings.PrintWhatSelectedIndex)");
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.SidesOptions, plan.Settings.SidesSelectedIndex)");
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.CollationOptions, plan.Settings.CollationSelectedIndex)");
@@ -25,6 +29,8 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.ScalingOptions, plan.Settings.ScalingSelectedIndex)");
         source.Should().Contain("RenderPreviewInstructions(canvas, painting.Instructions)");
         source.Should().Contain("IsChecked = plan.Settings.PrintGridlines");
+        source.Should().Contain("Content = plan.PrintHeadingsText");
+        source.Should().Contain("IsChecked = plan.Settings.PrintHeadings");
         source.Should().Contain("IsEnabled = plan.Settings.IgnorePrintAreaEnabled");
 
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_PrintWhatActiveSheets\"");
@@ -32,6 +38,8 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_CollatedOption\"");
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_CopiesSectionLabel\"");
         source.Should().NotContain("PrintPreviewText(\"PrintPreview_PageSetupButton\"");
+        source.Should().NotContain("PrintPreviewText(\"PrintPreview_PrintButton\"");
+        source.Should().NotContain("PrintPreviewText(\"PrintPreview_CloseButton\"");
         source.Should().NotContain("CreatePreviewComboBox(183, \"Portrait\")");
         source.Should().NotContain("CreatePreviewComboBox(183, \"A4\")");
         source.Should().NotContain("CreatePreviewComboBox(183, \"Narrow\")");

@@ -5,6 +5,7 @@ using FreeX.Core.Model;
 namespace FreeX.App.Presentation.PageLayout;
 
 public sealed record PrintPreviewTopToolbarPlan(
+    string PrintButtonText,
     string PrinterLabelText,
     string PrinterName,
     double PrinterComboWidth,
@@ -18,11 +19,13 @@ public sealed record PrintPreviewTopToolbarPlan(
     string SidesLabelText,
     string StatusText,
     string PageRangeText,
-    double PageRangeComboWidth);
+    double PageRangeComboWidth,
+    string CloseButtonText);
 
 public sealed record PrintPreviewNavigationGlyphPlan(
     PrintPreviewToolbarCommand Command,
-    string Text);
+    string Text,
+    string AutomationId);
 
 public sealed record PrintPreviewDocumentToolbarPlan(
     IReadOnlyList<PrintPreviewNavigationGlyphPlan> NavigationButtons,
@@ -68,6 +71,8 @@ public sealed record PrintPreviewSettingsRailPlan(
     string IgnorePrintAreaText,
     string PrintOptionsSectionText,
     string PrintGridlinesText,
+    string PrintHeadingsText,
+    string PageSetupLinkText,
     double ChoiceComboWidth);
 
 public static class PrintPreviewSurfacePlanner
@@ -89,6 +94,7 @@ public static class PrintPreviewSurfacePlanner
         var rangePlan = PrintPreviewToolbarStatePlanner.CreatePageRangeToolbarPlan(totalPages, textResolver);
 
         return new PrintPreviewTopToolbarPlan(
+            PrintButtonText: Text(textResolver, "PrintPreview_PrintButton", "Print..."),
             PrinterLabelText: Text(textResolver, "PrintPreview_PrinterLabel", "Printer:"),
             PrinterName: NormalizePrinterName(printerName),
             PrinterComboWidth: PrinterComboWidth,
@@ -102,7 +108,8 @@ public static class PrintPreviewSurfacePlanner
             SidesLabelText: Text(textResolver, "PrintPreview_SidesLabel", "Sides:"),
             StatusText: PrintPreviewToolbarStatePlanner.CreateStatusText(printerName, 1, totalPages),
             PageRangeText: rangePlan.Choices[0].Text,
-            PageRangeComboWidth: ToolbarPageRangeComboWidth);
+            PageRangeComboWidth: ToolbarPageRangeComboWidth,
+            CloseButtonText: Text(textResolver, "PrintPreview_CloseButton", "Close"));
     }
 
     public static PrintPreviewDocumentToolbarPlan CreateDocumentToolbarPlan(
@@ -111,10 +118,22 @@ public static class PrintPreviewSurfacePlanner
         new(
             NavigationButtons:
             [
-                new(PrintPreviewToolbarCommand.FirstPage, "|<"),
-                new(PrintPreviewToolbarCommand.PreviousPage, "<"),
-                new(PrintPreviewToolbarCommand.NextPage, ">"),
-                new(PrintPreviewToolbarCommand.LastPage, ">|")
+                new(
+                    PrintPreviewToolbarCommand.FirstPage,
+                    "|<",
+                    PrintPreviewDialogPlanner.FirstPageButtonAutomationId),
+                new(
+                    PrintPreviewToolbarCommand.PreviousPage,
+                    "<",
+                    PrintPreviewDialogPlanner.PreviousPageButtonAutomationId),
+                new(
+                    PrintPreviewToolbarCommand.NextPage,
+                    ">",
+                    PrintPreviewDialogPlanner.NextPageButtonAutomationId),
+                new(
+                    PrintPreviewToolbarCommand.LastPage,
+                    ">|",
+                    PrintPreviewDialogPlanner.LastPageButtonAutomationId)
             ],
             PageLabelText: Text(textResolver, "PrintPreview_PageLabel", "Page:"),
             PageNumberText: "1",
@@ -140,7 +159,8 @@ public static class PrintPreviewSurfacePlanner
         PrintPreviewSettings currentSettings,
         bool hasSelection,
         bool canUpdatePrintPreviewSettings,
-        PrintSettingsTextResolver? textResolver = null)
+        PrintSettingsTextResolver? textResolver = null,
+        bool stripMnemonics = true)
     {
         var panelPlan = PrintPreviewSettingsPanelPlanner.Build(
             sheet,
@@ -151,37 +171,40 @@ public static class PrintPreviewSurfacePlanner
 
         return new PrintPreviewSettingsRailPlan(
             panelPlan,
-            CopiesSectionText: Text(textResolver, "PrintPreview_CopiesSectionLabel", "Copies:"),
+            CopiesSectionText: Text(textResolver, "PrintPreview_CopiesSectionLabel", "Copies:", stripMnemonics),
             CopiesText: panelPlan.Copies.ToString(CultureInfo.InvariantCulture),
             CopiesBoxWidth: SettingsCopiesBoxWidth,
-            PrinterSectionText: Text(textResolver, "PrintPreview_PrinterSectionLabel", "Printer:"),
+            PrinterSectionText: Text(textResolver, "PrintPreview_PrinterSectionLabel", "Printer:", stripMnemonics),
             PrinterName: NormalizePrinterName(printerName),
             PrinterComboWidth: SettingsChoiceComboWidth,
-            PrinterPropertiesButtonText: Text(textResolver, "PrintPreview_PrinterPropertiesButton", "Printer Properties"),
-            PrintWhatLabelText: Text(textResolver, "PrintPreview_PrintWhatLabel", "Print What:"),
-            PagesLabelText: Text(textResolver, "PrintPreview_PagesLabel", "Pages:"),
-            PageRange: CreateSettingsPageRangePlan(totalPages, textResolver),
-            SidesSectionText: Text(textResolver, "PrintPreview_SidesSectionLabel", "Print Sides:"),
-            CollationSectionText: Text(textResolver, "PrintPreview_CollatedSectionLabel", "Collation:"),
-            OrientationLabelText: Text(textResolver, "PrintPreview_OrientationLabel", "Orientation:"),
-            PaperSizeLabelText: Text(textResolver, "PageSetup_PaperSize", "Paper size:"),
-            MarginsLabelText: Text(textResolver, "PrintPreview_MarginsButton", "Margins"),
-            ScalingLabelText: Text(textResolver, "PrintPreview_ScalingLabel", "Scaling:"),
-            IgnorePrintAreaText: Text(textResolver, "PrintPreview_IgnorePrintArea", "Ignore print area"),
-            PrintOptionsSectionText: Text(textResolver, "PrintPreview_PrintOptionsSection", "Print Options"),
-            PrintGridlinesText: Text(textResolver, "PageSetup_PrintGridlines", "Print gridlines"),
+            PrinterPropertiesButtonText: Text(textResolver, "PrintPreview_PrinterPropertiesButton", "Printer Properties", stripMnemonics),
+            PrintWhatLabelText: Text(textResolver, "PrintPreview_PrintWhatLabel", "Print What:", stripMnemonics),
+            PagesLabelText: Text(textResolver, "PrintPreview_PagesLabel", "Pages:", stripMnemonics),
+            PageRange: CreateSettingsPageRangePlan(totalPages, textResolver, stripMnemonics),
+            SidesSectionText: Text(textResolver, "PrintPreview_SidesSectionLabel", "Print Sides:", stripMnemonics),
+            CollationSectionText: Text(textResolver, "PrintPreview_CollatedSectionLabel", "Collation:", stripMnemonics),
+            OrientationLabelText: Text(textResolver, "PrintPreview_OrientationLabel", "Orientation:", stripMnemonics),
+            PaperSizeLabelText: Text(textResolver, "PageSetup_PaperSize", "Paper size:", stripMnemonics),
+            MarginsLabelText: Text(textResolver, "PrintPreview_MarginsButton", "Margins", stripMnemonics),
+            ScalingLabelText: Text(textResolver, "PrintPreview_ScalingLabel", "Scaling:", stripMnemonics),
+            IgnorePrintAreaText: Text(textResolver, "PrintPreview_IgnorePrintArea", "Ignore print area", stripMnemonics),
+            PrintOptionsSectionText: Text(textResolver, "PrintPreview_PrintOptionsSection", "Print Options", stripMnemonics),
+            PrintGridlinesText: Text(textResolver, "PageSetup_PrintGridlines", "Print gridlines", stripMnemonics),
+            PrintHeadingsText: Text(textResolver, "PageSetup_PrintRowAndColumnHeadings", "Print headings", stripMnemonics),
+            PageSetupLinkText: Text(textResolver, "PrintPreview_PageSetupLink", "Page Setup", stripMnemonics),
             ChoiceComboWidth: SettingsChoiceComboWidth);
     }
 
     private static PrintPreviewPageRangeFieldsPlan CreateSettingsPageRangePlan(
         int totalPages,
-        PrintSettingsTextResolver? textResolver)
+        PrintSettingsTextResolver? textResolver,
+        bool stripMnemonics)
     {
         var normalizedTotalPages = Math.Max(1, totalPages);
 
         return new PrintPreviewPageRangeFieldsPlan(
             "1",
-            Text(textResolver, "PrintPreview_PageRangeToText", "To:"),
+            Text(textResolver, "PrintPreview_PageRangeToText", "To:", stripMnemonics),
             normalizedTotalPages.ToString(CultureInfo.InvariantCulture),
             SettingsPageRangeBoxWidth);
     }
@@ -189,10 +212,14 @@ public static class PrintPreviewSurfacePlanner
     private static string NormalizePrinterName(string printerName) =>
         string.IsNullOrWhiteSpace(printerName) ? "Windows print dialog" : printerName.Trim();
 
-    private static string Text(PrintSettingsTextResolver? textResolver, string key, string fallback)
+    private static string Text(
+        PrintSettingsTextResolver? textResolver,
+        string key,
+        string fallback,
+        bool stripMnemonics = true)
         => LocalizedFallbackTextResolver.Resolve(
             key,
             fallback,
             textResolver is null ? null : candidate => textResolver.Get(candidate, fallback),
-            stripMnemonics: true);
+            stripMnemonics: stripMnemonics);
 }
