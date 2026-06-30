@@ -27,4 +27,23 @@ public sealed class StatusBarViewSwitchSourceTests
         viewSwitchSource.Should().Contain("Width = 24");
         viewSwitchSource.Should().NotContain("Content = label");
     }
+
+    [Fact]
+    public void StatusBarTextPlanning_LivesInPresentationPlanner()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "FreeW.App.Host",
+            "MainWindow.cs"));
+
+        source.Should().Contain("using FreeW.App.Presentation.Shell;");
+        source.Should().Contain("FreeWEditorStatusPlanner.Build(");
+        source.Should().Contain("new FreeWEditorStatusSnapshot(");
+        source.Should().NotContain("WordCount.Words(selectionText)");
+        source.Should().NotContain("FormatDocumentSelectionStatus(words, characters)");
+    }
 }

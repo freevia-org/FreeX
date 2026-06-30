@@ -54,6 +54,20 @@ public sealed class SisterDialogTextResourceSourceTests
     }
 
     [Fact]
+    public void MainWindow_ResolvesEditorStatusTextFromPresentationPlanner()
+    {
+        var source = ReadAvaloniaSource("MainWindow.cs");
+
+        source.Should().Contain("using FreeW.App.Presentation.Shell;");
+        source.Should().Contain("FreeWEditorStatusPlanner.Build(");
+        source.Should().Contain("new FreeWEditorStatusSnapshot(");
+        source.Should().Contain("_editor.ComputeStatistics()");
+        source.Should().Contain("SelectionText: _editor.SelectedText");
+        source.Should().NotContain("text.Split((char[]?)null");
+        source.Should().NotContain("SisterAppStatusBarTextPlanner.FormatDocumentSummaryStatus(");
+    }
+
+    [Fact]
     public void BackstageView_ResolvesRailAndPaneTextFromPresentationResources()
     {
         var source = ReadAvaloniaSource("Backstage", "BackstageView.cs");
