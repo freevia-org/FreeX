@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Accessibility;
 
 namespace FreeX.App.Services;
 
@@ -157,14 +158,8 @@ public static class ReviewWorkflowPlanner
             previous,
             "No threaded comments on the active sheet.");
 
-    public static CellAddress GetAccessibilityNavigationTarget(AccessibilityIssue issue)
-    {
-        var location = issue.Location.Trim();
-        var firstLocation = location.Split(':', 2)[0];
-        return CellAddress.TryParse(firstLocation, issue.SheetId, out var address)
-            ? address
-            : new CellAddress(issue.SheetId, 1, 1);
-    }
+    public static CellAddress GetAccessibilityNavigationTarget(AccessibilityIssue issue) =>
+        AccessibilityCheckerDialogPlanner.GetNavigationTarget(issue);
 
     private static IReadOnlyList<ReviewCommentListItem> CreateNoteItems(Sheet? sheet) =>
         sheet is null

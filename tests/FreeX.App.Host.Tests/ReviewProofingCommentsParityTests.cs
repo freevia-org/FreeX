@@ -51,13 +51,13 @@ public sealed class ReviewProofingCommentsParityTests
     public void AccessibilityCheckerDialog_CleanOkClosesWithoutNavigationResult()
     {
         var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
-        var cleanStart = source.IndexOf("if (_sections.Count == 0)", StringComparison.Ordinal);
-        var issueStart = source.IndexOf("// Inspection Results heading", cleanStart, StringComparison.Ordinal);
+        var cleanStart = source.IndexOf("if (_plan.State == AccessibilityCheckerDialogState.Clean)", StringComparison.Ordinal);
+        var issueStart = source.IndexOf("var body = new Grid();", cleanStart, StringComparison.Ordinal);
         var cleanContent = source[
             cleanStart..
             issueStart];
 
-        cleanContent.Should().Contain("_messageBox.Text = CreateMessage");
+        cleanContent.Should().Contain("_messageBox.Text = _plan.CleanMessage");
         cleanContent.Should().Contain("_goToButton.Visibility = Visibility.Collapsed");
         cleanContent.Should().NotContain("DialogResult = true");
     }

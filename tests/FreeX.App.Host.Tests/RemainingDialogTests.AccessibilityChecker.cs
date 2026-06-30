@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.Accessibility;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -44,11 +45,12 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("public sealed record AccessibilityCheckerDialogResult");
         source.Should().Contain("private readonly TreeView _resultsTree");
         source.Should().Contain("private readonly Button _goToButton");
-        source.Should().Contain("Content = UiText.Get(\"AccessibilityChecker_GoToButton\")");
+        source.Should().Contain("AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get)");
+        source.Should().Contain("ApplyAction(_goToButton, _plan.GoToAction);");
         source.Should().Contain("_resultsTree.MouseDoubleClick += ResultsTree_MouseDoubleClick;");
         source.Should().Contain("private void GoToSelectedIssue()");
         reviewSource.Should().Contain("if (dialog.ShowDialog() == true)");
-        reviewSource.Should().Contain("NavigateToCell(AccessibilityCheckerDialog.GetNavigationTarget(dialog.Result!.Issue));");
+        reviewSource.Should().Contain("NavigateToCell(AccessibilityCheckerDialogPlanner.GetNavigationTarget(dialog.Result!.Issue));");
     }
 
     [Fact]
@@ -81,24 +83,20 @@ public sealed partial class RemainingDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("AccessibilityCheckerDialog.cs");
 
-        source.Should().Contain("AutomationProperties.SetName(_messageBox, UiText.Get(\"AccessibilityChecker_ResultAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_messageBox, \"AccessibilityCheckerResultText\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_messageBox, UiText.Get(\"AccessibilityChecker_ResultHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetName(_resultsTree, UiText.Get(\"AccessibilityChecker_IssueListAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_resultsTree, \"AccessibilityCheckerIssueList\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_resultsTree, UiText.Get(\"AccessibilityChecker_IssueListHelpText\"));");
-        source.Should().Contain("AutomationProperties.SetName(_goToButton, UiText.Get(\"AccessibilityChecker_GoToAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_goToButton, \"AccessibilityCheckerGoToButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_goToButton, UiText.Get(\"AccessibilityChecker_GoToHelpText\"));");
+        source.Should().Contain("ApplyAutomation(_messageBox, _plan.ResultAutomation);");
+        source.Should().Contain("ApplyAutomation(_resultsTree, _plan.IssueListAutomation);");
+        source.Should().Contain("ApplyAction(_goToButton, _plan.GoToAction);");
+        source.Should().Contain("ApplyAction(_closeButton, _plan.CloseAction);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(target, automation.AutomationId);");
         UiText.Get("AccessibilityChecker_ResultAutomationName").Should().Be("Accessibility checker result");
     }
 
     [Fact]
-    public void AccessibilityCheckerDialog_GetNavigationTarget_UsesFirstCellInIssueLocation()
+    public void AccessibilityCheckerDialogPlanner_GetNavigationTarget_UsesFirstCellInIssueLocation()
     {
         var sheetId = SheetId.New();
 
-        AccessibilityCheckerDialog.GetNavigationTarget(new AccessibilityIssue(
+        AccessibilityCheckerDialogPlanner.GetNavigationTarget(new AccessibilityIssue(
                 AccessibilityIssueKind.ChartMissingTitle,
                 sheetId,
                 "Sheet1",
@@ -107,7 +105,7 @@ public sealed partial class RemainingDialogTests
             .Should()
             .Be(new CellAddress(sheetId, 3, 3));
 
-        AccessibilityCheckerDialog.GetNavigationTarget(new AccessibilityIssue(
+        AccessibilityCheckerDialogPlanner.GetNavigationTarget(new AccessibilityIssue(
                 AccessibilityIssueKind.DefaultWorksheetName,
                 sheetId,
                 "Sheet1",

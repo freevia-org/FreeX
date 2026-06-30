@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
@@ -7,7 +6,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
-using Free.Shared.Localization;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.Core.Commands;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -15,12 +14,6 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    // Review ▸ Check Accessibility — Excel-style Accessibility Checker task pane. Inspection Results
-    // are grouped by severity (Errors / Warnings / Tips) and, within each section, by issue type;
-    // selecting an item reveals the "Additional Information" area ("Why Fix" / "How To Fix") and
-    // enables [Go To]. Structure and Additional Information text are shared with the WPF dialog via
-    // FreeX.Core.Commands.AccessibilityInspectionResult / AccessibilityIssueClassification.
-
     private async Task ShowAccessibilityCheckerDialogAsync()
     {
         if (_isOpening || _isSaving)
@@ -30,22 +23,22 @@ public sealed partial class MainWindow
             return;
 
         var issues = AccessibilityCheckerService.FindIssues(_session.Workbook);
-        var sections = AccessibilityInspectionResult.Build(issues);
+        var plan = AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get);
 
-        if (sections.Count == 0)
+        if (plan.State == AccessibilityCheckerDialogState.Clean)
         {
-            await ShowAccessibilityCheckerCleanDialogAsync();
+            await ShowAccessibilityCheckerCleanDialogAsync(plan);
             return;
         }
 
-        await ShowAccessibilityCheckerIssuesDialogAsync(sections);
+        await ShowAccessibilityCheckerIssuesDialogAsync(plan);
     }
 
-    private async Task ShowAccessibilityCheckerCleanDialogAsync()
+    private async Task ShowAccessibilityCheckerCleanDialogAsync(AccessibilityCheckerDialogPlan plan)
     {
         var dialog = new Window
         {
-            Title = AcText("AccessibilityChecker_Title", "Accessibility Checker"),
+            Title = plan.Title,
             Width = 360,
             Height = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -56,7 +49,7 @@ public sealed partial class MainWindow
 
         var titleBlock = new TextBlock
         {
-            Text = AcText("AccessibilityChecker_Title", "Accessibility Checker"),
+            Text = plan.Title,
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 8),
@@ -64,29 +57,26 @@ public sealed partial class MainWindow
 
         var messageBlock = new TextBlock
         {
-            Text = UiText.Get("ShellLoc_AccessibilityCheckerNoIssues"),
+            Text = plan.CleanMessage,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16),
         };
-        AutomationProperties.SetName(messageBlock, UiText.Get("ShellLoc_AccessibilityCheckerResultAutomationName"));
-        AutomationProperties.SetAutomationId(messageBlock, "AccessibilityCheckerResultText");
-        AutomationProperties.SetHelpText(messageBlock, UiText.Get("ShellLoc_AccessibilityCheckerResultHelpText"));
+        ApplyAutomation(messageBlock, plan.ResultAutomation);
 
         var statusBlock = new TextBlock
         {
-            Text = AcText("AccessibilityChecker_StatusClean",
-                "No accessibility issues found. People with disabilities should not have difficulty reading this workbook."),
+            Text = plan.StatusText,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16),
         };
 
-        var okButton = new Button
+        var closeButton = new Button
         {
-            Content = UiText.Get("Common_Ok"),
             MinWidth = 76,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
-        okButton.Click += (_, _) => dialog.Close();
+        ApplyAction(closeButton, plan.CloseAction);
+        closeButton.Click += (_, _) => dialog.Close();
 
         dialog.KeyDown += (_, e) =>
         {
@@ -105,21 +95,20 @@ public sealed partial class MainWindow
                 titleBlock,
                 messageBlock,
                 statusBlock,
-                okButton,
+                closeButton,
             },
         };
 
-        dialog.Opened += (_, _) => okButton.Focus();
+        dialog.Opened += (_, _) => closeButton.Focus();
 
         await dialog.ShowDialog(this);
     }
 
-    private async Task ShowAccessibilityCheckerIssuesDialogAsync(
-        IReadOnlyList<AccessibilityInspectionSection> sections)
+    private async Task ShowAccessibilityCheckerIssuesDialogAsync(AccessibilityCheckerDialogPlan plan)
     {
         var dialog = new Window
         {
-            Title = AcText("AccessibilityChecker_Title", "Accessibility Checker"),
+            Title = plan.Title,
             Width = 360,
             Height = 520,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -128,18 +117,12 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "AccessibilityCheckerDialog");
 
-        // ---- Inspection Results tree ----
-        // Windows wraps the inspection results in a bordered box with a compact (12px) font; match
-        // that here by reducing the tree font size and hosting it inside a 1px light-gray Border.
         var resultsTree = new TreeView
         {
-            Margin = new Thickness(0, 0, 0, 0),
+            Margin = new Thickness(0),
             BorderThickness = new Thickness(0),
             FontSize = 12,
         };
-        // Compact node rows: Avalonia's default TreeViewItem header is taller than the Windows
-        // Accessibility Checker rows. Trim the per-item padding and min-height so the tree is dense
-        // like the Windows screenshot (~18px rows instead of ~30px).
         resultsTree.Styles.Add(new Style(s => s.OfType<TreeViewItem>())
         {
             Setters =
@@ -158,9 +141,7 @@ public sealed partial class MainWindow
                 new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.PaddingProperty, new Thickness(2, 0)),
             },
         });
-        AutomationProperties.SetName(resultsTree, UiText.Get("ShellLoc_AccessibilityCheckerIssueListAutomationName"));
-        AutomationProperties.SetAutomationId(resultsTree, "AccessibilityCheckerIssueList");
-        AutomationProperties.SetHelpText(resultsTree, UiText.Get("ShellLoc_AccessibilityCheckerIssueListHelpText"));
+        ApplyAutomation(resultsTree, plan.IssueListAutomation);
 
         var resultsBorder = new Border
         {
@@ -170,11 +151,11 @@ public sealed partial class MainWindow
         };
 
         TreeViewItem? firstLeaf = null;
-        foreach (var section in sections)
+        foreach (var section in plan.Sections)
         {
             var sectionNode = new TreeViewItem
             {
-                Header = $"{SeverityHeader(section.Severity)} ({section.IssueCount})",
+                Header = $"{section.Header} ({section.IssueCount})",
                 FontWeight = FontWeight.SemiBold,
                 IsExpanded = true,
             };
@@ -183,7 +164,7 @@ public sealed partial class MainWindow
             {
                 var groupNode = new TreeViewItem
                 {
-                    Header = $"{group.Descriptor.Label} ({group.Items.Count})",
+                    Header = $"{group.Label} ({group.Items.Count})",
                     IsExpanded = true,
                     Tag = group,
                 };
@@ -205,7 +186,6 @@ public sealed partial class MainWindow
             resultsTree.Items.Add(sectionNode);
         }
 
-        // ---- Additional Information area ----
         var whyFixText = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
         var howToFixText = new TextBlock { TextWrapping = TextWrapping.Wrap };
         var additionalInfoPanel = new StackPanel
@@ -215,93 +195,74 @@ public sealed partial class MainWindow
             {
                 new TextBlock
                 {
-                    Text = AcText("AccessibilityChecker_AdditionalInformation", "Additional Information"),
+                    Text = plan.AdditionalInformationHeader,
                     FontWeight = FontWeight.SemiBold,
                     Margin = new Thickness(0, 0, 0, 6),
                 },
-                new TextBlock { Text = AcText("AccessibilityChecker_WhyFixHeader", "Why Fix:"), FontWeight = FontWeight.SemiBold },
+                new TextBlock { Text = plan.WhyFixHeader, FontWeight = FontWeight.SemiBold },
                 whyFixText,
-                new TextBlock { Text = AcText("AccessibilityChecker_HowToFixHeader", "How To Fix:"), FontWeight = FontWeight.SemiBold },
+                new TextBlock { Text = plan.HowToFixHeader, FontWeight = FontWeight.SemiBold },
                 howToFixText,
             },
         };
 
-        // ---- Status line ----
         var statusBlock = new TextBlock
         {
-            Text = AcText("AccessibilityChecker_StatusReady", "Ready"),
+            Text = plan.StatusText,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
         };
 
-        // ---- Buttons ----
         var goToButton = new Button
         {
-            Content = UiText.Get("ShellLoc_AccessibilityCheckerGoToButton"),
             MinWidth = 76,
-            IsDefault = true,
             Margin = new Thickness(0, 0, 8, 0),
         };
-        AutomationProperties.SetName(goToButton, UiText.Get("ShellLoc_AccessibilityCheckerGoToAutomationName"));
-        AutomationProperties.SetAutomationId(goToButton, "AccessibilityCheckerGoToButton");
-        AutomationProperties.SetHelpText(goToButton, UiText.Get("ShellLoc_AccessibilityCheckerGoToHelpText"));
+        ApplyAction(goToButton, plan.GoToAction);
 
-        var closeButton = new Button
-        {
-            Content = UiText.Get("Common_Close"),
-            MinWidth = 76,
-            IsCancel = true,
-        };
-        AutomationProperties.SetName(closeButton, UiText.Get("ShellLoc_AccessibilityCheckerCloseAutomationName"));
-        AutomationProperties.SetAutomationId(closeButton, "AccessibilityCheckerCloseButton");
-        AutomationProperties.SetHelpText(closeButton, UiText.Get("ShellLoc_AccessibilityCheckerCloseHelpText"));
+        var closeButton = new Button { MinWidth = 76 };
+        ApplyAction(closeButton, plan.CloseAction);
         ApplyDialogButtonChrome(goToButton, 84, isDefault: true);
         ApplyDialogButtonChrome(closeButton, 84);
 
         AccessibilityIssue? selectedIssue = null;
 
-        AccessibilityInspectionItem? SelectedItem()
+        AccessibilityCheckerItemPlan? SelectedItem()
         {
             if (resultsTree.SelectedItem is not TreeViewItem node)
                 return null;
             return node.Tag switch
             {
-                AccessibilityInspectionItem item => item,
-                AccessibilityInspectionGroup group => group.Items.Count > 0 ? group.Items[0] : null,
+                AccessibilityCheckerItemPlan item => item,
+                AccessibilityCheckerGroupPlan group => group.Items.Count > 0 ? group.Items[0] : null,
                 _ => null,
             };
         }
 
-        AccessibilityIssueDescriptor? SelectedDescriptor()
+        AccessibilityCheckerGroupPlan? SelectedGroup()
         {
             if (resultsTree.SelectedItem is not TreeViewItem node)
                 return null;
-            return node.Tag switch
-            {
-                AccessibilityInspectionItem item => AccessibilityIssueClassification.Describe(item.Issue.Kind),
-                AccessibilityInspectionGroup group => group.Descriptor,
-                _ => null,
-            };
+            return node.Tag as AccessibilityCheckerGroupPlan;
         }
 
         void UpdateSelection()
         {
-            var descriptor = SelectedDescriptor();
-            var item = SelectedItem();
+            var selection = AccessibilityCheckerDialogPlanner.CreateSelection(SelectedItem(), SelectedGroup(), plan);
 
-            goToButton.IsEnabled = item is not null;
+            goToButton.IsEnabled = selection.CanNavigate;
 
-            if (descriptor is null)
+            if (!selection.HasAdditionalInformation)
             {
                 additionalInfoPanel.IsVisible = false;
-                statusBlock.Text = AcText("AccessibilityChecker_StatusReady", "Ready");
+                statusBlock.Text = selection.StatusText;
                 return;
             }
 
             additionalInfoPanel.IsVisible = true;
-            whyFixText.Text = AcText(descriptor.WhyFixKey, descriptor.WhyFix);
-            howToFixText.Text = AcText(descriptor.HowToFixKey, descriptor.HowToFix);
-            statusBlock.Text = item is not null ? item.Description : descriptor.Label;
+            whyFixText.Text = selection.WhyFix;
+            howToFixText.Text = selection.HowToFix;
+            statusBlock.Text = selection.StatusText;
         }
 
         void GoToSelected()
@@ -326,10 +287,9 @@ public sealed partial class MainWindow
             }
         };
 
-        // ---- Layout ----
         var titleBlock = new TextBlock
         {
-            Text = AcText("AccessibilityChecker_Title", "Accessibility Checker"),
+            Text = plan.Title,
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 8),
@@ -337,7 +297,7 @@ public sealed partial class MainWindow
 
         var resultsHeader = new TextBlock
         {
-            Text = AcText("AccessibilityChecker_InspectionResults", "Inspection Results"),
+            Text = plan.InspectionResultsHeader,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         };
@@ -386,11 +346,11 @@ public sealed partial class MainWindow
 
         await dialog.ShowDialog(this);
 
-        // Navigate after dialog closes (if Go To was used)
         if (selectedIssue is not null)
         {
             ClearSelectedDrawingObject();
-            var result = _session.GoToAccessibilityIssue(selectedIssue);
+            var target = AccessibilityCheckerDialogPlanner.GetNavigationTarget(selectedIssue);
+            var result = _session.GoToCell(target);
             if (!result.Success)
             {
                 ShowEditIssue(result.ErrorMessage ?? "Could not navigate to accessibility issue.");
@@ -402,13 +362,18 @@ public sealed partial class MainWindow
         }
     }
 
-    private static string SeverityHeader(AccessibilitySeverity severity) => severity switch
+    private static void ApplyAction(Button button, AccessibilityCheckerActionSpec action)
     {
-        AccessibilitySeverity.Error => AcText("AccessibilityChecker_SectionErrors", "Errors"),
-        AccessibilitySeverity.Warning => AcText("AccessibilityChecker_SectionWarnings", "Warnings"),
-        _ => AcText("AccessibilityChecker_SectionTips", "Tips"),
-    };
+        button.Content = action.Text;
+        button.IsDefault = action.IsDefault;
+        button.IsCancel = action.IsCancel;
+        ApplyAutomation(button, action.Automation);
+    }
 
-    private static string AcText(string key, string fallback) =>
-        LocalizedFallbackTextResolver.Resolve(key, fallback, UiText.Get);
+    private static void ApplyAutomation(StyledElement target, AccessibilityCheckerAutomationSpec automation)
+    {
+        AutomationProperties.SetName(target, automation.Name);
+        AutomationProperties.SetAutomationId(target, automation.AutomationId);
+        AutomationProperties.SetHelpText(target, automation.HelpText);
+    }
 }
