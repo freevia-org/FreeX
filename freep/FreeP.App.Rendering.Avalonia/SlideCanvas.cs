@@ -886,38 +886,31 @@ public sealed class SlideCanvas : Control
         DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        if (chart.Series.Count == 0) return;
-        var values = chart.Series[0].Values.Where(v => v.HasValue && v.Value > 0).Select(v => v!.Value).ToList();
-        if (values.Count == 0) return;
-        double total = values.Sum();
-        if (total <= 0) return;
-
-        double cx = plotX + plotW / 2;
-        double cy = plotY + plotH / 2;
-        double r  = Math.Min(plotW, plotH) / 2 * 0.85;
-        double startAngle = -Math.PI / 2;
-
         var borderPen = new Pen(Brushes.White, 0.8);
-        for (int i = 0; i < values.Count; i++)
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildPieSlicePrimitives(chart, plot))
         {
-            double sweepAngle = values[i] / total * 2 * Math.PI;
-            double endAngle   = startAngle + sweepAngle;
-            SrgbColor sc = i < seriesColors.Count ? seriesColors[i] : new SrgbColor(0x4F, 0x81, 0xBD);
+            SrgbColor sc = primitive.PointIndex < seriesColors.Count
+                ? seriesColors[primitive.PointIndex]
+                : new SrgbColor(0x4F, 0x81, 0xBD);
             var brush = new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B));
-            bool largeArc = sweepAngle > Math.PI;
-            var startPt = new Point(cx + r * Math.Cos(startAngle), cy + r * Math.Sin(startAngle));
-            var endPt   = new Point(cx + r * Math.Cos(endAngle),   cy + r * Math.Sin(endAngle));
+            var startPt = ToPoint(primitive.OuterStart);
+            var endPt = ToPoint(primitive.OuterEnd);
 
             var geo = new StreamGeometry();
             using (var ctx = geo.Open())
             {
-                ctx.BeginFigure(new Point(cx, cy), isFilled: true);
+                ctx.BeginFigure(ToPoint(primitive.Center), isFilled: true);
                 ctx.LineTo(startPt);
-                ctx.ArcTo(endPt, new Size(r, r), 0, largeArc, SweepDirection.Clockwise);
+                ctx.ArcTo(
+                    endPt,
+                    new Size(primitive.OuterRadius, primitive.OuterRadius),
+                    0,
+                    primitive.IsLargeArc,
+                    SweepDirection.Clockwise);
                 ctx.EndFigure(isClosed: true);
             }
             dc.DrawGeometry(brush, borderPen, geo);
-            startAngle = endAngle;
         }
     }
 
@@ -965,56 +958,35 @@ public sealed class SlideCanvas : Control
         DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        if (chart.Series.Count == 0) return;
-
-        double cx  = plotX + plotW / 2;
-        double cy  = plotY + plotH / 2;
-        double rOut = Math.Min(plotW, plotH) / 2 * 0.85;
-        double rIn  = rOut * Math.Clamp(chart.DoughnutHolePercent, 0, 90) / 100.0;
-
         var borderPen = new Pen(Brushes.White, 0.8);
-        int serCount  = chart.Series.Count;
-        double ringGap = serCount > 1 ? rOut * 0.04 : 0;
-        double ringW   = serCount > 1 ? (rOut - rIn - (serCount - 1) * ringGap) / serCount : (rOut - rIn);
-
-        for (int si = 0; si < serCount; si++)
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildDoughnutSlicePrimitives(chart, plot))
         {
-            var series = chart.Series[si];
-            var values = series.Values.Where(v => v.HasValue && v.Value > 0).Select(v => v!.Value).ToList();
-            if (values.Count == 0) continue;
-            double total = values.Sum();
-            if (total <= 0) continue;
+            SrgbColor sc = primitive.PointIndex < seriesColors.Count
+                ? seriesColors[primitive.PointIndex]
+                : GetSeriesColor(chart, primitive.PointIndex, 0, seriesColors);
+            var brush = new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B));
 
-            // BV3: si=0 → innermost ring (nearest hole); si=serCount-1 → outermost (matches PowerPoint order)
-            double innerR = Math.Max(0, rIn + si * (ringW + ringGap));
-            double outerR = innerR + ringW;
-            double startAngle = -Math.PI / 2;
-
-            for (int pi = 0; pi < values.Count; pi++)
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
             {
-                double sweepAngle = values[pi] / total * 2 * Math.PI;
-                double endAngle   = startAngle + sweepAngle;
-                SrgbColor sc = pi < seriesColors.Count ? seriesColors[pi] : GetSeriesColor(chart, pi, 0, seriesColors);
-                var brush = new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B));
-                bool largeArc = sweepAngle > Math.PI;
-
-                var outerStart = new Point(cx + outerR * Math.Cos(startAngle), cy + outerR * Math.Sin(startAngle));
-                var outerEnd   = new Point(cx + outerR * Math.Cos(endAngle),   cy + outerR * Math.Sin(endAngle));
-                var innerEnd   = new Point(cx + innerR * Math.Cos(endAngle),   cy + innerR * Math.Sin(endAngle));
-                var innerStart = new Point(cx + innerR * Math.Cos(startAngle), cy + innerR * Math.Sin(startAngle));
-
-                var geo = new StreamGeometry();
-                using (var ctx = geo.Open())
-                {
-                    ctx.BeginFigure(outerStart, isFilled: true);
-                    ctx.ArcTo(outerEnd, new Size(outerR, outerR), 0, largeArc, SweepDirection.Clockwise);
-                    ctx.LineTo(innerEnd);
-                    ctx.ArcTo(innerStart, new Size(innerR, innerR), 0, largeArc, SweepDirection.CounterClockwise);
-                    ctx.EndFigure(isClosed: true);
-                }
-                dc.DrawGeometry(brush, borderPen, geo);
-                startAngle = endAngle;
+                ctx.BeginFigure(ToPoint(primitive.OuterStart), isFilled: true);
+                ctx.ArcTo(
+                    ToPoint(primitive.OuterEnd),
+                    new Size(primitive.OuterRadius, primitive.OuterRadius),
+                    0,
+                    primitive.IsLargeArc,
+                    SweepDirection.Clockwise);
+                ctx.LineTo(ToPoint(primitive.InnerEnd));
+                ctx.ArcTo(
+                    ToPoint(primitive.InnerStart),
+                    new Size(primitive.InnerRadius, primitive.InnerRadius),
+                    0,
+                    primitive.IsLargeArc,
+                    SweepDirection.CounterClockwise);
+                ctx.EndFigure(isClosed: true);
             }
+            dc.DrawGeometry(brush, borderPen, geo);
         }
     }
 

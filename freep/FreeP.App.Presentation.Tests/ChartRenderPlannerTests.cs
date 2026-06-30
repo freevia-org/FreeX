@@ -193,6 +193,66 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildPieSlicePrimitives_ComputesClockwiseWedgesFromTop()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 1, 3 });
+        var chart = new ChartShape { ChartType = ChartType.Pie };
+        chart.Series.Add(series);
+
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        slices.Should().HaveCount(2);
+        var first = slices[0];
+        first.SeriesIndex.Should().Be(0);
+        first.PointIndex.Should().Be(0);
+        first.Center.Should().Be(new ChartPlanPoint(100, 50));
+        first.InnerRadius.Should().Be(0);
+        first.OuterRadius.Should().BeApproximately(42.5, 0.0001);
+        first.StartAngle.Should().BeApproximately(-Math.PI / 2, 0.0001);
+        first.EndAngle.Should().BeApproximately(0, 0.0001);
+        first.IsLargeArc.Should().BeFalse();
+        first.OuterStart.X.Should().BeApproximately(100, 0.0001);
+        first.OuterStart.Y.Should().BeApproximately(7.5, 0.0001);
+        first.OuterEnd.X.Should().BeApproximately(142.5, 0.0001);
+        first.OuterEnd.Y.Should().BeApproximately(50, 0.0001);
+    }
+
+    [Fact]
+    public void BuildDoughnutSlicePrimitives_PlansSeriesZeroAsInnermostRing()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Doughnut,
+            DoughnutHolePercent = 50
+        };
+
+        var first = new ChartSeries { Name = "Inner" };
+        first.Values.AddRange(new double?[] { 1, 1 });
+        chart.Series.Add(first);
+
+        var second = new ChartSeries { Name = "Outer" };
+        second.Values.AddRange(new double?[] { 1, 1 });
+        chart.Series.Add(second);
+
+        var slices = ChartRenderPlanner.BuildDoughnutSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        slices.Should().HaveCount(4);
+        slices[0].SeriesIndex.Should().Be(0);
+        slices[0].PointIndex.Should().Be(0);
+        slices[0].InnerRadius.Should().BeApproximately(21.25, 0.0001);
+        slices[0].OuterRadius.Should().BeApproximately(31.025, 0.0001);
+        slices[2].SeriesIndex.Should().Be(1);
+        slices[2].PointIndex.Should().Be(0);
+        slices[2].InnerRadius.Should().BeApproximately(32.725, 0.0001);
+        slices[2].OuterRadius.Should().BeApproximately(42.5, 0.0001);
+    }
+
+    [Fact]
     public void BuildDataLabelPlans_StackedColumnPercentUsesCategoryTotal()
     {
         var labels = new ChartDataLabels
