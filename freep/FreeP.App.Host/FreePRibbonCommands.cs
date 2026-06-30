@@ -457,21 +457,20 @@ internal static class FreePRibbonCommands
 
     private static SlideObjectPicturePayload? TryPickPicturePayload()
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title  = "Insert Picture",
-            Filter = "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*"
-        };
+        var result = WpfFileDialogService.ShowOpenDialog(
+            owner: null,
+            filter: "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*",
+            title: "Insert Picture");
 
-        if (dlg.ShowDialog() != true)
+        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
         {
             return null;
         }
 
         try
         {
-            var bytes = System.IO.File.ReadAllBytes(dlg.FileName);
-            return SlideObjectInsertionPlanner.CreatePicturePayload(bytes, dlg.FileName);
+            var bytes = System.IO.File.ReadAllBytes(result.FileName);
+            return SlideObjectInsertionPlanner.CreatePicturePayload(bytes, result.FileName);
         }
         catch
         {

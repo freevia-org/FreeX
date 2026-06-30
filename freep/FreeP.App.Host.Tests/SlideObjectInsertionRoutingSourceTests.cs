@@ -15,7 +15,11 @@ public sealed class SlideObjectInsertionRoutingSourceTests
 
         source.Should().Contain("RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true)");
         source.Should().Contain("SlideObjectInsertionPlanner.BuiltInPlans");
-        source.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload(bytes, dlg.FileName)");
+        source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        source.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload(bytes, result.FileName)");
+        source.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
+        source.Should().NotContain("new OpenFileDialog");
+        source.Should().NotContain(".ShowDialog()");
         source.Should().NotContain("editor.InsertDefaultTextBox(");
         source.Should().NotContain("editor.InsertDefaultRectangle(");
         source.Should().NotContain("editor.InsertDefaultEllipse(");
