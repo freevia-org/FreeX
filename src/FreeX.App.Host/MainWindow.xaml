@@ -1496,23 +1496,23 @@
                     <!-- Tabs row + search box -->
                     <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,0">
                         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                            <Button Background="Transparent" BorderThickness="0" Padding="0"
+                            <Button x:Name="SsRecentTabButton"
+                                    Background="Transparent" BorderThickness="0" Padding="0"
                                     Cursor="Hand" Click="SsRecentTab_Click"
-                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Recent}"
-                                    local:RibbonTooltip.KeyTip="RC" local:RibbonMetadata.CommandName="Recent">
+                                    AutomationProperties.Name="{Binding ElementName=SsRecentTabText, Path=Text}">
                                 <Border x:Name="SsRecentTab" Padding="0,8,22,8"
                                         BorderThickness="0,0,0,2" BorderBrush="#0F6D8C">
-                                <TextBlock x:Name="SsRecentTabText" Text="{local:Loc Key=MainWindow_Text_Recent}" FontSize="13"
+                                <TextBlock x:Name="SsRecentTabText" FontSize="13"
                                            FontWeight="SemiBold" Foreground="#0F6D8C"/>
                                 </Border>
                             </Button>
-                            <Button Background="Transparent" BorderThickness="0" Padding="0"
+                            <Button x:Name="SsPinnedTabButton"
+                                    Background="Transparent" BorderThickness="0" Padding="0"
                                     Cursor="Hand" Click="SsPinnedTab_Click"
-                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Pinned}"
-                                    local:RibbonTooltip.KeyTip="PN" local:RibbonMetadata.CommandName="Pinned">
+                                    AutomationProperties.Name="{Binding ElementName=SsPinnedTabText, Path=Text}">
                                 <Border x:Name="SsPinnedTab" Padding="0,8,22,8"
                                         BorderThickness="0,0,0,2" BorderBrush="Transparent">
-                                <TextBlock x:Name="SsPinnedTabText" Text="{local:Loc Key=MainWindow_Text_Pinned}" FontSize="13"
+                                <TextBlock x:Name="SsPinnedTabText" FontSize="13"
                                            Foreground="#888"/>
                                 </Border>
                             </Button>
@@ -1523,8 +1523,6 @@
                             <TextBox x:Name="SsSearchBox" Width="180" FontSize="12"
                                      BorderThickness="0" Background="Transparent"
                                      VerticalContentAlignment="Center"
-                                     AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_SearchRecentFiles}"
-                                     AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_FilterRecentAndPinnedFiles}"
                                      TextChanged="SsSearchBox_TextChanged"/>
                         </Border>
                     </DockPanel>
@@ -1537,8 +1535,8 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="150"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{local:Loc Key=MainWindow_Text_Name}" FontSize="11" Foreground="#888"/>
-                            <TextBlock Grid.Column="1" Text="{local:Loc Key=MainWindow_Text_DateModified}" FontSize="11" Foreground="#888"/>
+                            <TextBlock x:Name="SsRecentNameColumnHeader" Grid.Column="0" FontSize="11" Foreground="#888"/>
+                            <TextBlock x:Name="SsRecentDateModifiedColumnHeader" Grid.Column="1" FontSize="11" Foreground="#888"/>
                         </Grid>
                     </Border>
 
@@ -1552,7 +1550,6 @@
                                             Click="SsRecentItem_Click"
                                             Loaded="SsRecentFileItem_Loaded"
                                             Cursor="Hand"
-                                            AutomationProperties.AutomationId="BackstageRecentFileItem"
                                             AutomationProperties.Name="{Binding OpenAutomationName}"
                                             AutomationProperties.HelpText="{Binding OpenAutomationHelpText}">
                                         <Button.Template>
@@ -1599,12 +1596,10 @@
                                             <Button Grid.Column="2"
                                                     Style="{StaticResource BackstageRecentPinCommandButton}"
                                                     Click="SsPinItem_Click"
-                                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PinFile}"
-                                                    local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PinOrUnpinThisWorkbookInTheRecentFilesList}"
-                                                    AutomationProperties.AutomationId="BackstageRecentPinButton"
+                                                    Loaded="SsRecentPinCommandButton_Loaded"
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
-                                                    ToolTip="{local:Loc Key=MainWindow_ToolTip_PinToList}" local:RibbonMetadata.CommandName="Pin File">
+                                                    >
                                                 <local:RibbonIcon CommandName="Pin to list" Kind="Pin" Style="{StaticResource BackstageRecentPinCommandIcon}"/>
                                             </Button>
                                         </Grid>
@@ -1625,7 +1620,6 @@
                                             Click="SsRecentItem_Click"
                                             Loaded="SsPinnedFileItem_Loaded"
                                             Cursor="Hand"
-                                            AutomationProperties.AutomationId="BackstagePinnedFileItem"
                                             AutomationProperties.Name="{Binding OpenAutomationName}"
                                             AutomationProperties.HelpText="{Binding OpenAutomationHelpText}">
                                         <Button.Template>
@@ -1672,12 +1666,10 @@
                                             <Button Grid.Column="2"
                                                     Style="{StaticResource BackstageRecentPinCommandButton}"
                                                     Click="SsUnpinItem_Click"
-                                                    local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_UnpinFile}"
-                                                    local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveThisWorkbookFromThePinnedFilesList}"
-                                                    AutomationProperties.AutomationId="BackstagePinnedUnpinButton"
+                                                    Loaded="SsPinnedUnpinCommandButton_Loaded"
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
-                                                    ToolTip="{local:Loc Key=MainWindow_ToolTip_UnpinFromList}" local:RibbonMetadata.CommandName="Unpin File">
+                                                    >
                                                 <local:RibbonIcon CommandName="Unpin from list" Kind="Pin" Style="{StaticResource BackstageRecentPinCommandIcon}"/>
                                             </Button>
                                         </Grid>

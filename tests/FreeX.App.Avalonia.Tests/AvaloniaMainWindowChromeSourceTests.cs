@@ -289,8 +289,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().Contain("CaptureBackstageSurface(outputDirectory, surfaceId)");
         captureSource.Should().Contain("CreateParityCapturedBackstageSurface(surfaceId)");
         captureSource.Should().Contain("FreeXBackstageNavigationPlanner.Build()");
-        captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.ParityCapture)");
-        captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.ParityCapture)");
+        captureSource.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
+        captureSource.Should().Contain("FreeXBackstageInfoSurface.ParityCapture");
+        captureSource.Should().Contain("BuildParityCapturedBackstageInfoPanePlan()");
+        captureSource.Should().Contain("FreeXBackstageHomePanePlanner.Build()");
         // The parity-captured Account pane mirrors the WPF host page ("Local account information"
         // with the local app/OS identity rows) rather than the 4-row product-info catalog, so the
         // Linux capture no longer mislabels Account as "Product information".
@@ -329,8 +331,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         source.Should().Contain("WorkbookInfoDisplayPlanner.Build(");
         source.Should().Contain("WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.AvaloniaInfoDialog)");
+        source.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
+        source.Should().Contain("FreeXBackstageInfoSurface.AvaloniaInfoDialog");
+        source.Should().Contain("foreach (var detail in pane.Details)");
+        source.Should().Contain("foreach (var action in pane.Actions)");
+        source.Should().NotContain("ResolveBackstageInfoDetailValue");
         source.Should().Contain("FreeXBackstageExportPanePlanner.Build(");
         source.Should().Contain("CreateBackstageExportPaneRequest(scopePlan)");
         source.Should().Contain("BuildBackstageExportPaneSpec(");

@@ -76,10 +76,13 @@ public sealed class BackstageInfoPanelSourceTests
         source.Should().Contain("BackstageInfoPlanner.Build(");
         source.Should().Contain("BackstageInfoResources.Strings");
         source.Should().Contain("hasSelection: SheetGrid.SelectedRange is not null");
-        source.Should().Contain("InfoFileSize.Text = plan.FileSize;");
-        source.Should().Contain("InfoShareStatus.Text = plan.SharingStatus;");
-        source.Should().Contain("InfoExportStatus.Text = plan.ExportStatus;");
-        source.Should().Contain("InfoWorkbookProtectionSummary.Text = plan.Summary.WorkbookProtectionSummary;");
+        source.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
+        source.Should().Contain("CreateBackstageInfoPaneRequest(info)");
+        source.Should().Contain("ResolveBackstageInfoDetailTextBlock(detail.Id).Text = ResolveBackstageTextValue(detail.Value);");
+        source.Should().Contain("FreeXBackstageInfoDetailId.FileSize => InfoFileSize");
+        source.Should().Contain("FreeXBackstageInfoDetailId.Share => InfoShareStatus");
+        source.Should().Contain("FreeXBackstageInfoDetailId.Export => InfoExportStatus");
+        source.Should().Contain("FreeXBackstageInfoDetailId.WorkbookProtection => InfoWorkbookProtectionSummary");
         source.Should().Contain("ProtectWorkbookBtn_Click(sender, e);");
     }
 
@@ -91,7 +94,8 @@ public sealed class BackstageInfoPanelSourceTests
         var constructorSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         constructorSource.Should().Contain("ConfigureBackstageInfoActionButtons();");
-        source.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.WpfInfoPane)");
+        source.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
+        source.Should().Contain("FreeXBackstageInfoSurface.WpfInfoPane");
         source.Should().Contain("InfoProtectWorkbookButton.Click += InfoProtectWorkbookBtn_Click;");
         source.Should().Contain("ConfigureBackstageInfoActionButton(");
         source.Should().Contain("action.AutomationId");

@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using Free.Shared.AppServices;
+using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services.Ribbon;
 
 namespace FreeX.App.Host;
@@ -145,13 +146,21 @@ public partial class MainWindow
 
     private void SsRecentFileItem_Loaded(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement element && element.ContextMenu is null)
+        if (sender is not FrameworkElement element)
+            return;
+
+        ApplyBackstageRecentFileRowDescriptor(element, FreeXBackstageRecentFileRowKind.Recent);
+        if (element.ContextMenu is null)
             element.ContextMenu = BuildBackstageRecentFileContextMenu(pinned: false);
     }
 
     private void SsPinnedFileItem_Loaded(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement element && element.ContextMenu is null)
+        if (sender is not FrameworkElement element)
+            return;
+
+        ApplyBackstageRecentFileRowDescriptor(element, FreeXBackstageRecentFileRowKind.Pinned);
+        if (element.ContextMenu is null)
             element.ContextMenu = BuildBackstageRecentFileContextMenu(pinned: true);
     }
 

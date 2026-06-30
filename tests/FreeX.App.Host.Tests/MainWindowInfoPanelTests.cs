@@ -47,11 +47,14 @@ public sealed class MainWindowInfoPanelTests
         source.Should().Contain("BackstageInfoResources.Strings,");
         source.Should().Contain("activeSheet,");
         source.Should().Contain("hasSelection: SheetGrid.SelectedRange is not null");
-        source.Should().Contain("InfoStatisticsSummary.Text");
-        source.Should().Contain("InfoAccessibilitySummary.Text");
-        source.Should().Contain("InfoFormulaErrorSummary.Text");
-        source.Should().Contain("InfoShareStatus.Text");
-        source.Should().Contain("InfoWorkbookProtectionSummary.Text");
-        source.Should().Contain("InfoActiveSheetProtectionSummary.Text");
+        source.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
+        source.Should().Contain("CreateBackstageInfoPaneRequest(info)");
+        source.Should().Contain("ResolveBackstageInfoDetailTextBlock(detail.Id).Text = ResolveBackstageTextValue(detail.Value);");
+        source.Should().Contain("FreeXBackstageInfoDetailId.Share => InfoShareStatus");
+        source.Should().Contain("FreeXBackstageInfoDetailId.WorkbookProtection => InfoWorkbookProtectionSummary");
+        source.Should().Contain("FreeXBackstageInfoDetailId.ActiveSheetProtection => InfoActiveSheetProtectionSummary");
+        source.Should().Contain("FreeXBackstageInfoDetailId.WorkbookStatistics => InfoStatisticsSummary");
+        source.Should().Contain("FreeXBackstageInfoDetailId.Accessibility => InfoAccessibilitySummary");
+        source.Should().Contain("FreeXBackstageInfoDetailId.FormulaErrors => InfoFormulaErrorSummary");
     }
 }

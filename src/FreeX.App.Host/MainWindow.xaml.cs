@@ -310,6 +310,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         RibbonMenuIconSeeder.Register();
         RebuildQuickAccessToolbar();
         InitializeQuickAccessToolbarCustomizationContextMenus();
+        ConfigureBackstageHomePaneDescriptors();
         ConfigureBackstageInfoActionButtons();
         InitializeBackstageFrame();
         RegisterKeyboardCommandShortcuts();
