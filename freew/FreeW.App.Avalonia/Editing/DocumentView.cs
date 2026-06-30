@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -73,8 +74,6 @@ public sealed class DocumentView : Control
     private const double RulerThicknessDip = 14.0;
     // Gap between consecutive page rectangles (grey desk visible between them).
     private const double PageGap = 20;
-    // Minimum horizontal gap between the control edge and the page left/right edge.
-    private const double MinHorzGutter = 24;
     private const double DefaultFontSizePt = 11;
     private const double FallbackWidth = 816; // 8.5in * 96dpi
     private const double ListIndentStep = 24;
@@ -88,14 +87,6 @@ public sealed class DocumentView : Control
     // glyph (~58% of line height) finishes near the baseline (≈0.33 + 0.58*lineH ≈ 0.91*lineH)
     // instead of overflowing into the next line.  Matches Word's subscript baseline offset.
     private const double SubYLowerFraction = 0.33;
-
-    // Web/Draft layout constants.
-    // Web: content column capped at this width (responsive up to this limit).
-    private const double WebMaxContentWidth = 1000;
-    // Web: small fixed left/right inset (no page chrome).
-    private const double WebInset = 24;
-    // Draft: even smaller left margin, no right constraint.
-    private const double DraftInset = 16;
 
     private DocumentViewMode _viewMode = DocumentViewMode.PrintLayout;
     private bool _showParagraphMarks;
@@ -209,6 +200,8 @@ public sealed class DocumentView : Control
     private double _pageHeightPx;
     // Number of discrete pages after the last layout pass.
     private int _pageCount = 1;
+    private DocumentViewSurfacePlan _surfacePlan =
+        DocumentViewLayoutPlanner.BuildSurfacePlan(new PageSettings(), DocumentViewLayoutKind.PrintLayout, FallbackWidth);
 
     // ── AV-COL: multi-column body text layout fields ────────────────────────────────────────────────
     // Number of body-text columns for the current layout (1 = single-column, the default).
@@ -2361,7 +2354,7 @@ public sealed class DocumentView : Control
             // Offset within this page's page-space rectangle:
             //   pageTop(pageSpace) = DeskPadding + pageIndex*(pageHeightPx+PageGap)
             //   yWithinPagePx = runY - pageTop(pageSpace) = runY - DeskPadding - pageIndex*(pageHeightPx+PageGap)
-            var yWithinPagePx = runY - DeskPadding - runPageIndex * (_pageHeightPx + PageGap);
+            var yWithinPagePx = runY - _surfacePlan.PageTopDip(runPageIndex);
             var baselineFromTopPt = yWithinPagePx / PxPerPoint + fontSizePt;
             var yPt = pageHeightPt - baselineFromTopPt;
 
@@ -2374,12 +2367,12 @@ public sealed class DocumentView : Control
 
         // Glyphs are now in page-space Y (discrete multi-page layout).
         // Derive page index and within-page Y directly from the page-space Y.
-        var pageStride = _pageHeightPx + PageGap; // distance between page tops in page space
+        var pageStride = _surfacePlan.PageStrideDip; // distance between page tops in page space
         foreach (var g in glyphs)
         {
             // Invert ContentYToPageSpaceY:
             //   pageSpaceY = DeskPadding + pageIndex*(pageHeightPx+PageGap) + marginTopDip + offsetWithinPage
-            var rel = g.Y - DeskPadding;
+            var rel = g.Y - _surfacePlan.DeskPaddingDip;
             var pageIndex = Math.Max(0, (int)(rel / pageStride));
             var sameRun = runFmt is not null
                 && runPageIndex == pageIndex
@@ -2436,6 +2429,14 @@ public sealed class DocumentView : Control
 
     // ---- Layout ---------------------------------------------------------------------------------
 
+    private static DocumentViewLayoutKind ToLayoutKind(DocumentViewMode mode) => mode switch
+    {
+        DocumentViewMode.PrintLayout => DocumentViewLayoutKind.PrintLayout,
+        DocumentViewMode.WebLayout => DocumentViewLayoutKind.WebLayout,
+        DocumentViewMode.Draft => DocumentViewLayoutKind.Draft,
+        _ => DocumentViewLayoutKind.PrintLayout
+    };
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var width = double.IsFinite(availableSize.Width) && availableSize.Width > 0
@@ -2469,88 +2470,66 @@ public sealed class DocumentView : Control
         _footnoteBandHeightByPage.Clear(); // DB1/DB2
         _tabLeaderSpans.Clear(); // AV-TAB
 
+        _surfacePlan = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            _doc.Page,
+            ToLayoutKind(_viewMode),
+            width);
+
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
             // ---- Print Layout: paginated white pages on a grey desk ----
             // Page geometry from the document's PageSettings: a centred page with its own margins.
-            _pageWidth = Math.Max(320, _doc.Page.WidthPt * PxPerPoint);
-            _pageHeightPx = Math.Max(400, _doc.Page.HeightPt * PxPerPoint);
-            var marginLeft  = Math.Max(0, _doc.Page.MarginLeftPt)   * PxPerPoint;
-            var marginRight = Math.Max(0, _doc.Page.MarginRightPt)  * PxPerPoint;
-            _marginTopDip    = Math.Max(0, _doc.Page.MarginTopPt)    * PxPerPoint;
-            _marginBottomDip = Math.Max(0, _doc.Page.MarginBottomPt) * PxPerPoint;
-            // Centre the page in the available width, never closer than MinHorzGutter to the edge.
-            _pageLeft = Math.Max(MinHorzGutter, (width - _pageWidth) / 2);
-            _contentLeft = _pageLeft + marginLeft;
-            _contentWidth = Math.Max(120, _pageWidth - marginLeft - marginRight);
+            _pageWidth = _surfacePlan.PageWidthDip;
+            _pageHeightPx = _surfacePlan.PageHeightDip;
+            _marginTopDip    = _surfacePlan.MarginTopDip;
+            _marginBottomDip = _surfacePlan.MarginBottomDip;
+            // Centre the page in the available width, never closer than the planner's minimum gutter.
+            _pageLeft = _surfacePlan.PageLeftDip;
+            _contentLeft = _surfacePlan.ContentLeftDip;
+            _contentWidth = _surfacePlan.ContentWidthDip;
         }
         else if (_viewMode == DocumentViewMode.WebLayout)
         {
             // ---- Web Layout: continuous column, capped width, no page chrome ----
-            // Responsive up to WebMaxContentWidth; small fixed inset on each side.
-            var colWidth = Math.Min(width - 2 * WebInset, WebMaxContentWidth);
-            _pageWidth = Math.Max(320, colWidth);
-            _pageHeightPx = double.MaxValue / 2; // effectively infinite — no pagination
-            _marginTopDip    = WebInset;
-            _marginBottomDip = WebInset;
-            _pageLeft = WebInset;
-            _contentLeft = WebInset;
-            _contentWidth = Math.Max(120, colWidth);
+            // Responsive up to the planner's Web Layout cap; small fixed inset on each side.
+            _pageWidth = _surfacePlan.PageWidthDip;
+            _pageHeightPx = _surfacePlan.PageHeightDip; // effectively infinite — no pagination
+            _marginTopDip    = _surfacePlan.MarginTopDip;
+            _marginBottomDip = _surfacePlan.MarginBottomDip;
+            _pageLeft = _surfacePlan.PageLeftDip;
+            _contentLeft = _surfacePlan.ContentLeftDip;
+            _contentWidth = _surfacePlan.ContentWidthDip;
         }
         else // Draft
         {
             // ---- Draft: plain left-margin continuous flow ----
-            _pageWidth = Math.Max(320, width - DraftInset);
-            _pageHeightPx = double.MaxValue / 2;
-            _marginTopDip    = DraftInset;
-            _marginBottomDip = DraftInset;
-            _pageLeft = DraftInset;
-            _contentLeft = DraftInset;
-            _contentWidth = Math.Max(120, width - DraftInset * 2);
+            _pageWidth = _surfacePlan.PageWidthDip;
+            _pageHeightPx = _surfacePlan.PageHeightDip;
+            _marginTopDip    = _surfacePlan.MarginTopDip;
+            _marginBottomDip = _surfacePlan.MarginBottomDip;
+            _pageLeft = _surfacePlan.PageLeftDip;
+            _contentLeft = _surfacePlan.ContentLeftDip;
+            _contentWidth = _surfacePlan.ContentWidthDip;
         }
 
         // AV-COL: compute multi-column geometry from PageSettings.
         // Only active in PrintLayout mode — Web/Draft always use a single column.
         {
-            var pageColCount = _viewMode == DocumentViewMode.PrintLayout
-                ? Math.Max(1, _doc.Page.ColumnCount)
-                : 1;
-            if (pageColCount > 1)
-            {
-                var gapDip = Math.Max(0, _doc.Page.ColumnSpacingPt * PxPerPoint);
-                double colWidthDip;
-                if (_doc.Page.ColumnWidthsPt is { Count: > 1 } explicitWidths
-                    && explicitWidths.Count == pageColCount)
-                {
-                    // Unequal layout: use the narrowest column to guarantee all N columns fit.
-                    colWidthDip = explicitWidths.Min() * PxPerPoint;
-                }
-                else
-                {
-                    colWidthDip = (_contentWidth - (pageColCount - 1) * gapDip) / pageColCount;
-                }
-                colWidthDip = Math.Max(1, colWidthDip);
-                _colCount       = pageColCount;
-                _colWidth       = colWidthDip;
-                _colGap         = gapDip;
-                _colLineBetween = _doc.Page.ColumnsLineBetween;
-            }
-            else
-            {
-                _colCount       = 1;
-                _colWidth       = _contentWidth;
-                _colGap         = 0;
-                _colLineBetween = false;
-            }
+            var columnPlan = DocumentViewLayoutPlanner.BuildColumnPlan(
+                _doc.Page,
+                _contentWidth,
+                usePageColumns: _surfacePlan.IsPrintLayout);
+            _colCount       = columnPlan.Count;
+            _colWidth       = columnPlan.WidthDip;
+            _colGap         = columnPlan.GapDip;
+            _colLineBetween = columnPlan.LineBetween;
         }
 
         // Body text layout uses _colWidth as the per-column wrap width.
         var textWidth = _colWidth;
         // Available text-area height per page (between top and bottom margin).
         // For Web/Draft this is effectively infinite so ReserveContentY never paginates.
-        var textAreaHeight = _viewMode == DocumentViewMode.PrintLayout
-            ? Math.Max(40, _pageHeightPx - _marginTopDip - _marginBottomDip)
-            : double.MaxValue / 2;
+        var textAreaHeight = _surfacePlan.TextAreaHeightDip;
 
         // _layoutContentY tracks the "content Y" — the offset within the flowing text area
         // (0 = start of the first text area). This gets converted to page-space Y via
@@ -2571,7 +2550,7 @@ public sealed class DocumentView : Control
             var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
             var totalSlots = lastSlot + 1;
             _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
-            _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+            _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
 
             // DB1: measure true footnote band heights (needs first-pass placed positions to resolve pages).
             if (_doc.Footnotes.Count > 0)
@@ -2603,7 +2582,7 @@ public sealed class DocumentView : Control
                 lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
                 totalSlots = lastSlot + 1;
                 _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
-                _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+                _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
             }
         }
         else
@@ -2837,7 +2816,7 @@ public sealed class DocumentView : Control
         for (var pi = 0; pi < _pageCount; pi++)
         {
             // Page-space top of this page.
-            var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+            var pageTop = _surfacePlan.PageTopDip(pi);
 
             // AE1: use the true owning section for this page (not an even distribution).
             var pageSection = pageToSection[pi];
@@ -3432,7 +3411,7 @@ public sealed class DocumentView : Control
 
         foreach (var (pg, ids) in byPage.OrderBy(kv => kv.Key))
         {
-            var pageTop    = DeskPadding + pg * (_pageHeightPx + PageGap);
+            var pageTop    = _surfacePlan.PageTopDip(pg);
             var pageBottom = pageTop + _pageHeightPx;
             // Body text area bottom on this page (page-space), using the reserved effective height.
             var bandReservation = _footnoteBandHeightByPage.TryGetValue(pg, out var bh) ? bh : 0.0;
@@ -3504,7 +3483,7 @@ public sealed class DocumentView : Control
         if (_doc.Endnotes.Count == 0) return;
 
         // Start just below the last body page (in page-space). The last page's bottom edge:
-        var lastPageBottom = DeskPadding + (_pageCount - 1) * (_pageHeightPx + PageGap) + _pageHeightPx;
+        var lastPageBottom = _surfacePlan.PageTopDip(_pageCount - 1) + _pageHeightPx;
         var startY = lastPageBottom + PageGap + _marginTopDip * 0.25;
 
         var headingFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt + 2, Bold = true };
@@ -3555,17 +3534,7 @@ public sealed class DocumentView : Control
     /// </summary>
     private double ContentYToPageSpaceY(double contentY)
     {
-        if (_viewMode != DocumentViewMode.PrintLayout)
-            return _marginTopDip + contentY;
-
-        // AV-COL: with multi-column layout each "slot" is one column's worth of content.
-        // slot = the index of the column being filled (0 = page0/col0, 1 = page0/col1, ...).
-        // pageIndex = slot / _colCount  (multiple columns fill the same page).
-        // offsetWithinPage = contentY mod textAreaHeight  (within the column's vertical span).
-        var slot      = (int)(contentY / _layoutTextAreaHeight);
-        var pageIndex = slot / _colCount;
-        var offsetWithinPage = contentY - slot * _layoutTextAreaHeight;
-        return DeskPadding + pageIndex * (_pageHeightPx + PageGap) + _marginTopDip + offsetWithinPage;
+        return _surfacePlan.ContentYToPageSpaceY(contentY, _colCount);
     }
 
     /// <summary>
@@ -3575,13 +3544,7 @@ public sealed class DocumentView : Control
     /// </summary>
     private int PageIndexFromPageSpaceY(double pageSpaceY)
     {
-        if (_viewMode != DocumentViewMode.PrintLayout)
-            return 0;
-
-        // Each page occupies (pageHeightPx + PageGap) in page space, starting at DeskPadding.
-        var rel = pageSpaceY - DeskPadding;
-        if (rel < 0) return 0;
-        return Math.Max(0, (int)(rel / (_pageHeightPx + PageGap)));
+        return _surfacePlan.PageIndexFromPageSpaceY(pageSpaceY);
     }
 
     /// <summary>
@@ -3802,7 +3765,7 @@ public sealed class DocumentView : Control
             var slot          = (int)(peekContentY / _layoutTextAreaHeight);
             var pageIndex     = _colCount > 1 ? slot / _colCount : slot;
             var pageTop       = _viewMode == DocumentViewMode.PrintLayout
-                                    ? DeskPadding + pageIndex * (_pageHeightPx + PageGap)
+                                    ? _surfacePlan.PageTopDip(pageIndex)
                                     : 0;
             var offsetInPage  = exclusionBottom - pageTop - _marginTopDip;
             // Clamp offsetInPage so we never jump past this page's text area (wrong-page placement).
@@ -4789,7 +4752,7 @@ public sealed class DocumentView : Control
         // Page top in page-space (DeskPadding + pageIndex*(pageHeight+gap)).
         double PageTop(int pi) =>
             _viewMode == DocumentViewMode.PrintLayout
-                ? DeskPadding + pi * (_pageHeightPx + PageGap)
+                ? _surfacePlan.PageTopDip(pi)
                 : 0;
 
         for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
@@ -4849,7 +4812,7 @@ public sealed class DocumentView : Control
 
         double PageTop(int pi) =>
             _viewMode == DocumentViewMode.PrintLayout
-                ? DeskPadding + pi * (_pageHeightPx + PageGap)
+                ? _surfacePlan.PageTopDip(pi)
                 : 0;
 
         for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
@@ -5204,7 +5167,7 @@ public sealed class DocumentView : Control
     private void DrawRuler(DrawingContext context)
     {
         const double inchDip = 72.0;
-        var pageTop = DeskPadding; // first page only
+        var pageTop = _surfacePlan.PageTopDip(0); // first page only
         // ── Horizontal ruler: sits just above the page's top edge. ──
         var hRect = new Rect(_pageLeft, pageTop - RulerThicknessDip, _pageWidth, RulerThicknessDip);
         context.FillRectangle(RulerFill, hRect);
@@ -5213,7 +5176,8 @@ public sealed class DocumentView : Control
         var bodyRight = _contentLeft + _contentWidth;
         context.FillRectangle(RulerMarginFill, new Rect(bodyRight, hRect.Y, _pageLeft + _pageWidth - bodyRight, RulerThicknessDip));
         context.DrawRectangle(null, RulerBorderPen, hRect);
-        for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)
+        var rulerTicks = DocumentViewLayoutPlanner.BuildRulerTicks(_surfacePlan, inchDip);
+        foreach (var x in rulerTicks)
             context.DrawLine(RulerTickPen, new Point(x, hRect.Y + RulerThicknessDip - 4), new Point(x, hRect.Y + RulerThicknessDip));
 
         // ── Vertical ruler: sits just left of the page's left edge. ──
@@ -5224,7 +5188,7 @@ public sealed class DocumentView : Control
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, pageTop, RulerThicknessDip, _marginTopDip));
         context.FillRectangle(RulerMarginFill, new Rect(vRect.X, bodyBottom, RulerThicknessDip, pageTop + _pageHeightPx - bodyBottom));
         context.DrawRectangle(null, RulerBorderPen, vRect);
-        for (var y = pageTop; y <= pageTop + _pageHeightPx + 0.01; y += inchDip)
+        foreach (var y in rulerTicks.Select(tick => pageTop + tick - _pageLeft))
             context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
     }
 
@@ -5328,7 +5292,7 @@ public sealed class DocumentView : Control
             // Draw each discrete page rectangle: page-coloured sheet with drop-shadow + chrome border.
             for (var pi = 0; pi < _pageCount; pi++)
             {
-                var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+                var pageTop = _surfacePlan.PageTopDip(pi);
                 var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, _pageHeightPx);
                 var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
                 context.FillRectangle(PageShadowBrush, shadowRect);
@@ -5376,7 +5340,7 @@ public sealed class DocumentView : Control
         {
             for (var pi = 0; pi < _pageCount; pi++)
             {
-                var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+                var pageTop = _surfacePlan.PageTopDip(pi);
                 var ruleTop    = pageTop + _marginTopDip;
                 var ruleBottom = pageTop + _pageHeightPx - _marginBottomDip;
                 for (var ci = 0; ci < _colCount - 1; ci++)
@@ -8352,26 +8316,13 @@ public sealed class DocumentView : Control
     /// </summary>
     internal IReadOnlyList<(double X1, double Y1, double X2, double Y2)> ComputeGridlines()
     {
-        var lines = new List<(double, double, double, double)>();
         if (!_showGridlines || _viewMode != DocumentViewMode.PrintLayout)
-            return lines;
+            return [];
 
-        var areaLeft   = _contentLeft;
-        var areaRight  = _contentLeft + _contentWidth;
-        for (var pi = 0; pi < _pageCount; pi++)
-        {
-            var pageTop    = DeskPadding + pi * (_pageHeightPx + PageGap);
-            var areaTop    = pageTop + _marginTopDip;
-            var areaBottom = pageTop + _pageHeightPx - _marginBottomDip;
-
-            // Horizontal lines.
-            for (var y = areaTop; y <= areaBottom + 0.01; y += GridlineStepDip)
-                lines.Add((areaLeft, y, areaRight, y));
-            // Vertical lines.
-            for (var x = areaLeft; x <= areaRight + 0.01; x += GridlineStepDip)
-                lines.Add((x, areaTop, x, areaBottom));
-        }
-        return lines;
+        return DocumentViewLayoutPlanner
+            .BuildGridlines(_surfacePlan, _pageCount, GridlineStepDip)
+            .Select(line => (line.X1, line.Y1, line.X2, line.Y2))
+            .ToList();
     }
 
     /// <summary>
@@ -8382,13 +8333,10 @@ public sealed class DocumentView : Control
     /// </summary>
     internal IReadOnlyList<double> ComputeRulerTicks()
     {
-        var ticks = new List<double>();
         if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
-            return ticks;
+            return [];
         const double inchDip = 72.0; // 1in = 72pt = 72 DIP at 96 DPI base
-        for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)
-            ticks.Add(x);
-        return ticks;
+        return DocumentViewLayoutPlanner.BuildRulerTicks(_surfacePlan, inchDip);
     }
 
     public void SetAlignment(TextAlignment alignment)
@@ -11071,7 +11019,7 @@ public sealed class DocumentView : Control
 
         double PageTop(int pi) =>
             _viewMode == DocumentViewMode.PrintLayout
-                ? DeskPadding + pi * (_pageHeightPx + PageGap)
+                ? _surfacePlan.PageTopDip(pi)
                 : 0;
 
         double x = pl.HorizontalAnchor switch

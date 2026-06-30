@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using FreeW.App.Host;
 using System.Diagnostics;
@@ -3136,7 +3137,7 @@ public sealed class DocumentView : RichTextBox
         if (Document is not { } doc)
             return (1, 1);
 
-        var (_, contentHeight) = PageLayout.ContentAreaDip(_model.Page);
+        var contentHeight = DocumentViewLayoutPlanner.BuildPageMetrics(_model.Page).ContentHeightDip;
         if (contentHeight <= 0)
             return (1, 1);
 
@@ -4452,11 +4453,14 @@ public sealed class DocumentView : RichTextBox
             // so the text column sits inside the same printable area the print path uses. The host paints
             // the grey workspace; centring the page lets that grey show on either side. The drop shadow
             // lifts the sheet off the workspace.
-            var (pageWidthDip, _) = PageLayout.PageSizeDip(_model.Page);
-            var (left, top, right, bottom) = PageLayout.MarginsDip(_model.Page);
-            Width = pageWidthDip;
+            var pageMetrics = DocumentViewLayoutPlanner.BuildPageMetrics(_model.Page);
+            Width = pageMetrics.PageWidthDip;
             HorizontalAlignment = HorizontalAlignment.Center;
-            Padding = new Thickness(left, top, right, bottom);
+            Padding = new Thickness(
+                pageMetrics.MarginLeftDip,
+                pageMetrics.MarginTopDip,
+                pageMetrics.MarginRightDip,
+                pageMetrics.MarginBottomDip);
             Effect = PageShadow;
         }
         else
@@ -5399,28 +5403,19 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
-        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
-        var gapDip = PageLayout.PointsToDip(page.ColumnSpacingPt);
-
-        double columnWidthDip;
-        if (page.ColumnWidthsPt is { Count: > 1 } widths && widths.Count == columns)
-        {
-            // Unequal layout: WPF lays out equal flexible columns, so use the narrowest requested width to
-            // guarantee all N columns fit the content area (a faithful approximation of Left/Right).
-            columnWidthDip = PageLayout.PointsToDip(widths.Min());
-        }
-        else
-        {
-            columnWidthDip = (contentWidthDip - (columns - 1) * gapDip) / columns;
-        }
+        var pageMetrics = DocumentViewLayoutPlanner.BuildPageMetrics(page);
+        var columnPlan = DocumentViewLayoutPlanner.BuildColumnPlan(
+            page,
+            pageMetrics.ContentWidthDip,
+            usePageColumns: true);
 
         // Guard degenerate geometry (narrow page / wide gaps) so the width stays usable and positive.
-        flow.ColumnWidth = Math.Max(1, columnWidthDip);
+        flow.ColumnWidth = columnPlan.WidthDip;
         flow.IsColumnWidthFlexible = true; // let WPF expand columns to fill the content area
-        flow.ColumnGap = Math.Max(0, gapDip);
+        flow.ColumnGap = columnPlan.GapDip;
 
         // "Line between" (w:cols/@w:sep) → a thin rule centred in the gap.
-        if (page.ColumnsLineBetween)
+        if (columnPlan.LineBetween)
         {
             flow.ColumnRuleWidth = 1;
             flow.ColumnRuleBrush = System.Windows.Media.Brushes.Gray;
