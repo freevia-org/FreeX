@@ -12,6 +12,7 @@ using System.Windows.Media.Imaging;
 using FreeX.App.UI;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.ToolsShared.Wpf;
 
 /// <summary>
 /// Chart fidelity census + comparison for a real workbook (default ExcelExamples1.xlsx).
@@ -378,24 +379,7 @@ internal static class Program
     private static double ComputeMeanPixelDiff(string excelPath, string freexPath)
     {
         const int W = 600, H = 400;
-        var e = ResizeTo(LoadBitmap(excelPath), W, H);
-        var f = ResizeTo(LoadBitmap(freexPath), W, H);
-        var ep = new byte[W * H * 4]; e.CopyPixels(ep, W * 4, 0);
-        var fp = new byte[W * H * 4]; f.CopyPixels(fp, W * 4, 0);
-        long total = 0;
-        int n = W * H;
-        for (int i = 0; i < n; i++)
-        {
-            int o = i * 4;
-            double ea = ep[o + 3] / 255.0, fa = fp[o + 3] / 255.0;
-            for (int c = 0; c < 3; c++)
-            {
-                double ev = ep[o + c] * ea + 255 * (1 - ea);
-                double fv = fp[o + c] * fa + 255 * (1 - fa);
-                total += (long)Math.Abs(ev - fv);
-            }
-        }
-        return total / ((double)n * 3 * 255) * 100.0;
+        return WpfImageDiff.ComputeMeanPixelDiff(excelPath, freexPath, W, H);
     }
 
     private static BitmapSource ResizeTo(BitmapSource src, int w, int h)
