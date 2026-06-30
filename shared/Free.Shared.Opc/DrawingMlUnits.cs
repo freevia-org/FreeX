@@ -1,84 +1,49 @@
-using System.Globalization;
-
 namespace Free.Shared.Opc;
 
 /// <summary>
-/// DrawingML / OOXML unit constants and conversions shared across all sibling apps.
-/// <list type="bullet">
-/// <item>EMU (English Metric Unit) — the native DrawingML coordinate unit: 914 400 per inch, 12 700 per point.</item>
-/// <item>dxa — twentieths of a point (twips), used in WordprocessingML for paragraph/table sizes.</item>
-/// <item>half-points — run font-size unit in WordprocessingML (w:sz).</item>
-/// <item>eighth-points — border-width unit in WordprocessingML (w:sz on w:pBdr / w:tblBorders).</item>
-/// </list>
-/// All formulas are byte-identical to the originals in <c>Ooxml</c> (FreeW.Core.IO).
+/// Compatibility facade for callers that historically imported DrawingML units from Free.Shared.Opc.
+/// The neutral implementation lives in <see cref="Free.Shared.Drawing.DrawingMlCoordinateUnits"/>.
 /// </summary>
 public static class DrawingMlUnits
 {
-    /// <summary>EMU per point (DrawingML/ECMA-376). 12 700 EMU = 1 pt; 914 400 EMU = 1 in.</summary>
-    public const long EmuPerPoint = 12700;
+    public const long EmuPerPoint = Free.Shared.Drawing.DrawingMlCoordinateUnits.EmuPerPoint;
+    public const long EmuPerInch = Free.Shared.Drawing.DrawingMlCoordinateUnits.EmuPerInch;
+    public const long EmuPerPixel = Free.Shared.Drawing.DrawingMlCoordinateUnits.EmuPerPixel;
+    public const long AngleUnitsPerDegree = Free.Shared.Drawing.DrawingMlCoordinateUnits.AngleUnitsPerDegree;
 
-    /// <summary>EMU per inch (DrawingML/ECMA-376). 914 400 EMU = 1 in.</summary>
-    public const long EmuPerInch = 914400;
+    public static long PointsToEmu(double points) => Free.Shared.Drawing.DrawingMlCoordinateUnits.PointsToEmu(points);
 
-    /// <summary>EMU per DIP pixel at 96 DPI. 9 525 EMU = 1 px.</summary>
-    public const long EmuPerPixel = 9525;
+    public static double EmuToPoints(double emus) => Free.Shared.Drawing.DrawingMlCoordinateUnits.EmuToPoints(emus);
 
-    /// <summary>Converts a point value to the nearest integer number of EMU.</summary>
-    public static long PointsToEmu(double points) => (long)Math.Round(points * EmuPerPoint);
+    public static long PixelsToEmu(double pixels) => Free.Shared.Drawing.DrawingMlCoordinateUnits.PixelsToEmu(pixels);
 
-    /// <summary>Converts an EMU value to points.</summary>
-    public static double EmuToPoints(double emus) => emus / EmuPerPoint;
+    public static double EmuToPixels(double emus) => Free.Shared.Drawing.DrawingMlCoordinateUnits.EmuToPixels(emus);
 
-    /// <summary>Converts a DIP pixel value to the nearest integer number of EMU.</summary>
-    public static long PixelsToEmu(double pixels) => (long)Math.Round(Math.Max(0, pixels) * EmuPerPixel);
+    public static double EmuToPixels(string? value) => Free.Shared.Drawing.DrawingMlCoordinateUnits.EmuToPixels(value);
 
-    /// <summary>Converts an EMU value to DIP pixels at 96 DPI.</summary>
-    public static double EmuToPixels(double emus) => emus / EmuPerPixel;
+    public static double EmuToPoints(string? value) => Free.Shared.Drawing.DrawingMlCoordinateUnits.EmuToPoints(value);
 
-    /// <summary>
-    /// Parses an EMU string attribute and converts to DIP pixels at 96 DPI.
-    /// Returns 0 when the value is null, empty, or not a valid number.
-    /// </summary>
-    public static double EmuToPixels(string? value) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var emus)
-            ? EmuToPixels(emus)
-            : 0;
+    public static double AngleToDegrees(double angleUnits) =>
+        Free.Shared.Drawing.DrawingMlCoordinateUnits.AngleToDegrees(angleUnits);
 
-    /// <summary>
-    /// Parses an EMU string attribute and converts to points.
-    /// Returns 0 when the value is null, empty, or not a valid integer.
-    /// </summary>
-    public static double EmuToPoints(string? value) =>
-        long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
-            ? EmuToPoints(v)
-            : 0;
+    public static double AngleToRadians(double angleUnits) =>
+        Free.Shared.Drawing.DrawingMlCoordinateUnits.AngleToRadians(angleUnits);
 
-    /// <summary>OOXML "dxa" = twentieths of a point. Parses an integer dxa attribute and converts to points.</summary>
-    public static double DxaToPoints(string? value) => ParseInt(value) / 20.0;
+    public static double DxaToPoints(string? value) => Free.Shared.Drawing.DrawingMlCoordinateUnits.DxaToPoints(value);
 
-    /// <summary>Converts a point value to the nearest integer number of dxa (twentieths of a point).</summary>
-    public static int PointsToDxa(double points) => (int)Math.Round(points * 20.0);
+    public static int PointsToDxa(double points) => Free.Shared.Drawing.DrawingMlCoordinateUnits.PointsToDxa(points);
 
-    /// <summary>
-    /// Run font size is in half-points (w:sz). Parses the attribute and converts to points.
-    /// Returns <see langword="null"/> when the value is absent or zero.
-    /// </summary>
     public static double? HalfPointsToPoints(string? value) =>
-        ParseInt(value) is var v && v != 0 ? v / 2.0 : null;
+        Free.Shared.Drawing.DrawingMlCoordinateUnits.HalfPointsToPoints(value);
 
-    /// <summary>Converts a point value to the nearest integer number of half-points.</summary>
-    public static int PointsToHalfPoints(double points) => (int)Math.Round(points * 2.0);
+    public static int PointsToHalfPoints(double points) =>
+        Free.Shared.Drawing.DrawingMlCoordinateUnits.PointsToHalfPoints(points);
 
-    /// <summary>Border widths (w:sz on w:pBdr / w:tblBorders edges) are in eighths of a point.</summary>
-    public static double EighthPointsToPoints(string? value) => ParseInt(value) / 8.0;
+    public static double EighthPointsToPoints(string? value) =>
+        Free.Shared.Drawing.DrawingMlCoordinateUnits.EighthPointsToPoints(value);
 
-    /// <summary>Converts a point value to the nearest integer number of eighth-points (minimum 1).</summary>
-    public static int PointsToEighthPoints(double points) => Math.Max(1, (int)Math.Round(points * 8.0));
+    public static int PointsToEighthPoints(double points) =>
+        Free.Shared.Drawing.DrawingMlCoordinateUnits.PointsToEighthPoints(points);
 
-    /// <summary>
-    /// Parses an integer attribute value using invariant culture.
-    /// Returns 0 when the value is null, empty, or not a valid integer.
-    /// </summary>
-    public static int ParseInt(string? value) =>
-        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+    public static int ParseInt(string? value) => Free.Shared.Drawing.DrawingMlCoordinateUnits.ParseInt(value);
 }
