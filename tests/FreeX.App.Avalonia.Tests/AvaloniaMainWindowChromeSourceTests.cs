@@ -619,7 +619,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().Contain("new ObjectSizeDialogSubmission(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedDrawingShape(");
+        contextualTabsSource.Should().Contain("[\"shapeFormat.shapeGradient\"] = () => RunGuarded(OpenShapeGradientDialogAsync),");
         formatDialogSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildFormatCommands(");
+        formatDialogSource.Should().Contain("ShapeGradientPlanner.Capture(shape)");
+        formatDialogSource.Should().Contain("ShapeGradientPlanner.CreateDirectionOptions()");
+        formatDialogSource.Should().Contain("ShapeGradientPlanner.PreviewVector(");
+        formatDialogSource.Should().Contain("ShapeGradientPlanner.CreateResult(");
 
         contextualTabsSource.Should().NotContain("_session.ActiveSheet.Pictures.FirstOrDefault(");
         contextualTabsSource.Should().NotContain("_session.ActiveSheet.DrawingShapes.FirstOrDefault(");
@@ -636,6 +641,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().NotContain("new ResizeDrawingShapeCommand(");
         contextualTabsSource.Should().NotContain("new SetPictureAltTextCommand(");
         contextualTabsSource.Should().NotContain("new SetDrawingShapeAltTextCommand(");
+        contextualTabsSource.Should().NotContain("SetSelectedShapeGradientAsync(");
+        contextualTabsSource.Should().NotContain("new SetDrawingShapeGradientCommand(");
+        contextualTabsSource.Should().NotContain("InsertLoc_GradientStartColor");
+        contextualTabsSource.Should().NotContain("InsertLoc_GradientEndColor");
         formatDialogSource.Should().NotContain("new SetDrawingObjectRotationCommand(");
         formatDialogSource.Should().NotContain("new ResizePictureCommand(");
         formatDialogSource.Should().NotContain("new ResizeDrawingShapeCommand(");
