@@ -3,11 +3,10 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -22,6 +21,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle TableStyleGalleryChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>
     /// Table Design ▸ Table Styles — opens the styles gallery for the active table and applies the chosen built-in
     /// style through the shared apply command. Reports an honest status when no table is active.
@@ -52,6 +53,7 @@ public sealed partial class MainWindow
             ItemsSource = surface.Items.Select(item => item.Label).ToList(),
             SelectedIndex = TableStyleGalleryPlanner.FindSurfaceItemIndex(surface, table.StyleName),
         };
+        AvaloniaCompactDialogChrome.ApplyListBox(gallery, TableStyleGalleryChromeStyle);
         AutomationProperties.SetAutomationId(gallery, "TableStyleGalleryList");
         AutomationProperties.SetName(gallery, UiText.Get("TableStyleGallery_GalleryName"));
 
@@ -70,8 +72,8 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(ok, "TableStyleGalleryOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "TableStyleGalleryCancelButton");
-        ApplyDialogButtonChrome(ok, 80, isDefault: true);
-        ApplyDialogButtonChrome(cancel, 80);
+        AvaloniaCompactDialogChrome.ApplyButton(ok, TableStyleGalleryChromeStyle, 80, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, TableStyleGalleryChromeStyle, 80);
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
 
@@ -86,14 +88,7 @@ public sealed partial class MainWindow
         DockPanel.SetDock(label, Dock.Top);
         content.Children.Add(label);
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { ok, cancel },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         content.Children.Add(buttonRow);
 

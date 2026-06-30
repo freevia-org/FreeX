@@ -4,10 +4,9 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
-
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -49,9 +48,8 @@ public sealed partial class MainWindow
             MinHeight = 280,
             ItemsSource = styleNames,
             SelectedIndex = PivotStyleGalleryPlanner.FindStyleIndex(styleNames, values.StyleName),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotListBoxChrome(gallery);
         AutomationProperties.SetAutomationId(gallery, "PivotStyleGalleryList");
         AutomationProperties.SetName(gallery, UiText.Get("PivotStyleGallery_GalleryName"));
 
@@ -88,14 +86,7 @@ public sealed partial class MainWindow
         DockPanel.SetDock(label, Dock.Top);
         content.Children.Add(label);
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { ok, cancel },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         content.Children.Add(buttonRow);
 

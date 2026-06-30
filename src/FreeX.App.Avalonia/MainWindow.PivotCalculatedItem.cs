@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
@@ -71,12 +72,8 @@ public sealed partial class MainWindow
             MaxHeight = double.PositiveInfinity,
             TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
             Text = "= ",
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(4, 1),
         };
+        ApplyPivotTextBoxChrome(formulaBox, fixedHeight: false);
         AutomationProperties.SetAutomationId(formulaBox, "PivotCalcItemFormulaBox");
         AutomationProperties.SetName(formulaBox, UiText.Get("PivotCalcItem_FormulaLabel"));
 
@@ -124,7 +121,8 @@ public sealed partial class MainWindow
             }
         };
 
-        var fieldsList = new ListBox { Height = 96, FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var fieldsList = new ListBox { Height = 96 };
+        ApplyPivotListBoxChrome(fieldsList);
         foreach (var reference in references)
             fieldsList.Items.Add(reference);
         if (references.Count > 0)
@@ -219,14 +217,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children = { insertButton },
         });
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { save, delete, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([save, delete, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);

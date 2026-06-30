@@ -37,14 +37,29 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyButton(button, PivotDialogChromeStyle, minWidth, isDefault);
     }
 
-    private static void ApplyPivotTextBoxChrome(TextBox textBox)
+    private static void ApplyPivotTextBoxChrome(TextBox textBox, bool fixedHeight = true)
     {
-        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PivotDialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PivotDialogChromeStyle, fixedHeight);
     }
 
     private static void ApplyPivotComboBoxChrome(ComboBox comboBox)
     {
         AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PivotDialogChromeStyle);
+    }
+
+    private static void ApplyPivotCheckBoxChrome(CheckBox checkBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, PivotDialogChromeStyle);
+    }
+
+    private static void ApplyPivotRadioButtonChrome(RadioButton radioButton)
+    {
+        AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, PivotDialogChromeStyle);
+    }
+
+    private static void ApplyPivotListBoxChrome(ListBox listBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyListBox(listBox, PivotDialogChromeStyle);
     }
 
     // ── PivotTable Options dialog ─────────────────────────────────────────────
@@ -72,17 +87,15 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_ShowRowGrandTotals"),
             IsChecked = values.ShowRowGrandTotals,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(rowGrandTotalsBox);
         AutomationProperties.SetAutomationId(rowGrandTotalsBox, "PivotOptionsRowGrandTotalsBox");
         var columnGrandTotalsBox = new CheckBox
         {
             Content = UiText.Get("PivotOptions_ShowColumnGrandTotals"),
             IsChecked = values.ShowColumnGrandTotals,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(columnGrandTotalsBox);
         AutomationProperties.SetAutomationId(columnGrandTotalsBox, "PivotOptionsColumnGrandTotalsBox");
 
         var reportLayoutBox = new ComboBox { MinWidth = 220 };
@@ -106,9 +119,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_ShowSubtotals"),
             IsChecked = values.ShowSubtotals,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(subtotalsBox);
         AutomationProperties.SetAutomationId(subtotalsBox, "PivotOptionsSubtotalsBox");
 
         var subtotalPlacementBox = new ComboBox { MinWidth = 220 };
@@ -124,27 +136,24 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_RepeatItemLabels"),
             IsChecked = values.RepeatItemLabels,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(repeatLabelsBox);
         AutomationProperties.SetAutomationId(repeatLabelsBox, "PivotOptionsRepeatLabelsBox");
 
         var blankRowBox = new CheckBox
         {
             Content = UiText.Get("PivotOptions_InsertBlankRow"),
             IsChecked = values.BlankLineAfterItems,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(blankRowBox);
         AutomationProperties.SetAutomationId(blankRowBox, "PivotOptionsBlankRowBox");
 
         var mergeLabelsBox = new CheckBox
         {
             Content = UiText.Get("PivotOptions_MergeAndCenterLabels"),
             IsChecked = values.MergeAndCenterLabels,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyPivotCheckBoxChrome(mergeLabelsBox);
         AutomationProperties.SetAutomationId(mergeLabelsBox, "PivotOptionsMergeLabelsBox");
 
         void SyncSubtotalState()
@@ -345,13 +354,16 @@ public sealed partial class MainWindow
         Foreground = HeaderForeground,
     };
 
-    private static CheckBox OptionCheckBox(string text, bool isChecked) => new()
+    private static CheckBox OptionCheckBox(string text, bool isChecked)
     {
-        Content = StripDisplayMnemonic(text),
-        IsChecked = isChecked,
-        FontSize = 12,
-        FontFamily = FormulaBarFontFamily,
-    };
+        var checkBox = new CheckBox
+        {
+            Content = StripDisplayMnemonic(text),
+            IsChecked = isChecked,
+        };
+        ApplyPivotCheckBoxChrome(checkBox);
+        return checkBox;
+    }
 
     private static TextBox OptionTextBox(string text, double minWidth)
     {
