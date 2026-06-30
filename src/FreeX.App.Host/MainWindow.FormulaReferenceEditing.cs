@@ -34,10 +34,11 @@ public partial class MainWindow
 
     private void UpdateFormulaRangeEntryStateAfterTextChanged(System.Windows.Controls.TextBox editor)
     {
-        if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(editor.Text))
+        var textChangePlan = FormulaEditInteractionPlanner.BuildTextChangePlan(editor.Text);
+        if (textChangePlan.StartsPointMode)
         {
             _formulaRangeEntryMode = true;
-            SetFormulaEnterStatusBarMode();
+            ApplyFormulaEditStatusBarPlan(textChangePlan.StatusBarPlan);
         }
 
         ClearFormulaReferenceEntrySpanIfCaretLeftReference(editor);
