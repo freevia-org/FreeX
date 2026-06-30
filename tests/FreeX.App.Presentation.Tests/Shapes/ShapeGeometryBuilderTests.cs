@@ -21,6 +21,43 @@ public sealed class ShapeGeometryBuilderTests
     {
         typeof(ShapeGeometryBuilder).Assembly.FullName.Should().Be(typeof(LayoutRect).Assembly.FullName);
         typeof(ShapeGeometry).Assembly.FullName.Should().Be(typeof(LayoutPoint).Assembly.FullName);
+        typeof(ShapeGeometryBuilder).Namespace.Should().Be("Free.Shared.Drawing");
+        typeof(ShapeGeometry).Namespace.Should().Be("Free.Shared.Drawing");
+    }
+
+    [Fact]
+    public void PresentationShapeGeometrySources_RemainNeutralized()
+    {
+        var sharedRoot = TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("shared", "Free.Shared.Drawing");
+        var shapesRoot = TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("src", "FreeX.App.Presentation", "Shapes");
+
+        foreach (var sharedFile in new[]
+        {
+            "Geometry.cs",
+            "DrawingShapeKind.cs",
+            "DrawingShapeKindSupport.cs",
+            "ShapeGeometry.cs",
+            "ShapeGeometryBuilder.cs"
+        })
+        {
+            File.Exists(Path.Combine(sharedRoot, sharedFile))
+                .Should()
+                .BeTrue($"{sharedFile} should remain owned by Free.Shared.Drawing");
+        }
+
+        Directory.EnumerateFiles(shapesRoot, "ShapeGeometry*.cs", SearchOption.TopDirectoryOnly)
+            .Should()
+            .BeEmpty("shape geometry files should not reappear under FreeX.App.Presentation.Shapes");
+
+        var presentationShapeSources = Directory
+            .EnumerateFiles(shapesRoot, "*.cs", SearchOption.TopDirectoryOnly)
+            .Select(File.ReadAllText)
+            .ToArray();
+
+        presentationShapeSources.Should().NotContain(source => source.Contains("public static class ShapeGeometryBuilder", StringComparison.Ordinal));
+        presentationShapeSources.Should().NotContain(source => source.Contains("public sealed record ShapeGeometry", StringComparison.Ordinal));
+        presentationShapeSources.Should().NotContain(source => source.Contains("public sealed record ShapeContour", StringComparison.Ordinal));
+        presentationShapeSources.Should().NotContain(source => source.Contains("public enum ShapeSegmentKind", StringComparison.Ordinal));
     }
 
     [Theory]
