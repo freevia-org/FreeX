@@ -417,12 +417,15 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("new ChartAxisFormatDialog(chart, useXAxis)");
         source.Should().Contain("var seriesCount = ChartSeriesFormatPlanner.GetSeriesCount(chart);");
         source.Should().Contain("new ChartSeriesFormatDialog(chart, seriesCount)");
-        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Labels\"");
-        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Trendline\"");
+        source.Should().Contain("var command = ChartWorkflowCommandCatalog.FormatDataLabels;");
+        source.Should().Contain("var command = ChartWorkflowCommandCatalog.FormatTrendline;");
+        source.Should().Contain("var command = ChartWorkflowCommandCatalog.FormatDataSeries;");
+        source.Should().Contain("ChartWorkflowCommandCatalog.CanOpenDialog(chart, command)");
+        source.Should().Contain("ShowUnsupportedChartWorkflow(command)");
         source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions())");
         source.Should().Contain("UiText.Get(\"ChartAxisFormat_XAxisTitle\")");
         source.Should().Contain("UiText.Get(\"ChartAxisFormat_YAxisTitle\")");
-        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Series\", chart, dialog.Result.ToOptions(chart))");
+        source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions(chart))");
     }
 
     [Fact]

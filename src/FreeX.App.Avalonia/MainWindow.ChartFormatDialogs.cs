@@ -36,7 +36,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Data Labels", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatDataLabels;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
         var current = ChartDataLabelsPlanner.Read(chart);
@@ -44,10 +45,10 @@ public sealed partial class MainWindow
         if (result is not { } edited)
             return;
 
-        if (!TryGetSelectedChart("Data Labels", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Data Labels", chart, ChartDataLabelsPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartDataLabelsPlanner.Plan(edited));
     }
 
     private async Task<ChartDataLabelsInput?> ShowChartDataLabelsDialogAsync(ChartDataLabelsInput current)
@@ -705,12 +706,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Format Series", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatDataSeries;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (ChartTypeSupport.GetDataSeriesCount(chart) <= 0)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_NoDataSeriesToFormat"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -727,10 +729,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart("Format Series", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Format Series", chart, ChartSeriesFormatPlanner.Plan(chart, edited));
+        ApplyChartLayout(command, chart, ChartSeriesFormatPlanner.Plan(chart, edited));
     }
 
     private async Task<ChartSeriesFormatInput?> ShowChartSeriesFormatDialogAsync(
@@ -954,12 +956,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Trendline", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatTrendline;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartTrendlinePlanner.SupportsTrendlines(chart.Type))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_TrendlinesAvailableOn"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -968,10 +971,10 @@ public sealed partial class MainWindow
         if (result is not { } edited)
             return;
 
-        if (!TryGetSelectedChart("Trendline", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Trendline", chart, ChartTrendlinePlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartTrendlinePlanner.Plan(edited));
     }
 
     private async Task<ChartTrendlineInput?> ShowChartTrendlineDialogAsync(ChartTrendlineInput current)
@@ -1183,12 +1186,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Error Bars", out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatErrorBars;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartErrorBarsPlanner.SupportsErrorBars(chart.Type))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_ErrorBarsAvailableOn"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -1197,10 +1201,10 @@ public sealed partial class MainWindow
         if (result is not { } edited)
             return;
 
-        if (!TryGetSelectedChart("Error Bars", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Error Bars", chart, ChartErrorBarsPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartErrorBarsPlanner.Plan(edited));
     }
 
     private async Task<ChartErrorBarsInput?> ShowChartErrorBarsDialogAsync(ChartErrorBarsInput current)

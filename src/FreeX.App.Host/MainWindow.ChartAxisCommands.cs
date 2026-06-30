@@ -10,11 +10,12 @@ public partial class MainWindow
 {
     private void ChartSecondaryAxisBtn_Click(object sender, RoutedEventArgs e)
     {
+        var command = ChartWorkflowCommandCatalog.SecondaryAxis;
         if (!TryExecuteRepeatableChartLayout(
-                "Secondary Axis",
-                UiText.Get("MainWindowMessage_ChartSecondaryAxisRequiresChart"),
-                ChartAxisPlanner.CanToggleSecondaryAxis,
-                UiText.Get("MainWindowMessage_ChartSecondaryAxisUnsupported"),
+                ChartWorkflowCaption(command),
+                UiText.Get(command.HostMissingSelectionMessageResourceKey),
+                chart => ChartWorkflowCommandCatalog.CanOpenDialog(chart, command),
+                UiText.Get(command.HostUnsupportedMessageResourceKey!),
                 ChartAxisPlanner.PlanSecondaryAxisToggle))
             return;
 
@@ -123,8 +124,9 @@ public partial class MainWindow
 
     private void ShowChartAxisFormatDialog(bool useXAxis)
     {
+        var command = ChartAxisWorkflowCommandCatalog.FormatAxis(useXAxis);
         var caption = useXAxis ? UiText.Get("ChartAxisFormat_XAxisTitle") : UiText.Get("ChartAxisFormat_YAxisTitle");
-        if (!TryGetFirstChartForDialog(caption, UiText.Get("MainWindowMessage_ChartAxisOptionsRequiresChart"), out var chart))
+        if (!TryGetFirstChartForDialog(caption, UiText.Get(command.HostMissingSelectionMessageResourceKey), out var chart))
             return;
 
         var dialog = new ChartAxisFormatDialog(chart, useXAxis) { Owner = this };
@@ -136,125 +138,76 @@ public partial class MainWindow
 
     private void ToggleChartAxisTicks(bool useXAxis)
     {
-        var caption = useXAxis ? "X Axis Ticks" : "Y Axis Ticks";
-        ToggleChartAxisQuickCommand(
-            useXAxis,
-            ChartAxisQuickCommand.TickMarks,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisTicksRequiresChart"));
+        ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.TickMarks(useXAxis));
     }
 
     private void ToggleChartAxisLabels(bool useXAxis)
     {
-        var caption = useXAxis ? "X Axis Labels" : "Y Axis Labels";
-        ToggleChartAxisQuickCommand(
-            useXAxis,
-            ChartAxisQuickCommand.Labels,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisLabelsRequiresChart"));
+        ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.Labels(useXAxis));
     }
 
     private void ToggleChartAxisLabelFont(bool useXAxis)
     {
-        var caption = useXAxis ? "X Axis Label Font" : "Y Axis Label Font";
-        ToggleChartAxisQuickCommand(
-            useXAxis,
-            ChartAxisQuickCommand.LabelFont,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisLabelFormattingRequiresChart"));
+        ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.LabelFont(useXAxis));
     }
 
     private void ToggleChartAxisLabelAngle(bool useXAxis)
     {
-        var caption = useXAxis ? "X Axis Label Angle" : "Y Axis Label Angle";
-        ToggleChartAxisQuickCommand(
-            useXAxis,
-            ChartAxisQuickCommand.LabelAngle,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisLabelRotationRequiresChart"));
+        ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.LabelAngle(useXAxis));
     }
 
     private void ToggleChartAxisLine(bool useXAxis)
     {
-        var caption = useXAxis ? "X Axis Line" : "Y Axis Line";
-        ToggleChartAxisQuickCommand(
-            useXAxis,
-            ChartAxisQuickCommand.AxisLine,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisLineFormattingRequiresChart"));
+        ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.AxisLine(useXAxis));
     }
 
     private void ToggleChartAxisGridlines(bool useXAxis)
     {
-        var caption = useXAxis ? "X Axis Gridlines" : "Y Axis Gridlines";
-        ToggleChartAxisQuickCommand(
-            useXAxis,
-            ChartAxisQuickCommand.Gridlines,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisGridlinesRequiresChart"));
+        ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis));
     }
 
     private void ToggleChartAxisGridlineStyle(bool useXAxis)
     {
-        var caption = useXAxis ? "X Gridline Style" : "Y Gridline Style";
-        ToggleChartAxisQuickCommand(
-            useXAxis,
-            ChartAxisQuickCommand.GridlineStyle,
-            caption,
-            UiText.Get("MainWindowMessage_ChartGridlineFormattingRequiresChart"));
+        ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.GridlineStyle(useXAxis));
     }
 
     private void ToggleChartAxisNumberFormat(bool useXAxis)
     {
-        var caption = useXAxis ? "X Axis Number Format" : "Y Axis Number Format";
-        ToggleChartAxisQuickCommand(
-            useXAxis,
-            ChartAxisQuickCommand.NumberFormat,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisNumberFormatRequiresChart"));
+        ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.NumberFormat(useXAxis));
     }
 
     private void ToggleChartAxisLogScale(bool useXAxis)
     {
-        var caption = useXAxis ? "X Log Scale" : "Y Log Scale";
         ToggleChartAxisPlannedCommand(
-            useXAxis,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisScaleRequiresChart"),
+            ChartAxisWorkflowCommandCatalog.LogScale(useXAxis),
             ChartAxisPlanner.PlanLogScaleToggle);
     }
 
     private void ToggleChartAxisBounds(bool useXAxis)
     {
-        var caption = useXAxis ? "X Axis Bounds" : "Y Axis Bounds";
         ToggleChartAxisPlannedCommand(
-            useXAxis,
-            caption,
-            UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresChart"),
+            ChartAxisWorkflowCommandCatalog.Bounds(useXAxis),
             ChartAxisPlanner.PlanBoundsToggle);
     }
 
-    private void ToggleChartAxisQuickCommand(
-        bool useXAxis,
-        ChartAxisQuickCommand command,
-        string caption,
-        string requiresChartMessage)
+    private void ToggleChartAxisQuickCommand(ChartAxisWorkflowCommandDescriptor command)
     {
+        if (command.QuickCommand is not { } quickCommand)
+            throw new ArgumentException("Axis command descriptor does not have a quick command.", nameof(command));
+
         if (!TryExecuteRepeatableChartLayout(
-                caption,
-                requiresChartMessage,
+                command.Label,
+                UiText.Get(command.HostMissingSelectionMessageResourceKey),
                 null,
                 null,
-                chart => ChartAxisPlanner.PlanQuickCommand(chart, useXAxis, command)))
+                chart => ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand)))
             return;
 
         UpdateViewport();
     }
 
     private void ToggleChartAxisPlannedCommand(
-        bool useXAxis,
-        string caption,
-        string requiresChartMessage,
+        ChartAxisWorkflowCommandDescriptor command,
         Func<Sheet, ChartModel, bool, ChartAxisCommandPlan> planner)
     {
         IWorkbookCommand CreateCommand()
@@ -262,11 +215,11 @@ public partial class MainWindow
             var sheet = _workbook.GetSheet(_currentSheetId);
             var chart = FindFirstChart(sheet);
             if (sheet is null || chart is null)
-                return new FailedWorkbookCommand(requiresChartMessage);
+                return new FailedWorkbookCommand(UiText.Get(command.HostMissingSelectionMessageResourceKey));
 
-            var plan = planner(sheet, chart, useXAxis);
+            var plan = planner(sheet, chart, command.UseXAxis);
             if (plan.Options is not { } options)
-                return new FailedWorkbookCommand(GetChartAxisCommandIssueMessage(plan.Issue, useXAxis));
+                return new FailedWorkbookCommand(GetChartAxisCommandIssueMessage(plan.Issue, command.UseXAxis));
 
             return new SetChartLayoutCommand(_currentSheetId, chart.Id, options);
         }
@@ -274,7 +227,7 @@ public partial class MainWindow
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
         if (!outcome.Success)
         {
-            ShowCommandError(outcome, caption);
+            ShowCommandError(outcome, command.Label);
             return;
         }
 

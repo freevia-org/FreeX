@@ -85,6 +85,60 @@ public sealed class ChartWorkflowDescriptorPlannerTests
     }
 
     [Fact]
+    public void ChartWorkflowCommands_SurfaceDialogResourceKeysAndSupportGates()
+    {
+        var bar = ChartWorkflowCommandCatalog.FormatBarColumn;
+        bar.TitleResourceKey.Should().Be(ChartBarFormatPlanner.TitleResourceKey);
+        bar.HostMissingSelectionMessageResourceKey.Should().Be("MainWindowMessage_ChartSelectBarColumnForGapWidth");
+        bar.HostUnsupportedMessageResourceKey.Should().Be("MainWindowMessage_ChartGapWidthUnsupported");
+        bar.UnsupportedStatusResourceKey.Should().Be("ChartLoc_GapWidthOverlapAvailableOn");
+
+        ChartWorkflowCommandCatalog.FormatDataLabels.TitleResourceKey.Should().Be("ChartDataLabels_Title");
+        ChartWorkflowCommandCatalog.FormatTrendline.HostUnsupportedMessageResourceKey
+            .Should().Be("MainWindowMessage_ChartTrendlinesSupportedTypes");
+        ChartWorkflowCommandCatalog.FormatErrorBars.UnsupportedStatusResourceKey
+            .Should().Be("ChartLoc_ErrorBarsAvailableOn");
+        ChartWorkflowCommandCatalog.SecondaryAxis.HostMissingSelectionMessageResourceKey
+            .Should().Be("MainWindowMessage_ChartSecondaryAxisRequiresChart");
+
+        var column = Chart(ChartType.Column, endCol: 3);
+        var noSeriesColumn = Chart(ChartType.Column, endCol: 1);
+        var pie = Chart(ChartType.Pie, endCol: 2);
+        var bubble = Chart(ChartType.Bubble, endCol: 3);
+
+        ChartWorkflowCommandCatalog.CanOpenDialog(column, ChartWorkflowCommandCatalog.FormatBarColumn).Should().BeTrue();
+        ChartWorkflowCommandCatalog.CanOpenDialog(pie, ChartWorkflowCommandCatalog.FormatBarColumn).Should().BeFalse();
+        ChartWorkflowCommandCatalog.CanOpenDialog(bubble, ChartWorkflowCommandCatalog.FormatBubbleChart).Should().BeTrue();
+        ChartWorkflowCommandCatalog.CanOpenDialog(pie, ChartWorkflowCommandCatalog.FormatTrendline).Should().BeFalse();
+        ChartWorkflowCommandCatalog.CanOpenDialog(noSeriesColumn, ChartWorkflowCommandCatalog.FormatDataSeries).Should().BeFalse();
+        ChartWorkflowCommandCatalog.CanOpenDialog(column, ChartWorkflowCommandCatalog.FormatDataSeries).Should().BeTrue();
+        ChartWorkflowCommandCatalog.CanOpenDialog(column, ChartWorkflowCommandCatalog.ComboChart).Should().BeTrue();
+        ChartWorkflowCommandCatalog.CanOpenDialog(column, ChartWorkflowCommandCatalog.SecondaryAxis).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AxisWorkflowCommands_MapLabelsMessagesAndQuickCommands()
+    {
+        var xGridlines = ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: true);
+        xGridlines.Id.Should().Be(ChartAxisWorkflowCommandId.XAxisGridlines);
+        xGridlines.Label.Should().Be("X Axis Gridlines");
+        xGridlines.HostMissingSelectionMessageResourceKey.Should().Be("MainWindowMessage_ChartAxisGridlinesRequiresChart");
+        xGridlines.QuickCommand.Should().Be(ChartAxisQuickCommand.Gridlines);
+
+        var yLabels = ChartAxisWorkflowCommandCatalog.Labels(useXAxis: false);
+        yLabels.Id.Should().Be(ChartAxisWorkflowCommandId.YAxisLabels);
+        yLabels.UseXAxis.Should().BeFalse();
+        yLabels.Label.Should().Be("Y Axis Labels");
+        yLabels.QuickCommand.Should().Be(ChartAxisQuickCommand.Labels);
+
+        ChartAxisWorkflowCommandCatalog.LogScale(useXAxis: true).HostMissingSelectionMessageResourceKey
+            .Should().Be("MainWindowMessage_ChartAxisScaleRequiresChart");
+        ChartAxisWorkflowCommandCatalog.Bounds(useXAxis: false).Label.Should().Be("Y Axis Bounds");
+        ChartAxisWorkflowCommandCatalog.All.Select(command => command.Id)
+            .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public void PivotChartOptions_ReadCreateAndDescriptors_CoverSharedDialogSurface()
     {
         var chart = new ChartModel
@@ -134,5 +188,18 @@ public sealed class ChartWorkflowDescriptorPlannerTests
             .AutomationId.Should().Be("PivotChartOptionsBlankDisplayMode");
         PivotChartOptionsPlanner.GetBlankDisplayChoices().Select(choice => choice.Mode)
             .Should().Equal(ChartBlankDisplayMode.Gap, ChartBlankDisplayMode.Span, ChartBlankDisplayMode.Zero);
+    }
+
+    private static ChartModel Chart(ChartType type, uint endCol)
+    {
+        var sheetId = SheetId.New();
+        return new ChartModel
+        {
+            Type = type,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 4, endCol)),
+        };
     }
 }

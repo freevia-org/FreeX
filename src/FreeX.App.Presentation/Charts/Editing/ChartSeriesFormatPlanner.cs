@@ -113,6 +113,9 @@ public static class ChartSeriesFormatPlanner
         throw new ArgumentOutOfRangeException(nameof(id), id, null);
     }
 
+    /// <summary>True when the chart has an actual data series to format.</summary>
+    public static bool HasDataSeries(ChartModel chart) => ChartTypeSupport.GetDataSeriesCount(chart) > 0;
+
     /// <summary>The number of data series the series picker should offer (at least one).</summary>
     public static int GetSeriesCount(ChartModel chart) => Math.Max(1, ChartTypeSupport.GetDataSeriesCount(chart));
 

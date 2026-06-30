@@ -46,14 +46,14 @@ public sealed partial class MainWindow
     /// when it is eligible for shared chart workflows. Reports an honest status and returns null otherwise.
     /// </summary>
     private bool TryGetSelectedChart(ChartWorkflowCommandDescriptor command, out ChartModel chart) =>
-        TryGetSelectedChart(command.Label, out chart);
+        TryGetSelectedChart(ChartWorkflowCaption(command), out chart);
 
     private bool TryGetSelectedChart(string commandLabel, out ChartModel chart)
     {
         chart = null!;
         if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Chart)
         {
-            RefreshShell(UiText.Format("ChartLoc_SelectChartBeforeUsing", commandLabel));
+            RefreshShell(UiText.Format(ChartWorkflowCommandCatalog.SelectChartBeforeUsingStatusResourceKey, commandLabel));
             return false;
         }
 
@@ -63,7 +63,7 @@ public sealed partial class MainWindow
             return true;
         }
 
-        RefreshShell(UiText.Format("ChartLoc_SelectChartBeforeUsing", commandLabel));
+        RefreshShell(UiText.Format(ChartWorkflowCommandCatalog.SelectChartBeforeUsingStatusResourceKey, commandLabel));
         return false;
     }
 
@@ -73,15 +73,26 @@ public sealed partial class MainWindow
     /// the shell (which repaints the chart overlay) on success.
     /// </summary>
     private void ApplyChartLayout(ChartWorkflowCommandDescriptor command, ChartModel chart, ChartLayoutOptions options) =>
-        ApplyChartLayout(command.Label, chart, options);
+        ApplyChartLayout(ChartWorkflowCaption(command), chart, options);
 
     private void ApplyChartLayout(string commandLabel, ChartModel chart, ChartLayoutOptions options)
     {
         var result = _session.ExecuteReviewCommand(new SetChartLayoutCommand(_session.ActiveSheet.Id, chart.Id, options));
         RefreshShell(result.Success
-            ? UiText.Format("ChartLoc_CommandApplied", commandLabel)
-            : result.ErrorMessage ?? UiText.Format("ChartLoc_CommandFailed", commandLabel));
+            ? UiText.Format(ChartWorkflowCommandCatalog.CommandAppliedStatusResourceKey, commandLabel)
+            : result.ErrorMessage ?? UiText.Format(ChartWorkflowCommandCatalog.CommandFailedStatusResourceKey, commandLabel));
     }
+
+    private static string ChartWorkflowCaption(ChartWorkflowCommandDescriptor command) =>
+        command.TitleResourceKey is { } resourceKey ? UiText.Get(resourceKey) : command.Label;
+
+    private static string ChartWorkflowUnsupportedStatus(ChartWorkflowCommandDescriptor command) =>
+        command.UnsupportedStatusResourceKey is { } resourceKey
+            ? UiText.Get(resourceKey)
+            : UiText.Format(ChartWorkflowCommandCatalog.CommandNotYetAvailableStatusResourceKey, ChartWorkflowCaption(command));
+
+    private void RefreshUnsupportedChartWorkflow(ChartWorkflowCommandDescriptor command) =>
+        RefreshShell(ChartWorkflowUnsupportedStatus(command));
 
     // ---- Chart Design: Change Chart Type (real, ChangeChartTypeCommand) -------------------------------
 
@@ -740,7 +751,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Chart Titles", out var chart))
+        var command = ChartWorkflowCommandCatalog.ChartTitles;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
         var current = ChartTitlesPlanner.Read(chart);
@@ -748,7 +760,7 @@ public sealed partial class MainWindow
         if (result is not { } titles)
             return;
 
-        if (!TryGetSelectedChart("Chart Titles", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
         // The shared planner trims/collapses each title and drops axis titles for axis-less chart types
@@ -756,7 +768,7 @@ public sealed partial class MainWindow
         var options = ChartTitlesPlanner.Plan(
             chart.Type,
             new ChartTitlesInput(titles.ChartTitle, titles.XAxisTitle, titles.YAxisTitle));
-        ApplyChartLayout("Chart Titles", chart, options);
+        ApplyChartLayout(command, chart, options);
     }
 
     private async Task<(string ChartTitle, string XAxisTitle, string YAxisTitle)?> ShowChartTitlesDialogAsync(
@@ -953,20 +965,17 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Secondary Axis", out var chart))
+        var command = ChartWorkflowCommandCatalog.SecondaryAxis;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartTypeSupport.SupportsSecondaryAxis(chart.Type) || ChartTypeSupport.GetDataSeriesCount(chart) < 2)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_SecondaryAxisNeeds"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
-        // Toggle the second series (index 1) on/off the secondary axis.
-        var enable = !chart.ShowSecondaryAxis;
-        ApplyChartLayout("Secondary Axis", chart, new ChartLayoutOptions(
-            ShowSecondaryAxis: enable,
-            SecondaryAxisSeriesIndexes: enable ? new[] { 1 } : Array.Empty<int>()));
+        ApplyChartLayout(command, chart, ChartAxisPlanner.PlanSecondaryAxisToggle(chart));
     }
 
     // ---- Chart Format: shape fill / outline + formatting toggles (real, SetChartLayoutCommand) --------
@@ -1047,79 +1056,44 @@ public sealed partial class MainWindow
 
     private void CycleChartXAxisGridlines()
     {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("X Axis Gridlines", out var chart))
-            return;
-
-        if (!ChartTypeSupport.SupportsAxes(chart.Type))
-        {
-            RefreshShell(UiText.Get("ChartLoc_NoAxesForGridlines"));
-            return;
-        }
-
-        var (showMajor, showMinor) = ChartQuickFormatCycler.NextGridlineState(
-            chart.ShowXAxisMajorGridlines,
-            chart.ShowXAxisMinorGridlines);
-        ApplyChartLayout("X Axis Gridlines", chart, new ChartLayoutOptions(
-            ShowXAxisMajorGridlines: showMajor,
-            ShowXAxisMinorGridlines: showMinor));
+        ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: true), "ChartLoc_NoAxesForGridlines");
     }
 
     private void CycleChartYAxisGridlines()
     {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Y Axis Gridlines", out var chart))
-            return;
-
-        if (!ChartTypeSupport.SupportsAxes(chart.Type))
-        {
-            RefreshShell(UiText.Get("ChartLoc_NoAxesForGridlines"));
-            return;
-        }
-
-        var (showMajor, showMinor) = ChartQuickFormatCycler.NextGridlineState(
-            chart.ShowYAxisMajorGridlines,
-            chart.ShowYAxisMinorGridlines);
-        ApplyChartLayout("Y Axis Gridlines", chart, new ChartLayoutOptions(
-            ShowYAxisMajorGridlines: showMajor,
-            ShowYAxisMinorGridlines: showMinor));
+        ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: false), "ChartLoc_NoAxesForGridlines");
     }
 
     private void ToggleChartXAxisLabels()
     {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("X Axis Labels", out var chart))
-            return;
-
-        if (!ChartTypeSupport.SupportsAxes(chart.Type))
-        {
-            RefreshShell(UiText.Get("ChartLoc_NoAxes"));
-            return;
-        }
-
-        ApplyChartLayout("X Axis Labels", chart, new ChartLayoutOptions(ShowXAxisLabels: !chart.ShowXAxisLabels));
+        ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.Labels(useXAxis: true), "ChartLoc_NoAxes");
     }
 
     private void ToggleChartYAxisLabels()
     {
+        ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandCatalog.Labels(useXAxis: false), "ChartLoc_NoAxes");
+    }
+
+    private void ExecuteChartAxisQuickCommand(ChartAxisWorkflowCommandDescriptor command, string unsupportedStatusResourceKey)
+    {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Y Axis Labels", out var chart))
+        if (!TryGetSelectedChart(command.Label, out var chart))
             return;
 
-        if (!ChartTypeSupport.SupportsAxes(chart.Type))
+        if (!ChartAxisPlanner.SupportsAxes(chart.Type))
         {
-            RefreshShell(UiText.Get("ChartLoc_NoAxes"));
+            RefreshShell(UiText.Get(unsupportedStatusResourceKey));
             return;
         }
 
-        ApplyChartLayout("Y Axis Labels", chart, new ChartLayoutOptions(ShowYAxisLabels: !chart.ShowYAxisLabels));
+        if (command.QuickCommand is not { } quickCommand)
+            return;
+
+        ApplyChartLayout(command.Label, chart, ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand));
     }
 
     /// <summary>Reports that a Chart-tab command has no Core support yet (no silent no-op, no invented behavior).</summary>
     private void ReportChartCommandNotYetAvailable(string commandLabel)
-        => RefreshShell(UiText.Format("ChartLoc_CommandNotYetAvailable", commandLabel));
+        => RefreshShell(UiText.Format(ChartWorkflowCommandCatalog.CommandNotYetAvailableStatusResourceKey, commandLabel));
 }

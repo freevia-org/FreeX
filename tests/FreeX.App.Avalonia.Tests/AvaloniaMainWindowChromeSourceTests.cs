@@ -86,7 +86,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTypeFormatDialogs.cs")));
 
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelPosition(");
-        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
+        chartTabsSource.Should().Contain("ChartAxisWorkflowCommandCatalog.Gridlines(useXAxis: true)");
+        chartTabsSource.Should().Contain("ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand)");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
         chartTabsSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId)");

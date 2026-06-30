@@ -20,7 +20,7 @@ public sealed partial class MainWindow
     {
         ExecuteChartQuickCommand(
             ChartQuickCommandCatalog.ComboSeries,
-            UiText.Get("ChartLoc_ComboChartsNeed"));
+            ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.ComboChart));
     }
 
     // ---- Chart Format ▸ Text group: title / axis-title / legend / data-label color & size -------------
@@ -71,7 +71,7 @@ public sealed partial class MainWindow
     {
         ExecuteChartQuickCommand(
             ChartQuickCommandCatalog.SeriesDash,
-            UiText.Get("ChartLoc_NoDataSeriesToFormat"));
+            ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.FormatDataSeries));
     }
 
     private void CycleChartMarkerSize()
@@ -82,15 +82,15 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart(command.Label, out var chart))
             return;
 
-        if (ChartTypeSupport.GetDataSeriesCount(chart) <= 0)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, ChartWorkflowCommandCatalog.FormatDataSeries))
         {
-            RefreshShell(UiText.Get("ChartLoc_NoDataSeriesToFormat"));
+            RefreshUnsupportedChartWorkflow(ChartWorkflowCommandCatalog.FormatDataSeries);
             return;
         }
 
         if (!ChartQuickCommandPlanner.CanApply(chart, command.Command))
         {
-            RefreshShell(UiText.Get("ChartLoc_MarkersAvailableOn"));
+            RefreshShell(ChartQuickUnsupportedStatus(command));
             return;
         }
 
@@ -108,10 +108,15 @@ public sealed partial class MainWindow
 
         if (!ChartQuickCommandPlanner.CanApply(chart, command.Command))
         {
-            RefreshShell(unsupportedMessage ?? UiText.Format("ChartLoc_CommandNotYetAvailable", command.Label));
+            RefreshShell(unsupportedMessage ?? ChartQuickUnsupportedStatus(command));
             return;
         }
 
         ApplyChartLayout(command.Label, chart, ChartQuickCommandPlanner.Plan(chart, command.Command));
     }
+
+    private static string ChartQuickUnsupportedStatus(ChartQuickCommandDescriptor command) =>
+        command.UnsupportedStatusResourceKey is { } resourceKey
+            ? UiText.Get(resourceKey)
+            : UiText.Format(ChartWorkflowCommandCatalog.CommandNotYetAvailableStatusResourceKey, command.Label);
 }

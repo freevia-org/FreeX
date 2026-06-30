@@ -19,11 +19,15 @@ public sealed class AvaloniaChartQuickCommandSourceTests
         source.Should().Contain("private void ExecuteChartQuickCommand(");
         source.Should().Contain("ChartQuickCommandPlanner.CanApply(chart, command.Command)");
         source.Should().Contain("ChartQuickCommandPlanner.Plan(chart, command.Command)");
-        source.Should().Contain("UiText.Get(\"ChartLoc_ComboChartsNeed\")");
-        source.Should().Contain("UiText.Get(\"ChartLoc_NoDataSeriesToFormat\")");
-        source.Should().Contain("UiText.Get(\"ChartLoc_MarkersAvailableOn\")");
+        source.Should().Contain("ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.ComboChart)");
+        source.Should().Contain("ChartWorkflowUnsupportedStatus(ChartWorkflowCommandCatalog.FormatDataSeries)");
+        source.Should().Contain("ChartQuickUnsupportedStatus(command)");
 
         source.Should().NotContain("ChartQuickFormatCycler.");
+        source.Should().NotContain("ChartTypeSupport.GetDataSeriesCount");
+        source.Should().NotContain("UiText.Get(\"ChartLoc_ComboChartsNeed\")");
+        source.Should().NotContain("UiText.Get(\"ChartLoc_NoDataSeriesToFormat\")");
+        source.Should().NotContain("UiText.Get(\"ChartLoc_MarkersAvailableOn\")");
         source.Should().NotContain("new ChartLayoutOptions(");
         source.Should().NotContain("\"Chart Title Color\"");
         source.Should().NotContain("\"Combo Chart Series\"");
