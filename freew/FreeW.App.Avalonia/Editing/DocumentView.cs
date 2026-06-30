@@ -122,6 +122,7 @@ public sealed class DocumentView : Control
     private readonly List<FloatingWordArtData>  _floatingWordArts  = new();
     private readonly List<FloatingSmartArtData> _floatingSmartArts = new();
     private readonly List<FloatingGroupData>    _floatingGroups    = new();
+    private readonly List<DocumentFloatingObjectSnapshot> _floatingSnapshots = new();
     // AV-WRAP: unified list of wrap-exclusion zones (Square/Tight/TopAndBottom only).
     // Populated during Collect* calls; consulted by EmitLinePaged and LayoutParagraphPaged.
     // Each entry is a page-space rect + the wrapping mode (Behind/InFront entries are never added).
@@ -2164,14 +2165,10 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            var list = new List<(int, string)>();
-            foreach (var fi in _floatingImages.Where(fi => fi.BehindText)) list.Add((fi.ZOrder, "Image"));
-            foreach (var sd in _floatingShapes.Where(sd => sd.BehindText)) list.Add((sd.ZOrder, "Shape"));
-            foreach (var cd in _floatingCharts.Where(c => c.BehindText)) list.Add((cd.ZOrder, "Chart"));
-            foreach (var wd in _floatingWordArts.Where(w => w.BehindText)) list.Add((wd.ZOrder, "WordArt"));
-            foreach (var sa in _floatingSmartArts.Where(s => s.BehindText)) list.Add((sa.ZOrder, "SmartArt"));
-            foreach (var gd in _floatingGroups.Where(g => g.BehindText)) list.Add((gd.ZOrder, "Group"));
-            return list.OrderBy(d => d.Item1).ToList();
+            return DocumentViewLayoutPlanner
+                .BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: true)
+                .Select(snapshot => (snapshot.ZOrderIndex, snapshot.TypeTag))
+                .ToList();
         }
     }
 
@@ -2181,14 +2178,10 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            var list = new List<(int, string)>();
-            foreach (var fi in _floatingImages.Where(fi => !fi.BehindText)) list.Add((fi.ZOrder, "Image"));
-            foreach (var sd in _floatingShapes.Where(sd => !sd.BehindText)) list.Add((sd.ZOrder, "Shape"));
-            foreach (var cd in _floatingCharts.Where(c => !c.BehindText)) list.Add((cd.ZOrder, "Chart"));
-            foreach (var wd in _floatingWordArts.Where(w => !w.BehindText)) list.Add((wd.ZOrder, "WordArt"));
-            foreach (var sa in _floatingSmartArts.Where(s => !s.BehindText)) list.Add((sa.ZOrder, "SmartArt"));
-            foreach (var gd in _floatingGroups.Where(g => !g.BehindText)) list.Add((gd.ZOrder, "Group"));
-            return list.OrderBy(d => d.Item1).ToList();
+            return DocumentViewLayoutPlanner
+                .BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: false)
+                .Select(snapshot => (snapshot.ZOrderIndex, snapshot.TypeTag))
+                .ToList();
         }
     }
 
@@ -2460,6 +2453,7 @@ public sealed class DocumentView : Control
         _floatingWordArts.Clear();
         _floatingSmartArts.Clear();
         _floatingGroups.Clear();
+        _floatingSnapshots.Clear();
         _wrapExclusions.Clear();
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
@@ -2571,6 +2565,7 @@ public sealed class DocumentView : Control
                 _floatingWordArts.Clear();
                 _floatingSmartArts.Clear();
                 _floatingGroups.Clear();
+                _floatingSnapshots.Clear();
                 _wrapExclusions.Clear();
                 _inlineCharts.Clear();
                 _inlineWordArts.Clear();
@@ -2632,7 +2627,7 @@ public sealed class DocumentView : Control
                 // Route to the image-paragraph path only when the paragraph contains inline images.
                 // Paragraphs whose images are ALL floating (anchored) are laid out as normal text
                 // paragraphs so that the anchor content-Y is tracked; their images are collected
-                // into _floatingImages by CollectFloatingImages() called from within each layout method.
+                // into _floatingImages by CollectFloatingObjects() called from within each layout method.
                 var hasInlineImage   = paragraph.Runs.Any(r => r.Image    is { IsFloating: false });
                 var hasInlineChart   = paragraph.Runs.Any(r => r.Chart    is { IsFloating: false });
                 var hasInlineWordArt = paragraph.Runs.Any(r => r.WordArt  is { IsFloating: false });
@@ -2644,14 +2639,14 @@ public sealed class DocumentView : Control
                     if (hasInlineImage)
                     {
                         // Mixed paragraph: inline image(s) present — use the image layout path which
-                        // also calls CollectFloatingImages internally.
+                        // also calls CollectFloatingObjects internally.
                         // Non-list paragraph: reset all counters (list run ended).
                         Array.Clear(levelCounters, 0, MaxListDepth);
                         LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
                         continue;
                     }
                     // Floating-only: fall through to normal paragraph layout below,
-                    // which calls CollectFloatingImages at the start of EmitLinePaged.
+                    // which calls CollectFloatingObjects at the start of EmitLinePaged.
                 }
 
                 // FO4: route paragraphs with inline charts / SmartArt / WordArt to the dedicated path.
@@ -3604,19 +3599,6 @@ public sealed class DocumentView : Control
     // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Registers a page-space rect as a text-wrap exclusion zone for the given wrapping mode.
-    /// Behind and InFront objects are silently ignored (they never push text aside).
-    /// </summary>
-    private void AddWrapExclusion(Rect pageSpaceRect, ImageWrapping wrapping)
-    {
-        var zone = DocumentViewLayoutPlanner.BuildWrapExclusionZone(
-            ToPlannerRect(pageSpaceRect),
-            wrapping);
-        if (zone is not null)
-            _wrapExclusions.Add(zone);
-    }
-
-    /// <summary>
     /// Advances <c>_layoutContentY</c> past any TopAndBottom exclusion zones that would overlap
     /// a line of <paramref name="estimatedLineHeight"/> at the current position.
     /// Loops until no TopAndBottom zone overlaps, capping at 200 iterations to prevent infinite loops
@@ -3708,13 +3690,7 @@ public sealed class DocumentView : Control
         }
         var firstLineHeight = ApplyLineSpacing(firstLineNaturalH, pf);
         var anchorContentY = PeekFirstLineContentY(firstLineHeight);
-        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
-        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
-        // FO3: collect charts, WordArt, SmartArt, and drawing groups at the same accurate anchor Y.
-        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
+        CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
 
         if (marker is not null)
         {
@@ -4358,18 +4334,12 @@ public sealed class DocumentView : Control
             break;
         }
         var anchorContentY = PeekFirstLineContentY(firstImgLineH);
-        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
-        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
-        // FO3: collect charts, WordArt, SmartArt, and drawing groups at the same accurate anchor Y.
-        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
+        CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
 
         foreach (var run in paragraph.Runs)
         {
             if (run.Image is not { IsFloating: false } image)
-                continue; // Skip floating images — they are handled by CollectFloatingImages.
+                continue; // Skip floating images — they are handled by CollectFloatingObjects.
 
             var width = image.WidthPt > 0 ? image.WidthPt * PxPerPoint : 120;
             var height = image.HeightPt > 0 ? image.HeightPt * PxPerPoint : 80;
@@ -4451,12 +4421,7 @@ public sealed class DocumentView : Control
         }
         // Collect floating objects anchored to this paragraph (mirrors LayoutImageParagraphPaged).
         var anchorContentY = PeekFirstLineContentY(firstObjHeight);
-        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
-        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
-        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
-        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
+        CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
 
         // Track a virtual glyph offset so the caret can step over inline objects.
         var glyphOffset = _placed.Count > 0
@@ -4540,7 +4505,7 @@ public sealed class DocumentView : Control
                 var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
-                // Flatten nodes depth-first (mirrors CollectFloatingSmartArts).
+                // Flatten nodes depth-first for render.
                 var texts = new List<string>();
                 static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
                 {
@@ -4621,126 +4586,147 @@ public sealed class DocumentView : Control
         return bitmap;
     }
 
-    /// <summary>
-    /// Scans <paramref name="paragraph"/> for floating images and appends each one to
-    /// <c>_floatingImages</c> with its page-space rect computed from <see cref="FloatingPlacement"/>.
-    /// <paramref name="anchorContentY"/> is the content-space Y at which the paragraph starts —
-    /// used as the vertical reference when <see cref="VerticalAnchor.Paragraph"/> is set.
-    /// </summary>
-    private void CollectFloatingImages(int blockIndex, Paragraph paragraph, double anchorContentY)
+    private void CollectFloatingObjects(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+        var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+            paragraph,
+            blockIndex,
+            anchorContentY,
+            _surfacePlan,
+            _colCount);
+
+        if (snapshots.Count == 0)
+            return;
+
+        _floatingSnapshots.AddRange(snapshots);
+        _wrapExclusions.AddRange(DocumentViewLayoutPlanner.BuildFloatingWrapExclusionZones(snapshots));
+
+        foreach (var snapshot in snapshots)
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.Image is not { IsFloating: true } img)
+            if (snapshot.RunIndex < 0 || snapshot.RunIndex >= paragraph.Runs.Count)
                 continue;
 
-            var imgW = img.WidthPt  > 0 ? img.WidthPt  * PxPerPoint : 120;
-            var imgH = img.HeightPt > 0 ? img.HeightPt * PxPerPoint :  80;
+            var run = paragraph.Runs[snapshot.RunIndex];
+            var rect = ToAvaloniaRect(snapshot.Rect);
 
-            var placement = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
-                _surfacePlan,
-                anchorContentY,
-                _colCount,
-                img.HorizontalAnchor,
-                img.HorizontalOffsetPt,
-                img.VerticalAnchor,
-                img.VerticalOffsetPt);
+            switch (snapshot.Kind)
+            {
+                case DocumentFloatingObjectKind.Image when run.Image is { IsFloating: true } img:
+                    _floatingImages.Add((
+                        rect,
+                        DecodeBitmap(img),
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        snapshot.BlockIndex,
+                        snapshot.RunIndex));
+                    break;
 
-            var rect = new Rect(placement.XDip, placement.YDip, imgW, imgH);
-            var behindText = img.Wrapping == ImageWrapping.Behind;
-            // AV-FLSEL: BlockIndex/RunIndex stored for hit-test.
-            _floatingImages.Add((rect, DecodeBitmap(img), behindText, img.ZOrderIndex, blockIndex, runIdx));
-            // AV-WRAP: register exclusion zone for text-flow wrapping (Square/Tight/TopAndBottom only).
-            AddWrapExclusion(rect, img.Wrapping);
+                case DocumentFloatingObjectKind.Shape when run.Shape is { IsFloating: true } shape:
+                    _floatingShapes.Add(BuildFloatingShapeData(
+                        shape,
+                        rect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        snapshot.BlockIndex,
+                        snapshot.RunIndex));
+                    break;
+
+                case DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart:
+                    var chartData = BuildChartData(
+                        chart,
+                        rect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
+                    chartData.BlockIndex = snapshot.BlockIndex;
+                    chartData.RunIndex = snapshot.RunIndex;
+                    _floatingCharts.Add(chartData);
+                    break;
+
+                case DocumentFloatingObjectKind.WordArt when run.WordArt is { IsFloating: true } wordArt:
+                    _floatingWordArts.Add(BuildFloatingWordArtData(
+                        wordArt,
+                        rect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        snapshot.BlockIndex,
+                        snapshot.RunIndex));
+                    break;
+
+                case DocumentFloatingObjectKind.SmartArt when run.SmartArt is { IsFloating: true } smartArt:
+                    _floatingSmartArts.Add(BuildFloatingSmartArtData(
+                        smartArt,
+                        rect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        snapshot.BlockIndex,
+                        snapshot.RunIndex));
+                    break;
+
+                case DocumentFloatingObjectKind.Group when run.DrawingGroup is { } group:
+                    _floatingGroups.Add(BuildFloatingGroupData(group, snapshot));
+                    break;
+            }
         }
     }
 
-    /// <summary>
-    /// Scans <paramref name="paragraph"/> for floating shapes and appends each to <c>_floatingShapes</c>
-    /// with its page-space rect and pre-built brushes/pens. Mirrors <see cref="CollectFloatingImages"/>.
-    /// <paramref name="anchorContentY"/> is the content-space Y of the paragraph start.
-    /// </summary>
-    private void CollectFloatingShapes(int blockIndex, Paragraph paragraph, double anchorContentY)
+    private FloatingShapeData BuildFloatingShapeData(
+        Shape shape,
+        Rect rect,
+        bool behindText,
+        int zOrder,
+        int blockIndex = -1,
+        int runIndex = -1)
     {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+        IBrush? fillBrush = null;
+        if (shape.ExtendedFill is { } extFill)
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.Shape is not { IsFloating: true } shape)
-                continue;
-
-            var pl = shape.Placement!; // guaranteed non-null when IsFloating
-
-            var shapeW = shape.WidthPt  > 0 ? shape.WidthPt  * PxPerPoint : 120;
-            var shapeH = shape.HeightPt > 0 ? shape.HeightPt * PxPerPoint :  80;
-
-            var placement = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
-                _surfacePlan,
-                anchorContentY,
-                _colCount,
-                pl);
-
-            var rect = new Rect(placement.XDip, placement.YDip, shapeW, shapeH);
-            var behindText = pl.Wrapping == ImageWrapping.Behind;
-
-            // ── Fill brush ───────────────────────────────────────────────────────────
-            IBrush? fillBrush = null;
-            if (shape.ExtendedFill is { } extFill)
+            fillBrush = extFill.Kind switch
             {
-                fillBrush = extFill.Kind switch
-                {
-                    ShapeFillKind.NoFill   => null,
-                    ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(extFill, rect),
-                    ShapeFillKind.Pattern  => BuildAvaloniaPatternBrush(extFill),
-                    _                      => ParseSolidBrush(shape.FillColorHex),
-                };
-            }
-            else if (!string.IsNullOrEmpty(shape.FillColorHex))
-            {
-                fillBrush = ParseSolidBrush(shape.FillColorHex);
-            }
-
-            // ── Outline pen ──────────────────────────────────────────────────────────
-            Pen? outlinePen = null;
-            if (!string.IsNullOrEmpty(shape.OutlineColorHex))
-            {
-                var strokeBrush = ParseSolidBrush(shape.OutlineColorHex);
-                var strokeW = shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt * PxPerPoint : 1.0;
-                DashStyle? dashStyle = shape.OutlineDash?.ToLowerInvariant() switch
-                {
-                    "dash"        => new DashStyle([4, 3], 0),
-                    "sysdot"      => new DashStyle([1, 2], 0),
-                    "dashDot"
-                    or "dashdot"  => new DashStyle([4, 2, 1, 2], 0),
-                    _             => null,
-                };
-                outlinePen = dashStyle is not null
-                    ? new Pen(strokeBrush, strokeW, dashStyle)
-                    : new Pen(strokeBrush, strokeW);
-            }
-
-            // ── Text ─────────────────────────────────────────────────────────────────
-            var text = shape.HasText ? shape.PlainText : null;
-
-            _floatingShapes.Add(new FloatingShapeData
-            {
-                Rect          = rect,
-                BehindText    = behindText,
-                ZOrder        = pl.ZOrderIndex,
-                BlockIndex    = blockIndex,
-                RunIndex      = runIdx,
-                Kind          = shape.Kind,
-                CustomGeo     = shape.HasCustomGeometry ? shape.CustomGeometry : null,
-                FillBrush     = fillBrush,
-                OutlinePen    = outlinePen,
-                Text          = text,
-                RotationAngle = shape.RotationAngle,
-                FlipH         = shape.FlipH,
-                FlipV         = shape.FlipV,
-            });
-            // AV-WRAP: register exclusion zone.
-            AddWrapExclusion(rect, pl.Wrapping);
+                ShapeFillKind.NoFill => null,
+                ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(extFill, rect),
+                ShapeFillKind.Pattern => BuildAvaloniaPatternBrush(extFill),
+                _ => ParseSolidBrush(shape.FillColorHex),
+            };
         }
+        else if (!string.IsNullOrEmpty(shape.FillColorHex))
+        {
+            fillBrush = ParseSolidBrush(shape.FillColorHex);
+        }
+
+        Pen? outlinePen = null;
+        if (!string.IsNullOrEmpty(shape.OutlineColorHex))
+        {
+            var strokeBrush = ParseSolidBrush(shape.OutlineColorHex);
+            var strokeW = shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt * PxPerPoint : 1.0;
+            DashStyle? dashStyle = shape.OutlineDash?.ToLowerInvariant() switch
+            {
+                "dash" => new DashStyle([4, 3], 0),
+                "sysdot" => new DashStyle([1, 2], 0),
+                "dashDot" or "dashdot" => new DashStyle([4, 2, 1, 2], 0),
+                _ => null,
+            };
+            outlinePen = dashStyle is not null
+                ? new Pen(strokeBrush, strokeW, dashStyle)
+                : new Pen(strokeBrush, strokeW);
+        }
+
+        return new FloatingShapeData
+        {
+            Rect = rect,
+            BehindText = behindText,
+            ZOrder = zOrder,
+            BlockIndex = blockIndex,
+            RunIndex = runIndex,
+            Kind = shape.Kind,
+            CustomGeo = shape.HasCustomGeometry ? shape.CustomGeometry : null,
+            FillBrush = fillBrush,
+            OutlinePen = outlinePen,
+            Text = shape.HasText ? shape.PlainText : null,
+            RotationAngle = shape.RotationAngle,
+            FlipH = shape.FlipH,
+            FlipV = shape.FlipV,
+        };
     }
 
     /// <summary>Builds an Avalonia <see cref="LinearGradientBrush"/> from a <see cref="ShapeFill"/> gradient.</summary>
@@ -5183,48 +5169,9 @@ public sealed class DocumentView : Control
             }
         }
 
-        // Behind-text pass: merge ALL six floating types into ONE list sorted by ZOrderIndex.
-        // UU1 fix: previously images and shapes were drawn in two separate OrderBy loops so any
-        // shape always painted over any image regardless of ZOrder.
-        // XX1 fix: the FO3 wave (charts/WordArt/SmartArt/groups) was added as FOUR SEPARATE
-        // post-pass loops, re-introducing the same UU1 bug.  The WPF reference
-        // (SyncFloatingObjectsCanvas) adds ALL types to ONE list and sorts by ZOrder — we do the
-        // same here so all six types interleave correctly within each band.
-        {
-            var behindDraws = new List<(int ZOrder, Action Draw)>();
-            foreach (var fi in _floatingImages.Where(fi => fi.BehindText))
-            {
-                var (rect, bitmap, _, _, _, _) = fi;
-                behindDraws.Add((fi.ZOrder, () => DrawFloatingImage(context, rect, bitmap)));
-            }
-            foreach (var sd in _floatingShapes.Where(sd => sd.BehindText))
-            {
-                var captured = sd;
-                behindDraws.Add((sd.ZOrder, () => DrawFloatingShape(context, captured)));
-            }
-            foreach (var cd in _floatingCharts.Where(c => c.BehindText))
-            {
-                var captured = cd;
-                behindDraws.Add((cd.ZOrder, () => DrawFloatingChart(context, captured)));
-            }
-            foreach (var wd in _floatingWordArts.Where(w => w.BehindText))
-            {
-                var captured = wd;
-                behindDraws.Add((wd.ZOrder, () => DrawFloatingWordArt(context, captured)));
-            }
-            foreach (var sd in _floatingSmartArts.Where(s => s.BehindText))
-            {
-                var captured = sd;
-                behindDraws.Add((sd.ZOrder, () => DrawFloatingSmartArt(context, captured)));
-            }
-            foreach (var gd in _floatingGroups.Where(g => g.BehindText))
-            {
-                var captured = gd;
-                behindDraws.Add((gd.ZOrder, () => DrawFloatingGroup(context, captured)));
-            }
-            foreach (var (_, draw) in behindDraws.OrderBy(d => d.ZOrder))
-                draw();
-        }
+        // Behind-text pass: planner snapshots merge all floating kinds into one z-ordered band.
+        foreach (var snapshot in DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: true))
+            DrawFloatingObjectSnapshot(context, snapshot);
 
         // Inline images (non-floating).
         foreach (var (rect, bitmap) in _images)
@@ -5377,44 +5324,11 @@ public sealed class DocumentView : Control
         }
 
         // In-front pass: same merged ZOrder logic for all six types (UU1 + XX1 fix).
-        {
-            var frontDraws = new List<(int ZOrder, Action Draw)>();
-            foreach (var fi in _floatingImages.Where(fi => !fi.BehindText))
-            {
-                var (rect, bitmap, _, _, _, _) = fi;
-                frontDraws.Add((fi.ZOrder, () => DrawFloatingImage(context, rect, bitmap)));
-            }
-            foreach (var sd in _floatingShapes.Where(sd => !sd.BehindText))
-            {
-                var captured = sd;
-                frontDraws.Add((sd.ZOrder, () => DrawFloatingShape(context, captured)));
-            }
-            foreach (var cd in _floatingCharts.Where(c => !c.BehindText))
-            {
-                var captured = cd;
-                frontDraws.Add((cd.ZOrder, () => DrawFloatingChart(context, captured)));
-            }
-            foreach (var wd in _floatingWordArts.Where(w => !w.BehindText))
-            {
-                var captured = wd;
-                frontDraws.Add((wd.ZOrder, () => DrawFloatingWordArt(context, captured)));
-            }
-            foreach (var sd in _floatingSmartArts.Where(s => !s.BehindText))
-            {
-                var captured = sd;
-                frontDraws.Add((sd.ZOrder, () => DrawFloatingSmartArt(context, captured)));
-            }
-            foreach (var gd in _floatingGroups.Where(g => !g.BehindText))
-            {
-                var captured = gd;
-                frontDraws.Add((gd.ZOrder, () => DrawFloatingGroup(context, captured)));
-            }
-            foreach (var (_, draw) in frontDraws.OrderBy(d => d.ZOrder))
-                draw();
-        }
+        foreach (var snapshot in DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(_floatingSnapshots, behindText: false))
+            DrawFloatingObjectSnapshot(context, snapshot);
 
         // HF: draw header/footer items (pre-computed in BuildHeaderFooterItems). The in-front floating
-        // objects are already drawn by the unified z-ordered frontDraws pass above.
+        // objects are already drawn by the planner-ordered front pass above.
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
             foreach (var item in _headerFooterItems)
@@ -5557,6 +5471,53 @@ public sealed class DocumentView : Control
     /// Renders a single floating image (or a placeholder rect if the bitmap could not be decoded).
     /// Shared by the behind-text and in-front passes in <see cref="Render"/>.
     /// </summary>
+    private void DrawFloatingObjectSnapshot(DrawingContext context, DocumentFloatingObjectSnapshot snapshot)
+    {
+        switch (snapshot.Kind)
+        {
+            case DocumentFloatingObjectKind.Image:
+                foreach (var image in _floatingImages)
+                {
+                    if (image.BlockIndex == snapshot.BlockIndex && image.RunIndex == snapshot.RunIndex)
+                    {
+                        DrawFloatingImage(context, image.Rect, image.Image);
+                        return;
+                    }
+                }
+                break;
+
+            case DocumentFloatingObjectKind.Shape:
+                if (_floatingShapes.FirstOrDefault(shape =>
+                        shape.BlockIndex == snapshot.BlockIndex && shape.RunIndex == snapshot.RunIndex) is { } shape)
+                    DrawFloatingShape(context, shape);
+                break;
+
+            case DocumentFloatingObjectKind.Chart:
+                if (_floatingCharts.FirstOrDefault(chart =>
+                        chart.BlockIndex == snapshot.BlockIndex && chart.RunIndex == snapshot.RunIndex) is { } chart)
+                    DrawFloatingChart(context, chart);
+                break;
+
+            case DocumentFloatingObjectKind.WordArt:
+                if (_floatingWordArts.FirstOrDefault(wordArt =>
+                        wordArt.BlockIndex == snapshot.BlockIndex && wordArt.RunIndex == snapshot.RunIndex) is { } wordArt)
+                    DrawFloatingWordArt(context, wordArt);
+                break;
+
+            case DocumentFloatingObjectKind.SmartArt:
+                if (_floatingSmartArts.FirstOrDefault(smartArt =>
+                        smartArt.BlockIndex == snapshot.BlockIndex && smartArt.RunIndex == snapshot.RunIndex) is { } smartArt)
+                    DrawFloatingSmartArt(context, smartArt);
+                break;
+
+            case DocumentFloatingObjectKind.Group:
+                if (_floatingGroups.FirstOrDefault(group =>
+                        group.BlockIndex == snapshot.BlockIndex && group.RunIndex == snapshot.RunIndex) is { } group)
+                    DrawFloatingGroup(context, group);
+                break;
+        }
+    }
+
     private void DrawFloatingImage(DrawingContext context, Rect rect, Bitmap? bitmap)
     {
         if (bitmap is not null)
@@ -6126,44 +6087,13 @@ public sealed class DocumentView : Control
         hit = default;
         if (_laidOutWidth < 0) Relayout(FallbackWidth);
 
-        // Gather all candidates into one list sorted by: BehindText ascending (in-front first),
-        // then ZOrder descending (highest z-order first). This mirrors the Word rule that in-front
-        // objects always beat behind-text objects; within each band the topmost z-order wins.
-        var candidates = new List<(bool BehindText, int ZOrder, int BlockIndex, int RunIndex, string Kind, Rect Rect)>();
+        var winner = DocumentViewLayoutPlanner.HitTestFloatingObject(
+            _floatingSnapshots,
+            ToPlannerPoint(point));
+        if (winner is null)
+            return false;
 
-        foreach (var fi in _floatingImages)
-            if (fi.Rect.Contains(point))
-                candidates.Add((fi.BehindText, fi.ZOrder, fi.BlockIndex, fi.RunIndex, "Image", fi.Rect));
-
-        foreach (var sd in _floatingShapes)
-            if (sd.Rect.Contains(point))
-                candidates.Add((sd.BehindText, sd.ZOrder, sd.BlockIndex, sd.RunIndex, "Shape", sd.Rect));
-
-        foreach (var cd in _floatingCharts)
-            if (cd.Rect.Contains(point))
-                candidates.Add((cd.BehindText, cd.ZOrder, cd.BlockIndex, cd.RunIndex, "Chart", cd.Rect));
-
-        foreach (var wd in _floatingWordArts)
-            if (wd.Rect.Contains(point))
-                candidates.Add((wd.BehindText, wd.ZOrder, wd.BlockIndex, wd.RunIndex, "WordArt", wd.Rect));
-
-        foreach (var sa in _floatingSmartArts)
-            if (sa.Rect.Contains(point))
-                candidates.Add((sa.BehindText, sa.ZOrder, sa.BlockIndex, sa.RunIndex, "SmartArt", sa.Rect));
-
-        foreach (var gd in _floatingGroups)
-            if (gd.Rect.Contains(point))
-                candidates.Add((gd.BehindText, gd.ZOrder, gd.BlockIndex, gd.RunIndex, "Group", gd.Rect));
-
-        if (candidates.Count == 0) return false;
-
-        // In-front (BehindText=false) wins over behind-text; within each band highest ZOrder wins.
-        var winner = candidates
-            .OrderBy(c => c.BehindText ? 1 : 0)   // false (in-front) first
-            .ThenByDescending(c => c.ZOrder)
-            .First();
-
-        hit = (winner.BlockIndex, winner.RunIndex, winner.Kind, winner.Rect);
+        hit = (winner.BlockIndex, winner.RunIndex, winner.TypeTag, ToAvaloniaRect(winner.Rect));
         return true;
     }
 
@@ -6217,36 +6147,12 @@ public sealed class DocumentView : Control
     /// </summary>
     private void RefreshSelectedFloatingRect(int blockIndex, int runIndex, string kind)
     {
-        Rect? found = null;
-        switch (kind)
-        {
-            case "Image":
-                foreach (var fi in _floatingImages)
-                    if (fi.BlockIndex == blockIndex && fi.RunIndex == runIndex) { found = fi.Rect; break; }
-                break;
-            case "Shape":
-                foreach (var sd in _floatingShapes)
-                    if (sd.BlockIndex == blockIndex && sd.RunIndex == runIndex) { found = sd.Rect; break; }
-                break;
-            case "Chart":
-                foreach (var cd in _floatingCharts)
-                    if (cd.BlockIndex == blockIndex && cd.RunIndex == runIndex) { found = cd.Rect; break; }
-                break;
-            case "WordArt":
-                foreach (var wd in _floatingWordArts)
-                    if (wd.BlockIndex == blockIndex && wd.RunIndex == runIndex) { found = wd.Rect; break; }
-                break;
-            case "SmartArt":
-                foreach (var sa in _floatingSmartArts)
-                    if (sa.BlockIndex == blockIndex && sa.RunIndex == runIndex) { found = sa.Rect; break; }
-                break;
-            case "Group":
-                foreach (var gd in _floatingGroups)
-                    if (gd.BlockIndex == blockIndex && gd.RunIndex == runIndex) { found = gd.Rect; break; }
-                break;
-        }
-        if (found.HasValue)
-            _selectedFloating = (blockIndex, runIndex, kind, found.Value);
+        var found = _floatingSnapshots.FirstOrDefault(snapshot =>
+            snapshot.BlockIndex == blockIndex
+            && snapshot.RunIndex == runIndex
+            && snapshot.TypeTag == kind);
+        if (found is not null)
+            _selectedFloating = (blockIndex, runIndex, kind, ToAvaloniaRect(found.Rect));
         else
             _selectedFloating = null; // object was deleted / moved out of view
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -10837,255 +10743,121 @@ public sealed class DocumentView : Control
 
     // ── FO3 collection helpers ────────────────────────────────────────────────────────────────────
 
-    /// <summary>Resolves floating-placement page-space position through the neutral layout planner.</summary>
-    private (double X, double Y) ResolveFloatingPos(FloatingPlacement pl, double anchorContentY)
-    {
-        var placement = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
-            _surfacePlan,
-            anchorContentY,
-            _colCount,
-            pl);
-
-        return (placement.XDip, placement.YDip);
-    }
-
-    /// <summary>Collects floating charts anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingCharts(int blockIndex, Paragraph paragraph, double anchorContentY)
-    {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+    private static FloatingWordArtData BuildFloatingWordArtData(
+        WordArt wordArt,
+        Rect rect,
+        bool behindText,
+        int zOrder,
+        int blockIndex = -1,
+        int runIndex = -1) =>
+        new()
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.Chart is not { IsFloating: true } chart)
-                continue;
+            Rect = rect,
+            BehindText = behindText,
+            ZOrder = zOrder,
+            BlockIndex = blockIndex,
+            RunIndex = runIndex,
+            Text = wordArt.Text,
+            Style = wordArt.Style,
+            FontSizePt = wordArt.FontSizePt,
+            Warp = wordArt.Warp,
+        };
 
-            var pl = chart.Placement!;
-            var w  = chart.WidthPt  > 0 ? chart.WidthPt  * PxPerPoint : 360 * PxPerPoint;
-            var h  = chart.HeightPt > 0 ? chart.HeightPt * PxPerPoint : 216 * PxPerPoint;
-            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
-
-            var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
-            var chartRect = new Rect(x, y, w, h);
-            var cd = BuildChartData(chart, chartRect, pl.Wrapping == ImageWrapping.Behind, pl.ZOrderIndex, series);
-            cd.BlockIndex = blockIndex;
-            cd.RunIndex   = runIdx;
-            _floatingCharts.Add(cd);
-            // AV-WRAP: register exclusion zone.
-            AddWrapExclusion(chartRect, pl.Wrapping);
-        }
-    }
-
-    /// <summary>Collects floating WordArt anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingWordArts(int blockIndex, Paragraph paragraph, double anchorContentY)
+    private static FloatingSmartArtData BuildFloatingSmartArtData(
+        SmartArt smartArt,
+        Rect rect,
+        bool behindText,
+        int zOrder,
+        int blockIndex = -1,
+        int runIndex = -1)
     {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+        var texts = new List<string>();
+        FlattenNodes(smartArt.Nodes, texts);
+
+        return new FloatingSmartArtData
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.WordArt is not { IsFloating: true } wa)
-                continue;
+            Rect = rect,
+            BehindText = behindText,
+            ZOrder = zOrder,
+            BlockIndex = blockIndex,
+            RunIndex = runIndex,
+            Kind = smartArt.Kind,
+            NodeTexts = texts,
+        };
 
-            var pl = wa.Placement!;
-            // WordArt width: estimate from text length × font size × scaling factor (no explicit WidthPt on model).
-            var w = Math.Max(72, wa.FontSizePt * Math.Max(1, wa.Text.Length) * 0.62) * PxPerPoint;
-            var h = Math.Max(40, wa.FontSizePt * 1.6) * PxPerPoint;
-            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
-
-            var waRect = new Rect(x, y, w, h);
-            _floatingWordArts.Add(new FloatingWordArtData
+        static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
+        {
+            foreach (var node in nodes)
             {
-                Rect       = waRect,
-                BehindText = pl.Wrapping == ImageWrapping.Behind,
-                ZOrder     = pl.ZOrderIndex,
-                BlockIndex = blockIndex,
-                RunIndex   = runIdx,
-                Text       = wa.Text,
-                Style      = wa.Style,
-                FontSizePt = wa.FontSizePt,
-                Warp       = wa.Warp,
-            });
-            // AV-WRAP: register exclusion zone.
-            AddWrapExclusion(waRect, pl.Wrapping);
-        }
-    }
-
-    /// <summary>Collects floating SmartArt diagrams anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingSmartArts(int blockIndex, Paragraph paragraph, double anchorContentY)
-    {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
-        {
-            var run = paragraph.Runs[runIdx];
-            if (run.SmartArt is not { IsFloating: true } sa)
-                continue;
-
-            var pl = sa.Placement!;
-            var w  = sa.WidthPt  > 0 ? sa.WidthPt  * PxPerPoint : 468 * PxPerPoint;
-            var h  = sa.HeightPt > 0 ? sa.HeightPt * PxPerPoint : 216 * PxPerPoint;
-            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
-
-            // Flatten node texts depth-first for render.
-            var texts = new List<string>();
-            static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
-            {
-                foreach (var n in nodes)
-                {
-                    into.Add(n.Text);
-                    FlattenNodes(n.Children, into);
-                }
+                into.Add(node.Text);
+                FlattenNodes(node.Children, into);
             }
-            FlattenNodes(sa.Nodes, texts);
-
-            var saRect = new Rect(x, y, w, h);
-            _floatingSmartArts.Add(new FloatingSmartArtData
-            {
-                Rect       = saRect,
-                BehindText = pl.Wrapping == ImageWrapping.Behind,
-                ZOrder     = pl.ZOrderIndex,
-                BlockIndex = blockIndex,
-                RunIndex   = runIdx,
-                Kind       = sa.Kind,
-                NodeTexts  = texts,
-            });
-            // AV-WRAP: register exclusion zone.
-            AddWrapExclusion(saRect, pl.Wrapping);
         }
     }
 
-    /// <summary>Collects floating drawing groups anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingGroups(int blockIndex, Paragraph paragraph, double anchorContentY)
+    private FloatingGroupData BuildFloatingGroupData(
+        FreeW.Core.Model.DrawingGroup group,
+        DocumentFloatingObjectSnapshot snapshot)
     {
-        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
+        var children = new List<FloatingGroupChildData>();
+        foreach (var childSnapshot in DocumentViewLayoutPlanner.BuildFloatingGroupChildSnapshots(group, snapshot.Rect))
         {
-            var run = paragraph.Runs[runIdx];
-            if (run.DrawingGroup is not { } grp)
+            if (childSnapshot.ChildIndex < 0 || childSnapshot.ChildIndex >= group.Children.Count)
                 continue;
 
-            var pl = grp.Placement;
-            var gw = grp.WidthPt  > 0 ? grp.WidthPt  * PxPerPoint : 144 * PxPerPoint;
-            var gh = grp.HeightPt > 0 ? grp.HeightPt * PxPerPoint :  72 * PxPerPoint;
-            var (gx, gy) = ResolveFloatingPos(pl, anchorContentY);
-            var groupRect = new Rect(gx, gy, gw, gh);
+            var child = group.Children[childSnapshot.ChildIndex];
+            var childRect = ToAvaloniaRect(childSnapshot.Rect);
+            var childData = new FloatingGroupChildData { Rect = childRect };
 
-            var behindText = pl.Wrapping == ImageWrapping.Behind;
-            var children   = new List<FloatingGroupChildData>();
-
-            for (var i = 0; i < grp.Children.Count; i++)
+            switch (childSnapshot.Kind)
             {
-                var child = grp.Children[i];
-                var offX  = i < grp.ChildOffsets.Count ? grp.ChildOffsets[i].X * PxPerPoint : 0;
-                var offY  = i < grp.ChildOffsets.Count ? grp.ChildOffsets[i].Y * PxPerPoint : 0;
-                var cw    = grp.ChildWidthPt(i)  * PxPerPoint;
-                var ch    = grp.ChildHeightPt(i) * PxPerPoint;
-                var childRect = new Rect(gx + offX, gy + offY, cw, ch);
+                case DocumentFloatingObjectKind.Image when child is InlineImage img:
+                    childData.Kind = FloatingGroupChildData.ChildKind.Image;
+                    childData.Bitmap = DecodeBitmap(img);
+                    break;
 
-                var cd = new FloatingGroupChildData { Rect = childRect };
-                switch (child)
-                {
-                    case InlineImage img:
-                        cd.Kind   = FloatingGroupChildData.ChildKind.Image;
-                        cd.Bitmap = DecodeBitmap(img);
-                        break;
+                case DocumentFloatingObjectKind.Shape when child is Shape shape:
+                    childData.Kind = FloatingGroupChildData.ChildKind.Shape;
+                    childData.Shape = BuildFloatingShapeData(shape, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    break;
 
-                    case Shape s:
-                    {
-                        cd.Kind = FloatingGroupChildData.ChildKind.Shape;
-                        IBrush? fb = null;
-                        if (s.ExtendedFill is { } ef)
-                        {
-                            fb = ef.Kind switch
-                            {
-                                ShapeFillKind.NoFill   => null,
-                                ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(ef, childRect),
-                                ShapeFillKind.Pattern  => BuildAvaloniaPatternBrush(ef),
-                                _                      => ParseSolidBrush(s.FillColorHex),
-                            };
-                        }
-                        else if (!string.IsNullOrEmpty(s.FillColorHex))
-                        {
-                            fb = ParseSolidBrush(s.FillColorHex);
-                        }
+                case DocumentFloatingObjectKind.Chart when child is Chart chart:
+                    childData.Kind = FloatingGroupChildData.ChildKind.Chart;
+                    childData.Chart = BuildChartData(
+                        chart,
+                        childRect,
+                        snapshot.BehindText,
+                        snapshot.ZOrderIndex,
+                        chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
+                    break;
 
-                        Pen? op = null;
-                        if (!string.IsNullOrEmpty(s.OutlineColorHex))
-                        {
-                            var sw = s.OutlineWidthPt > 0 ? s.OutlineWidthPt * PxPerPoint : 1.0;
-                            op = new Pen(ParseSolidBrush(s.OutlineColorHex) ?? Brushes.Black, sw);
-                        }
+                case DocumentFloatingObjectKind.WordArt when child is WordArt wordArt:
+                    childData.Kind = FloatingGroupChildData.ChildKind.WordArt;
+                    childData.WordArt = BuildFloatingWordArtData(wordArt, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    break;
 
-                        cd.Shape = new FloatingShapeData
-                        {
-                            Rect          = childRect,
-                            BehindText    = behindText,
-                            ZOrder        = pl.ZOrderIndex,
-                            Kind          = s.Kind,
-                            CustomGeo     = s.HasCustomGeometry ? s.CustomGeometry : null,
-                            FillBrush     = fb,
-                            OutlinePen    = op,
-                            Text          = s.HasText ? s.PlainText : null,
-                            RotationAngle = s.RotationAngle,
-                            FlipH         = s.FlipH,
-                            FlipV         = s.FlipV,
-                        };
-                        break;
-                    }
+                case DocumentFloatingObjectKind.SmartArt when child is SmartArt smartArt:
+                    childData.Kind = FloatingGroupChildData.ChildKind.SmartArt;
+                    childData.SmartArt = BuildFloatingSmartArtData(smartArt, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
+                    break;
 
-                    case Chart c:
-                        cd.Kind = FloatingGroupChildData.ChildKind.Chart;
-                        cd.Chart = BuildChartData(c, childRect, behindText, pl.ZOrderIndex,
-                            c.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
-                        break;
-
-                    case WordArt wa:
-                        cd.Kind = FloatingGroupChildData.ChildKind.WordArt;
-                        cd.WordArt = new FloatingWordArtData
-                        {
-                            Rect       = childRect,
-                            BehindText = behindText,
-                            ZOrder     = pl.ZOrderIndex,
-                            Text       = wa.Text,
-                            Style      = wa.Style,
-                            FontSizePt = wa.FontSizePt,
-                            Warp       = wa.Warp,
-                        };
-                        break;
-
-                    case SmartArt sa:
-                    {
-                        var texts = new List<string>();
-                        static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
-                        {
-                            foreach (var n in nodes) { into.Add(n.Text); FlattenNodes(n.Children, into); }
-                        }
-                        FlattenNodes(sa.Nodes, texts);
-                        cd.Kind = FloatingGroupChildData.ChildKind.SmartArt;
-                        cd.SmartArt = new FloatingSmartArtData
-                        {
-                            Rect       = childRect,
-                            BehindText = behindText,
-                            ZOrder     = pl.ZOrderIndex,
-                            Kind       = sa.Kind,
-                            NodeTexts  = texts,
-                        };
-                        break;
-                    }
-                }
-
-                children.Add(cd);
+                default:
+                    continue;
             }
 
-            _floatingGroups.Add(new FloatingGroupData
-            {
-                Rect       = groupRect,
-                BehindText = behindText,
-                ZOrder     = pl.ZOrderIndex,
-                BlockIndex = blockIndex,
-                RunIndex   = runIdx,
-                Children   = children,
-            });
-            // AV-WRAP: register exclusion zone using the group's overall bounding rect.
-            AddWrapExclusion(groupRect, pl.Wrapping);
+            children.Add(childData);
         }
-    }
 
-    // ── FO3 draw helpers ──────────────────────────────────────────────────────────────────────────
+        return new FloatingGroupData
+        {
+            Rect = ToAvaloniaRect(snapshot.Rect),
+            BehindText = snapshot.BehindText,
+            ZOrder = snapshot.ZOrderIndex,
+            BlockIndex = snapshot.BlockIndex,
+            RunIndex = snapshot.RunIndex,
+            Children = children,
+        };
+    }
 
     // Colour palette for chart series — matches Word's default colorful1 scheme.
     private static readonly Color[] ChartSeriesColors =

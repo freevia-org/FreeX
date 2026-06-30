@@ -558,7 +558,7 @@ public sealed class DocumentViewLayoutPlannerTests
 public sealed class DocumentViewLayoutPlannerSourceGuardTests
 {
     [Fact]
-    public void PlatformDocumentViews_DelegatePageAndColumnGeometryToPresentationPlanner()
+    public void PlatformDocumentViews_DelegatePageColumnAndFloatingPlanningToPresentationPlanner()
     {
         var hostSource = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avaloniaSource = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
@@ -567,12 +567,17 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildPageMetrics(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildColumnPlan(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(");
-        hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(");
+        hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(");
+        hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(");
 
         avaloniaSource.Should().Contain("using FreeW.App.Presentation.DocumentView;");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildSurfacePlan(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildColumnPlan(");
-        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(");
+        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(");
+        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingWrapExclusionZones(");
+        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(");
+        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.HitTestFloatingObject(");
+        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingGroupChildSnapshots(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingHandleRects(");
@@ -598,6 +603,25 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         source.Should().NotContain("var freeLeft  = rect.Left");
         source.Should().NotContain("var hx = new[] { rect.X");
         source.Should().NotContain("right  = Math.Max(pointer.X");
+    }
+
+    [Fact]
+    public void AvaloniaDocumentView_DoesNotReownFloatingObjectPlanning()
+    {
+        var source = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        source.Should().NotContain("DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(");
+        source.Should().NotContain("private void AddWrapExclusion(");
+        source.Should().NotContain("private void CollectFloatingImages(");
+        source.Should().NotContain("private void CollectFloatingShapes(");
+        source.Should().NotContain("private void CollectFloatingCharts(");
+        source.Should().NotContain("private void CollectFloatingWordArts(");
+        source.Should().NotContain("private void CollectFloatingSmartArts(");
+        source.Should().NotContain("private void CollectFloatingGroups(");
+        source.Should().NotContain("private (double X, double Y) ResolveFloatingPos(");
+        source.Should().NotContain("var candidates = new List<(bool BehindText, int ZOrder");
+        source.Should().NotContain("var behindDraws = new List<(int ZOrder, Action Draw)>");
+        source.Should().NotContain("var frontDraws = new List<(int ZOrder, Action Draw)>");
     }
 
     private static string ReadSource(params string[] relativeParts)
