@@ -28,14 +28,20 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false)");
         source.Should().Contain("_fileWorkflow.MarkDirty();");
         source.Should().Contain("PromptSaveChangesSync");
+        source.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
+        source.Should().Contain("AvaloniaSaveChangesPromptText.ForDocumentAction(");
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         source.Should().NotContain("private string? _currentPath");
         source.Should().NotContain("private bool _isDirty");
+        source.Should().NotContain("private async Task<SaveChangesPrompt> ShowSaveChangesPromptAsync");
+        source.Should().NotContain("Do you want to save changes to");
+        source.Should().NotContain("Content = \"Don't save\"");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         source.Should().NotContain("new FileCommandSession");
         source.Should().NotContain("v1: proceed without a save-changes dialog");
         project.Should().Contain(@"..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj");
+        project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
     }
 
     private static string FindRepositoryRoot()

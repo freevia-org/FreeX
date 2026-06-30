@@ -446,48 +446,13 @@ public sealed class MainWindow : Window
     }
 
     private SaveChangesPrompt PromptSaveChangesSync(string action) =>
-        ShowSaveChangesPromptAsync(_fileWorkflow.DisplayName, action).GetAwaiter().GetResult();
-
-    private async Task<SaveChangesPrompt> ShowSaveChangesPromptAsync(string displayName, string action)
-    {
-        var dialog = new Window
-        {
-            Title = DefaultTitle,
-            Width = 420,
-            Height = 170,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        };
-
-        var message = new TextBlock
-        {
-            Text = $"Do you want to save changes to \"{displayName}\" before {action}?",
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var save = new Button { Content = "Save", MinWidth = 82, IsDefault = true };
-        save.Click += (_, _) => dialog.Close(SaveChangesPrompt.Save);
-
-        var dontSave = new Button { Content = "Don't save", MinWidth = 82, Margin = new Thickness(8, 0, 0, 0) };
-        dontSave.Click += (_, _) => dialog.Close(SaveChangesPrompt.DontSave);
-
-        var cancel = new Button { Content = "Cancel", MinWidth = 82, IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
-        cancel.Click += (_, _) => dialog.Close(SaveChangesPrompt.Cancel);
-
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-            Children = { save, dontSave, cancel },
-        };
-
-        dialog.Content = new StackPanel { Children = { message, buttons } };
-
-        var result = await dialog.ShowDialog<object?>(this);
-        return result is SaveChangesPrompt prompt ? prompt : SaveChangesPrompt.Cancel;
-    }
+        AvaloniaSaveChangesDialog.ShowAsync(
+                this,
+                AvaloniaSaveChangesPromptText.ForDocumentAction(
+                    DefaultTitle,
+                    _fileWorkflow.DisplayName,
+                    action))
+            .GetAwaiter().GetResult();
 
     private void FileNew()
     {
