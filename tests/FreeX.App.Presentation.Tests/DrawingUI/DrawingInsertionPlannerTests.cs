@@ -24,6 +24,7 @@ public sealed class DrawingInsertionPlannerTests
     {
         DrawingInsertionPlanner.ShapeGroups.Should().NotBeEmpty();
         DrawingInsertionPlanner.ShapeGroups.SelectMany(group => group.Items).Should().OnlyContain(item => Enum.IsDefined(item.Kind));
+        DrawingInsertionPlanner.ShapeGroups.SelectMany(group => group.MenuItems).Should().OnlyContain(item => Enum.IsDefined(item.Kind));
         DrawingInsertionPlanner.ShapeGroups.Select(group => group.Label).Should().OnlyContain(label => !string.IsNullOrWhiteSpace(label));
         DrawingInsertionPlanner.ShapeItems.Select(item => item.Label).Should().OnlyContain(label => !string.IsNullOrWhiteSpace(label));
     }
@@ -41,6 +42,18 @@ public sealed class DrawingInsertionPlannerTests
                 "Flowchart",
                 "Stars and Banners",
                 "Callouts");
+    }
+
+    [Fact]
+    public void ShapeCatalog_ExposesRenderReadyChildMenuKeyTips()
+    {
+        var rectangles = DrawingInsertionPlanner.ShapeGroups.Single(group => group.Label == "Rectangles");
+        rectangles.KeyTip.Should().Be("2");
+        rectangles.Items.Single(item => item.Label == "Rectangle").KeyTip.Should().Be("R");
+        rectangles.MenuItems.Single(item => item.Label == "Rectangle").KeyTip.Should().Be("2R");
+
+        var flowchart = DrawingInsertionPlanner.ShapeGroups.Single(group => group.Label == "Flowchart");
+        flowchart.MenuItems.Single(item => item.Label == "Decision").KeyTip.Should().Be("6D");
     }
 
     [Theory]

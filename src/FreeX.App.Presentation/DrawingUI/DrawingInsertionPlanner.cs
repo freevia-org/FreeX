@@ -5,7 +5,13 @@ namespace FreeX.App.Presentation.DrawingUI;
 
 public sealed record DrawingShapeGalleryItem(DrawingShapeKind Kind, string Label, string KeyTip);
 
-public sealed record DrawingShapeGalleryGroup(string Label, string KeyTip, IReadOnlyList<DrawingShapeGalleryItem> Items);
+public sealed record DrawingShapeGalleryMenuItem(DrawingShapeKind Kind, string Label, string KeyTip);
+
+public sealed record DrawingShapeGalleryGroup(string Label, string KeyTip, IReadOnlyList<DrawingShapeGalleryItem> Items)
+{
+    public IReadOnlyList<DrawingShapeGalleryMenuItem> MenuItems { get; } =
+        Items.Select(item => new DrawingShapeGalleryMenuItem(item.Kind, item.Label, KeyTip + item.KeyTip)).ToArray();
+}
 
 /// <summary>
 /// Portable insertion catalog and command factory for drawing shapes and text boxes. Renderers own menus,

@@ -40,6 +40,24 @@ public sealed class TableDesignCommandSourceTests
     }
 
     [Fact]
+    public void TableDesignStyleGallery_ConsumesSharedSurfaceDescriptor()
+    {
+        var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
+
+        source.Should().Contain("TableStyleGalleryPlanner.GetSurface(_workbook.Theme)");
+        source.Should().Contain("foreach (var group in surface.Groups)");
+        source.Should().Contain("foreach (var item in group.Items)");
+        source.Should().Contain("Header = CreateFormatTableGalleryHeader(item)");
+        source.Should().Contain("Tag = item");
+        source.Should().Contain("RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);");
+        source.Should().Contain("ApplyStructuredTableStyle(item.Option);");
+        source.Should().NotContain("TableStyleGalleryPlanner.GetOptions(_workbook.Theme)");
+        source.Should().NotContain("option.Label.Split");
+        source.Should().NotContain("CultureInfo.InvariantCulture");
+        source.Should().NotContain("option.Label[(family.Length + 1)..]");
+    }
+
+    [Fact]
     public void TableDesignDeferredSliceHandlers_RouteThroughModelCommandsAndPivotCreationApis()
     {
         var source = ReadHostSourceFile("MainWindow.TableDesignCommands.cs");
