@@ -2,6 +2,7 @@ using System.Globalization;
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Series;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -92,7 +93,7 @@ public static partial class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -180,7 +181,7 @@ public static partial class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -406,7 +407,7 @@ public static partial class ChartRenderer
     }
 
     private static double GetStackedLabelValue(ChartModel chart, bool normalizeToPercent, double sourceValue, double displayValue) =>
-        normalizeToPercent && ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
+        normalizeToPercent && ChartDataLabelTextPlanner.ShouldRenderPercentageLabels(chart)
             ? displayValue / 100
             : sourceValue;
 }

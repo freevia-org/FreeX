@@ -369,7 +369,7 @@ public static partial class ChartRenderer
             var midAngle = accumulatedAngle + sweep / 2.0;
             accumulatedAngle += sweep;
 
-            var value = ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
+            var value = ChartDataLabelTextPlanner.ShouldRenderPercentageLabels(chart)
                 ? positiveValue / total
                 : point.Value;
             var position = GetPieDataLabelPosition(chart.DataLabelPosition, midAngle);
@@ -377,7 +377,7 @@ public static partial class ChartRenderer
             {
                 XAxisKey = PieAnnotationXAxisKey,
                 YAxisKey = PieAnnotationYAxisKey,
-                Text = ChartDataLabelFormatter.FormatDataLabel(chart, seriesName, point.CategoryName, value),
+                Text = ChartDataLabelTextPlanner.FormatDataLabel(chart, seriesName, point.CategoryName, value),
                 TextPosition = position,
                 TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
                 TextVerticalAlignment = OxyPlot.VerticalAlignment.Middle,
@@ -583,7 +583,7 @@ public static partial class ChartRenderer
         var fillColor = pointFormat?.ResolveFillColor(theme) ?? chart.ResolveDataLabelFillColor(theme);
         model.Annotations.Add(new TextAnnotation
         {
-            Text = ChartDataLabelFormatter.FormatDataLabel(chart, seriesName, categoryName, value),
+            Text = ChartDataLabelTextPlanner.FormatDataLabel(chart, seriesName, categoryName, value),
             TextPosition = new DataPoint(x, y),
             TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
             TextVerticalAlignment = chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd
@@ -626,7 +626,7 @@ public static partial class ChartRenderer
                 seriesName,
                 seriesIndex,
                 pointIndex,
-                ChartDataLabelFormatter.GetCategory(categories, (int)Math.Round(point.X)),
+                ChartDataLabelTextPlanner.GetCategory(categories, (int)Math.Round(point.X)),
                 point.X,
                 point.Y,
                 point.Y);

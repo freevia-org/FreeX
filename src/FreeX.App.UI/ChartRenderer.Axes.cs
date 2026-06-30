@@ -1,6 +1,7 @@
 using OxyPlot;
 using OxyPlot.Axes;
 
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -49,7 +50,7 @@ public static partial class ChartRenderer
                 if (ChartTypeSupport.SupportsXAxisBounds(chart.Type) &&
                     chart.XAxisNumberFormat != ChartDataLabelNumberFormat.General &&
                     axis.LabelFormatter is null)
-                    axis.LabelFormatter = value => FormatAxisValue(chart.XAxisNumberFormat, value);
+                    axis.LabelFormatter = value => ChartDataLabelTextPlanner.FormatAxisValue(chart.XAxisNumberFormat, value);
                 ApplyGridlineStyle(
                     axis,
                     chart.ShowXAxisMajorGridlines,
@@ -78,7 +79,7 @@ public static partial class ChartRenderer
                 if (ChartTypeSupport.SupportsYAxisBounds(chart.Type) &&
                     chart.YAxisNumberFormat != ChartDataLabelNumberFormat.General &&
                     axis.LabelFormatter is null)
-                    axis.LabelFormatter = value => FormatAxisValue(chart.YAxisNumberFormat, value);
+                    axis.LabelFormatter = value => ChartDataLabelTextPlanner.FormatAxisValue(chart.YAxisNumberFormat, value);
                 ApplyGridlineStyle(
                     axis,
                     chart.ShowYAxisMajorGridlines,
@@ -230,15 +231,6 @@ public static partial class ChartRenderer
             ChartAxisTickStyle.Inside => TickStyle.Inside,
             ChartAxisTickStyle.Cross => TickStyle.Crossing,
             _ => TickStyle.Outside
-        };
-
-    private static string FormatAxisValue(ChartDataLabelNumberFormat format, double value) =>
-        format switch
-        {
-            ChartDataLabelNumberFormat.Number => value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", System.Globalization.CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Percent => value.ToString("0%", System.Globalization.CultureInfo.InvariantCulture),
-            _ => value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
         };
 
     private static bool ShouldUseLogAxis(ChartModel chart, Axis axis) =>
