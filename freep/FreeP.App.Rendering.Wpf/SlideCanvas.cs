@@ -454,9 +454,10 @@ public sealed class SlideCanvas : FrameworkElement
             bitmap = cropped;
         }
 
-        // 18A: apply colour effects (grayscale, brightness/contrast, biLevel, alpha)
-        if (pic.Grayscale || pic.BiLevelThreshold.HasValue || pic.Brightness.HasValue || pic.Contrast.HasValue || pic.AlphaModPct.HasValue)
-            bitmap = ApplyColorEffectsWpf(bitmap, pic);
+        // 18A: apply colour effects (grayscale, brightness/contrast, biLevel)
+        var effectPlan = PictureColorEffectPlanner.Plan(pic);
+        if (effectPlan.HasPixelEffects)
+            bitmap = ApplyColorEffectsWpf(bitmap, effectPlan);
 
         var dest = new Rect(pic.DestDip.X, pic.DestDip.Y, pic.DestDip.Width, pic.DestDip.Height);
 
@@ -497,7 +498,7 @@ public sealed class SlideCanvas : FrameworkElement
     /// Returns a new (frozen) <see cref="WriteableBitmap"/> with effects applied.
     /// Alpha is handled separately via PushOpacity — only pixel-level effects are done here.
     /// </summary>
-    private static BitmapSource ApplyColorEffectsWpf(BitmapSource src, DrawOp.Picture pic)
+    private static BitmapSource ApplyColorEffectsWpf(BitmapSource src, PictureColorEffectPlan effectPlan)
     {
         // Convert to Bgra32 for direct pixel access
         var bgra = new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
@@ -507,62 +508,7 @@ public sealed class SlideCanvas : FrameworkElement
         var pixels = new byte[ph * stride];
         bgra.CopyPixels(pixels, stride, 0);
 
-        bool doGray    = pic.Grayscale;
-        bool doBiLevel = pic.BiLevelThreshold.HasValue;
-        double biThresh = doBiLevel ? pic.BiLevelThreshold!.Value : 0;
-        bool doLum     = pic.Brightness.HasValue || pic.Contrast.HasValue;
-        double bright  = pic.Brightness ?? 0;
-        double contrast = pic.Contrast  ?? 0;
-
-        for (int i = 0; i < pixels.Length; i += 4)
-        {
-            double b = pixels[i]     / 255.0;
-            double g = pixels[i + 1] / 255.0;
-            double r = pixels[i + 2] / 255.0;
-            // a = pixels[i + 3] — untouched here; AlphaModPct handled via PushOpacity
-
-            // Grayscale: luminosity-preserving (ITU-R BT.709)
-            if (doGray)
-            {
-                double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                r = g = b = lum;
-            }
-
-            // Brightness/contrast (PowerPoint model: brightness shifts midpoint, contrast scales range)
-            if (doLum)
-            {
-                // Apply brightness (additive offset)
-                r = Math.Clamp(r + bright, 0, 1);
-                g = Math.Clamp(g + bright, 0, 1);
-                b = Math.Clamp(b + bright, 0, 1);
-
-                // Apply contrast (scale around 0.5)
-                if (contrast > 0)
-                {
-                    r = Math.Clamp((r - 0.5) / (1 - contrast) + 0.5, 0, 1);
-                    g = Math.Clamp((g - 0.5) / (1 - contrast) + 0.5, 0, 1);
-                    b = Math.Clamp((b - 0.5) / (1 - contrast) + 0.5, 0, 1);
-                }
-                else if (contrast < 0)
-                {
-                    r = Math.Clamp((r - 0.5) * (1 + contrast) + 0.5, 0, 1);
-                    g = Math.Clamp((g - 0.5) * (1 + contrast) + 0.5, 0, 1);
-                    b = Math.Clamp((b - 0.5) * (1 + contrast) + 0.5, 0, 1);
-                }
-            }
-
-            // BiLevel: threshold to pure black or white (after grayscale/lum)
-            if (doBiLevel)
-            {
-                double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                double bw  = lum >= biThresh ? 1.0 : 0.0;
-                r = g = b = bw;
-            }
-
-            pixels[i]     = (byte)(b * 255);
-            pixels[i + 1] = (byte)(g * 255);
-            pixels[i + 2] = (byte)(r * 255);
-        }
+        PictureColorEffectPlanner.ApplyToBgra32(pixels, effectPlan);
 
         var wb = new WriteableBitmap(pw, ph, bgra.DpiX, bgra.DpiY, PixelFormats.Bgra32, null);
         wb.WritePixels(new Int32Rect(0, 0, pw, ph), pixels, stride, 0);

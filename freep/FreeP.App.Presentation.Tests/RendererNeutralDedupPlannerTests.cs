@@ -66,6 +66,68 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void PictureColorEffectPlanner_AppliesGrayscaleAndPreservesAlpha()
+    {
+        byte[] pixels =
+        [
+            0, 0, 255, 7,
+            0, 255, 0, 8,
+            255, 0, 0, 9
+        ];
+
+        PictureColorEffectPlanner.ApplyToBgra32(
+            pixels,
+            new PictureColorEffectPlan(
+                Grayscale: true,
+                BiLevelThreshold: null,
+                Brightness: null,
+                Contrast: null));
+
+        pixels.Should().Equal(
+        [
+            54, 54, 54, 7,
+            182, 182, 182, 8,
+            18, 18, 18, 9
+        ]);
+    }
+
+    [Fact]
+    public void PictureColorEffectPlanner_AppliesBrightnessContrastAndBiLevelInRendererOrder()
+    {
+        byte[] pixels =
+        [
+            0, 0, 0, 77,
+            128, 128, 128, 88,
+            255, 255, 255, 99
+        ];
+
+        PictureColorEffectPlanner.ApplyToBgra32(
+            pixels,
+            new PictureColorEffectPlan(
+                Grayscale: false,
+                BiLevelThreshold: 0.5,
+                Brightness: 0.25,
+                Contrast: -0.5));
+
+        pixels.Should().Equal(
+        [
+            0, 0, 0, 77,
+            255, 255, 255, 88,
+            255, 255, 255, 99
+        ]);
+    }
+
+    [Fact]
+    public void PictureColorEffectPlanner_PixelPlanIgnoresAlphaOnlyOpacity()
+    {
+        var alphaOnly = PictureColorEffectPlanner.Plan(new DrawOp.Picture { AlphaModPct = 0.5 });
+        alphaOnly.HasPixelEffects.Should().BeFalse();
+
+        var withBrightness = PictureColorEffectPlanner.Plan(new DrawOp.Picture { Brightness = 0.1 });
+        withBrightness.HasPixelEffects.Should().BeTrue();
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralShapeAndWarpPlanners()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -87,6 +149,25 @@ public sealed class RendererNeutralDedupPlannerTests
 
         wpf.Should().NotContain("BuildShapeTransform");
         avalonia.Should().NotContain("BuildShapeMatrix");
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralPictureColorEffectPlanner()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("PictureColorEffectPlanner.Plan");
+            source.Should().Contain("PictureColorEffectPlanner.ApplyToBgra32");
+            source.Should().NotContain("0.2126 * r + 0.7152 * g + 0.0722 * b");
+            source.Should().NotContain("pic.Brightness ?? 0");
+            source.Should().NotContain("pic.Contrast  ?? 0");
+        }
     }
 
     [Fact]
