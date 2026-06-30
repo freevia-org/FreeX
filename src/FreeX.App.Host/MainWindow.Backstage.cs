@@ -572,9 +572,9 @@ public partial class MainWindow
 
     private async Task OpenFileAsync(string path, bool suppressRecentFiles = false)
     {
-        var ext = System.IO.Path.GetExtension(path).ToLower();
-        var adapter = FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format);
-        if (adapter == null) return;
+        if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path, out var target, out _))
+            return;
+        var ext = FileFormatResolver.NormalizeExtension(target!.Extension);
         if (_isOpeningFile) return;
         _isOpeningFile = true;
         using var operationCancellation = BeginFileOperationCancellation();
@@ -583,13 +583,19 @@ public partial class MainWindow
             if (!await CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")))
                 return;
 
-            _operationProgressFileName = System.IO.Path.GetFileName(path);
+            _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowOpenProgress(CreateOpenProgress("preparing", TimeSpan.Zero, 1));
 
             var progress = new Progress<OpenProgressUpdate>(
                 update => ShowOpenProgress(update.Title, update.Detail, update.Percent));
             var loader = new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook));
-            var result = await loader.LoadAsync(path, adapter, ext, format!, progress, operationCancellation.Token);
+            var result = await loader.LoadAsync(
+                target.Path,
+                target.Adapter,
+                ext,
+                target.Format,
+                progress,
+                operationCancellation.Token);
             operationCancellation.Token.ThrowIfCancellationRequested();
 
             CloseFindReplaceDialogIfOpen();
@@ -610,7 +616,7 @@ public partial class MainWindow
                     : 0;
             _currentSheetId = _workbook.Sheets[activeSheetIndex].Id;
             InvalidateNavigationCaches();
-            _currentFilePath = result.OpenedAsTemplate ? null : path;
+            _currentFilePath = result.OpenedAsTemplate ? null : target.Path;
             UpdateTitleBar();
             MarkWorkbookSaved();
             // Notify sibling windows so they rebind their viewports to the new workbook.
@@ -620,7 +626,7 @@ public partial class MainWindow
 
             RecentFileRegistrationService.RegisterIfNeeded(
                 _recentFiles,
-                new RecentFileRegistrationRequest(path, suppressRecentFiles));
+                new RecentFileRegistrationRequest(target.Path, suppressRecentFiles));
             ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
             operationCancellation.Token.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
@@ -633,7 +639,7 @@ public partial class MainWindow
             {
                 ["extension"] = ext,
                 ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = format?.FormatName,
+                ["format"] = target.Format.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
         }
@@ -643,7 +649,7 @@ public partial class MainWindow
             {
                 ["extension"] = ext,
                 ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = format?.FormatName
+                ["format"] = target.Format.FormatName
             });
         }
         catch (Exception ex)
@@ -652,7 +658,7 @@ public partial class MainWindow
             {
                 ["extension"] = ext,
                 ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
-                ["format"] = format?.FormatName,
+                ["format"] = target.Format.FormatName,
                 ["reason"] = ex.GetType().Name
             });
             ShowOwnedMessage(
