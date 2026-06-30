@@ -194,26 +194,11 @@ public sealed partial class MainWindow
         // ---- Preview panel (right side) ------------------------------------------------------------
         var preview = BuildChartTypePreviewPanel(panel.Preview);
 
-        var dialog = new Window
-        {
-            Title = UiText.Get("ChangeChartType_Title"),
-            SizeToContent = SizeToContent.WidthAndHeight,
-            MinWidth = 600,
-            Background = Brushes.White,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, "ChangeChartTypeDialog");
+        var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
+        dialog.MinWidth = 600;
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
-        AutomationProperties.SetAutomationId(okButton, "ChangeChartTypeOkButton");
-        ApplyChartButtonChrome(okButton, 80, isDefault: true);
+        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChangeChartType");
         okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);
-
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
-        AutomationProperties.SetAutomationId(cancelButton, "ChangeChartTypeCancelButton");
-        ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
 
         // Body grid: category list | subtype gallery | preview.
@@ -265,14 +250,7 @@ public sealed partial class MainWindow
                     Margin = new Thickness(0, 0, 0, 4),
                 },
                 bodyGrid,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Margin = new Thickness(0, 8, 0, 0),
-                    Children = { okButton, cancelButton },
-                },
+                buttonRow,
             },
         };
 
@@ -584,21 +562,12 @@ public sealed partial class MainWindow
         RefreshLists();
 
         // ---- Dialog layout -------------------------------------------------------------------
-        var dialog = new Window
-        {
-            Title = UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey),
-            SizeToContent = SizeToContent.WidthAndHeight,
-            MinWidth = 460,
-            Background = Brushes.White,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, SelectDataSourcePlanner.DialogAutomationId);
+        var dialog = NewChartDialog(
+            UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey),
+            SelectDataSourcePlanner.DialogAutomationId);
+        dialog.MinWidth = 460;
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
-        AutomationProperties.SetAutomationId(okButton, "SelectChartDataOkButton");
-        ApplyChartButtonChrome(okButton, 80, isDefault: true);
+        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("SelectChartData");
         okButton.Click += (_, _) =>
         {
             var rangeText = rangeBox.Text ?? string.Empty;
@@ -614,10 +583,6 @@ public sealed partial class MainWindow
                 categoriesCheck.IsChecked == true,
                 switchRowColumnCheck.IsChecked == true));
         };
-
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
-        AutomationProperties.SetAutomationId(cancelButton, "SelectChartDataCancelButton");
-        ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close((SelectDataSourceResult?)null);
 
         // Helper to build a panel with a list on the left and buttons stacked on the right.
@@ -659,15 +624,9 @@ public sealed partial class MainWindow
         ApplyChartButtonChrome(hiddenEmptyButton, 180);
         hiddenEmptyButton.Click += async (_, _) =>
         {
-            var infoDialog = new Window
-            {
-                Title = UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey),
-                SizeToContent = SizeToContent.WidthAndHeight,
-                Background = Brushes.White,
-                CanResize = false,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                ShowInTaskbar = false,
-            };
+            var infoDialog = NewChartDialog(
+                UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey),
+                "SelectChartDataHiddenEmptyDialog");
             var closeBtn = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
             ApplyChartButtonChrome(closeBtn, 80, isDefault: true);
             closeBtn.Click += (_, _) => infoDialog.Close();
@@ -686,12 +645,7 @@ public sealed partial class MainWindow
                         TextWrapping = TextWrapping.Wrap,
                         MaxWidth = 340,
                     },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                        Children = { closeBtn },
-                    },
+                    CreateChartDialogActionRow([closeBtn]),
                 },
             };
             await infoDialog.ShowDialog(dialog);
@@ -722,14 +676,7 @@ public sealed partial class MainWindow
                 categoriesCheck,
                 hiddenEmptyButton,
                 // OK / Cancel
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Margin = new Thickness(0, 4, 0, 0),
-                    Children = { okButton, cancelButton },
-                },
+                buttonRow,
             },
         };
 
@@ -786,27 +733,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(yAxisBox, "ChartYAxisTitleBox");
         ApplyChartTextBoxChrome(yAxisBox);
 
-        var dialog = new Window
-        {
-            Title = UiText.Get("ChartLoc_ChartTitlesTitle"),
-            SizeToContent = SizeToContent.WidthAndHeight,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, "ChartTitlesDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartLoc_ChartTitlesTitle"), "ChartTitlesDialog");
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
-        AutomationProperties.SetAutomationId(okButton, "ChartTitlesOkButton");
-        ApplyChartButtonChrome(okButton, 80, isDefault: true);
+        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartTitles");
         okButton.Click += (_, _) => dialog.Close(((string, string, string)?)(
             chartTitleBox.Text ?? string.Empty,
             xAxisBox.Text ?? string.Empty,
             yAxisBox.Text ?? string.Empty));
-
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
-        AutomationProperties.SetAutomationId(cancelButton, "ChartTitlesCancelButton");
-        ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close(((string, string, string)?)null);
 
         dialog.Content = new StackPanel
@@ -822,13 +755,7 @@ public sealed partial class MainWindow
                 xAxisBox,
                 new TextBlock { Text = UiText.Get("ChartLoc_VerticalAxisTitleLabel"), FontSize = 12 },
                 yAxisBox,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children = { okButton, cancelButton },
-                },
+                buttonRow,
             },
         };
 
@@ -884,19 +811,9 @@ public sealed partial class MainWindow
             positionChoices.FirstOrDefault(c => c.Position == position)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
 
-        var dialog = new Window
-        {
-            Title = UiText.Get("ChartLoc_LegendTitle"),
-            SizeToContent = SizeToContent.WidthAndHeight,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, "ChartLegendDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartLoc_LegendTitle"), "ChartLegendDialog");
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
-        AutomationProperties.SetAutomationId(okButton, "ChartLegendOkButton");
-        ApplyChartButtonChrome(okButton, 80, isDefault: true);
+        var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartLegend");
         okButton.Click += (_, _) =>
         {
             var chosenPosition = positionCombo.SelectedItem is ChartLegendPositionChoice picked
@@ -904,10 +821,6 @@ public sealed partial class MainWindow
                 : ChartLegendPosition.Right;
             dialog.Close((ChartLegendInput?)new ChartLegendInput(showCheck.IsChecked == true, chosenPosition));
         };
-
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
-        AutomationProperties.SetAutomationId(cancelButton, "ChartLegendCancelButton");
-        ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close((ChartLegendInput?)null);
 
         dialog.Content = new StackPanel
@@ -920,13 +833,7 @@ public sealed partial class MainWindow
                 showCheck,
                 new TextBlock { Text = UiText.Get("ChartLoc_LegendPositionLabel"), FontSize = 12 },
                 positionCombo,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children = { okButton, cancelButton },
-                },
+                buttonRow,
             },
         };
 
