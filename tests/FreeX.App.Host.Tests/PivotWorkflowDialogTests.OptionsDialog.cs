@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FluentAssertions;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -316,25 +317,15 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotStyleCatalog_ListsBuiltInLightMediumAndDarkStylesAndPreservesCustomCurrentStyle()
+    public void PivotStyleGalleryDialog_UsesPresentationPlannerForCatalogSelectionAndResult()
     {
-        var styleNames = PivotStyleCatalog.GetStyleNames("  MyWorkbookPivotStyle  ");
+        var source = DialogSourceTestSupport.ReadHostSources("PivotStyleGalleryDialog.cs");
 
-        styleNames.Should().HaveCount(85);
-        styleNames.Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"));
-        styleNames.Skip(28).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"));
-        styleNames.Skip(56).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}"));
-        styleNames[^1].Should().Be("MyWorkbookPivotStyle");
-    }
-
-    [Fact]
-    public void PivotStyleCatalog_DoesNotDuplicateBuiltInCurrentStyle()
-    {
-        PivotStyleCatalog.GetStyleNames("pivotstylemedium10")
-            .Should()
-            .HaveCount(84)
-            .And
-            .ContainSingle(styleName => string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase));
+        source.Should().Contain("public PivotStyleGalleryValues Result { get; private set; }");
+        source.Should().Contain("PivotStyleGalleryPlanner.CreateResult(styleName)");
+        source.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(styleName)");
+        source.Should().Contain("PivotStyleGalleryPlanner.FindStyleIndex(styleNames, styleName)");
+        source.Should().NotContain("PivotStyleCatalog");
     }
 
     [Fact]
@@ -368,11 +359,11 @@ public sealed partial class PivotWorkflowDialogTests
     {
         PivotStyleGalleryDialog.CreateResult("  PivotStyleDark28  ")
             .Should()
-            .Be(new PivotStyleGalleryDialogResult("PivotStyleDark28"));
+            .Be(new PivotStyleGalleryValues("PivotStyleDark28"));
 
         PivotStyleGalleryDialog.CreateResult("  ")
             .Should()
-            .Be(new PivotStyleGalleryDialogResult("PivotStyleLight16"));
+            .Be(new PivotStyleGalleryValues("PivotStyleLight16"));
     }
 
     [Fact]
