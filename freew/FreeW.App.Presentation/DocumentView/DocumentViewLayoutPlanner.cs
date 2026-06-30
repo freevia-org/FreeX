@@ -167,6 +167,37 @@ public sealed record DocumentFloatingLineExclusionPlan(
     double LeftDeltaDip,
     double RightShrinkDip);
 
+public enum DocumentFloatingObjectKind
+{
+    Image,
+    Shape,
+    Chart,
+    WordArt,
+    SmartArt,
+    Group
+}
+
+public sealed record DocumentFloatingObjectSnapshot(
+    DocumentFloatingObjectKind Kind,
+    int BlockIndex,
+    int RunIndex,
+    DocumentFloatRect Rect,
+    bool BehindText,
+    int ZOrderIndex,
+    ImageWrapping Wrapping)
+{
+    public string TypeTag => Kind switch
+    {
+        DocumentFloatingObjectKind.SmartArt => "SmartArt",
+        _ => Kind.ToString()
+    };
+}
+
+public sealed record DocumentFloatingGroupChildSnapshot(
+    DocumentFloatingObjectKind Kind,
+    int ChildIndex,
+    DocumentFloatRect Rect);
+
 public static class DocumentViewLayoutPlanner
 {
     private const double DefaultWrapGapDip = 9.0;
@@ -336,6 +367,222 @@ public static class DocumentViewLayoutPlanner
         };
 
         return new DocumentFloatingObjectPlacementPlan(xDip, yDip, anchorPageIndex);
+    }
+
+    public static IReadOnlyList<DocumentFloatingObjectSnapshot> BuildFloatingObjectSnapshots(
+        TextDocument document,
+        DocumentViewSurfacePlan surface,
+        int columnCount,
+        double anchorContentYDip = 0)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(surface);
+
+        var snapshots = new List<DocumentFloatingObjectSnapshot>();
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            if (document.Blocks[blockIndex] is not Paragraph paragraph)
+                continue;
+
+            snapshots.AddRange(BuildFloatingObjectSnapshots(
+                paragraph,
+                blockIndex,
+                anchorContentYDip,
+                surface,
+                columnCount));
+        }
+
+        return snapshots;
+    }
+
+    public static IReadOnlyList<DocumentFloatingObjectSnapshot> BuildFloatingObjectSnapshots(
+        Paragraph paragraph,
+        int blockIndex,
+        double anchorContentYDip,
+        DocumentViewSurfacePlan surface,
+        int columnCount)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(surface);
+
+        var snapshots = new List<DocumentFloatingObjectSnapshot>();
+        for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+        {
+            var run = paragraph.Runs[runIndex];
+            if (run.Image is { IsFloating: true } image)
+            {
+                AddSnapshot(
+                    snapshots,
+                    DocumentFloatingObjectKind.Image,
+                    blockIndex,
+                    runIndex,
+                    surface,
+                    anchorContentYDip,
+                    columnCount,
+                    image.WidthPt,
+                    image.HeightPt,
+                    defaultWidthPt: 120,
+                    defaultHeightPt: 80,
+                    image.Wrapping,
+                    image.ZOrderIndex,
+                    image.HorizontalAnchor,
+                    image.HorizontalOffsetPt,
+                    image.VerticalAnchor,
+                    image.VerticalOffsetPt);
+            }
+            else if (run.Shape is { IsFloating: true, Placement: { } shapePlacement } shape)
+            {
+                AddSnapshot(
+                    snapshots,
+                    DocumentFloatingObjectKind.Shape,
+                    blockIndex,
+                    runIndex,
+                    surface,
+                    anchorContentYDip,
+                    columnCount,
+                    shape.WidthPt,
+                    shape.HeightPt,
+                    defaultWidthPt: 120,
+                    defaultHeightPt: 80,
+                    shapePlacement);
+            }
+            else if (run.Chart is { IsFloating: true, Placement: { } chartPlacement } chart)
+            {
+                AddSnapshot(
+                    snapshots,
+                    DocumentFloatingObjectKind.Chart,
+                    blockIndex,
+                    runIndex,
+                    surface,
+                    anchorContentYDip,
+                    columnCount,
+                    chart.WidthPt,
+                    chart.HeightPt,
+                    defaultWidthPt: 360,
+                    defaultHeightPt: 216,
+                    chartPlacement);
+            }
+            else if (run.WordArt is { IsFloating: true, Placement: { } wordArtPlacement } wordArt)
+            {
+                AddSnapshot(
+                    snapshots,
+                    DocumentFloatingObjectKind.WordArt,
+                    blockIndex,
+                    runIndex,
+                    surface,
+                    anchorContentYDip,
+                    columnCount,
+                    EstimateWordArtWidthPt(wordArt),
+                    EstimateWordArtHeightPt(wordArt),
+                    defaultWidthPt: 72,
+                    defaultHeightPt: 40,
+                    wordArtPlacement);
+            }
+            else if (run.SmartArt is { IsFloating: true, Placement: { } smartArtPlacement } smartArt)
+            {
+                AddSnapshot(
+                    snapshots,
+                    DocumentFloatingObjectKind.SmartArt,
+                    blockIndex,
+                    runIndex,
+                    surface,
+                    anchorContentYDip,
+                    columnCount,
+                    smartArt.WidthPt,
+                    smartArt.HeightPt,
+                    defaultWidthPt: 468,
+                    defaultHeightPt: 216,
+                    smartArtPlacement);
+            }
+            else if (run.DrawingGroup is { } group)
+            {
+                AddSnapshot(
+                    snapshots,
+                    DocumentFloatingObjectKind.Group,
+                    blockIndex,
+                    runIndex,
+                    surface,
+                    anchorContentYDip,
+                    columnCount,
+                    group.WidthPt,
+                    group.HeightPt,
+                    defaultWidthPt: 144,
+                    defaultHeightPt: 72,
+                    group.Placement);
+            }
+        }
+
+        return snapshots;
+    }
+
+    public static IReadOnlyList<DocumentFloatingObjectSnapshot> BuildFloatingObjectDrawOrder(
+        IEnumerable<DocumentFloatingObjectSnapshot> snapshots,
+        bool behindText)
+    {
+        ArgumentNullException.ThrowIfNull(snapshots);
+
+        return snapshots
+            .Where(snapshot => snapshot.BehindText == behindText)
+            .OrderBy(snapshot => snapshot.ZOrderIndex)
+            .ThenBy(snapshot => snapshot.BlockIndex)
+            .ThenBy(snapshot => snapshot.RunIndex)
+            .ToList();
+    }
+
+    public static DocumentFloatingObjectSnapshot? HitTestFloatingObject(
+        IEnumerable<DocumentFloatingObjectSnapshot> snapshots,
+        DocumentFloatPoint point)
+    {
+        ArgumentNullException.ThrowIfNull(snapshots);
+
+        return snapshots
+            .Where(snapshot => snapshot.Rect.Contains(point))
+            .OrderBy(snapshot => snapshot.BehindText ? 1 : 0)
+            .ThenByDescending(snapshot => snapshot.ZOrderIndex)
+            .ThenByDescending(snapshot => snapshot.BlockIndex)
+            .ThenByDescending(snapshot => snapshot.RunIndex)
+            .FirstOrDefault();
+    }
+
+    public static IReadOnlyList<DocumentFloatingWrapExclusionZone> BuildFloatingWrapExclusionZones(
+        IEnumerable<DocumentFloatingObjectSnapshot> snapshots)
+    {
+        ArgumentNullException.ThrowIfNull(snapshots);
+
+        return snapshots
+            .Select(snapshot => BuildWrapExclusionZone(snapshot.Rect, snapshot.Wrapping))
+            .OfType<DocumentFloatingWrapExclusionZone>()
+            .ToList();
+    }
+
+    public static IReadOnlyList<DocumentFloatingGroupChildSnapshot> BuildFloatingGroupChildSnapshots(
+        DrawingGroup group,
+        DocumentFloatRect groupRect)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+
+        var children = new List<DocumentFloatingGroupChildSnapshot>();
+        for (var childIndex = 0; childIndex < group.Children.Count; childIndex++)
+        {
+            if (!TryGetFloatingKind(group.Children[childIndex], out var kind))
+                continue;
+
+            var (offsetXPt, offsetYPt) = childIndex < group.ChildOffsets.Count
+                ? group.ChildOffsets[childIndex]
+                : (0.0, 0.0);
+            var widthDip = PageLayout.PointsToDip(group.ChildWidthPt(childIndex));
+            var heightDip = PageLayout.PointsToDip(group.ChildHeightPt(childIndex));
+            children.Add(new DocumentFloatingGroupChildSnapshot(
+                kind,
+                childIndex,
+                new DocumentFloatRect(
+                    groupRect.XDip + PageLayout.PointsToDip(offsetXPt),
+                    groupRect.YDip + PageLayout.PointsToDip(offsetYPt),
+                    widthDip,
+                    heightDip)));
+        }
+
+        return children;
     }
 
     public static DocumentViewSurfacePlan BuildFloatingOverlaySurfacePlan(
@@ -658,6 +905,102 @@ public static class DocumentViewLayoutPlanner
             topDip,
             Math.Max(minimumDip, rightDip - leftDip),
             Math.Max(minimumDip, bottomDip - topDip));
+    }
+
+    private static void AddSnapshot(
+        ICollection<DocumentFloatingObjectSnapshot> snapshots,
+        DocumentFloatingObjectKind kind,
+        int blockIndex,
+        int runIndex,
+        DocumentViewSurfacePlan surface,
+        double anchorContentYDip,
+        int columnCount,
+        double widthPt,
+        double heightPt,
+        double defaultWidthPt,
+        double defaultHeightPt,
+        FloatingPlacement placement)
+    {
+        AddSnapshot(
+            snapshots,
+            kind,
+            blockIndex,
+            runIndex,
+            surface,
+            anchorContentYDip,
+            columnCount,
+            widthPt,
+            heightPt,
+            defaultWidthPt,
+            defaultHeightPt,
+            placement.Wrapping,
+            placement.ZOrderIndex,
+            placement.HorizontalAnchor,
+            placement.HorizontalOffsetPt,
+            placement.VerticalAnchor,
+            placement.VerticalOffsetPt);
+    }
+
+    private static void AddSnapshot(
+        ICollection<DocumentFloatingObjectSnapshot> snapshots,
+        DocumentFloatingObjectKind kind,
+        int blockIndex,
+        int runIndex,
+        DocumentViewSurfacePlan surface,
+        double anchorContentYDip,
+        int columnCount,
+        double widthPt,
+        double heightPt,
+        double defaultWidthPt,
+        double defaultHeightPt,
+        ImageWrapping wrapping,
+        int zOrderIndex,
+        HorizontalAnchor horizontalAnchor,
+        double horizontalOffsetPt,
+        VerticalAnchor verticalAnchor,
+        double verticalOffsetPt)
+    {
+        var placement = BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip,
+            columnCount,
+            horizontalAnchor,
+            horizontalOffsetPt,
+            verticalAnchor,
+            verticalOffsetPt);
+        var widthDip = PageLayout.PointsToDip(widthPt > 0 ? widthPt : defaultWidthPt);
+        var heightDip = PageLayout.PointsToDip(heightPt > 0 ? heightPt : defaultHeightPt);
+
+        snapshots.Add(new DocumentFloatingObjectSnapshot(
+            kind,
+            blockIndex,
+            runIndex,
+            new DocumentFloatRect(placement.XDip, placement.YDip, widthDip, heightDip),
+            wrapping == ImageWrapping.Behind,
+            zOrderIndex,
+            wrapping));
+    }
+
+    private static double EstimateWordArtWidthPt(WordArt wordArt) =>
+        Math.Max(72, wordArt.FontSizePt * Math.Max(1, wordArt.Text.Length) * 0.62);
+
+    private static double EstimateWordArtHeightPt(WordArt wordArt) =>
+        Math.Max(40, wordArt.FontSizePt * 1.6);
+
+    private static bool TryGetFloatingKind(object modelObject, out DocumentFloatingObjectKind kind)
+    {
+        kind = modelObject switch
+        {
+            InlineImage => DocumentFloatingObjectKind.Image,
+            Shape => DocumentFloatingObjectKind.Shape,
+            Chart => DocumentFloatingObjectKind.Chart,
+            WordArt => DocumentFloatingObjectKind.WordArt,
+            SmartArt => DocumentFloatingObjectKind.SmartArt,
+            DrawingGroup => DocumentFloatingObjectKind.Group,
+            _ => default
+        };
+
+        return modelObject is InlineImage or Shape or Chart or WordArt or SmartArt or DrawingGroup;
     }
 
     private static DocumentViewSurfacePlan BuildPrintSurfacePlan(

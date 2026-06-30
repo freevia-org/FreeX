@@ -366,6 +366,193 @@ public sealed class DocumentViewLayoutPlannerTests
         resized.Should().Be(new DocumentFloatRect(10, 20, 140, 120));
         clamped.Should().Be(new DocumentFloatRect(10, 20, 20, 20));
     }
+
+    [Fact]
+    public void BuildFloatingObjectSnapshots_CollectsEveryFloatingKindAndWrapZones()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+        var paragraph = BuildAllFloatingKindsParagraph();
+
+        var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+            paragraph,
+            blockIndex: 2,
+            anchorContentYDip: 100,
+            surface,
+            columnCount: 1);
+
+        snapshots.Select(snapshot => snapshot.Kind).Should().Equal(
+            DocumentFloatingObjectKind.Image,
+            DocumentFloatingObjectKind.Shape,
+            DocumentFloatingObjectKind.Chart,
+            DocumentFloatingObjectKind.WordArt,
+            DocumentFloatingObjectKind.SmartArt,
+            DocumentFloatingObjectKind.Group);
+        snapshots.Should().OnlyContain(snapshot => snapshot.BlockIndex == 2);
+
+        var image = snapshots[0];
+        image.Rect.Should().Be(new DocumentFloatRect(144, 232, 96, 48));
+        image.ZOrderIndex.Should().Be(3);
+        image.BehindText.Should().BeFalse();
+        image.TypeTag.Should().Be("Image");
+
+        snapshots[1].BehindText.Should().BeTrue();
+        snapshots[4].TypeTag.Should().Be("SmartArt");
+
+        var wrapZones = DocumentViewLayoutPlanner.BuildFloatingWrapExclusionZones(snapshots);
+        wrapZones.Select(zone => zone.Wrapping).Should().Equal(
+            ImageWrapping.Square,
+            ImageWrapping.Tight,
+            ImageWrapping.TopAndBottom,
+            ImageWrapping.Square);
+    }
+
+    [Fact]
+    public void BuildFloatingObjectDrawOrder_OrdersMergedKindsInsideEachBand()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+        var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+            BuildAllFloatingKindsParagraph(),
+            blockIndex: 0,
+            anchorContentYDip: 0,
+            surface,
+            columnCount: 1);
+
+        DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: true)
+            .Select(snapshot => (snapshot.ZOrderIndex, snapshot.TypeTag))
+            .Should().Equal((1, "Shape"));
+
+        DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: false)
+            .Select(snapshot => (snapshot.ZOrderIndex, snapshot.TypeTag))
+            .Should().Equal(
+                (3, "Image"),
+                (5, "WordArt"),
+                (7, "SmartArt"),
+                (9, "Chart"),
+                (11, "Group"));
+    }
+
+    [Fact]
+    public void HitTestFloatingObject_PrefersFrontBandThenHighestZOrder()
+    {
+        var rect = new DocumentFloatRect(10, 20, 100, 80);
+        var snapshots = new[]
+        {
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Shape, 0, 0, rect, BehindText: true, ZOrderIndex: 100, ImageWrapping.Behind),
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Image, 0, 1, rect, BehindText: false, ZOrderIndex: 2, ImageWrapping.Square),
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Chart, 0, 2, rect, BehindText: false, ZOrderIndex: 8, ImageWrapping.InFront),
+        };
+
+        var hit = DocumentViewLayoutPlanner.HitTestFloatingObject(
+            snapshots,
+            new DocumentFloatPoint(40, 50));
+
+        hit.Should().NotBeNull();
+        hit!.Kind.Should().Be(DocumentFloatingObjectKind.Chart);
+        hit.ZOrderIndex.Should().Be(8);
+
+        DocumentViewLayoutPlanner.HitTestFloatingObject(
+            snapshots,
+            new DocumentFloatPoint(200, 50))
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildFloatingGroupChildSnapshots_ResolvesChildKindsAndOffsets()
+    {
+        var group = new DrawingGroup();
+        group.Children.Add(new InlineImage([1], widthPt: 36, heightPt: 18));
+        group.Children.Add(new Shape { Kind = ShapeKind.Ellipse, WidthPt = 24, HeightPt = 12 });
+        group.Children.Add(Chart.Create(ChartKind.Column, ["A"], [4]));
+        group.Children.Add(WordArt.Create("Arc", fontSizePt: 20));
+        group.Children.Add(SmartArt.Create(SmartArtKind.Process, ["Plan", "Ship"]));
+        group.ChildOffsets.Add((0, 0));
+        group.ChildOffsets.Add((9, 6));
+        group.ChildOffsets.Add((18, 12));
+        group.ChildOffsets.Add((27, 18));
+        group.ChildOffsets.Add((36, 24));
+
+        var snapshots = DocumentViewLayoutPlanner.BuildFloatingGroupChildSnapshots(
+            group,
+            new DocumentFloatRect(100, 200, 300, 400));
+
+        snapshots.Select(snapshot => snapshot.Kind).Should().Equal(
+            DocumentFloatingObjectKind.Image,
+            DocumentFloatingObjectKind.Shape,
+            DocumentFloatingObjectKind.Chart,
+            DocumentFloatingObjectKind.WordArt,
+            DocumentFloatingObjectKind.SmartArt);
+        snapshots[1].Rect.Should().Be(new DocumentFloatRect(112, 208, 32, 16));
+        snapshots[4].Rect.XDip.Should().BeApproximately(148, 0.01);
+        snapshots[4].Rect.YDip.Should().BeApproximately(232, 0.01);
+    }
+
+    private static Paragraph BuildAllFloatingKindsParagraph()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(string.Empty)
+        {
+            Image = new InlineImage([1], widthPt: 72, heightPt: 36)
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 18,
+                VerticalOffsetPt = 9,
+                ZOrderIndex = 3,
+            }
+        });
+        paragraph.Runs.Add(Run.FromShape(new Shape
+        {
+            WidthPt = 90,
+            HeightPt = 45,
+            Placement = Floating(ImageWrapping.Behind, zOrder: 1, horizontalOffsetPt: 36, verticalOffsetPt: 18),
+        }));
+        paragraph.Runs.Add(Run.FromChart(new Chart
+        {
+            Kind = ChartKind.Column,
+            WidthPt = 180,
+            HeightPt = 90,
+            Placement = Floating(ImageWrapping.InFront, zOrder: 9, horizontalOffsetPt: 54, verticalOffsetPt: 27),
+        }));
+        paragraph.Runs.Add(Run.FromWordArt(new WordArt("Go", fontSizePt: 24)
+        {
+            Placement = Floating(ImageWrapping.Tight, zOrder: 5, horizontalOffsetPt: 72, verticalOffsetPt: 36),
+        }));
+        paragraph.Runs.Add(Run.FromSmartArt(new SmartArt
+        {
+            Kind = SmartArtKind.Process,
+            WidthPt = 200,
+            HeightPt = 100,
+            Placement = Floating(ImageWrapping.TopAndBottom, zOrder: 7, horizontalOffsetPt: 90, verticalOffsetPt: 45),
+        }));
+        paragraph.Runs.Add(Run.FromDrawingGroup(new DrawingGroup
+        {
+            WidthPt = 144,
+            HeightPt = 72,
+            Placement = Floating(ImageWrapping.Square, zOrder: 11, horizontalOffsetPt: 108, verticalOffsetPt: 54),
+        }));
+        return paragraph;
+    }
+
+    private static FloatingPlacement Floating(
+        ImageWrapping wrapping,
+        int zOrder,
+        double horizontalOffsetPt,
+        double verticalOffsetPt) =>
+        new()
+        {
+            Wrapping = wrapping,
+            ZOrderIndex = zOrder,
+            HorizontalOffsetPt = horizontalOffsetPt,
+            VerticalOffsetPt = verticalOffsetPt,
+        };
 }
 
 public sealed class DocumentViewLayoutPlannerSourceGuardTests
