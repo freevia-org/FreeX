@@ -1,3 +1,5 @@
+using Free.Shared.AppServices;
+
 namespace FreeX.App.Presentation.Charts.Editing;
 
 public sealed record ChartQuickCommandDescriptor(
@@ -290,13 +292,5 @@ public static class ChartQuickCommandCatalog
     public static IReadOnlyList<ChartQuickCommandDescriptor> All => Commands;
 
     public static ChartQuickCommandDescriptor Get(ChartQuickCommand command)
-    {
-        foreach (var descriptor in Commands)
-        {
-            if (descriptor.Command == command)
-                return descriptor;
-        }
-
-        throw new ArgumentOutOfRangeException(nameof(command), command, null);
-    }
+        => WorkflowCommandCatalogPolicy.GetById(Commands, command, descriptor => descriptor.Command);
 }

@@ -1,3 +1,5 @@
+using Free.Shared.AppServices;
+
 namespace FreeX.App.Presentation.Charts.Editing;
 
 public enum ChartAxisWorkflowCommandId
@@ -249,13 +251,5 @@ public static class ChartAxisWorkflowCommandCatalog
         useXAxis ? XAxisBounds : YAxisBounds;
 
     public static ChartAxisWorkflowCommandDescriptor Get(ChartAxisWorkflowCommandId id)
-    {
-        foreach (var command in Commands)
-        {
-            if (command.Id == id)
-                return command;
-        }
-
-        throw new ArgumentOutOfRangeException(nameof(id), id, null);
-    }
+        => WorkflowCommandCatalogPolicy.GetById(Commands, id, command => command.Id);
 }

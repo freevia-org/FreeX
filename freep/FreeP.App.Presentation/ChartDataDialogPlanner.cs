@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -135,24 +136,16 @@ public sealed class ChartDataDialogPlanner
     public const double DefaultDialogWidth = 640;
     public const double DefaultDialogHeight = 440;
 
-    private readonly List<string> _categories;
-    private readonly List<string> _seriesNames;
-    private readonly List<List<double?>> _values;
+    private readonly ChartDataGridPlanner _grid;
 
-    private ChartDataDialogPlanner(
-        List<string> categories,
-        List<string> seriesNames,
-        List<List<double?>> values)
+    private ChartDataDialogPlanner(ChartDataGridPlanner grid)
     {
-        _categories = categories;
-        _seriesNames = seriesNames;
-        _values = values;
-        EnsureRectangular();
+        _grid = grid;
     }
 
-    public int CategoryCount => _categories.Count;
+    public int CategoryCount => _grid.CategoryCount;
 
-    public int SeriesCount => _seriesNames.Count;
+    public int SeriesCount => _grid.SeriesCount;
 
     public static ChartDataDialogSurfacePlan BuildSurfacePlan()
     {
@@ -173,119 +166,72 @@ public sealed class ChartDataDialogPlanner
     {
         ArgumentNullException.ThrowIfNull(chart);
 
-        return new ChartDataDialogPlanner(
-            chart.Categories.Select(NormalizeLabel).ToList(),
-            chart.Series.Select(series => NormalizeLabel(series.Name)).ToList(),
-            chart.Series.Select(series => series.Values.ToList()).ToList());
+        return new ChartDataDialogPlanner(ChartDataGridPlanner.Create(
+            chart.Categories,
+            chart.Series.Select(series => series.Name),
+            chart.Series.Select(series => series.Values)));
     }
 
     public string GetCategory(int categoryIndex)
     {
-        return IsValidCategoryIndex(categoryIndex)
-            ? _categories[categoryIndex]
-            : string.Empty;
+        return _grid.GetCategory(categoryIndex);
     }
 
     public void SetCategory(int categoryIndex, string? label)
     {
-        if (IsValidCategoryIndex(categoryIndex))
-        {
-            _categories[categoryIndex] = NormalizeLabel(label);
-        }
+        _grid.SetCategory(categoryIndex, label);
     }
 
     public string GetSeriesName(int seriesIndex)
     {
-        return IsValidSeriesIndex(seriesIndex)
-            ? _seriesNames[seriesIndex]
-            : string.Empty;
+        return _grid.GetSeriesName(seriesIndex);
     }
 
     public void SetSeriesName(int seriesIndex, string? name)
     {
-        if (IsValidSeriesIndex(seriesIndex))
-        {
-            _seriesNames[seriesIndex] = NormalizeLabel(name);
-        }
+        _grid.SetSeriesName(seriesIndex, name);
     }
 
     public double? GetValue(int seriesIndex, int categoryIndex)
     {
-        if (!IsValidSeriesIndex(seriesIndex) || !IsValidCategoryIndex(categoryIndex))
-        {
-            return null;
-        }
-
-        return _values[seriesIndex][categoryIndex];
+        return _grid.GetValue(seriesIndex, categoryIndex);
     }
 
     public void SetValue(int seriesIndex, int categoryIndex, double? value)
     {
-        if (!IsValidSeriesIndex(seriesIndex) || !IsValidCategoryIndex(categoryIndex))
-        {
-            return;
-        }
-
-        _values[seriesIndex][categoryIndex] = value;
+        _grid.SetValue(seriesIndex, categoryIndex, value);
     }
 
     public void AddSeries()
     {
-        _seriesNames.Add(DefaultSeriesName(_seriesNames.Count + 1));
-        _values.Add(Enumerable.Repeat((double?)null, _categories.Count).ToList());
-        EnsureRectangular();
+        _grid.AddSeries(DefaultSeriesName(_grid.SeriesCount + 1));
     }
 
     public void RemoveLastSeries()
     {
-        if (_seriesNames.Count == 0)
-        {
-            return;
-        }
-
-        _seriesNames.RemoveAt(_seriesNames.Count - 1);
-        if (_values.Count > 0)
-        {
-            _values.RemoveAt(_values.Count - 1);
-        }
+        _grid.RemoveLastSeries();
     }
 
     public void AddCategory()
     {
-        _categories.Add(DefaultCategoryName(_categories.Count + 1));
-        foreach (var seriesValues in _values)
-        {
-            seriesValues.Add(null);
-        }
+        _grid.AddCategory(DefaultCategoryName(_grid.CategoryCount + 1));
     }
 
     public void RemoveLastCategory()
     {
-        if (_categories.Count == 0)
-        {
-            return;
-        }
-
-        _categories.RemoveAt(_categories.Count - 1);
-        foreach (var seriesValues in _values)
-        {
-            if (seriesValues.Count > 0)
-            {
-                seriesValues.RemoveAt(seriesValues.Count - 1);
-            }
-        }
+        _grid.RemoveLastCategory();
     }
 
     public ChartDataDialogTableProjection BuildTableProjection()
     {
-        var columns = Enumerable.Range(0, _seriesNames.Count)
+        var columns = Enumerable.Range(0, _grid.SeriesCount)
             .Select(seriesIndex => new ChartDataDialogSeriesColumn(
                 this,
                 seriesIndex,
                 valueIndex: seriesIndex))
             .ToList();
 
-        var rows = Enumerable.Range(0, _categories.Count)
+        var rows = Enumerable.Range(0, _grid.CategoryCount)
             .Select(categoryIndex => new ChartDataDialogTableRow(
                 this,
                 categoryIndex,
@@ -307,20 +253,16 @@ public sealed class ChartDataDialogPlanner
     {
         ArgumentNullException.ThrowIfNull(categoryEdits);
 
-        foreach (var edit in categoryEdits)
-        {
-            SetCategory(edit.CategoryIndex, edit.Category);
-        }
+        _grid.ApplyCategoryEdits(categoryEdits.Select(edit =>
+            new ChartDataGridCategoryEdit(edit.CategoryIndex, edit.Category)));
     }
 
     public void ApplySeriesNameEdits(IEnumerable<ChartDataDialogSeriesNameEdit> seriesNameEdits)
     {
         ArgumentNullException.ThrowIfNull(seriesNameEdits);
 
-        foreach (var edit in seriesNameEdits)
-        {
-            SetSeriesName(edit.SeriesIndex, edit.Name);
-        }
+        _grid.ApplySeriesNameEdits(seriesNameEdits.Select(edit =>
+            new ChartDataGridSeriesNameEdit(edit.SeriesIndex, edit.Name)));
     }
 
     public void ApplyValueEdits(
@@ -330,10 +272,11 @@ public sealed class ChartDataDialogPlanner
         ArgumentNullException.ThrowIfNull(valueEdits);
         ArgumentNullException.ThrowIfNull(culture);
 
-        foreach (var edit in valueEdits)
-        {
-            SetValue(edit.SeriesIndex, edit.CategoryIndex, ParseCellValue(edit.Value, culture));
-        }
+        _grid.ApplyValueEdits(valueEdits.Select(edit =>
+            new ChartDataGridValueEdit(
+                edit.SeriesIndex,
+                edit.CategoryIndex,
+                ParseCellValue(edit.Value, culture))));
     }
 
     public ChartDataDialogCommitPlan BuildCommitPlan(
@@ -352,47 +295,27 @@ public sealed class ChartDataDialogPlanner
 
     public IReadOnlyList<string> CategoriesForCommit()
     {
-        return _categories.ToList();
+        return _grid.CategoriesSnapshot();
     }
 
     public IReadOnlyList<string> SeriesNamesForCommit()
     {
-        return _seriesNames.ToList();
+        return _grid.SeriesNamesSnapshot();
     }
 
     public IReadOnlyList<IReadOnlyList<double?>> ValuesForCommit()
     {
-        return _values.Select(values => (IReadOnlyList<double?>)values.ToList()).ToList();
+        return _grid.ValuesSnapshot();
     }
 
     public static string FormatCellValue(double? value, CultureInfo culture)
     {
-        return value is double numeric
-            ? numeric.ToString("G6", culture)
-            : string.Empty;
+        return DialogNumericTextPolicy.FormatNullableDouble(value, culture);
     }
 
     public static double? ParseCellValue(object? value, CultureInfo culture)
     {
-        if (value is double numericValue)
-        {
-            return numericValue;
-        }
-
-        if (value is not string text)
-        {
-            return null;
-        }
-
-        var trimmed = text.Trim();
-        if (trimmed.Length == 0)
-        {
-            return null;
-        }
-
-        return double.TryParse(trimmed, NumberStyles.Any, culture, out double numeric)
-            ? numeric
-            : null;
+        return DialogNumericTextPolicy.ParseNullableDouble(value, culture);
     }
 
     public static string DefaultSeriesName(int oneBasedIndex)
@@ -407,35 +330,4 @@ public sealed class ChartDataDialogPlanner
         return $"Cat {oneBasedIndex}";
     }
 
-    private void EnsureRectangular()
-    {
-        int categoryCount = _categories.Count;
-        foreach (var seriesValues in _values)
-        {
-            while (seriesValues.Count < categoryCount)
-            {
-                seriesValues.Add(null);
-            }
-
-            while (seriesValues.Count > categoryCount)
-            {
-                seriesValues.RemoveAt(seriesValues.Count - 1);
-            }
-        }
-    }
-
-    private bool IsValidCategoryIndex(int categoryIndex)
-    {
-        return categoryIndex >= 0 && categoryIndex < _categories.Count;
-    }
-
-    private bool IsValidSeriesIndex(int seriesIndex)
-    {
-        return seriesIndex >= 0 && seriesIndex < _seriesNames.Count;
-    }
-
-    private static string NormalizeLabel(string? label)
-    {
-        return label ?? string.Empty;
-    }
 }

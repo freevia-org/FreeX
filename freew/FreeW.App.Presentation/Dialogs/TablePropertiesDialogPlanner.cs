@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -121,7 +122,7 @@ public static class TablePropertiesDialogPlanner
         return new TablePropertiesDialogInitialState(
             PreferredWidthText: FormatPoints(table.PreferredWidthPt ?? 0, culture),
             PreferredWidthOn: table.PreferredWidthPt is not null,
-            AlignmentIndex: Math.Max(0, IndexOf(AlignmentValues, table.Alignment)),
+            AlignmentIndex: Math.Max(0, DialogOptionPolicy.IndexOf(AlignmentValues, table.Alignment)),
             WrappingIndex: table.TextWrapping ? 1 : 0,
             IndentText: FormatPoints(table.IndentFromLeftPt ?? 0, culture),
             DefaultCellMarginTopText: FormatPoints(defaults.TopPt, culture),
@@ -132,14 +133,16 @@ public static class TablePropertiesDialogPlanner
             CellSpacingOn: table.CellSpacingPt is not null,
             RowHeightText: FormatPoints(row?.HeightPt ?? 0, culture),
             RowHeightOn: row?.HeightPt is not null,
-            RowRuleIndex: Math.Max(0, IndexOf(RowRuleValues, rowRule)),
+            RowRuleIndex: Math.Max(0, DialogOptionPolicy.IndexOf(RowRuleValues, rowRule)),
             AllowRowBreak: row?.AllowBreakAcrossPages ?? true,
             RepeatHeaderRow: table.Formatting.RepeatHeaderRow,
             ColumnWidthText: FormatPoints(cell?.WidthPt ?? 0, culture),
             ColumnWidthOn: cell?.WidthPt is not null,
             CellWidthText: FormatPoints(cell?.WidthPt ?? 0, culture),
             CellWidthOn: cell?.WidthPt is not null,
-            CellVerticalAlignmentIndex: Math.Max(0, IndexOf(CellVerticalAlignmentValues, cell?.VerticalAlignment ?? TableCellVerticalAlignment.Top)),
+            CellVerticalAlignmentIndex: Math.Max(0, DialogOptionPolicy.IndexOf(
+                CellVerticalAlignmentValues,
+                cell?.VerticalAlignment ?? TableCellVerticalAlignment.Top)),
             CellMarginsSameAsTable: cell?.Margins is null,
             CellMarginTopText: FormatPoints(cellMargins.TopPt, culture),
             CellMarginLeftText: FormatPoints(cellMargins.LeftPt, culture),
@@ -159,20 +162,20 @@ public static class TablePropertiesDialogPlanner
         result = null;
         errorMessage = null;
 
-        if (!TryReadOptional(input.PreferredWidthOn, input.PreferredWidthText, culture, out var preferredWidth)
-            || !TryParseNonNegative(input.IndentText, culture, out var indent)
-            || !TryParseNonNegative(input.DefaultCellMarginTopText, culture, out var dmTop)
-            || !TryParseNonNegative(input.DefaultCellMarginLeftText, culture, out var dmLeft)
-            || !TryParseNonNegative(input.DefaultCellMarginBottomText, culture, out var dmBottom)
-            || !TryParseNonNegative(input.DefaultCellMarginRightText, culture, out var dmRight)
-            || !TryReadOptional(input.CellSpacingOn, input.CellSpacingText, culture, out var cellSpacing)
-            || !TryReadOptional(input.RowHeightOn, input.RowHeightText, culture, out var rowHeight)
-            || !TryReadOptional(input.ColumnWidthOn, input.ColumnWidthText, culture, out var columnWidth)
-            || !TryReadOptional(input.CellWidthOn, input.CellWidthText, culture, out var cellWidth)
-            || !TryParseNonNegative(input.CellMarginTopText, culture, out var cmTop)
-            || !TryParseNonNegative(input.CellMarginLeftText, culture, out var cmLeft)
-            || !TryParseNonNegative(input.CellMarginBottomText, culture, out var cmBottom)
-            || !TryParseNonNegative(input.CellMarginRightText, culture, out var cmRight))
+        if (!DialogNumericTextPolicy.TryParseOptionalNonNegativeDouble(input.PreferredWidthOn, input.PreferredWidthText, culture, out var preferredWidth)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.IndentText, culture, out var indent)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.DefaultCellMarginTopText, culture, out var dmTop)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.DefaultCellMarginLeftText, culture, out var dmLeft)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.DefaultCellMarginBottomText, culture, out var dmBottom)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.DefaultCellMarginRightText, culture, out var dmRight)
+            || !DialogNumericTextPolicy.TryParseOptionalNonNegativeDouble(input.CellSpacingOn, input.CellSpacingText, culture, out var cellSpacing)
+            || !DialogNumericTextPolicy.TryParseOptionalNonNegativeDouble(input.RowHeightOn, input.RowHeightText, culture, out var rowHeight)
+            || !DialogNumericTextPolicy.TryParseOptionalNonNegativeDouble(input.ColumnWidthOn, input.ColumnWidthText, culture, out var columnWidth)
+            || !DialogNumericTextPolicy.TryParseOptionalNonNegativeDouble(input.CellWidthOn, input.CellWidthText, culture, out var cellWidth)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.CellMarginTopText, culture, out var cmTop)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.CellMarginLeftText, culture, out var cmLeft)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.CellMarginBottomText, culture, out var cmBottom)
+            || !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.CellMarginRightText, culture, out var cmRight))
         {
             errorMessage = ValidationMessage;
             return false;
@@ -180,63 +183,26 @@ public static class TablePropertiesDialogPlanner
 
         result = new TablePropertiesValues(
             PreferredWidthPt: preferredWidth,
-            Alignment: ValueAtOrDefault(AlignmentValues, input.AlignmentIndex),
+            Alignment: DialogOptionPolicy.ValueAtOrDefault(AlignmentValues, input.AlignmentIndex),
             TextWrapping: input.WrappingIndex == 1,
             IndentFromLeftPt: indent > 0 ? indent : null,
             DefaultCellMargins: new TableCellMargins(dmTop, dmLeft, dmBottom, dmRight),
             CellSpacingPt: cellSpacing,
             RowHeightPt: rowHeight,
-            RowHeightRule: rowHeight is null ? TableRowHeightRule.Auto : ValueAtOrDefault(RowRuleValues, input.RowRuleIndex),
+            RowHeightRule: rowHeight is null
+                ? TableRowHeightRule.Auto
+                : DialogOptionPolicy.ValueAtOrDefault(RowRuleValues, input.RowRuleIndex),
             AllowRowBreak: input.AllowRowBreak,
             RepeatHeaderRow: input.RepeatHeaderRow,
             ColumnWidthPt: columnWidth,
             CellPreferredWidthPt: cellWidth,
-            CellVerticalAlignment: ValueAtOrDefault(CellVerticalAlignmentValues, input.CellVerticalAlignmentIndex),
+            CellVerticalAlignment: DialogOptionPolicy.ValueAtOrDefault(
+                CellVerticalAlignmentValues,
+                input.CellVerticalAlignmentIndex),
             CellMargins: input.CellMarginsSameAsTable ? null : new TableCellMargins(cmTop, cmLeft, cmBottom, cmRight));
         return true;
     }
 
     public static string FormatPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
-
-    private static bool TryReadOptional(bool isChecked, string? text, CultureInfo culture, out double? value)
-    {
-        if (!isChecked)
-        {
-            value = null;
-            return true;
-        }
-
-        if (TryParseNonNegative(text, culture, out var parsed))
-        {
-            value = parsed;
-            return true;
-        }
-
-        value = null;
-        return false;
-    }
-
-    private static bool TryParseNonNegative(string? text, CultureInfo culture, out double value)
-    {
-        var t = (text ?? string.Empty).Trim();
-        return double.TryParse(t, NumberStyles.Float, culture, out value) && value >= 0;
-    }
-
-    private static int IndexOf<T>(IReadOnlyList<T> values, T value)
-    {
-        for (var i = 0; i < values.Count; i++)
-        {
-            if (EqualityComparer<T>.Default.Equals(values[i], value))
-                return i;
-        }
-
-        return -1;
-    }
-
-    private static T ValueAtOrDefault<T>(IReadOnlyList<T> values, int index) =>
-        values[Math.Clamp(index, 0, values.Count - 1)];
+        => DialogNumericTextPolicy.FormatPoints(value, culture);
 }

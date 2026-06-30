@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 
 namespace FreeW.App.Presentation.Dialogs;
 
@@ -60,14 +61,8 @@ public static class ChartSizeDialogPlanner
     }
 
     public static string FormatPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
+        => DialogNumericTextPolicy.FormatPoints(value, culture);
 
     private static bool TryParsePositive(string? text, CultureInfo culture, out double value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && value > 0;
-    }
+        => DialogNumericTextPolicy.TryParsePositiveDouble(text, culture, out value);
 }
