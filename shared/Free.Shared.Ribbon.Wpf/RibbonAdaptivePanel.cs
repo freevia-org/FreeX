@@ -89,14 +89,13 @@ public sealed class RibbonGroupHost : ContentControl
 
     private FrameworkElement BuildCollapsedButton()
     {
-        // Use the group's first real command icon (kind + command name so the actual SVG resolves, not a
-        // generic glyph) at a prominent size. A collapsed group reads as one representative command button.
-        var iconControl = _group.Controls.FirstOrDefault(c => c.Icon is not null);
+        // Use the shared representative icon choice so collapsed groups tell the same story across renderers.
+        var representativeIcon = RibbonCollapsedGroupPresentationPlanner.GetRepresentativeIcon(_group);
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         stack.Children.Add(new RibbonIcon
         {
-            Kind = iconControl?.Icon?.Kind ?? RibbonCommandIconKind.Generic,
-            CommandName = iconControl?.CommandId.Value ?? string.Empty,
+            Kind = representativeIcon.Icon.Kind,
+            CommandName = representativeIcon.CommandName ?? string.Empty,
             IconSize = 36,
             HorizontalAlignment = HorizontalAlignment.Center
         });

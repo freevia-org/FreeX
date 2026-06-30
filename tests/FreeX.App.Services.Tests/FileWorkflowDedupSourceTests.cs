@@ -107,6 +107,32 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
+    public void BackstageInfoFileMetadataProbe_StaysInSharedService()
+    {
+        var readerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookInfoFileMetadataReader.cs"));
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "BackstageInfoPlanner.cs"));
+        var avaloniaSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.Backstage.cs"));
+
+        readerSource.Should().Contain("new FileInfo(currentFilePath)");
+        readerSource.Should().Contain("WorkbookInfoPlanner.Build(");
+        plannerSource.Should().Contain("WorkbookInfoFileMetadataReader.BuildPlan(");
+        avaloniaSource.Should().Contain("WorkbookInfoFileMetadataReader.BuildPlan(");
+
+        plannerSource.Should().NotContain("new FileInfo(");
+        avaloniaSource.Should().NotContain("new FileInfo(");
+        avaloniaSource.Should().NotContain("File.Exists(path)");
+    }
+
+    [Fact]
     public void GetDataPickerPolicy_StaysInSharedPlanner()
     {
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(

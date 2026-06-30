@@ -1,4 +1,5 @@
 using Free.Shared.Commands;
+using Free.Shared.Drawing;
 
 namespace FreeP.Core.Model;
 
@@ -306,10 +307,10 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
         _snapshot = PresentationModelCloneHelper.CloneTable(table);
 
         int idx = Math.Clamp(_atCol, 0, table.ColumnWidthsEmu.Count);
-        // Default width: match adjacent column or 914400 EMU (1 inch).
+        // Default width: match adjacent column or one inch.
         long width = idx > 0
             ? table.ColumnWidthsEmu[idx - 1]
-            : (table.ColumnWidthsEmu.Count > 0 ? table.ColumnWidthsEmu[0] : 914400L);
+            : (table.ColumnWidthsEmu.Count > 0 ? table.ColumnWidthsEmu[0] : DrawingMlCoordinateUnits.EmuPerInch);
 
         table.ColumnWidthsEmu.Insert(idx, width);
 

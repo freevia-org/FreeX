@@ -1,4 +1,5 @@
 using FluentAssertions;
+using DrawingMlUnits = Free.Shared.Drawing.DrawingMlCoordinateUnits;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -26,6 +27,33 @@ public sealed class DrawingMlUnitsTests
     [Fact]
     public void EmuPerPixel_Is9525()
         => DrawingMlUnits.EmuPerPixel.Should().Be(9525L);
+
+    [Fact]
+    public void AngleUnitsPerDegree_Is60000()
+        => DrawingMlUnits.AngleUnitsPerDegree.Should().Be(60000L);
+
+    [Fact]
+    public void OpcFacade_DelegatesToSharedDrawingUnits()
+    {
+        Free.Shared.Opc.DrawingMlUnits.EmuPerInch.Should().Be(DrawingMlUnits.EmuPerInch);
+        Free.Shared.Opc.DrawingMlUnits.PointsToEmu(1.5).Should().Be(DrawingMlUnits.PointsToEmu(1.5));
+        Free.Shared.Opc.DrawingMlUnits.AngleToDegrees(60000).Should().Be(DrawingMlUnits.AngleToDegrees(60000));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(60000, 1)]
+    [InlineData(5400000, 90)]
+    [InlineData(-5400000, -90)]
+    public void AngleToDegrees_ReturnsExpected(double angleUnits, double expectedDegrees)
+        => DrawingMlUnits.AngleToDegrees(angleUnits).Should().BeApproximately(expectedDegrees, 1e-9);
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(5400000, Math.PI / 2)]
+    [InlineData(10800000, Math.PI)]
+    public void AngleToRadians_ReturnsExpected(double angleUnits, double expectedRadians)
+        => DrawingMlUnits.AngleToRadians(angleUnits).Should().BeApproximately(expectedRadians, 1e-9);
 
     // ── EMU ↔ points ─────────────────────────────────────────────────────────
 

@@ -414,9 +414,7 @@ public sealed record WorkbookTheme(
             return 0;
         }
 
-        const double emusPerInch = 914400d; // DrawingMlUnits.EmuPerInch — not referenceable from FreeX.Core.Model (no shared-opc dep)
-        const double pixelsPerInch = 96d;
-        return coordinate / emusPerInch * pixelsPerInch;
+        return DrawingMlCoordinateUnits.EmuToPixels(coordinate);
     }
 
     private static double ReadAngleRadians(string? angleText)
@@ -430,7 +428,7 @@ public sealed record WorkbookTheme(
             return 0;
         }
 
-        return angle / 60000d * Math.PI / 180d;
+        return DrawingMlCoordinateUnits.AngleToRadians(angle);
     }
 
     private static double CleanZero(double value) =>
