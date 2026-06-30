@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -292,29 +291,25 @@ public partial class MainWindow
         }
 
         var menu = _tableDesignStyleGalleryMenu ??= new ContextMenu();
-        var options = TableStyleGalleryPlanner.GetOptions(_workbook.Theme);
-        string? currentFamily = null;
-        for (var index = 0; index < options.Count; index++)
+        var surface = TableStyleGalleryPlanner.GetSurface(_workbook.Theme);
+        foreach (var group in surface.Groups)
         {
-            var option = options[index];
-            var family = option.Label.Split(' ', 2)[0];
-            if (!string.Equals(currentFamily, family, StringComparison.Ordinal))
-            {
-                if (menu.Items.Count > 0)
-                    menu.Items.Add(new Separator());
-                menu.Items.Add(CreateFormatTableGallerySectionHeader(family));
-                currentFamily = family;
-            }
+            if (menu.Items.Count > 0)
+                menu.Items.Add(new Separator());
+            menu.Items.Add(CreateFormatTableGallerySectionHeader(group.Family));
 
-            var menuItem = new MenuItem
+            foreach (var item in group.Items)
             {
-                Header = CreateFormatTableGalleryHeader(option),
-                Tag = index.ToString(CultureInfo.InvariantCulture),
-                MinWidth = 176
-            };
-            RibbonTooltip.SetKeyTip(menuItem, $"{family[0]}{option.Label[(family.Length + 1)..]}");
-            menuItem.Click += TableDesignStyleGalleryMenuItem_Click;
-            menu.Items.Add(menuItem);
+                var menuItem = new MenuItem
+                {
+                    Header = CreateFormatTableGalleryHeader(item),
+                    Tag = item,
+                    MinWidth = 176
+                };
+                RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);
+                menuItem.Click += TableDesignStyleGalleryMenuItem_Click;
+                menu.Items.Add(menuItem);
+            }
         }
 
         AttachTableDesignStyleGalleryContextMenu();
@@ -338,10 +333,10 @@ public partial class MainWindow
 
     private void TableDesignStyleGalleryMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var index = sender is MenuItem { Tag: string tag } && int.TryParse(tag, out var parsed)
-            ? parsed
-            : 0;
-        ApplyStructuredTableStyle(index);
+        var item = sender is MenuItem { Tag: TableStyleGallerySurfaceItem tagged }
+            ? tagged
+            : TableStyleGalleryPlanner.GetSurfaceItem(TableStyleGalleryPlanner.GetSurface(_workbook.Theme), 0);
+        ApplyStructuredTableStyle(item.Option);
     }
 
     private void ApplyStructuredTableOptions(
@@ -372,12 +367,11 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void ApplyStructuredTableStyle(int variant)
+    private void ApplyStructuredTableStyle(TableStyleGalleryOption option)
     {
         if (!TryGetActiveStructuredTable(out _, out var table))
             return;
 
-        var option = FreeX.App.Presentation.TableUI.TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme);
         if (!TryExecuteCommand(
                 TableDesignCommandPlanner.BuildApplyStyleCommand(_currentSheetId, table, option),
                 "Table Style"))

@@ -22,14 +22,14 @@ public partial class MainWindow
             RibbonTooltip.SetKeyTip(groupItem, group.KeyTip);
             RibbonMetadata.SetCommandName(groupItem, group.Label);
 
-            foreach (var item in group.Items)
+            foreach (var item in group.MenuItems)
             {
                 var shapeItem = new MenuItem
                 {
                     Header = item.Label,
                     Tag = item.Kind
                 };
-                RibbonTooltip.SetKeyTip(shapeItem, group.KeyTip + item.KeyTip);
+                RibbonTooltip.SetKeyTip(shapeItem, item.KeyTip);
                 RibbonMetadata.SetCommandName(shapeItem, item.Label);
                 shapeItem.Click += ShapeGalleryMenuItem_Click;
                 groupItem.Items.Add(shapeItem);

@@ -23,10 +23,14 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Ellipse)");
         source.Should().Contain("DrawLineBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Line)");
-        DialogSourceTestSupport.ReadHostSources("MainWindow.ShapeGallery.cs")
+        var shapeGallerySource = DialogSourceTestSupport.ReadHostSources("MainWindow.ShapeGallery.cs");
+        shapeGallerySource
             .Should()
             .Contain("ShapeGalleryMenuItem_Click")
             .And.Contain("InsertDrawingShape(kind)");
+        shapeGallerySource.Should().Contain("foreach (var item in group.MenuItems)");
+        shapeGallerySource.Should().Contain("RibbonTooltip.SetKeyTip(shapeItem, item.KeyTip);");
+        shapeGallerySource.Should().NotContain("group.KeyTip + item.KeyTip");
         source.Should().Contain("private void BringForwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: true);");
         source.Should().Contain("private void SendBackwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: false);");
         source.Should().Contain("private void SelectionPaneBtn_Click(object sender, RoutedEventArgs e) => ShowSelectionPaneDialog();");
