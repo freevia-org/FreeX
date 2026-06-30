@@ -1004,19 +1004,24 @@ public sealed class SlideCanvas : FrameworkElement
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildAreaSeriesPrimitives(chart, plot))
+        foreach (var primitive in ChartRenderPlanner.BuildAreaSeriesPrimitives(chart, plot, seriesColors))
         {
-            var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
-            var brush  = FreezeBrush(new SolidColorBrush(
-                Color.FromArgb(200, color.R, color.G, color.B)));
+            if (primitive.AreaPath.Fill is not { } fill)
+                continue;
 
+            var brush = FreezeBrush(new SolidColorBrush(
+                Color.FromArgb(fill.Alpha, fill.Color.R, fill.Color.G, fill.Color.B)));
             var geo = new StreamGeometry();
             using (var ctx = geo.Open())
             {
-                ctx.BeginFigure(ToPoint(primitive.BaselineStart), isFilled: true, isClosed: true);
-                foreach (var point in primitive.Points)
-                    ctx.LineTo(ToPoint(point), isStroked: true, isSmoothJoin: false);
-                ctx.LineTo(ToPoint(primitive.BaselineEnd), isStroked: false, isSmoothJoin: false);
+                for (int pointIndex = 0; pointIndex < primitive.AreaPath.Points.Count; pointIndex++)
+                {
+                    var point = ToPoint(primitive.AreaPath.Points[pointIndex]);
+                    if (pointIndex == 0)
+                        ctx.BeginFigure(point, isFilled: true, isClosed: primitive.AreaPath.IsClosed);
+                    else
+                        ctx.LineTo(point, isStroked: true, isSmoothJoin: false);
+                }
             }
             if (geo.CanFreeze) geo.Freeze();
 

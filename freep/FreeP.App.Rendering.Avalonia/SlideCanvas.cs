@@ -919,19 +919,28 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildAreaSeriesPrimitives(chart, plot))
+        foreach (var primitive in ChartRenderPlanner.BuildAreaSeriesPrimitives(chart, plot, seriesColors))
         {
-            var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
-            var brush  = new SolidColorBrush(Color.FromArgb(200, color.R, color.G, color.B));
+            if (primitive.AreaPath.Fill is not { } fill)
+                continue;
 
+            var brush = new SolidColorBrush(Color.FromArgb(
+                fill.Alpha,
+                fill.Color.R,
+                fill.Color.G,
+                fill.Color.B));
             var geo = new StreamGeometry();
             using (var ctx = geo.Open())
             {
-                ctx.BeginFigure(ToPoint(primitive.BaselineStart), isFilled: true);
-                foreach (var point in primitive.Points)
-                    ctx.LineTo(ToPoint(point));
-                ctx.LineTo(ToPoint(primitive.BaselineEnd));
-                ctx.EndFigure(isClosed: true);
+                for (int pointIndex = 0; pointIndex < primitive.AreaPath.Points.Count; pointIndex++)
+                {
+                    var point = ToPoint(primitive.AreaPath.Points[pointIndex]);
+                    if (pointIndex == 0)
+                        ctx.BeginFigure(point, isFilled: true);
+                    else
+                        ctx.LineTo(point);
+                }
+                ctx.EndFigure(isClosed: primitive.AreaPath.IsClosed);
             }
             dc.DrawGeometry(brush, null, geo);
         }

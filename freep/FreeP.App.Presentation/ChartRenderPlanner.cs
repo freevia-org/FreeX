@@ -29,6 +29,13 @@ public enum ChartPlanTextAlignment
     Right
 }
 
+public readonly record struct ChartFillPlan(SrgbColor Color, byte Alpha);
+
+public readonly record struct ChartPathPrimitive(
+    IReadOnlyList<ChartPlanPoint> Points,
+    bool IsClosed,
+    ChartFillPlan? Fill);
+
 public readonly record struct ChartFramePlan(
     ChartPlanRect Bounds,
     ChartPlanRect Plot,
@@ -69,7 +76,9 @@ public readonly record struct ChartAreaSeriesPrimitive(
     int SeriesIndex,
     ChartPlanPoint BaselineStart,
     ChartPlanPoint BaselineEnd,
-    IReadOnlyList<ChartPlanPoint> Points);
+    IReadOnlyList<ChartPlanPoint> Points,
+    ChartPathPrimitive AreaPath,
+    ChartFillPlan Fill);
 
 public readonly record struct ChartScatterSeriesPrimitive(
     int SeriesIndex,
@@ -150,6 +159,28 @@ public static class ChartRenderPlanner
     public const double CategoryLabelHeight = 16.0;
     public const double BarCategoryLabelWidth = 44.0;
     public const double GridlinePad = 2.0;
+    public const byte AreaFillAlpha = 200;
+
+    private static readonly SrgbColor[] FallbackSeriesColors =
+    [
+        new(0x4F, 0x81, 0xBD),
+        new(0xC0, 0x50, 0x4D),
+        new(0x9B, 0xBB, 0x59),
+        new(0x80, 0x64, 0xA2),
+        new(0x4B, 0xAC, 0xC6),
+        new(0xF7, 0x96, 0x46)
+    ];
+
+    public static SrgbColor ResolveSeriesColor(
+        int seriesIndex,
+        IReadOnlyList<SrgbColor>? seriesColors)
+    {
+        if (seriesColors is not null && seriesIndex >= 0 && seriesIndex < seriesColors.Count)
+            return seriesColors[seriesIndex];
+
+        int fallbackIndex = Math.Abs(seriesIndex) % FallbackSeriesColors.Length;
+        return FallbackSeriesColors[fallbackIndex];
+    }
 
     public static ChartFramePlan BuildFramePlan(ChartShape chart, ChartPlanRect bounds)
     {
@@ -648,7 +679,8 @@ public static class ChartRenderPlanner
 
     public static IReadOnlyList<ChartAreaSeriesPrimitive> BuildAreaSeriesPrimitives(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
     {
         int categoryCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
@@ -681,11 +713,25 @@ public static class ChartRenderPlanner
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
 
+            var fill = new ChartFillPlan(
+                ResolveSeriesColor(seriesIndex, seriesColors),
+                AreaFillAlpha);
+            var pathPoints = new ChartPlanPoint[categoryCount + 2];
+            pathPoints[0] = baselineStart;
+            for (int pointIndex = 0; pointIndex < points.Length; pointIndex++)
+                pathPoints[pointIndex + 1] = points[pointIndex];
+            pathPoints[^1] = baselineEnd;
+
             primitives.Add(new ChartAreaSeriesPrimitive(
                 seriesIndex,
                 baselineStart,
                 baselineEnd,
-                points));
+                points,
+                new ChartPathPrimitive(
+                    pathPoints,
+                    IsClosed: true,
+                    Fill: fill),
+                fill));
         }
 
         return primitives;
