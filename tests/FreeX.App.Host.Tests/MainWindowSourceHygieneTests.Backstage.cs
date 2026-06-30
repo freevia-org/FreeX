@@ -17,7 +17,7 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().Contain("Drop=\"MainWindow_Drop\"");
         source.Should().Contain("WorkbookOpenIngressPlanner.SelectOpenableFile(paths, _fileAdapters)");
         source.Should().Contain("await OpenFileAsync(path)");
-        planner.Should().Contain("FileFormatResolver.FindOpenAdapter(adapters, extension, out _)");
+        planner.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(adapters, path");
     }
 
     [Fact]

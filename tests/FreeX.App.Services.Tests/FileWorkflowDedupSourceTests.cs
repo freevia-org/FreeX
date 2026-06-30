@@ -109,6 +109,33 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
+    public void FreeXWorkbookOpenTargetResolution_StaysInSharedPlanner()
+    {
+        var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookOpenTargetPlanner.cs"));
+        var sessionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookSession.cs"));
+        var wpfSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.Backstage.cs"));
+
+        plannerSource.Should().Contain("LocalFilePath.TryNormalize(");
+        plannerSource.Should().Contain("FileFormatResolver.FindOpenAdapter(");
+        plannerSource.Should().Contain("new WorkbookOpenTarget(");
+
+        sessionSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(");
+        sessionSource.Should().NotContain("FileFormatResolver.FindOpenAdapter(_adapters, extension");
+
+        wpfSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path");
+        wpfSource.Should().NotContain("FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext");
+    }
+
+    [Fact]
     public void FreeXWorkbookSaveTargetAndPathNormalizationDecisions_StayInCoordinator()
     {
         var coordinatorSource = File.ReadAllText(RepositoryFileLocator.Find(

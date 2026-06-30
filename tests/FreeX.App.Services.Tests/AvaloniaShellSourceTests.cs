@@ -58,7 +58,7 @@ public sealed class AvaloniaShellSourceTests
         ingressPlannerSource.Should().Contain("LocalFilePath.TryNormalize(candidatePath, out var normalizedPath)");
         ingressPlannerSource.Should().Contain("Directory.Exists(normalizedPath)");
         ingressPlannerSource.Should().Contain("File.Exists(normalizedPath)");
-        ingressPlannerSource.Should().Contain("FileFormatResolver.FindOpenAdapter(adapters, extension, out _)");
+        ingressPlannerSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(adapters, path");
         source.Should().Contain("ShowOpenIssue(message)");
         source.Should().Contain("await OpenWorkbookPathAsync(path!, fileAccessIdentity)");
         source.Should().Contain("await OpenWorkbookFromTargetAsync(target!)");

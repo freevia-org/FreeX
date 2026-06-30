@@ -2714,37 +2714,13 @@ public sealed class WorkbookSession
         string path,
         WorkbookFileAccessIdentity? fileAccessIdentity,
         out WorkbookOpenTarget? target,
-        out string message)
-    {
-        target = null;
-        if (!LocalFilePath.TryNormalize(path, out var openPath))
-        {
-            message = "Open requires a local file path.";
-            return false;
-        }
-
-        if (!TryGetExtension(openPath, out var extension))
-        {
-            message = "Unsupported file type.";
-            return false;
-        }
-
-        var adapter = FileFormatResolver.FindOpenAdapter(_adapters, extension, out var format);
-        if (adapter is null || format is null)
-        {
-            message = $"Unsupported file type: {extension}.";
-            return false;
-        }
-
-        target = new WorkbookOpenTarget(
-            openPath,
-            adapter,
-            extension,
-            format,
-            ResolveOpenFileAccessIdentity(openPath, fileAccessIdentity));
-        message = "";
-        return true;
-    }
+        out string message) =>
+        WorkbookOpenTargetPlanner.TryCreateOpenTarget(
+            _adapters,
+            path,
+            fileAccessIdentity,
+            out target,
+            out message);
 
     public bool TryResolveSaveTarget(string path, out FileSaveTarget? target, out string message)
     {
@@ -4711,37 +4687,6 @@ public sealed class WorkbookSession
     private static bool IsXlsxPath(string path) =>
         string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase);
 
-    private static bool TryGetExtension(string path, out string extension)
-    {
-        try
-        {
-            if (path.Contains('\0', StringComparison.Ordinal) ||
-                path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-            {
-                extension = "";
-                return false;
-            }
-
-            extension = Path.GetExtension(path) ?? "";
-            return !string.IsNullOrWhiteSpace(extension);
-        }
-        catch (ArgumentException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            extension = "";
-            return false;
-        }
-        catch (PathTooLongException)
-        {
-            extension = "";
-            return false;
-        }
-    }
-
     private static CellAddress GetInitialActiveCell(Sheet sheet) =>
         new(sheet.Id, Math.Max(1, sheet.ActiveRow ?? 1), Math.Max(1, sheet.ActiveCol ?? 1));
 
@@ -4771,26 +4716,12 @@ public sealed class WorkbookSession
             : WorkbookFileAccessIdentity.FromLocalPath(source.SourcePath);
     }
 
-    private static WorkbookFileAccessIdentity ResolveOpenFileAccessIdentity(
-        string openPath,
-        WorkbookFileAccessIdentity? fileAccessIdentity)
-    {
-        if (fileAccessIdentity is not null &&
-            fileAccessIdentity.TryWithLocalPath(openPath, out var resolvedIdentity) &&
-            resolvedIdentity is not null)
-        {
-            return resolvedIdentity;
-        }
-
-        return WorkbookFileAccessIdentity.FromLocalPath(openPath);
-    }
-
     private WorkbookFileAccessIdentity ResolveSavedFileAccessIdentity(
         string savedPath,
         WorkbookFileAccessIdentity? fileAccessIdentity)
     {
         if (fileAccessIdentity is not null)
-            return ResolveOpenFileAccessIdentity(savedPath, fileAccessIdentity);
+            return WorkbookOpenTargetPlanner.ResolveFileAccessIdentity(savedPath, fileAccessIdentity);
 
         if (CurrentFileAccessIdentity is not null &&
             CurrentFilePath is not null &&
