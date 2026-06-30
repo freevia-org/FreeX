@@ -1,5 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Presentation.Backstage;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -41,6 +43,29 @@ public sealed class LocalAccountPlannerTests
             detail.Label == "Export" &&
             detail.Value.Contains("Ready for local PDF/XPS export"));
         plan.Details.Should().NotContain(detail => detail.Label == "Microsoft 365 services");
+    }
+
+    [Fact]
+    public void Create_ProjectsDisplayedRowsThroughBackstageAccountCatalog()
+    {
+        var plan = LocalAccountPlanner.Create(
+            new FreeXOptions { UserName = "Analyst" },
+            @"C:\Work\Budget.xlsx",
+            "Budget.xlsx",
+            userNameProvider: () => "quinn",
+            userDomainProvider: () => "DESKTOP",
+            machineNameProvider: () => "FREEX-PC",
+            optionsPathProvider: () => "options.json",
+            fileExists: _ => true);
+
+        plan.Details.Select(detail => detail.Label).Should().Equal(
+            FreeXBackstagePaneCatalog.BuildAccountDetails()
+                .Select(detail => UiText.Get(detail.LabelKey)));
+        Detail(plan, FreeXBackstageAccountDetailId.FreeXUserName).Value.Should().Be("Analyst");
+        Detail(plan, FreeXBackstageAccountDetailId.LocalOsAccount).Value.Should().Be(@"DESKTOP\quinn");
+        Detail(plan, FreeXBackstageAccountDetailId.CurrentWorkbook).Value.Should().Be(@"Budget.xlsx (C:\Work\Budget.xlsx)");
+        Detail(plan, FreeXBackstageAccountDetailId.Sharing).Value.Should().Be(@"Ready for Windows Share from C:\Work\Budget.xlsx.");
+        Detail(plan, FreeXBackstageAccountDetailId.Export).Value.Should().Contain("Ready for local PDF/XPS export");
     }
 
     [Fact]
@@ -115,5 +140,17 @@ public sealed class LocalAccountPlannerTests
         message.Body.Should().Contain("Sharing: Ready for Windows Share");
         message.Body.Should().Contain("Export: Ready for local PDF/XPS export");
         message.Body.Should().NotContain("Microsoft 365 services");
+    }
+
+    private static LocalAccountDetail Detail(
+        LocalAccountPlan plan,
+        FreeXBackstageAccountDetailId id)
+    {
+        var labelKey = FreeXBackstagePaneCatalog.BuildAccountDetails()
+            .Single(detail => detail.Id == id)
+            .LabelKey;
+        var label = UiText.Get(labelKey);
+
+        return plan.Details.Single(detail => detail.Label == label);
     }
 }

@@ -1,5 +1,11 @@
 namespace FreeX.App.Presentation.Backstage;
 
+public sealed record FreeXBackstageExportScopeOptionSource<TScope>(
+    TScope Scope,
+    bool IsAvailable,
+    bool IsDefault)
+    where TScope : struct, Enum;
+
 public sealed record FreeXBackstageExportScopeOptionRequest(
     FreeXBackstageExportScopeId Scope,
     bool IsAvailable,
@@ -45,6 +51,48 @@ public sealed record FreeXBackstageExportPanePlan(
 /// </summary>
 public static class FreeXBackstageExportPanePlanner
 {
+    public static FreeXBackstageExportPaneRequest CreateRequest<TScope, TOutputKind>(
+        IReadOnlyList<FreeXBackstageExportScopeOptionSource<TScope>> scopes,
+        IReadOnlyList<TOutputKind> outputKinds,
+        TOutputKind defaultOutputKind,
+        bool canExport)
+        where TScope : struct, Enum
+        where TOutputKind : struct, Enum
+    {
+        ArgumentNullException.ThrowIfNull(scopes);
+        ArgumentNullException.ThrowIfNull(outputKinds);
+
+        return new FreeXBackstageExportPaneRequest(
+            scopes
+                .Select(scope => new FreeXBackstageExportScopeOptionRequest(
+                    ToBackstageScopeId(scope.Scope),
+                    scope.IsAvailable,
+                    scope.IsDefault))
+                .ToArray(),
+            outputKinds
+                .Select(outputKind => new FreeXBackstageExportOutputKindOptionRequest(
+                    ToBackstageOutputKindId(outputKind),
+                    EqualityComparer<TOutputKind>.Default.Equals(outputKind, defaultOutputKind)))
+                .ToArray(),
+            canExport);
+    }
+
+    public static FreeXBackstageExportScopeId ToBackstageScopeId<TScope>(TScope scope)
+        where TScope : struct, Enum =>
+        ConvertEnum<TScope, FreeXBackstageExportScopeId>(scope);
+
+    public static TScope ToExternalScope<TScope>(FreeXBackstageExportScopeId scope)
+        where TScope : struct, Enum =>
+        ConvertEnum<FreeXBackstageExportScopeId, TScope>(scope);
+
+    public static FreeXBackstageExportOutputKindId ToBackstageOutputKindId<TOutputKind>(TOutputKind outputKind)
+        where TOutputKind : struct, Enum =>
+        ConvertEnum<TOutputKind, FreeXBackstageExportOutputKindId>(outputKind);
+
+    public static TOutputKind ToExternalOutputKind<TOutputKind>(FreeXBackstageExportOutputKindId outputKind)
+        where TOutputKind : struct, Enum =>
+        ConvertEnum<FreeXBackstageExportOutputKindId, TOutputKind>(outputKind);
+
     public static FreeXBackstageExportPanePlan Build(FreeXBackstageExportPaneRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -93,5 +141,20 @@ public static class FreeXBackstageExportPanePlanner
         }
 
         return options;
+    }
+
+    private static TDestination ConvertEnum<TSource, TDestination>(TSource source)
+        where TSource : struct, Enum
+        where TDestination : struct, Enum
+    {
+        var name = Enum.GetName(typeof(TSource), source)
+            ?? throw new InvalidOperationException(
+                $"Backstage export mapping cannot resolve unnamed {typeof(TSource).Name} value '{source}'.");
+
+        if (Enum.TryParse<TDestination>(name, ignoreCase: false, out var destination))
+            return destination;
+
+        throw new InvalidOperationException(
+            $"Backstage export mapping does not define {typeof(TDestination).Name} value '{name}' for {typeof(TSource).Name}.");
     }
 }
