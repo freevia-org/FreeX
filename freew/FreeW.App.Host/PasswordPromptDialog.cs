@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.Shell;
 
 namespace FreeW.App.Host;
 
@@ -32,16 +33,16 @@ internal sealed class PasswordPromptDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         });
         panel.Children.Add(_passwordBox);
 
-        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        var ok = new Button { Content = "OK", MinWidth = 72, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        ok.Click += (_, _) => { _result = _passwordBox.Password; Close(); };
-        var cancel = new Button { Content = "Cancel", MinWidth = 72, IsCancel = true };
-        buttonRow.Children.Add(ok);
-        buttonRow.Children.Add(cancel);
-        panel.Children.Add(buttonRow);
+        panel.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
 
         Content = panel;
-        Loaded += (_, _) => _passwordBox.Focus();
+        Loaded += (_, _) => DialogFocus.Focus(_passwordBox);
+    }
+
+    private void Accept()
+    {
+        _result = _passwordBox.Password;
+        Close();
     }
 
     /// <summary>
