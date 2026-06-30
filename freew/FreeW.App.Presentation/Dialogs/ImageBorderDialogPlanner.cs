@@ -72,6 +72,8 @@ public static partial class ImageBorderDialogPlanner
         result = null;
         validation = null;
 
+        // Picture-border dialog policy is narrower than watermark color text: blank removes the border,
+        // otherwise the model receives bare six-digit RGB for the DOCX writer's a:srgbClr boundary.
         var color = FormatColorText(input.ColorText);
         if (color.Length == 0)
         {

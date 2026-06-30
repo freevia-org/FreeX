@@ -190,6 +190,9 @@ public static class WatermarkOptionsDialogPlanner
 
     private static double ToOpacity(bool semitransparent) => semitransparent ? 0.3 : 1.0;
 
+    // Watermark UI accepts Word-dialog-friendly color text: optional '#', 3/4/6/8 hex digits, and the
+    // user's notation is preserved for the model. That is deliberately broader than DrawingML srgbClr and
+    // not the same as shared ThemeColor, which normalizes opaque/translucent ARGB values.
     private static bool TryNormalizeColorHex(string? text, out string color)
     {
         color = string.Empty;
