@@ -7,11 +7,9 @@ namespace FreeX.App.Host;
 
 public partial class PageSetupDialog
 {
-    private sealed record PageSetupPresetComboItem(string Label, string Value);
-
     private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (SelectedPresetValue(HeaderPresetBox.SelectedItem) is not { } preset)
+        if (SelectedPresetValue(HeaderPresetBox, PageSetupDialogModel.HeaderPresetChoices) is not { } preset)
             return;
 
         Header = HeaderFooterEditorPlanner.ApplyCenterPreset(Header, preset);
@@ -20,7 +18,7 @@ public partial class PageSetupDialog
 
     private void FooterPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (SelectedPresetValue(FooterPresetBox.SelectedItem) is not { } preset)
+        if (SelectedPresetValue(FooterPresetBox, PageSetupDialogModel.FooterPresetChoices) is not { } preset)
             return;
 
         Footer = HeaderFooterEditorPlanner.ApplyCenterPreset(Footer, preset);
@@ -73,8 +71,8 @@ public partial class PageSetupDialog
         DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
         ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;
         AlignWithMarginsBox.IsChecked = AlignHeaderFooterWithMargins;
-        SelectPreset(HeaderPresetBox, Header.Center);
-        SelectPreset(FooterPresetBox, Footer.Center);
+        SelectPreset(HeaderPresetBox, PageSetupDialogModel.HeaderPresetChoices, Header.Center);
+        SelectPreset(FooterPresetBox, PageSetupDialogModel.FooterPresetChoices, Footer.Center);
         UpdateHeaderFooterPreview();
     }
 
@@ -91,33 +89,21 @@ public partial class PageSetupDialog
         if (comboBox.ItemsSource is not null)
             return;
 
-        comboBox.DisplayMemberPath = nameof(PageSetupPresetComboItem.Label);
-        comboBox.ItemsSource = choices
-            .Select(choice => new PageSetupPresetComboItem(UiText.Get(choice.LabelResourceKey), choice.Value))
-            .ToArray();
+        comboBox.ItemsSource = PageSetupDialogPlanner.ResolveChoiceLabels(choices, UiText.Get);
     }
 
-    private static void SelectPreset(ComboBox comboBox, string centerText)
-    {
-        for (var i = 0; i < comboBox.Items.Count; i++)
-        {
-            if (SelectedPresetValue(comboBox.Items[i]) == centerText)
-            {
-                comboBox.SelectedIndex = i;
-                return;
-            }
-        }
+    private static void SelectPreset(
+        ComboBox comboBox,
+        IReadOnlyList<PageSetupChoice<string>> choices,
+        string centerText) =>
+        comboBox.SelectedIndex = PageSetupDialogModel.HeaderFooterPresetExactIndex(choices, centerText);
 
-        comboBox.SelectedIndex = -1;
-    }
-
-    private static string? SelectedPresetValue(object? selectedItem) =>
-        selectedItem switch
-        {
-            PageSetupPresetComboItem item => item.Value,
-            ComboBoxItem { Tag: string preset } => preset,
-            _ => null
-        };
+    private static string? SelectedPresetValue(
+        ComboBox comboBox,
+        IReadOnlyList<PageSetupChoice<string>> choices) =>
+        comboBox.SelectedIndex >= 0
+            ? PageSetupDialogModel.HeaderFooterPresetValue(choices, comboBox.SelectedIndex)
+            : null;
 
     private void UpdateHeaderFooterPreview()
     {

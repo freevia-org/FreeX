@@ -283,6 +283,19 @@ public static class PageSetupDialogModel
     public static int HeaderFooterPresetIndex(IReadOnlyList<PageSetupChoice<string>> choices, string centerText) =>
         ChoiceIndex(choices, centerText, "");
 
+    public static int HeaderFooterPresetExactIndex(IReadOnlyList<PageSetupChoice<string>> choices, string centerText)
+    {
+        ArgumentNullException.ThrowIfNull(choices);
+
+        for (var index = 0; index < choices.Count; index++)
+        {
+            if (choices[index].Value == centerText)
+                return index;
+        }
+
+        return -1;
+    }
+
     public static string HeaderFooterPresetValue(IReadOnlyList<PageSetupChoice<string>> choices, int selectedIndex) =>
         ChoiceValue(choices, selectedIndex, "");
 

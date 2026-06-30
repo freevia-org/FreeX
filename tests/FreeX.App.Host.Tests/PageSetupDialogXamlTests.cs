@@ -278,6 +278,10 @@ public sealed class PageSetupDialogXamlTests
 
         source.Should().Contain("PopulatePresetBox(HeaderPresetBox, PageSetupDialogModel.HeaderPresetChoices)");
         source.Should().Contain("PopulatePresetBox(FooterPresetBox, PageSetupDialogModel.FooterPresetChoices)");
+        source.Should().Contain("PageSetupDialogPlanner.ResolveChoiceLabels(choices, UiText.Get)");
+        source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetExactIndex(choices, centerText)");
+        source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetValue(choices, comboBox.SelectedIndex)");
+        source.Should().NotContain("PageSetupPresetComboItem");
     }
 
     [Fact]
