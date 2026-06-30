@@ -1546,149 +1546,36 @@ public sealed class SlideCanvas : Control
         return fallbacks[si % fallbacks.Length];
     }
 
-    internal static (double min, double max, double majorUnit) ComputeNiceAxisRange(ChartShape chart)
-    {
-        double dataMin = 0, dataMax = 0;
-        foreach (var series in chart.Series)
-        {
-            if (series.OnSecondaryAxis) continue;  // CB1: exclude secondary-axis series from primary range
-            foreach (var v in series.Values)
-                if (v.HasValue) { dataMin = Math.Min(dataMin, v.Value); dataMax = Math.Max(dataMax, v.Value); }
-        }
-
-        double min = chart.ValueAxis.Min ?? (dataMin >= 0 ? 0 : dataMin);
-        double max = chart.ValueAxis.Max ?? dataMax;
-        if (max <= min) max = min + 1;
-
-        double range   = max - min;
-        double rawUnit = range / 4.0;
-        double mag     = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
-        double norm    = rawUnit / mag;
-        double niceMult = norm switch { < 1.5 => 1.0, < 2.25 => 2.0, < 3.75 => 2.5, < 7.5 => 5.0, _ => 10.0 };
-        double mu      = niceMult * mag;
-        double niceMax = Math.Ceiling(max / mu) * mu;
-        double niceMin = min >= 0 ? 0 : Math.Floor(min / mu) * mu;
-        if (Math.Abs(niceMax - max) < mu * 1e-9) niceMax += mu;
-        return (niceMin, niceMax, mu);
-    }
+    internal static (double min, double max, double majorUnit) ComputeNiceAxisRange(ChartShape chart) =>
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
 
     /// <summary>
     /// Computes the nice axis range for the SECONDARY value axis using ONLY series that have
     /// OnSecondaryAxis == true.  Returns (0,1,1) when there are no secondary-axis series
     /// (avoids divide-by-zero).  CB1 fix.
     /// </summary>
-    internal static (double min, double max, double majorUnit) ComputeNiceSecondaryAxisRange(ChartShape chart)
-    {
-        double dataMin = 0, dataMax = 0;
-        bool any = false;
-        foreach (var series in chart.Series)
-        {
-            if (!series.OnSecondaryAxis) continue;
-            foreach (var v in series.Values)
-                if (v.HasValue) { dataMin = Math.Min(dataMin, v.Value); dataMax = Math.Max(dataMax, v.Value); any = true; }
-        }
-        if (!any) return (0, 1, 1);  // no secondary series → sensible fallback
-
-        double min = chart.SecondaryValueAxis?.Min ?? (dataMin >= 0 ? 0 : dataMin);
-        double max = chart.SecondaryValueAxis?.Max ?? dataMax;
-        if (max <= min) max = min + 1;  // zero-range guard
-
-        double range   = max - min;
-        double rawUnit = range / 4.0;
-        if (rawUnit <= 0) rawUnit = 1;
-        double mag     = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
-        double norm    = rawUnit / mag;
-        double niceMult = norm switch { < 1.5 => 1.0, < 2.25 => 2.0, < 3.75 => 2.5, < 7.5 => 5.0, _ => 10.0 };
-        double mu      = niceMult * mag;
-        double niceMax = Math.Ceiling(max / mu) * mu;
-        double niceMin = min >= 0 ? 0 : Math.Floor(min / mu) * mu;
-        if (Math.Abs(niceMax - max) < mu * 1e-9) niceMax += mu;
-        return (niceMin, niceMax, mu);
-    }
+    internal static (double min, double max, double majorUnit) ComputeNiceSecondaryAxisRange(ChartShape chart) =>
+        ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
 
     internal static (double min, double max, double majorUnit) ComputeNiceScatterAxisRange(
-        ChartShape chart, bool useX)
-    {
-        double dataMin = 0, dataMax = 0;
-        foreach (var series in chart.Series)
-        {
-            var list = useX ? series.XValues : series.Values;
-            foreach (var v in list)
-                if (v.HasValue) { dataMin = Math.Min(dataMin, v.Value); dataMax = Math.Max(dataMax, v.Value); }
-        }
-        double min = dataMin >= 0 ? 0 : dataMin;
-        double max = dataMax;
-        if (max <= min) max = min + 1;
-        double range = max - min;
-        double rawUnit = range / 4.0;
-        if (rawUnit <= 0) rawUnit = 1;
-        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
-        double norm = rawUnit / magnitude;
-        double niceMult = norm switch { < 1.5 => 1.0, < 2.25 => 2.0, < 3.75 => 2.5, < 7.5 => 5.0, _ => 10.0 };
-        double mu = niceMult * magnitude;
-        double niceMax = Math.Ceiling(max / mu) * mu;
-        double niceMin = min >= 0 ? 0 : Math.Floor(min / mu) * mu;
-        if (Math.Abs(niceMax - max) < mu * 1e-9) niceMax += mu;
-        return (niceMin, niceMax, mu);
-    }
+        ChartShape chart, bool useX) =>
+        ChartRenderPlanner.ComputeScatterAxisRange(chart, useX);
 
     private static string FormatAxisValue(double v) =>
-        Math.Abs(v) >= 1000
-            ? $"{v / 1000:G4}K"
-            : v == Math.Floor(v)
-                ? ((long)v).ToString(System.Globalization.CultureInfo.InvariantCulture)
-                : v.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+        ChartRenderPlanner.FormatAxisValue(v);
 
     // ── Data label helpers ────────────────────────────────────────────────────
 
-    private static ChartDataLabels? EffectiveLabels(ChartShape chart, int seriesIndex)
-    {
-        var ser = seriesIndex < chart.Series.Count ? chart.Series[seriesIndex] : null;
-        var dl  = ser?.DataLabels ?? chart.DataLabels;
-        return (dl is not null && dl.HasAny) ? dl : null;
-    }
+    private static ChartDataLabels? EffectiveLabels(ChartShape chart, int seriesIndex) =>
+        ChartRenderPlanner.ResolveEffectiveLabels(chart, seriesIndex);
 
     private static string FormatDataLabel(
         ChartDataLabels dl, double value, double total,
-        string? categoryName, string? seriesName)
-    {
-        string formattedVal = string.IsNullOrEmpty(dl.NumberFormat)
-            ? FormatAxisValue(value)
-            : FormatWithCode(value, dl.NumberFormat!);
+        string? categoryName, string? seriesName) =>
+        ChartRenderPlanner.FormatDataLabel(dl, value, total, categoryName, seriesName);
 
-        string pctStr = total > 0
-            ? $"{value / total * 100:0}%"
-            : "0%";
-
-        var parts = new System.Text.StringBuilder();
-        if (dl.ShowSeriesName   && !string.IsNullOrEmpty(seriesName))  parts.Append(seriesName).Append(' ');
-        if (dl.ShowCategoryName && !string.IsNullOrEmpty(categoryName)) parts.Append(categoryName).Append(' ');
-        if (dl.ShowValue)   parts.Append(formattedVal).Append(' ');
-        if (dl.ShowPercent) parts.Append(pctStr).Append(' ');
-
-        return parts.ToString().Trim();
-    }
-
-    private static string FormatWithCode(double value, string code)
-    {
-        if (code.Contains('%'))
-        {
-            double pct = value * 100.0;
-            int dotPos = code.IndexOf('.');
-            // CB5: count digit chars between '.' and '%' (LastIndexOf('%') - dotPos - 1)
-            int decimals = dotPos >= 0 ? code.LastIndexOf('%') - dotPos - 1 : 0;
-            return pct.ToString(decimals > 0 ? $"F{decimals}" : "F0", System.Globalization.CultureInfo.InvariantCulture) + "%";
-        }
-        if (code.Contains(','))
-            return value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
-        int dotIdx = code.IndexOf('.');
-        if (dotIdx >= 0)
-        {
-            int dec = code.Length - dotIdx - 1;
-            return value.ToString($"F{dec}", System.Globalization.CultureInfo.InvariantCulture);
-        }
-        return FormatAxisValue(value);
-    }
+    private static string FormatWithCode(double value, string code) =>
+        ChartRenderPlanner.FormatWithCode(value, code);
 
     /// <summary>
     /// CB2: passes correct category-sum total for ShowPercent.

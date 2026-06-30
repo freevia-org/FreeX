@@ -1876,56 +1876,8 @@ public sealed class SlideCanvas : FrameworkElement
     /// Returns (min, max, majorUnit).
     /// </summary>
     internal static (double min, double max, double majorUnit) ComputeNiceAxisRange(
-        FreeP.Core.Model.ChartShape chart)
-    {
-        double dataMin = 0, dataMax = 0;
-        foreach (var series in chart.Series)
-        {
-            if (series.OnSecondaryAxis) continue;  // CB1: exclude secondary-axis series from primary range
-            foreach (var v in series.Values)
-            {
-                if (v.HasValue)
-                {
-                    dataMin = Math.Min(dataMin, v.Value);
-                    dataMax = Math.Max(dataMax, v.Value);
-                }
-            }
-        }
-
-        // Apply explicit axis overrides
-        double min = chart.ValueAxis.Min ?? (dataMin >= 0 ? 0 : dataMin);
-        double max = chart.ValueAxis.Max ?? dataMax;
-
-        if (max <= min) max = min + 1;
-
-        // Pick a nice major unit so we get approximately 4-5 gridlines.
-        double range = max - min;
-        double rawUnit = range / 4.0;
-        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
-        double norm = rawUnit / magnitude;
-
-        double niceMult = norm switch
-        {
-            < 1.5  => 1.0,
-            < 2.25 => 2.0,
-            < 3.75 => 2.5,
-            < 7.5  => 5.0,
-            _      => 10.0
-        };
-
-        double majorUnit = niceMult * magnitude;
-
-        // Round max up to next multiple of majorUnit
-        double niceMax = Math.Ceiling(max / majorUnit) * majorUnit;
-        double niceMin = min >= 0 ? 0 : Math.Floor(min / majorUnit) * majorUnit;
-
-        // PowerPoint adds one more tick of headroom when the data max exactly equals the
-        // computed niceMax (it never draws data touching the top gridline).
-        if (Math.Abs(niceMax - max) < majorUnit * 1e-9)
-            niceMax += majorUnit;
-
-        return (niceMin, niceMax, majorUnit);
-    }
+        FreeP.Core.Model.ChartShape chart) =>
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
 
     /// <summary>
     /// Computes the nice axis range for the SECONDARY value axis using ONLY series that have
@@ -1933,88 +1885,15 @@ public sealed class SlideCanvas : FrameworkElement
     /// (avoids divide-by-zero).  CB1 fix.
     /// </summary>
     internal static (double min, double max, double majorUnit) ComputeNiceSecondaryAxisRange(
-        FreeP.Core.Model.ChartShape chart)
-    {
-        double dataMin = 0, dataMax = 0;
-        bool any = false;
-        foreach (var series in chart.Series)
-        {
-            if (!series.OnSecondaryAxis) continue;
-            foreach (var v in series.Values)
-            {
-                if (v.HasValue)
-                {
-                    dataMin = Math.Min(dataMin, v.Value);
-                    dataMax = Math.Max(dataMax, v.Value);
-                    any = true;
-                }
-            }
-        }
-
-        if (!any) return (0, 1, 1);  // no secondary series → sensible fallback
-
-        // Apply explicit secondary-axis overrides
-        double min = chart.SecondaryValueAxis?.Min ?? (dataMin >= 0 ? 0 : dataMin);
-        double max = chart.SecondaryValueAxis?.Max ?? dataMax;
-
-        if (max <= min) max = min + 1;  // zero-range guard
-
-        double range = max - min;
-        double rawUnit = range / 4.0;
-        if (rawUnit <= 0) rawUnit = 1;
-        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
-        double norm = rawUnit / magnitude;
-
-        double niceMult = norm switch
-        {
-            < 1.5  => 1.0,
-            < 2.25 => 2.0,
-            < 3.75 => 2.5,
-            < 7.5  => 5.0,
-            _      => 10.0
-        };
-
-        double majorUnit = niceMult * magnitude;
-
-        double niceMax = Math.Ceiling(max / majorUnit) * majorUnit;
-        double niceMin = min >= 0 ? 0 : Math.Floor(min / majorUnit) * majorUnit;
-
-        if (Math.Abs(niceMax - max) < majorUnit * 1e-9)
-            niceMax += majorUnit;
-
-        return (niceMin, niceMax, majorUnit);
-    }
+        FreeP.Core.Model.ChartShape chart) =>
+        ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
 
     /// <summary>
     /// Nice-number axis range for scatter/bubble X axis (uses XValues) or Y axis (uses Values).
     /// </summary>
     internal static (double min, double max, double majorUnit) ComputeNiceScatterAxisRange(
-        FreeP.Core.Model.ChartShape chart, bool useX)
-    {
-        double dataMin = 0, dataMax = 0;
-        foreach (var series in chart.Series)
-        {
-            var list = useX ? series.XValues : series.Values;
-            foreach (var v in list)
-                if (v.HasValue) { dataMin = Math.Min(dataMin, v.Value); dataMax = Math.Max(dataMax, v.Value); }
-        }
-
-        double min = dataMin >= 0 ? 0 : dataMin;
-        double max = dataMax;
-        if (max <= min) max = min + 1;
-
-        double range = max - min;
-        double rawUnit = range / 4.0;
-        if (rawUnit <= 0) rawUnit = 1;
-        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
-        double norm = rawUnit / magnitude;
-        double niceMult = norm switch { < 1.5 => 1.0, < 2.25 => 2.0, < 3.75 => 2.5, < 7.5 => 5.0, _ => 10.0 };
-        double mu = niceMult * magnitude;
-        double niceMax = Math.Ceiling(max / mu) * mu;
-        double niceMin = min >= 0 ? 0 : Math.Floor(min / mu) * mu;
-        if (Math.Abs(niceMax - max) < mu * 1e-9) niceMax += mu;
-        return (niceMin, niceMax, mu);
-    }
+        FreeP.Core.Model.ChartShape chart, bool useX) =>
+        ChartRenderPlanner.ComputeScatterAxisRange(chart, useX);
 
     // Keep old signature for compatibility with existing callers that only need min/max
     private static (double min, double max) ComputeAxisRange(FreeP.Core.Model.ChartShape chart)
@@ -2024,11 +1903,7 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     private static string FormatAxisValue(double v) =>
-        Math.Abs(v) >= 1000
-            ? $"{v / 1000:G4}K"
-            : v == Math.Floor(v)
-                ? ((long)v).ToString(System.Globalization.CultureInfo.InvariantCulture)
-                : v.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+        ChartRenderPlanner.FormatAxisValue(v);
 
     // ── Data label helpers ────────────────────────────────────────────────────
 
@@ -2037,63 +1912,20 @@ public sealed class SlideCanvas : FrameworkElement
     /// Returns null if no labels are configured.
     /// </summary>
     private static FreeP.Core.Model.ChartDataLabels? EffectiveLabels(
-        FreeP.Core.Model.ChartShape chart, int seriesIndex)
-    {
-        var ser = seriesIndex < chart.Series.Count ? chart.Series[seriesIndex] : null;
-        var dl  = ser?.DataLabels ?? chart.DataLabels;
-        return (dl is not null && dl.HasAny) ? dl : null;
-    }
+        FreeP.Core.Model.ChartShape chart, int seriesIndex) =>
+        ChartRenderPlanner.ResolveEffectiveLabels(chart, seriesIndex);
 
     /// <summary>
     /// Composes the label string for a single data point according to the DataLabels config.
     /// </summary>
     private static string FormatDataLabel(
         FreeP.Core.Model.ChartDataLabels dl, double value, double total,
-        string? categoryName, string? seriesName)
-    {
-        string formattedVal = string.IsNullOrEmpty(dl.NumberFormat)
-            ? FormatAxisValue(value)
-            : FormatWithCode(value, dl.NumberFormat!);
-
-        string pctStr = total > 0
-            ? $"{value / total * 100:0}%"
-            : "0%";
-
-        var parts = new System.Text.StringBuilder();
-        if (dl.ShowSeriesName   && !string.IsNullOrEmpty(seriesName))  parts.Append(seriesName).Append(' ');
-        if (dl.ShowCategoryName && !string.IsNullOrEmpty(categoryName)) parts.Append(categoryName).Append(' ');
-        if (dl.ShowValue)   parts.Append(formattedVal).Append(' ');
-        if (dl.ShowPercent) parts.Append(pctStr).Append(' ');
-
-        return parts.ToString().Trim();
-    }
+        string? categoryName, string? seriesName) =>
+        ChartRenderPlanner.FormatDataLabel(dl, value, total, categoryName, seriesName);
 
     /// <summary>Basic numeric format-code application (subset: 0, 0.00, #,##0, 0%, 0.00%).</summary>
-    private static string FormatWithCode(double value, string code)
-    {
-        // Percentage codes: multiply by 100 for display
-        if (code.Contains('%'))
-        {
-            double pct = value * 100.0;
-            int decimals = 0;
-            int dotPos = code.IndexOf('.');
-            if (dotPos >= 0)
-                decimals = code.LastIndexOf('%') - dotPos - 1;  // CB5: count digits between '.' and '%'
-            string fmtStr = decimals > 0 ? $"F{decimals}" : "F0";
-            return pct.ToString(fmtStr, System.Globalization.CultureInfo.InvariantCulture) + "%";
-        }
-        // Thousands separator
-        if (code.Contains(','))
-            return value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
-        // Decimal places via 0.00 style
-        int dotIdx = code.IndexOf('.');
-        if (dotIdx >= 0)
-        {
-            int dec = code.Length - dotIdx - 1;
-            return value.ToString($"F{dec}", System.Globalization.CultureInfo.InvariantCulture);
-        }
-        return FormatAxisValue(value);
-    }
+    private static string FormatWithCode(double value, string code) =>
+        ChartRenderPlanner.FormatWithCode(value, code);
 
     /// <summary>
     /// Draws data labels for a column/area series, after bars/lines have been rendered.
