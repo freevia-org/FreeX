@@ -1052,7 +1052,7 @@ public partial class MainWindow
 
         if (result.Chosen)
         {
-            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, out var target) ||
+            if (!WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, result.FilterIndex, out var target) ||
                 target is null)
             {
                 return false;
