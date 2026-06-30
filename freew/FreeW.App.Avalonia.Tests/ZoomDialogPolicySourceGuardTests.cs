@@ -22,6 +22,23 @@ public sealed class ZoomDialogPolicySourceGuardTests
         source.Should().NotContain("ZoomLevels.FromPercent(");
     }
 
+    [Fact]
+    public void ZoomDialog_UsesSharedAvaloniaCompactDialogChromeForChrome()
+    {
+        var source = ReadAvaloniaSource("ZoomDialog.cs");
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(_percentBox, DialogChromeStyle)");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true)");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72)");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(button, DialogChromeStyle)");
+        source.Should().NotContain("Foreground = new SolidColorBrush(Color.FromRgb(0x80");
+        source.Should().NotContain("new StackPanel\r\n        {\r\n            Orientation = Orientation.Horizontal,\r\n            HorizontalAlignment = HorizontalAlignment.Right,");
+    }
+
     private static string ReadAvaloniaSource(string fileName)
     {
         var path = Path.Combine(FindRepositoryRoot(), "freew", "FreeW.App.Avalonia", fileName);
