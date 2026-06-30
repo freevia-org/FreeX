@@ -3784,15 +3784,13 @@ public static class PptxPackageReader
     private static long? ParseLongNullable(string? value) =>
         long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
 
-    private static bool TryParseHex6(string hex, out SrgbColor color)
+    private static bool TryParseHex6(string? hex, out SrgbColor color)
     {
         color = default;
-        var s = hex.Trim().TrimStart('#');
-        if (s.Length != 6) return false;
-        if (!byte.TryParse(s[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)) return false;
-        if (!byte.TryParse(s[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)) return false;
-        if (!byte.TryParse(s[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)) return false;
-        color = new SrgbColor(r, g, b);
+        if (!DrawingMlRgbColor.TryParseHexRgb(hex, out var rgb))
+            return false;
+
+        color = new SrgbColor(rgb.R, rgb.G, rgb.B);
         return true;
     }
 

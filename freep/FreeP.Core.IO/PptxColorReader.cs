@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeP.Core.Model;
 
@@ -260,14 +261,11 @@ internal static class PptxColorReader
     internal static string ToSchemeColorString(ThemeColorSlot slot) =>
         ThemeColorSlotMapper.ToSchemeColorString(slot);
 
-    private static SrgbColor? ParseHexColor(string hex)
+    private static SrgbColor? ParseHexColor(string? hex)
     {
-        var normalized = hex.Trim().TrimStart('#');
-        if (normalized.Length != 6) return null;
-        if (!byte.TryParse(normalized[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)) return null;
-        if (!byte.TryParse(normalized[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)) return null;
-        if (!byte.TryParse(normalized[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)) return null;
-        return new SrgbColor(r, g, b);
+        return DrawingMlRgbColor.TryParseHexRgb(hex, out var rgb)
+            ? new SrgbColor(rgb.R, rgb.G, rgb.B)
+            : null;
     }
 
     private static double? ReadPercentage(string? value) =>

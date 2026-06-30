@@ -3965,7 +3965,7 @@ public static class PptxPackageWriter
         }
     }
 
-    private static string FmtColor(SrgbColor c) => $"{c.R:X2}{c.G:X2}{c.B:X2}";
+    private static string FmtColor(SrgbColor c) => new DrawingMlRgbColor(c.R, c.G, c.B).ToHexRgb();
 
     private static string GetShapeId(SlideShape s) => s.Id.ToString(CultureInfo.InvariantCulture);
 
