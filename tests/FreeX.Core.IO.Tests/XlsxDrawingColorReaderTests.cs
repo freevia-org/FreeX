@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FluentAssertions;
+using Free.Shared.Drawing;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -21,6 +22,31 @@ public sealed class XlsxDrawingColorReaderTests
         XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var reference)
             .Should().BeTrue();
         reference.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2));
+    }
+
+    [Theory]
+    [InlineData("tx1", WorkbookThemeColorSlot.Dark1, DrawingMlThemeColorSlot.Dark1)]
+    [InlineData("bg1", WorkbookThemeColorSlot.Light1, DrawingMlThemeColorSlot.Light1)]
+    [InlineData("tx2", WorkbookThemeColorSlot.Dark2, DrawingMlThemeColorSlot.Dark2)]
+    [InlineData("bg2", WorkbookThemeColorSlot.Light2, DrawingMlThemeColorSlot.Light2)]
+    [InlineData("folHlink", WorkbookThemeColorSlot.FollowedHyperlink, DrawingMlThemeColorSlot.FollowedHyperlink)]
+    public void TryReadThemeColorReference_AdaptsSharedDrawingMlRoleMap(
+        string roleName,
+        WorkbookThemeColorSlot expectedWorkbookSlot,
+        DrawingMlThemeColorSlot expectedSharedSlot)
+    {
+        var solidFill = XElement.Parse($"""
+            <a:solidFill xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:schemeClr val="{roleName}"/>
+            </a:solidFill>
+            """);
+
+        DrawingMlThemeColorSlotMapper.TryMapRole(roleName, out var sharedSlot).Should().BeTrue();
+        sharedSlot.Should().Be(expectedSharedSlot);
+
+        XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var reference)
+            .Should().BeTrue();
+        reference.Should().Be(new WorkbookThemeColorReference(expectedWorkbookSlot));
     }
 
     [Fact]

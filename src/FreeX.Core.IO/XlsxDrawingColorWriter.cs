@@ -41,20 +41,5 @@ internal static class XlsxDrawingColorWriter
         $"{color.R:X2}{color.G:X2}{color.B:X2}";
 
     private static string ToSchemeColorValue(WorkbookThemeColorSlot slot) =>
-        slot switch
-        {
-            WorkbookThemeColorSlot.Dark1 => "dk1",
-            WorkbookThemeColorSlot.Light1 => "lt1",
-            WorkbookThemeColorSlot.Dark2 => "dk2",
-            WorkbookThemeColorSlot.Light2 => "lt2",
-            WorkbookThemeColorSlot.Accent1 => "accent1",
-            WorkbookThemeColorSlot.Accent2 => "accent2",
-            WorkbookThemeColorSlot.Accent3 => "accent3",
-            WorkbookThemeColorSlot.Accent4 => "accent4",
-            WorkbookThemeColorSlot.Accent5 => "accent5",
-            WorkbookThemeColorSlot.Accent6 => "accent6",
-            WorkbookThemeColorSlot.Hyperlink => "hlink",
-            WorkbookThemeColorSlot.FollowedHyperlink => "folHlink",
-            _ => "accent1"
-        };
+        XlsxDrawingThemeColorSlots.ToSchemeColorValue(slot);
 }

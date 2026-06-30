@@ -34,35 +34,5 @@ public static class XlsxDrawingColorReader
     }
 
     private static bool TryMapSchemeColor(string? value, out WorkbookThemeColorSlot slot)
-    {
-        slot = default;
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        slot = value.Trim().ToLowerInvariant() switch
-        {
-            "dk1" or "tx1" => WorkbookThemeColorSlot.Dark1,
-            "lt1" or "bg1" => WorkbookThemeColorSlot.Light1,
-            "dk2" or "tx2" => WorkbookThemeColorSlot.Dark2,
-            "lt2" or "bg2" => WorkbookThemeColorSlot.Light2,
-            "accent1" => WorkbookThemeColorSlot.Accent1,
-            "accent2" => WorkbookThemeColorSlot.Accent2,
-            "accent3" => WorkbookThemeColorSlot.Accent3,
-            "accent4" => WorkbookThemeColorSlot.Accent4,
-            "accent5" => WorkbookThemeColorSlot.Accent5,
-            "accent6" => WorkbookThemeColorSlot.Accent6,
-            "hlink" => WorkbookThemeColorSlot.Hyperlink,
-            "folhlink" => WorkbookThemeColorSlot.FollowedHyperlink,
-            _ => default
-        };
-
-        return value.Trim().ToLowerInvariant() is
-            "dk1" or "tx1" or
-            "lt1" or "bg1" or
-            "dk2" or "tx2" or
-            "lt2" or "bg2" or
-            "accent1" or "accent2" or "accent3" or "accent4" or "accent5" or "accent6" or
-            "hlink" or "folhlink";
-    }
-
+        => XlsxDrawingThemeColorSlots.TryMapRole(value, out slot);
 }
