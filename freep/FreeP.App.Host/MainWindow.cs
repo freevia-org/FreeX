@@ -82,7 +82,7 @@ public sealed class MainWindow : Window
     private FileCommands _file = null!;
     private BackstageView _backstage = null!;
     private Border _titleBar = null!;
-    private TextBlock _titleText = null!;
+    private SisterWpfWindowTitleBinder _titleBinder = null!;
     private TabControl _ribbonTabs = null!;
     private TabItem _fileTab = null!;
     private RibbonFileTabRouter? _fileTabRouter;
@@ -158,7 +158,7 @@ public sealed class MainWindow : Window
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
         _titleBar = titleBar.Root;
-        _titleText = titleBar.TitleText;
+        _titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);
         AddQuickAccessButtons(titleBar.QatHost);
 
         // Ribbon. Wave 4C passes the slideshow launch Actions into the command registry;
@@ -697,14 +697,12 @@ public sealed class MainWindow : Window
 
     private void UpdateTitle()
     {
-        var title = WindowTitlePlanner.Compose(
-            displayName:    _file.DisplayName,
-            applicationName: "FreeP",
-            isDirty:         _file.IsDirty,
-            dirtyMarker:     " *",
-            separator:       " — ");
-        Title           = title;
-        _titleText.Text = title;
+        _titleBinder.Update(new SisterWpfWindowTitleSpec(
+            DisplayName: _file.DisplayName,
+            ApplicationName: "FreeP",
+            IsDirty: _file.IsDirty,
+            DirtyMarker: " *",
+            Separator: " \u2014 "));
     }
 
     // ── Keyboard bindings ─────────────────────────────────────────────────────────

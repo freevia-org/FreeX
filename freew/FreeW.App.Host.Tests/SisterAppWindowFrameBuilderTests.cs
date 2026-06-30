@@ -31,6 +31,27 @@ public sealed class SisterAppWindowFrameBuilderTests
     }
 
     [StaFact]
+    public void WindowTitleBinder_ComposesAndUpdatesWindowAndTitleText()
+    {
+        var window = new Window();
+        var titleText = new TextBlock();
+
+        var title = SisterWpfWindowTitleBinder.Update(
+            window,
+            titleText,
+            new SisterWpfWindowTitleSpec(
+                DisplayName: "Quarterly Review",
+                ApplicationName: "FreeP",
+                IsDirty: true,
+                DirtyMarker: " *",
+                Separator: " \u2014 "));
+
+        title.Should().Be("Quarterly Review * \u2014 FreeP");
+        window.Title.Should().Be(title);
+        titleText.Text.Should().Be(title);
+    }
+
+    [StaFact]
     public void ClientFrameBuilder_ComposesChromeWorkAreaAndStatusRows()
     {
         var chrome = new Border();
