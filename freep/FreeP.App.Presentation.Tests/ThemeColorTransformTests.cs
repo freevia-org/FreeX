@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -12,6 +13,8 @@ public sealed class ThemeColorTransformTests
     [Fact]
     public void ThemeColorTransform_AppliesDrawingMlFractions()
     {
+        DrawingMlColorTransform.ApplyTint(new DrawingMlRgbColor(101, 151, 201), 0.5)
+            .Should().Be(new DrawingMlRgbColor(178, 203, 228));
         ThemeColorTransform.ApplyTint(new SrgbColor(101, 151, 201), 0.5)
             .Should().Be(new SrgbColor(178, 203, 228));
         ThemeColorTransform.ApplyTint(new SrgbColor(10, 20, 30), 0.0)
@@ -24,6 +27,22 @@ public sealed class ThemeColorTransformTests
 
         ThemeColorTransform.ApplyLuminance(new SrgbColor(64, 64, 64), 0.5, 0.25)
             .Should().Be(new SrgbColor(96, 96, 96));
+    }
+
+    [Fact]
+    public void ThemeColorTransform_AdaptsSharedDrawingMlTransform()
+    {
+        var baseColor = new SrgbColor(96, 128, 160);
+        var sharedBaseColor = new DrawingMlRgbColor(baseColor.R, baseColor.G, baseColor.B);
+        var sharedResolved = DrawingMlColorTransform.Apply(
+            sharedBaseColor,
+            lumMod: 0.7,
+            lumOff: 0.1,
+            tint: 0.8,
+            shade: 0.6);
+
+        ThemeColorTransform.Apply(baseColor, 0.7, 0.1, 0.8, 0.6)
+            .Should().Be(new SrgbColor(sharedResolved.R, sharedResolved.G, sharedResolved.B));
     }
 
     [Theory]
@@ -71,6 +90,13 @@ public sealed class ThemeColorTransformTests
         readerSource.Should().Contain("ThemeColorTransform.Apply(");
         resolverSource.Should().Contain("ThemeColorTransform.Apply(");
 
+        var transformSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.Core.Model", "ThemeColorTransform.cs"));
+        transformSource.Should().Contain("DrawingMlColorTransform.Apply(");
+        transformSource.Should().Contain("DrawingMlColorTransform.ApplyLuminance");
+        transformSource.Should().Contain("DrawingMlColorTransform.ApplyTint");
+        transformSource.Should().Contain("DrawingMlColorTransform.ApplyShade");
+        transformSource.Should().NotContain("RgbToHls(");
+
         readerSource.Should().NotContain("ApplyLumModOff(");
         resolverSource.Should().NotContain("ApplyLumModOff(");
         readerSource.Should().NotContain("private static SrgbColor ApplyTint");
@@ -80,12 +106,18 @@ public sealed class ThemeColorTransformTests
     }
 
     [Theory]
-    [InlineData("tx1", ThemeColorSlot.Dk1)]
-    [InlineData("bg1", ThemeColorSlot.Lt1)]
-    [InlineData("accent6", ThemeColorSlot.Accent6)]
-    [InlineData("folHlink", ThemeColorSlot.FolHLink)]
-    public void ThemeColorSlotMapper_MapsOfficeRoles(string roleName, ThemeColorSlot expectedSlot)
+    [InlineData("tx1", ThemeColorSlot.Dk1, DrawingMlThemeColorSlot.Dark1)]
+    [InlineData("bg1", ThemeColorSlot.Lt1, DrawingMlThemeColorSlot.Light1)]
+    [InlineData("accent6", ThemeColorSlot.Accent6, DrawingMlThemeColorSlot.Accent6)]
+    [InlineData("folHlink", ThemeColorSlot.FolHLink, DrawingMlThemeColorSlot.FollowedHyperlink)]
+    public void ThemeColorSlotMapper_AdaptsSharedOfficeRoles(
+        string roleName,
+        ThemeColorSlot expectedSlot,
+        DrawingMlThemeColorSlot expectedSharedSlot)
     {
+        DrawingMlThemeColorSlotMapper.TryMapRole(roleName, out var sharedSlot).Should().BeTrue();
+        sharedSlot.Should().Be(expectedSharedSlot);
+
         ThemeColorSlotMapper.TryMapRole(roleName, out var slot).Should().BeTrue();
         slot.Should().Be(expectedSlot);
     }
@@ -102,6 +134,12 @@ public sealed class ThemeColorTransformTests
         resolverSource.Should().Contain("ThemeColorSlotMapper.MapRoleToSlot(");
         resolverSource.Should().NotContain("DefaultClrMap");
         readerSource.Should().NotContain("\"tx1\" or");
+
+        var mapperSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.Core.Model", "ThemeColorSlotMapper.cs"));
+        mapperSource.Should().Contain("DrawingMlThemeColorSlotMapper.TryMapRole");
+        mapperSource.Should().Contain("DrawingMlThemeColorSlotMapper.MapRoleToSlot");
+        mapperSource.Should().Contain("DrawingMlThemeColorSlotMapper.ToSchemeColorValue");
+        mapperSource.Should().NotContain("DefaultRoleMap");
     }
 
     private static XElement BuildSchemeFill(string? lumMod, string? lumOff, string? tint, string? shade)

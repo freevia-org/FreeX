@@ -32,6 +32,9 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
         TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDrawingColorWriter.cs")
             .Should()
             .Contain("XlsxDrawingColorTint.ApplyTo");
+        TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDrawingColorWriter.cs")
+            .Should()
+            .Contain("XlsxDrawingThemeColorSlots.ToSchemeColorValue");
 
         var readerSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDrawingColorReader.cs");
         readerSource
@@ -39,7 +42,14 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
             .Contain("XlsxDrawingColorTint.ReadFrom");
         readerSource
             .Should()
+            .Contain("XlsxDrawingThemeColorSlots.TryMapRole");
+        readerSource
+            .Should()
             .Contain("XlsxColorReader.TryParseHexColor(value, out color)");
+
+        TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDrawingThemeColorSlots.cs")
+            .Should()
+            .Contain("DrawingMlThemeColorSlotMapper");
     }
 
     [Fact]
@@ -52,5 +62,10 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
         TestWorkspaceFiles.ReadCoreModelRepoSource("WorkbookTheme.cs")
             .Should()
             .Contain("WorkbookThemeTint.Apply(color, tint)");
+
+        TestWorkspaceFiles.ReadCoreModelRepoSource("WorkbookThemeTint.cs")
+            .Should()
+            .Contain("DrawingMlColorTransform.ApplyTint")
+            .And.Contain("DrawingMlColorTransform.ApplyShade");
     }
 }

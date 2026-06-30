@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using FluentAssertions;
+using Free.Shared.Drawing;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 
@@ -37,6 +38,30 @@ public sealed class XlsxDrawingColorWriterTests
         color!.Attribute("val")!.Value.Should().Be("lt1");
         color.Element(DrawingNs + "lumMod")!.Attribute("val")!.Value.Should().Be("60000");
         color.Element(DrawingNs + "lumOff").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(WorkbookThemeColorSlot.Dark1, DrawingMlThemeColorSlot.Dark1, "dk1")]
+    [InlineData(WorkbookThemeColorSlot.Light1, DrawingMlThemeColorSlot.Light1, "lt1")]
+    [InlineData(WorkbookThemeColorSlot.Accent6, DrawingMlThemeColorSlot.Accent6, "accent6")]
+    [InlineData(WorkbookThemeColorSlot.Hyperlink, DrawingMlThemeColorSlot.Hyperlink, "hlink")]
+    [InlineData(WorkbookThemeColorSlot.FollowedHyperlink, DrawingMlThemeColorSlot.FollowedHyperlink, "folHlink")]
+    public void ToSolidFill_AdaptsSharedDrawingMlSchemeColorValues(
+        WorkbookThemeColorSlot workbookSlot,
+        DrawingMlThemeColorSlot sharedSlot,
+        string expectedSchemeValue)
+    {
+        var fill = XlsxDrawingColorWriter.ToSolidFill(
+            new WorkbookThemeColorReference(workbookSlot),
+            null,
+            DrawingNs);
+
+        DrawingMlThemeColorSlotMapper.ToSchemeColorValue(sharedSlot)
+            .Should().Be(expectedSchemeValue);
+
+        var color = fill.Should().NotBeNull().And.Subject!.Element(DrawingNs + "schemeClr");
+        color.Should().NotBeNull();
+        color!.Attribute("val")!.Value.Should().Be(expectedSchemeValue);
     }
 
     [Fact]

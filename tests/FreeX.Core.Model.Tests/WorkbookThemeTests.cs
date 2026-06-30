@@ -389,6 +389,22 @@ public sealed class WorkbookThemeTests
     }
 
     [Fact]
+    public void WorkbookTheme_ResolveColor_AdaptsExcelTintToSharedRgbTransform()
+    {
+        var theme = WorkbookTheme.Office.WithColor(
+            WorkbookThemeColorSlot.Accent1,
+            new CellColor(100, 150, 200));
+
+        var positiveTint = DrawingMlColorTransform.ApplyTint(new DrawingMlRgbColor(100, 150, 200), 0.5);
+        var negativeTint = DrawingMlColorTransform.ApplyShade(new DrawingMlRgbColor(100, 150, 200), 0.75);
+
+        theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.5)
+            .Should().Be(new CellColor(positiveTint.R, positiveTint.G, positiveTint.B));
+        theme.ResolveColor(WorkbookThemeColorSlot.Accent1, -0.25)
+            .Should().Be(new CellColor(negativeTint.R, negativeTint.G, negativeTint.B));
+    }
+
+    [Fact]
     public void CellStyle_ResolvesThemeColorReferencesWithTint()
     {
         var theme = WorkbookTheme.Office

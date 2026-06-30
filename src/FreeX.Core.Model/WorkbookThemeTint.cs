@@ -9,17 +9,13 @@ internal static class WorkbookThemeTint
         if (Math.Abs(tint) < NeutralTintThreshold)
             return color;
 
-        return new CellColor(
-            Apply(color.R, tint),
-            Apply(color.G, tint),
-            Apply(color.B, tint));
+        var transformed = tint < 0
+            ? DrawingMlColorTransform.ApplyShade(ToSharedColor(color), 1.0 + tint)
+            : DrawingMlColorTransform.ApplyTint(ToSharedColor(color), 1.0 - tint);
+
+        return new CellColor(transformed.R, transformed.G, transformed.B);
     }
 
-    private static byte Apply(byte channel, double tint)
-    {
-        var value = tint < 0
-            ? channel * (1.0 + tint)
-            : channel + ((255 - channel) * tint);
-        return (byte)Math.Clamp(Math.Round(value), 0, 255);
-    }
+    private static DrawingMlRgbColor ToSharedColor(CellColor color) =>
+        new(color.R, color.G, color.B);
 }
