@@ -24,4 +24,14 @@ public sealed class TextBoxFrameLayoutPlannerTests
         layout.Bounds.Should().Be(new LayoutRect(10, 20, 12, 9));
         layout.TextBounds.Should().Be(new LayoutRect(14, 24, 4, 1));
     }
+
+    [Fact]
+    public void SharedPlanner_AsymmetricInsets_CreateTextBounds()
+    {
+        var layout = TextFrameLayoutPlanner.Create(
+            new LayoutRect(10, 20, 40, 30),
+            new TextFrameInsets(2, 3, 4, 5));
+
+        layout.TextBounds.Should().Be(new LayoutRect(12, 23, 34, 22));
+    }
 }
