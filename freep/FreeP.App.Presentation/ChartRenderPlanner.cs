@@ -118,25 +118,35 @@ public readonly record struct ChartBubblePrimitive(
     int SeriesIndex,
     int PointIndex,
     ChartPlanPoint Center,
-    double Radius);
+    double Radius,
+    ChartFillPlan Fill,
+    ChartStrokePlan Stroke);
 
 public readonly record struct ChartBubblePrimitivePlan(
     IReadOnlyList<ChartGridLinePlan> GridLines,
+    ChartStrokePlan GridLineStroke,
     IReadOnlyList<ChartTextPlan> XAxisLabels,
     IReadOnlyList<ChartTextPlan> YAxisLabels,
     IReadOnlyList<ChartBubblePrimitive> Bubbles);
 
-public readonly record struct ChartRadarRingPrimitive(IReadOnlyList<ChartPlanPoint> Points);
+public readonly record struct ChartRadarRingPrimitive(
+    IReadOnlyList<ChartPlanPoint> Points,
+    ChartPathPrimitive Path,
+    ChartStrokePlan Stroke);
 
 public readonly record struct ChartRadarSeriesPrimitive(
     int SeriesIndex,
     bool IsFilled,
     bool WithMarkers,
-    IReadOnlyList<ChartPlanPoint> Points);
+    IReadOnlyList<ChartPlanPoint> Points,
+    ChartPathPrimitive Path,
+    ChartStrokePlan Stroke,
+    IReadOnlyList<ChartCirclePrimitive> Markers);
 
 public readonly record struct ChartRadarPrimitivePlan(
     IReadOnlyList<ChartRadarRingPrimitive> Rings,
     IReadOnlyList<ChartGridLinePlan> Spokes,
+    ChartStrokePlan SpokeStroke,
     IReadOnlyList<ChartTextPlan> CategoryLabels,
     IReadOnlyList<ChartRadarSeriesPrimitive> Series);
 
@@ -186,6 +196,11 @@ public static class ChartRenderPlanner
     public const double ScatterMarkerRadius = 3.5;
     public const double ScatterDataLabelWidth = 40.0;
     public const double ScatterDataLabelHeight = 11.0;
+    public const byte BubbleFillAlpha = 180;
+    public const double BubbleStrokeThickness = 0.8;
+    public const byte RadarFillAlpha = 80;
+    public const double RadarSeriesStrokeThickness = 1.5;
+    public const double RadarMarkerRadius = 3.0;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -884,7 +899,8 @@ public static class ChartRenderPlanner
 
     public static ChartBubblePrimitivePlan BuildBubblePrimitivePlan(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
     {
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return EmptyBubblePrimitivePlan();
@@ -914,6 +930,9 @@ public static class ChartRenderPlanner
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
         {
             var series = chart.Series[seriesIndex];
+            var color = ResolveSeriesColor(seriesIndex, seriesColors);
+            var fill = new ChartFillPlan(color, BubbleFillAlpha);
+            var stroke = new ChartStrokePlan(color, Alpha: 255, Thickness: BubbleStrokeThickness);
             int pointCount = Math.Max(series.XValues.Count, series.Values.Count);
             for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
             {
@@ -934,7 +953,9 @@ public static class ChartRenderPlanner
                     new ChartPlanPoint(
                         plot.X + (xValue.Value - xMin) / xRange * plot.Width,
                         plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height),
-                    radius));
+                    radius,
+                    fill,
+                    stroke));
             }
         }
 
@@ -949,6 +970,7 @@ public static class ChartRenderPlanner
 
         return new ChartBubblePrimitivePlan(
             gridLines,
+            DefaultGridLineStroke(),
             xLabels,
             yLabels,
             bubbles);
@@ -956,7 +978,8 @@ public static class ChartRenderPlanner
 
     public static ChartRadarPrimitivePlan BuildRadarPrimitivePlan(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
     {
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return EmptyRadarPrimitivePlan();
@@ -995,7 +1018,10 @@ public static class ChartRenderPlanner
                     center.Y + ringRadius * Math.Sin(angle));
             }
 
-            rings.Add(new ChartRadarRingPrimitive(points));
+            rings.Add(new ChartRadarRingPrimitive(
+                points,
+                new ChartPathPrimitive(points, IsClosed: true, Fill: null),
+                DefaultGridLineStroke()));
         }
 
         var spokes = new List<ChartGridLinePlan>(categoryCount);
@@ -1040,16 +1066,39 @@ public static class ChartRenderPlanner
                     center.Y + radius * fraction * Math.Sin(angle));
             }
 
+            var color = ResolveSeriesColor(seriesIndex, seriesColors);
+            var fill = filled ? new ChartFillPlan(color, RadarFillAlpha) : (ChartFillPlan?)null;
+            var stroke = new ChartStrokePlan(color, Alpha: 255, Thickness: RadarSeriesStrokeThickness);
+            var markers = new List<ChartCirclePrimitive>();
+            if (withMarkers)
+            {
+                var markerFill = new ChartFillPlan(color, Alpha: 255);
+                for (int pointIndex = 0; pointIndex < points.Length; pointIndex++)
+                {
+                    markers.Add(new ChartCirclePrimitive(
+                        seriesIndex,
+                        pointIndex,
+                        points[pointIndex],
+                        RadarMarkerRadius,
+                        markerFill,
+                        Stroke: null));
+                }
+            }
+
             seriesPrimitives.Add(new ChartRadarSeriesPrimitive(
                 seriesIndex,
                 filled,
                 withMarkers,
-                points));
+                points,
+                new ChartPathPrimitive(points, IsClosed: true, fill),
+                stroke,
+                markers));
         }
 
         return new ChartRadarPrimitivePlan(
             rings,
             spokes,
+            DefaultRadarSpokeStroke(),
             labels,
             seriesPrimitives);
     }
@@ -1384,6 +1433,7 @@ public static class ChartRenderPlanner
     private static ChartBubblePrimitivePlan EmptyBubblePrimitivePlan() =>
         new(
             Array.Empty<ChartGridLinePlan>(),
+            DefaultGridLineStroke(),
             Array.Empty<ChartTextPlan>(),
             Array.Empty<ChartTextPlan>(),
             Array.Empty<ChartBubblePrimitive>());
@@ -1392,11 +1442,15 @@ public static class ChartRenderPlanner
         new(
             Array.Empty<ChartRadarRingPrimitive>(),
             Array.Empty<ChartGridLinePlan>(),
+            DefaultRadarSpokeStroke(),
             Array.Empty<ChartTextPlan>(),
             Array.Empty<ChartRadarSeriesPrimitive>());
 
     private static ChartStrokePlan DefaultGridLineStroke() =>
         new(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
+
+    private static ChartStrokePlan DefaultRadarSpokeStroke() =>
+        new(new SrgbColor(0xC0, 0xC0, 0xC0), Alpha: 255, Thickness: 0.5);
 
     private static IReadOnlyList<ChartDataLabelPlan> BuildScatterDataLabelPlans(
         ChartShape chart,

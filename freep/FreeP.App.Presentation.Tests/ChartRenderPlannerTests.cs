@@ -338,17 +338,28 @@ public sealed class ChartRenderPlannerTests
 
         var chart = new ChartShape { ChartType = ChartType.Bubble };
         chart.Series.Add(series);
+        var seriesColor = new SrgbColor(0x12, 0x34, 0x56);
 
         var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(
             chart,
-            new ChartPlanRect(0, 0, 160, 80));
+            new ChartPlanRect(0, 0, 160, 80),
+            new[] { seriesColor });
 
         plan.GridLines.Should().HaveCount(12);
+        plan.GridLineStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0xD9, 0xD9, 0xD9),
+            Alpha: 255,
+            Thickness: 0.5));
         plan.XAxisLabels.Should().HaveCount(6);
         plan.YAxisLabels.Should().HaveCount(6);
         plan.Bubbles.Should().HaveCount(2);
         plan.Bubbles[0].Radius.Should().BeApproximately(5, 0.0001);
         plan.Bubbles[0].Center.Should().Be(new ChartPlanPoint(0, 80));
+        plan.Bubbles[0].Fill.Should().Be(new ChartFillPlan(seriesColor, ChartRenderPlanner.BubbleFillAlpha));
+        plan.Bubbles[0].Stroke.Should().Be(new ChartStrokePlan(
+            seriesColor,
+            Alpha: 255,
+            Thickness: ChartRenderPlanner.BubbleStrokeThickness));
         plan.Bubbles[1].Radius.Should().BeApproximately(10, 0.0001);
         plan.Bubbles[1].Center.X.Should().BeApproximately(128, 0.0001);
         plan.Bubbles[1].Center.Y.Should().BeApproximately(16, 0.0001);
@@ -367,20 +378,70 @@ public sealed class ChartRenderPlannerTests
         };
         chart.Categories.AddRange(new[] { "North", "East", "South", "West" });
         chart.Series.Add(series);
+        var seriesColor = new SrgbColor(0xAA, 0xBB, 0xCC);
 
         var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(
             chart,
-            new ChartPlanRect(0, 0, 200, 100));
+            new ChartPlanRect(0, 0, 200, 100),
+            new[] { seriesColor });
 
         plan.Rings.Should().HaveCount(4);
         plan.Rings[0].Points.Should().HaveCount(4);
+        plan.Rings[0].Path.Points.Should().Equal(plan.Rings[0].Points);
+        plan.Rings[0].Path.IsClosed.Should().BeTrue();
+        plan.Rings[0].Path.Fill.Should().BeNull();
+        plan.Rings[0].Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0xD9, 0xD9, 0xD9),
+            Alpha: 255,
+            Thickness: 0.5));
         plan.Spokes.Should().HaveCount(4);
+        plan.SpokeStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0xC0, 0xC0, 0xC0),
+            Alpha: 255,
+            Thickness: 0.5));
         plan.CategoryLabels.Should().HaveCount(4);
         plan.Series.Should().ContainSingle();
         plan.Series[0].IsFilled.Should().BeTrue();
         plan.Series[0].WithMarkers.Should().BeFalse();
+        plan.Series[0].Path.IsClosed.Should().BeTrue();
+        plan.Series[0].Path.Points.Should().Equal(plan.Series[0].Points);
+        plan.Series[0].Path.Fill.Should().Be(new ChartFillPlan(seriesColor, ChartRenderPlanner.RadarFillAlpha));
+        plan.Series[0].Stroke.Should().Be(new ChartStrokePlan(
+            seriesColor,
+            Alpha: 255,
+            Thickness: ChartRenderPlanner.RadarSeriesStrokeThickness));
+        plan.Series[0].Markers.Should().BeEmpty();
         plan.Series[0].Points[0].X.Should().BeApproximately(100, 0.0001);
         plan.Series[0].Points[0].Y.Should().BeApproximately(40.625, 0.0001);
+    }
+
+    [Fact]
+    public void BuildRadarPrimitivePlan_PlansMarkerCirclesFromSeriesColor()
+    {
+        var series = new ChartSeries { Name = "Radar" };
+        series.Values.AddRange(new double?[] { 1, 2, 3 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            RadarStyle = RadarStyle.Marker
+        };
+        chart.Categories.AddRange(new[] { "North", "East", "South" });
+        chart.Series.Add(series);
+        var seriesColor = new SrgbColor(0x22, 0x66, 0xAA);
+
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 120, 120),
+            new[] { seriesColor });
+
+        var primitive = plan.Series.Should().ContainSingle().Subject;
+        primitive.WithMarkers.Should().BeTrue();
+        primitive.Path.Fill.Should().BeNull();
+        primitive.Markers.Should().HaveCount(3);
+        primitive.Markers[0].Radius.Should().Be(ChartRenderPlanner.RadarMarkerRadius);
+        primitive.Markers[0].Fill.Should().Be(new ChartFillPlan(seriesColor, Alpha: 255));
+        primitive.Markers[0].Stroke.Should().BeNull();
     }
 
     [Fact]
