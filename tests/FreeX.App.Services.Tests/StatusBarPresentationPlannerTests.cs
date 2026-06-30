@@ -94,10 +94,15 @@ public sealed class StatusBarPresentationPlannerTests
         var renderer = StatusBarPresentationPlanner.BuildRendererPlan(presentation);
 
         renderer.ReadyText.Should().BeEmpty();
+        renderer.ReadyTextVisible.Should().BeFalse();
+        renderer.VisibleReadoutText.Should().Be("Average: 20   Count: 4   Numerical Count: 3   Max: 30");
+        renderer.VisibleReadoutTextVisible.Should().BeTrue();
+        renderer.ZoomPercent.Should().Be(100);
         renderer.StatsPanelAutomationText.Should().Be("Average: 20; Count: 4; Numerical Count: 3; Max: 30");
         renderer.VisibilityElements.Should().Contain(new StatusBarElementVisibilityPlan(
             StatusBarPresentationElement.StatsPanel,
             true));
+        renderer.IsElementVisible(StatusBarPresentationElement.StatsPanel).Should().BeTrue();
         renderer.VisibilityElements.Should().Contain(new StatusBarElementVisibilityPlan(
             StatusBarPresentationElement.Sum,
             false));
@@ -139,6 +144,27 @@ public sealed class StatusBarPresentationPlannerTests
                 StatusBarPresentationElement.Maximum,
                 "Max: 30",
                 StatusBarTextResourceKeys.Maximum));
+    }
+
+    [Fact]
+    public void BuildRendererPlan_ReadyModelPlansSingleLineFooterState()
+    {
+        var model = StatusBarDisplayModelBuilder.Ready(StatusBarViewMode.Normal, zoomPercent: 125, "Ready");
+        var presentation = StatusBarPresentationPlanner.Build(
+            model,
+            StatusBarOptionVisibility.ExcelDefaults,
+            fallbackAutomationText: "Customize Status Bar");
+
+        var renderer = StatusBarPresentationPlanner.BuildRendererPlan(presentation);
+
+        renderer.ReadyText.Should().Be("Ready");
+        renderer.ReadyTextVisible.Should().BeTrue();
+        renderer.VisibleReadoutText.Should().BeEmpty();
+        renderer.VisibleReadoutTextVisible.Should().BeFalse();
+        renderer.ZoomPercent.Should().Be(125);
+        renderer.StatsPanelAutomationText.Should().Be("Customize Status Bar");
+        renderer.IsElementVisible(StatusBarPresentationElement.ReadyText).Should().BeTrue();
+        renderer.IsElementVisible(StatusBarPresentationElement.StatsPanel).Should().BeFalse();
     }
 
     private static StatusBarViewModel StatsModel() =>

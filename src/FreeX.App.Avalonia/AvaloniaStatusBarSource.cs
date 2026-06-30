@@ -61,7 +61,7 @@ internal static class AvaloniaStatusBarSource
     public static string FormatVisibleReadouts(
         StatusBarViewModel model,
         IReadOnlyDictionary<string, bool> optionVisibility) =>
-        BuildPresentation(model, optionVisibility).VisibleReadoutText;
+        BuildRendererPlan(model, optionVisibility).VisibleReadoutText;
 
     public static StatusBarPresentationPlan BuildPresentation(
         StatusBarViewModel model,
@@ -73,6 +73,18 @@ internal static class AvaloniaStatusBarSource
             StatusBarVisibilityPlanner.FromOptionVisibility(optionVisibility),
             hasPageNumberText,
             fallbackAutomationText);
+
+    public static StatusBarRendererPlan BuildRendererPlan(
+        StatusBarViewModel model,
+        IReadOnlyDictionary<string, bool> optionVisibility,
+        bool hasPageNumberText = false,
+        string fallbackAutomationText = "") =>
+        StatusBarPresentationPlanner.BuildRendererPlan(
+            BuildPresentation(
+                model,
+                optionVisibility,
+                hasPageNumberText,
+                fallbackAutomationText));
 
     public static bool IsOptionVisible(IReadOnlyDictionary<string, bool> optionVisibility, string optionTag) =>
         StatusBarVisibilityPlanner.IsOptionVisible(optionVisibility, optionTag);

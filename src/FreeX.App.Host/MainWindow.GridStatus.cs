@@ -103,16 +103,27 @@ public partial class MainWindow
             _statusBarDisplayStateCache.GetReady(
                 GetCurrentStatusBarViewMode(),
                 zoomPercent: 0);
-        ApplyStatusBarInteractiveDisplayState(BuildStatusBarPresentationPlan(state).Visibility);
+        ApplyStatusBarInteractiveDisplayState(
+            StatusBarPresentationPlanner.BuildRendererPlan(BuildStatusBarPresentationPlan(state)));
     }
 
-    private void ApplyStatusBarInteractiveDisplayState(StatusBarVisibilityPlan visibility)
+    private void ApplyStatusBarInteractiveDisplayState(StatusBarRendererPlan rendererPlan)
     {
-        SetVisibilityIfChanged(StatusViewShortcutControls, ToVisibility(visibility.ViewShortcutsVisible));
-        SetVisibilityIfChanged(StatusZoomText, ToVisibility(visibility.ZoomVisible));
-        SetVisibilityIfChanged(StatusZoomSliderControls, ToVisibility(visibility.ZoomSliderVisible));
-        SetVisibilityIfChanged(StatusZoomControls, ToVisibility(visibility.ZoomControlsVisible));
-        SetVisibilityIfChanged(StatusInteractiveControls, ToVisibility(visibility.InteractiveControlsVisible));
+        SetVisibilityIfChanged(
+            StatusViewShortcutControls,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.ViewShortcuts)));
+        SetVisibilityIfChanged(
+            StatusZoomText,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomText)));
+        SetVisibilityIfChanged(
+            StatusZoomSliderControls,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomSlider)));
+        SetVisibilityIfChanged(
+            StatusZoomControls,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomControls)));
+        SetVisibilityIfChanged(
+            StatusInteractiveControls,
+            ToVisibility(rendererPlan.IsElementVisible(StatusBarPresentationElement.InteractiveControls)));
     }
 
     private void ApplyStatusBarRendererPlan(
