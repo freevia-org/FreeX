@@ -1,15 +1,67 @@
+using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-internal static class ExcelSmokeCom
+namespace FreeX.ToolsShared.Wpf;
+
+public static class ExcelComAutomation
 {
+    private const string ExcelProcessName = "EXCEL";
     private const uint RpcCallRejectedHResult = 0x80010001u;
     private const uint RpcServerCallRetryLaterHResult = 0x8001010Au;
     private static readonly TimeSpan ExcelBusyRetryTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan ExcelReadyTimeout = TimeSpan.FromSeconds(30);
+
+    public static object CreateExcelApplication(
+        string registrationMissingMessage,
+        string activationNullMessage)
+    {
+        var excelType = Type.GetTypeFromProgID("Excel.Application")
+            ?? throw new InvalidOperationException(registrationMissingMessage);
+        return Activator.CreateInstance(excelType)
+            ?? throw new InvalidOperationException(activationNullMessage);
+    }
+
+    public static object CreateExcelApplicationWithRetry(
+        string registrationMissingMessage,
+        string activationNullMessage,
+        int maxAttempts,
+        int retryDelayMilliseconds,
+        string failureMessagePrefix,
+        Action<dynamic>? configure = null)
+    {
+        var excelType = Type.GetTypeFromProgID("Excel.Application")
+            ?? throw new InvalidOperationException(registrationMissingMessage);
+        Exception? lastException = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var excel = Activator.CreateInstance(excelType)
+                    ?? throw new InvalidOperationException(activationNullMessage);
+                configure?.Invoke((dynamic)excel);
+                return excel;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                lastException = ex;
+                Thread.Sleep(retryDelayMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"{failureMessagePrefix}: {lastException?.Message}",
+            lastException);
+    }
 
     public static void TrySetAutomationSecurity(dynamic excelApp)
     {
@@ -20,6 +72,25 @@ internal static class ExcelSmokeCom
         catch
         {
             // Older Excel builds can reject this property; DisplayAlerts=false still covers the smoke.
+        }
+    }
+
+    public static void TrySetProperty(dynamic target, string propertyName, object value)
+    {
+        try
+        {
+            var property = target.GetType().InvokeMember(
+                propertyName,
+                System.Reflection.BindingFlags.SetProperty,
+                null,
+                target,
+                new[] { value },
+                CultureInfo.InvariantCulture);
+            _ = property;
+        }
+        catch
+        {
+            // Optional automation flags are best-effort for comparison and smoke tooling.
         }
     }
 
@@ -68,6 +139,45 @@ internal static class ExcelSmokeCom
         }
     }
 
+    public static T InvokeWithComRetry<T>(Func<T> action, string operation)
+    {
+        Exception? last = null;
+        for (var attempt = 1; attempt <= 8; attempt++)
+        {
+            try
+            {
+                return action();
+            }
+            catch (Exception ex) when (LooksLikeExcelBusy(ex))
+            {
+                last = ex;
+                Thread.Sleep(Math.Min(attempt * 500, 2500));
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"{operation} failed after Excel busy retries: {last?.Message}",
+            last);
+    }
+
+    public static bool LooksLikeExcelBusy(Exception ex)
+    {
+        var hr = (uint)ex.HResult;
+        return hr is RpcCallRejectedHResult or RpcServerCallRetryLaterHResult
+            || ex.Message.Contains("0x80010001", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("Call was rejected", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("server is busy", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool LooksLikeDeadServer(Exception ex)
+    {
+        var hr = (uint)ex.HResult;
+        return hr is 0x800706BA
+                  or 0x80010108
+                  or 0x800706BE
+            || ex.Message.Contains("RPC", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static void WaitForExcelReady(object excelApp)
     {
         var deadline = DateTimeOffset.UtcNow + ExcelReadyTimeout;
@@ -89,7 +199,7 @@ internal static class ExcelSmokeCom
     }
 
     public static HashSet<int> GetExcelProcessIds() =>
-        Process.GetProcessesByName("EXCEL")
+        Process.GetProcessesByName(ExcelProcessName)
             .Select(process =>
             {
                 using (process)
@@ -120,7 +230,7 @@ internal static class ExcelSmokeCom
         if (excelPid is { } trackedPid && !baselineExcelPids.Contains(trackedPid))
             candidatePids.Add(trackedPid);
 
-        foreach (var process in Process.GetProcessesByName("EXCEL"))
+        foreach (var process in Process.GetProcessesByName(ExcelProcessName))
         {
             using (process)
             {
@@ -153,6 +263,45 @@ internal static class ExcelSmokeCom
         }
     }
 
+    public static void ReleaseComObject(object? value)
+    {
+        if (value is null)
+            return;
+
+        try
+        {
+            if (Marshal.IsComObject(value))
+                Marshal.FinalReleaseComObject(value);
+        }
+        catch
+        {
+            // Cleanup is best-effort for comparison and smoke tooling.
+        }
+    }
+
+    public static void CollectComReferences()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+    }
+
+    public static void TryCloseWorkbook(object? workbook)
+    {
+        if (workbook is null)
+            return;
+
+        try
+        {
+            ((dynamic)workbook).Close(false);
+        }
+        catch
+        {
+            // Best effort during error cleanup.
+        }
+    }
+
     private static bool IsTransientExcelBusyException(Exception ex) =>
         ex switch
         {
@@ -165,29 +314,6 @@ internal static class ExcelSmokeCom
     {
         var unsigned = (uint)hresult;
         return unsigned is RpcCallRejectedHResult or RpcServerCallRetryLaterHResult;
-    }
-
-    public static void ReleaseComObject(object? value)
-    {
-        if (value is null || !Marshal.IsComObject(value))
-            return;
-
-        try
-        {
-            Marshal.FinalReleaseComObject(value);
-        }
-        catch
-        {
-            // Cleanup best effort; orphaned Excel processes are handled separately.
-        }
-    }
-
-    public static void CollectComReferences()
-    {
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
     }
 
     private sealed class ExcelBusyMessageFilterRegistration(

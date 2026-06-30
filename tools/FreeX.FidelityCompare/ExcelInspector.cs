@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using FreeX.ToolsShared.Wpf;
+using static FreeX.ToolsShared.Wpf.ExcelComAutomation;
 
 // Drives desktop Excel via COM to inventory a workbook and read its computed cell values. One Excel
 // instance is reused for the whole batch and torn down by Shutdown(); orphan EXCEL PIDs are killed.
@@ -84,12 +86,12 @@ internal static class ExcelInspector
                 {
                     // Release per-sheet RCWs so they don't accumulate across the batch and destabilize the
                     // shared Excel instance. Pattern mirrors TryGetExcelPivotTableRange in SheetGridImageCompare.
-                    try { if (commentsRcw is not null && Marshal.IsComObject(commentsRcw)) Marshal.FinalReleaseComObject(commentsRcw); } catch { }
-                    try { if (hyperlinksRcw is not null && Marshal.IsComObject(hyperlinksRcw)) Marshal.FinalReleaseComObject(hyperlinksRcw); } catch { }
-                    try { if (listObjectsRcw is not null && Marshal.IsComObject(listObjectsRcw)) Marshal.FinalReleaseComObject(listObjectsRcw); } catch { }
-                    try { if (pivotTablesRcw is not null && Marshal.IsComObject(pivotTablesRcw)) Marshal.FinalReleaseComObject(pivotTablesRcw); } catch { }
-                    try { if (chartObjectsRcw is not null && Marshal.IsComObject(chartObjectsRcw)) Marshal.FinalReleaseComObject(chartObjectsRcw); } catch { }
-                    try { if (wsObject is not null && Marshal.IsComObject(wsObject)) Marshal.FinalReleaseComObject(wsObject); } catch { }
+                    ReleaseComObject(commentsRcw);
+                    ReleaseComObject(hyperlinksRcw);
+                    ReleaseComObject(listObjectsRcw);
+                    ReleaseComObject(pivotTablesRcw);
+                    ReleaseComObject(chartObjectsRcw);
+                    ReleaseComObject(wsObject);
                 }
             }
 
@@ -105,7 +107,7 @@ internal static class ExcelInspector
         {
             // Release the workbook RCW so COM/Excel memory does not accumulate across the batch (the
             // accumulation is what eventually crashes the shared instance).
-            try { if (workbookObject is not null && Marshal.IsComObject(workbookObject)) Marshal.FinalReleaseComObject(workbookObject); } catch { }
+            ReleaseComObject(workbookObject);
             GC.Collect();
             GC.WaitForPendingFinalizers();
         }
@@ -139,15 +141,6 @@ internal static class ExcelInspector
             }
         }
         throw new InvalidOperationException($"Workbooks.Open failed after retries: {last?.Message}", last);
-    }
-
-    private static bool LooksLikeDeadServer(Exception ex)
-    {
-        var hr = (uint)ex.HResult;
-        return hr is 0x800706BA   // RPC server is unavailable
-                  or 0x80010108   // RPC_E_DISCONNECTED
-                  or 0x800706BE   // RPC call failed
-            || ex.Message.Contains("RPC", StringComparison.OrdinalIgnoreCase);
     }
 
     private static Dictionary<(int Row, int Col), CellVal> ReadSheetValues(dynamic ws)
@@ -192,37 +185,8 @@ internal static class ExcelInspector
         }
         finally
         {
-            try { if (usedObject is not null && Marshal.IsComObject(usedObject)) Marshal.FinalReleaseComObject(usedObject); } catch { }
+            ReleaseComObject(usedObject);
         }
-    }
-
-    private static T InvokeWithComRetry<T>(Func<T> action, string operation)
-    {
-        Exception? last = null;
-        for (var attempt = 1; attempt <= 8; attempt++)
-        {
-            try
-            {
-                return action();
-            }
-            catch (Exception ex) when (LooksLikeExcelBusy(ex))
-            {
-                last = ex;
-                System.Threading.Thread.Sleep(Math.Min(attempt * 500, 2500));
-            }
-        }
-
-        throw new InvalidOperationException($"{operation} failed after Excel busy retries: {last?.Message}", last);
-    }
-
-    private static bool LooksLikeExcelBusy(Exception ex)
-    {
-        var hr = (uint)ex.HResult;
-        return hr is 0x80010001 // RPC_E_CALL_REJECTED
-                  or 0x8001010A // RPC_E_SERVERCALL_RETRYLATER
-            || ex.Message.Contains("0x80010001", StringComparison.OrdinalIgnoreCase)
-            || ex.Message.Contains("Call was rejected", StringComparison.OrdinalIgnoreCase)
-            || ex.Message.Contains("server is busy", StringComparison.OrdinalIgnoreCase);
     }
 
     private static CellVal Normalize(object? raw)
@@ -272,20 +236,19 @@ internal static class ExcelInspector
         if (_excel is not null)
             return _excel;
 
-        var baseline = GetExcelPids();
-        var excelType = Type.GetTypeFromProgID("Excel.Application")
-            ?? throw new InvalidOperationException("Excel.Application COM registration not found — is desktop Excel installed?");
-        var excel = Activator.CreateInstance(excelType)
-            ?? throw new InvalidOperationException("Excel.Application activation returned null.");
+        var baseline = GetExcelProcessIds();
+        var excel = ExcelComAutomation.CreateExcelApplication(
+            "Excel.Application COM registration not found — is desktop Excel installed?",
+            "Excel.Application activation returned null.");
         dynamic app = excel;
         app.Visible = false;
         app.DisplayAlerts = false;
-        TrySet(app, "EnableEvents", false);
-        TrySet(app, "AutomationSecurity", 3);
-        TrySet(app, "AskToUpdateLinks", false);
-        TrySet(app, "ScreenUpdating", false);
+        TrySetProperty(app, "EnableEvents", false);
+        TrySetProperty(app, "AutomationSecurity", 3);
+        TrySetProperty(app, "AskToUpdateLinks", false);
+        TrySetProperty(app, "ScreenUpdating", false);
         _excel = excel;
-        _ownedPids.UnionWith(GetExcelPids().Except(baseline)); // accumulate across recreations for cleanup
+        _ownedPids.UnionWith(GetExcelProcessIds().Except(baseline)); // accumulate across recreations for cleanup
 
         // Warm up: poll a cheap member until the COM server stops reporting "busy". The very first
         // Workbooks.Open on a cold process can still fail ("Unable to get the Open property"); Program
@@ -306,7 +269,7 @@ internal static class ExcelInspector
         if (dead is not null)
         {
             try { ((dynamic)dead).Quit(); } catch { }
-            try { if (Marshal.IsComObject(dead)) Marshal.FinalReleaseComObject(dead); } catch { }
+            ReleaseComObject(dead);
         }
         foreach (var p in Process.GetProcessesByName(ExcelProcessName).Where(p => _ownedPids.Contains(p.Id)))
         {
@@ -319,7 +282,7 @@ internal static class ExcelInspector
         if (_excel is not null)
         {
             try { ((dynamic)_excel).Quit(); } catch { }
-            try { if (Marshal.IsComObject(_excel)) Marshal.FinalReleaseComObject(_excel); } catch { }
+            ReleaseComObject(_excel);
             _excel = null;
         }
 
@@ -332,22 +295,4 @@ internal static class ExcelInspector
         }
     }
 
-    private static HashSet<int> GetExcelPids() =>
-        Process.GetProcessesByName(ExcelProcessName).Select(p => p.Id).ToHashSet();
-
-    private static void TrySet(dynamic app, string name, object value)
-    {
-        try
-        {
-            app.GetType().InvokeMember(name, System.Reflection.BindingFlags.SetProperty, null, app,
-                new[] { value }, CultureInfo.InvariantCulture);
-        }
-        catch { }
-    }
-
-    private static void TryCloseWorkbook(object? workbook)
-    {
-        if (workbook is null) return;
-        try { ((dynamic)workbook).Close(false); } catch { }
-    }
 }
