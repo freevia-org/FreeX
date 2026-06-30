@@ -1,10 +1,6 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using FreeX.App.Presentation.PageLayout;
-using FreeX.Core.Commands;
-using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -12,54 +8,50 @@ public partial class PageSetupDialog
 {
     private void PopulateFields()
     {
-        var fields = Fields;
-        var margins = ParseMarginsForDisplay(fields.MarginsText);
+        var surface = PageSetupDialogPlanner.PlanSurface(_sourceSheet, Fields);
+        var fields = surface.Fields;
 
         PopulateChoiceBoxes();
-        OrientationBox.SelectedIndex = PageSetupDialogPlanner.OrientationChoices.IndexOf(fields.Orientation);
-        PaperSizeBox.SelectedIndex = PageSetupDialogPlanner.PaperSizeChoices.IndexOf(fields.PaperSize);
-        LeftMarginBox.Text = margins.Left.ToString(CultureInfo.InvariantCulture);
-        RightMarginBox.Text = margins.Right.ToString(CultureInfo.InvariantCulture);
-        TopMarginBox.Text = margins.Top.ToString(CultureInfo.InvariantCulture);
-        BottomMarginBox.Text = margins.Bottom.ToString(CultureInfo.InvariantCulture);
-        HeaderMarginBox.Text = fields.HeaderMarginText;
-        FooterMarginBox.Text = fields.FooterMarginText;
+        OrientationBox.SelectedIndex = surface.ChoiceIndexes.Orientation;
+        PaperSizeBox.SelectedIndex = surface.ChoiceIndexes.PaperSize;
+        LeftMarginBox.Text = surface.Margins.Left;
+        RightMarginBox.Text = surface.Margins.Right;
+        TopMarginBox.Text = surface.Margins.Top;
+        BottomMarginBox.Text = surface.Margins.Bottom;
+        HeaderMarginBox.Text = surface.HeaderMarginText;
+        FooterMarginBox.Text = surface.FooterMarginText;
         CenterHorizontallyBox.IsChecked = fields.CenterHorizontally;
         CenterVerticallyBox.IsChecked = fields.CenterVertically;
-        if (fields.ScalingMode == PageSetupScalingMode.AdjustToPercent)
+        if (surface.Scaling.IsAdjustToPercent)
         {
             AdjustToRadioButton.IsChecked = true;
-            ScalePercentBox.Text = fields.ScalePercentText;
-            FitPagesWideBox.Text = "1";
-            FitPagesTallBox.Text = "1";
+            ScalePercentBox.Text = surface.Scaling.ScalePercentText;
+            FitPagesWideBox.Text = surface.Scaling.FitToWideText;
+            FitPagesTallBox.Text = surface.Scaling.FitToTallText;
         }
         else
         {
             FitToRadioButton.IsChecked = true;
-            ScalePercentBox.Text = "100";
-            FitPagesWideBox.Text = FitToDisplayText(fields.FitToWideText);
-            FitPagesTallBox.Text = FitToDisplayText(fields.FitToTallText);
+            ScalePercentBox.Text = surface.Scaling.ScalePercentText;
+            FitPagesWideBox.Text = surface.Scaling.FitToWideText;
+            FitPagesTallBox.Text = surface.Scaling.FitToTallText;
         }
 
-        FirstPageNumberBox.Text = fields.FirstPageNumberText;
-        PrintQualityBox.Text = fields.PrintQualityDpiText;
-        PrintAreaBox.Text = _sourceSheet.PrintArea is { } printArea
-            ? PageSetupRangeSelectionFormatter.Format(PageSetupRangeSelectionTarget.PrintArea, printArea, useR1C1ReferenceStyle: false)
-            : fields.PrintAreaText;
-        RowsRepeatBox.Text = _sourceSheet.PrintTitleRows is { } rows ? $"${rows.Start}:${rows.End}" : fields.RepeatRowsText;
-        ColumnsRepeatBox.Text = _sourceSheet.PrintTitleColumns is { } cols
-            ? $"${CellAddress.NumberToColumnName(cols.Start)}:${CellAddress.NumberToColumnName(cols.End)}"
-            : fields.RepeatColumnsText;
+        FirstPageNumberBox.Text = surface.FirstPageNumberText;
+        PrintQualityBox.Text = surface.PrintQualityDpiText;
+        PrintAreaBox.Text = surface.PrintAreaText;
+        RowsRepeatBox.Text = surface.RepeatRowsText;
+        ColumnsRepeatBox.Text = surface.RepeatColumnsText;
         PrintGridlinesBox.IsChecked = fields.PrintGridlines;
         PrintHeadingsBox.IsChecked = fields.PrintHeadings;
-        PageOrderBox.SelectedIndex = PageSetupDialogPlanner.PageOrderChoices.IndexOf(fields.PageOrder);
+        PageOrderBox.SelectedIndex = surface.ChoiceIndexes.PageOrder;
         PrintBlackAndWhiteBox.IsChecked = fields.PrintBlackAndWhite;
         PrintDraftQualityBox.IsChecked = fields.PrintDraftQuality;
-        PrintErrorValueBox.SelectedIndex = PageSetupDialogPlanner.PrintErrorValueChoices.IndexOf(fields.PrintErrorValue);
-        PrintCommentsBox.SelectedIndex = PageSetupDialogPlanner.PrintCommentChoices.IndexOf(fields.PrintComments);
+        PrintErrorValueBox.SelectedIndex = surface.ChoiceIndexes.PrintErrorValue;
+        PrintCommentsBox.SelectedIndex = surface.ChoiceIndexes.PrintComments;
         PopulateHeaderFooterPresetBoxes();
-        SelectPreset(HeaderPresetBox, PageSetupDialogModel.HeaderPresetChoices, Header.Center);
-        SelectPreset(FooterPresetBox, PageSetupDialogModel.FooterPresetChoices, Footer.Center);
+        HeaderPresetBox.SelectedIndex = surface.ChoiceIndexes.HeaderPreset;
+        FooterPresetBox.SelectedIndex = surface.ChoiceIndexes.FooterPreset;
         DifferentFirstPageBox.IsChecked = DifferentFirstPage;
         DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
         ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;
@@ -91,49 +83,16 @@ public partial class PageSetupDialog
         }
     }
 
-    private static WorksheetPageMargins ParseMarginsForDisplay(string marginsText) =>
-        PageMarginInputParser.TryParse(marginsText, out var margins, out _)
-            ? margins
-            : WorksheetPageMargins.Narrow;
-
-    private static string FitToDisplayText(string text) =>
-        string.IsNullOrWhiteSpace(text) ? "1" : text;
-
     private void ScalingMode_Changed(object sender, RoutedEventArgs e) => UpdateScalingInputState();
 
     private void FocusInitialKeyboardTarget()
     {
-        var openPlan = PageSetupDialogPlanner.PlanOpen(_initialFocusTarget);
-        switch (openPlan.InitialFocusTarget)
-        {
-            case PageSetupInitialFocusTarget.Margins:
-                PageSetupTabs.SelectedItem = MarginsTab;
-                DialogFocus.FocusAndSelect(LeftMarginBox);
-                return;
-            case PageSetupInitialFocusTarget.PaperSize:
-                PageSetupTabs.SelectedItem = PageTab;
-                PaperSizeBox.Focus();
-                Keyboard.Focus(PaperSizeBox);
-                return;
-            case PageSetupInitialFocusTarget.RepeatRows:
-                PageSetupTabs.SelectedItem = SheetTab;
-                DialogFocus.FocusAndSelect(RowsRepeatBox);
-                return;
-            case PageSetupInitialFocusTarget.PrintArea:
-                PageSetupTabs.SelectedItem = SheetTab;
-                DialogFocus.FocusAndSelect(PrintAreaBox);
-                return;
-            case PageSetupInitialFocusTarget.ScaleToFit:
-                PageSetupTabs.SelectedItem = PageTab;
-                var target = AdjustToRadioButton.IsChecked == true
-                    ? ScalePercentBox
-                    : FitPagesWideBox;
-                DialogFocus.FocusAndSelect(target);
-                return;
-        }
-
-        OrientationBox.Focus();
-        Keyboard.Focus(OrientationBox);
+        var plan = PageSetupDialogPlanner.PlanInitialFocus(
+            PageSetupDialogPlanner.PlanOpen(_initialFocusTarget),
+            FitToRadioButton.IsChecked == true
+                ? PageSetupScalingMode.FitToPages
+                : PageSetupScalingMode.AdjustToPercent);
+        FocusDialogTarget(plan);
     }
 
     private void UpdateScalingInputState()

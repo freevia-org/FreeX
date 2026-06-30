@@ -54,7 +54,7 @@ public partial class PageSetupDialog : Window
                             selection.End.Sheet == sheet.Id
             ? selection
             : null;
-        Fields = PageSetupDialogModel.FromSheet(sheet);
+        Fields = PageSetupDialogPlanner.PlanSurface(sheet).Fields;
         Header = Fields.Header;
         Footer = Fields.Footer;
         FirstPageHeader = Fields.FirstPageHeader;
@@ -114,17 +114,17 @@ public partial class PageSetupDialog : Window
 
     private PageSetupDialogFields ReadFields()
     {
-        var marginsText = string.Join(",",
+        var margins = new PageSetupMarginTextFields(
             LeftMarginBox.Text,
             RightMarginBox.Text,
             TopMarginBox.Text,
             BottomMarginBox.Text);
 
-        return Fields with
+        return PageSetupDialogPlanner.BuildFields(Fields, new PageSetupDialogSurfaceInput
         {
-            Orientation = SelectedOrientation(),
-            PaperSize = SelectedPaperSize(),
-            MarginsText = marginsText,
+            OrientationIndex = OrientationBox.SelectedIndex,
+            PaperSizeIndex = PaperSizeBox.SelectedIndex,
+            MarginsText = PageSetupDialogPlanner.BuildMarginsText(margins),
             HeaderMarginText = HeaderMarginBox.Text,
             FooterMarginText = FooterMarginBox.Text,
             CenterHorizontally = CenterHorizontallyBox.IsChecked == true,
@@ -144,9 +144,9 @@ public partial class PageSetupDialog : Window
             PrintHeadings = PrintHeadingsBox.IsChecked == true,
             PrintBlackAndWhite = PrintBlackAndWhiteBox.IsChecked == true,
             PrintDraftQuality = PrintDraftQualityBox.IsChecked == true,
-            PrintErrorValue = SelectedPrintErrorValue(),
-            PrintComments = SelectedPrintComments(),
-            PageOrder = SelectedPageOrder(),
+            PrintErrorValueIndex = PrintErrorValueBox.SelectedIndex,
+            PrintCommentsIndex = PrintCommentsBox.SelectedIndex,
+            PageOrderIndex = PageOrderBox.SelectedIndex,
             Header = Header,
             Footer = Footer,
             FirstPageHeader = FirstPageHeader,
@@ -163,72 +163,28 @@ public partial class PageSetupDialog : Window
             DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true,
             ScaleHeaderFooterWithDocument = ScaleWithDocumentBox.IsChecked == true,
             AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true
-        };
+        });
     }
 
     private void FocusValidationTarget(PageSetupValidationTarget? target)
     {
-        var route = PageSetupDialogModel.GetValidationRoute(target);
-        switch (route.Field)
-        {
-            case PageSetupDialogField.Margins:
-                FocusInvalidMarginInput();
-                break;
-            case PageSetupDialogField.HeaderMargin:
-            case PageSetupDialogField.FooterMargin:
-                FocusInvalidHeaderFooterMargin();
-                break;
-            case PageSetupDialogField.Scaling:
-                FocusInvalidScalingInput();
-                break;
-            case PageSetupDialogField.FirstPageNumber:
-                FocusInvalidPageTabNumber(FirstPageNumberBox);
-                break;
-            case PageSetupDialogField.PrintQuality:
-                FocusInvalidPageTabNumber(PrintQualityBox);
-                break;
-            case PageSetupDialogField.PrintArea:
-                FocusInvalidPrintArea();
-                break;
-            case PageSetupDialogField.RepeatRows:
-            case PageSetupDialogField.RepeatColumns:
-                FocusInvalidPrintTitles();
-                break;
-            case PageSetupDialogField.PaperSize:
-                PageSetupTabs.SelectedItem = PageTab;
-                PaperSizeBox.Focus();
-                break;
-            case PageSetupDialogField.PageOrder:
-                PageSetupTabs.SelectedItem = SheetTab;
-                PageOrderBox.Focus();
-                break;
-            case PageSetupDialogField.PrintErrorValue:
-                PageSetupTabs.SelectedItem = SheetTab;
-                PrintErrorValueBox.Focus();
-                break;
-            case PageSetupDialogField.PrintComments:
-                PageSetupTabs.SelectedItem = SheetTab;
-                PrintCommentsBox.Focus();
-                break;
-            default:
-                PageSetupTabs.SelectedItem = PageTab;
-                OrientationBox.Focus();
-                break;
-        }
+        FocusDialogTarget(
+            PageSetupDialogPlanner.PlanValidationFocus(
+                target,
+                new PageSetupDialogValidationFocusState
+                {
+                    HasSeparateMarginFields = true,
+                    LeftMarginText = LeftMarginBox.Text,
+                    RightMarginText = RightMarginBox.Text,
+                    TopMarginText = TopMarginBox.Text,
+                    BottomMarginText = BottomMarginBox.Text,
+                    HeaderMarginText = HeaderMarginBox.Text,
+                    FooterMarginText = FooterMarginBox.Text,
+                    ScalingMode = FitToRadioButton.IsChecked == true
+                        ? PageSetupScalingMode.FitToPages
+                        : PageSetupScalingMode.AdjustToPercent,
+                    FitToWideText = FitPagesWideBox.Text,
+                    RepeatRowsText = RowsRepeatBox.Text
+                }));
     }
-
-    private WorksheetPageOrientation SelectedOrientation() =>
-        PageSetupDialogPlanner.OrientationChoices.ValueAt(OrientationBox.SelectedIndex);
-
-    private WorksheetPaperSize SelectedPaperSize() =>
-        PageSetupDialogPlanner.PaperSizeChoices.ValueAt(PaperSizeBox.SelectedIndex);
-
-    private WorksheetPageOrder SelectedPageOrder() =>
-        PageSetupDialogPlanner.PageOrderChoices.ValueAt(PageOrderBox.SelectedIndex);
-
-    private WorksheetPrintErrorValue SelectedPrintErrorValue() =>
-        PageSetupDialogPlanner.PrintErrorValueChoices.ValueAt(PrintErrorValueBox.SelectedIndex);
-
-    private WorksheetPrintComments SelectedPrintComments() =>
-        PageSetupDialogPlanner.PrintCommentChoices.ValueAt(PrintCommentsBox.SelectedIndex);
 }
