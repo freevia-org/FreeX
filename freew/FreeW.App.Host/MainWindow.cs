@@ -35,7 +35,7 @@ public sealed class MainWindow : Window
     private Ruler _vRuler = null!;
     private Button _rulerTabSelector = null!;
     private bool _rulersVisible = true;
-    private TextBlock _titleText = null!;
+    private SisterWpfWindowTitleBinder _titleBinder = null!;
     private TextBlock _pageText = null!;
     private TextBlock _sectionText = null!;
     private TextBlock _countsText = null!;
@@ -367,7 +367,7 @@ public sealed class MainWindow : Window
         // the chrome stack here.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
         _titleBar = titleBar.Root;
-        _titleText = titleBar.TitleText;
+        _titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);
         AddQuickAccessButtons(titleBar.QatHost);
 
         var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
@@ -721,14 +721,12 @@ public sealed class MainWindow : Window
 
     private void UpdateTitle()
     {
-        var title = WindowTitlePlanner.Compose(
-            displayName: _file.DisplayName,
-            applicationName: "FreeW",
-            isDirty: _file.IsDirty,
-            dirtyMarker: " *",
-            separator: " — ");
-        Title = title;
-        _titleText.Text = title;
+        _titleBinder.Update(new SisterWpfWindowTitleSpec(
+            DisplayName: _file.DisplayName,
+            ApplicationName: "FreeW",
+            IsDirty: _file.IsDirty,
+            DirtyMarker: " *",
+            Separator: " \u2014 "));
     }
 
     // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's

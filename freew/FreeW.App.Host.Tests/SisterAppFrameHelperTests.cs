@@ -47,9 +47,12 @@ public sealed class SisterAppFrameHelperTests
         source.Should().Contain("WorkArea:");
         source.Should().Contain("StatusBar:");
         source.Should().Contain("SisterAppWindowFrameBuilder.Build(");
+        source.Should().Contain("SisterWpfWindowTitleBinder");
         source.Should().Contain("SisterAppStatusBarChrome.Build(");
         source.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
         source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
+        source.Should().NotContain("WindowTitlePlanner.Compose(");
+        source.Should().NotContain("_titleText.Text = title;");
         source.Should().NotContain("RibbonTabControlFactory.Create(");
         source.Should().NotContain("RibbonFileTabRouter.Attach(");
         source.Should().NotContain("RibbonWpfRenderer.BuildTabContent(");
@@ -74,6 +77,7 @@ public sealed class SisterAppFrameHelperTests
         {
             "SisterAppClientFrameBuilder.cs",
             "SisterAppWindowFrameBuilder.cs",
+            "SisterWpfWindowTitleBinder.cs",
             "SisterAppStatusBarChrome.cs",
             "BackstageFrame.cs",
             "BackstageFrameComposer.cs",
