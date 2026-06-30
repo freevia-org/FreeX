@@ -32,17 +32,18 @@ public sealed partial class SelectionPanePlannerTests
 
         source.Should().Contain("_list.KeyDown += List_KeyDown;");
         source.Should().Contain("private void List_KeyDown(object sender, KeyEventArgs e)");
-        source.Should().Contain("TryHandleListReorderShortcut(e)");
-        source.Should().Contain("private bool TryHandleListReorderShortcut(KeyEventArgs e)");
+        source.Should().Contain("SelectionPanePlanner.PlanKeyboardAction(");
+        source.Should().Contain("ToSelectionPaneKeyboardKey(e.Key)");
         source.Should().Contain("ModifierKeys.Control");
-        source.Should().Contain("e.Key == Key.Up");
         source.Should().Contain("AcceptMove(SelectionPaneDialogAction.MoveUp)");
-        source.Should().Contain("e.Key == Key.Down");
         source.Should().Contain("AcceptMove(SelectionPaneDialogAction.MoveDown)");
-        source.Should().Contain("if (e.Key == Key.F2)");
+        source.Should().Contain("SelectionPaneKeyboardAction.FocusRename");
         source.Should().Contain("FocusRenameBox();");
-        source.Should().Contain("if (e.Key == Key.Space)");
+        source.Should().Contain("SelectionPaneKeyboardAction.ToggleVisibility");
         source.Should().Contain("ToggleSelectedVisibility();");
+        source.Should().NotContain("TryHandleListReorderShortcut");
+        source.Should().NotContain("if (e.Key == Key.F2)");
+        source.Should().NotContain("if (e.Key == Key.Space)");
         source.Should().Contain("private void FocusRenameBox()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_renameBox);");
     }
