@@ -59,6 +59,16 @@ public static class OpcDocumentProperties
         string entryPath = OpcPackageProperties.CorePropertiesZipEntry) =>
         ReadCoreProperties(OpcXml.LoadXmlOrNull(archive, entryPath));
 
+    public static void ReadCoreProperties(
+        ZipArchive archive,
+        DocumentProperties target,
+        string entryPath = OpcPackageProperties.CorePropertiesZipEntry,
+        bool emptyStringsAsNull = false)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        target.ApplyCoreProperties(ReadCoreProperties(archive, entryPath), emptyStringsAsNull);
+    }
+
     public static CoreDocumentProperties ReadCoreProperties(XDocument? document)
     {
         var root = document?.Root;
@@ -115,6 +125,20 @@ public static class OpcDocumentProperties
         return document;
     }
 
+    public static XDocument BuildCorePropertiesDocument(
+        DocumentProperties properties,
+        bool includeEmptyStrings = false,
+        bool includeDcmiTypeNamespace = false,
+        bool includeXmlDeclaration = false)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        return BuildCorePropertiesDocument(
+            properties.ToCoreProperties(),
+            includeEmptyStrings,
+            includeDcmiTypeNamespace,
+            includeXmlDeclaration);
+    }
+
     public static void WriteCoreProperties(
         ZipArchive archive,
         CoreDocumentProperties properties,
@@ -130,6 +154,24 @@ public static class OpcDocumentProperties
                 includeEmptyStrings,
                 includeDcmiTypeNamespace,
                 includeXmlDeclaration));
+
+    public static void WriteCoreProperties(
+        ZipArchive archive,
+        DocumentProperties properties,
+        string entryPath = OpcPackageProperties.CorePropertiesZipEntry,
+        bool includeEmptyStrings = false,
+        bool includeDcmiTypeNamespace = false,
+        bool includeXmlDeclaration = false)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        WriteCoreProperties(
+            archive,
+            properties.ToCoreProperties(),
+            entryPath,
+            includeEmptyStrings,
+            includeDcmiTypeNamespace,
+            includeXmlDeclaration);
+    }
 
     public static ExtendedDocumentProperties ReadExtendedProperties(
         ZipArchive archive,

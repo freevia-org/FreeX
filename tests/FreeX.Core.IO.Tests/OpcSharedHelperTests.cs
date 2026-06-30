@@ -571,6 +571,50 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void DocumentProperties_ReadWriteCorePropertiesOverZipArchive_UsesSharedMutableModel()
+    {
+        var created = new DateTimeOffset(2026, 6, 30, 11, 12, 13, TimeSpan.Zero);
+        var properties = new DocumentProperties
+        {
+            Title = "Shared zip title",
+            Author = "Shared zip author",
+            Subject = "",
+            Keywords = "zip,shared",
+            Comments = "Written from the mutable shared model",
+            LastModifiedBy = "Codex",
+            Created = created,
+            Modified = created.AddMinutes(5),
+            Category = "Dedup",
+            ContentStatus = "Final",
+            Language = "en-US",
+            Version = "2"
+        };
+
+        using var stream = new MemoryStream();
+        using (new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+        }
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            OpcDocumentProperties.WriteCoreProperties(
+                archive,
+                properties,
+                includeEmptyStrings: true,
+                includeDcmiTypeNamespace: true,
+                includeXmlDeclaration: true);
+        }
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var copy = new DocumentProperties();
+        OpcDocumentProperties.ReadCoreProperties(readArchive, copy);
+
+        copy.ToCoreProperties().Should().Be(properties.ToCoreProperties());
+    }
+
+    [Fact]
     public void ExtendedDocumentProperties_BuildAndRead_RoundTripsSharedOpcFields()
     {
         var properties = new ExtendedDocumentProperties(
@@ -671,15 +715,23 @@ public sealed class OpcSharedHelperTests
         sharedModelSource.Should().Contain("CoreDocumentProperties ToCoreProperties()");
         sharedModelSource.Should().Contain("ApplyCoreProperties(CoreDocumentProperties properties");
         sharedOpcSource.Should().Contain("CoreDocumentProperties ReadCoreProperties(");
+        sharedOpcSource.Should().Contain("DocumentProperties target");
+        sharedOpcSource.Should().Contain("DocumentProperties properties,");
         sharedOpcSource.Should().Contain("BuildCorePropertiesDocument(");
 
         textDocumentSource.Should().Contain("public DocumentProperties Properties { get; } = new();");
         presentationSource.Should().Contain("public DocumentProperties Properties { get; } = new();");
 
-        docxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(archive)");
+        docxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(");
+        docxReaderSource.Should().Contain("document.Properties,");
+        docxReaderSource.Should().NotContain("document.Properties.ApplyCoreProperties(");
         docxWriterSource.Should().Contain("OpcDocumentProperties.BuildCorePropertiesDocument(");
-        pptxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(archive, path)");
+        docxWriterSource.Should().NotContain("properties.ToCoreProperties()");
+        pptxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(");
+        pptxReaderSource.Should().Contain("presentation.Properties,");
+        pptxReaderSource.Should().NotContain("props.ApplyCoreProperties(");
         pptxWriterSource.Should().Contain("OpcDocumentProperties.BuildCorePropertiesDocument(");
+        pptxWriterSource.Should().NotContain("presentation.Properties.ToCoreProperties()");
         xlsxPropertiesSource.Should().Contain("OpcDocumentProperties.PreservePropertyElements(");
     }
 

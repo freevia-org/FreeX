@@ -87,7 +87,10 @@ public static class PptxPackageReader
         // Core properties
         var corePropsPath = OpcRelationships.FirstTargetByType(rootRels, CorePropsRelType);
         if (corePropsPath is not null)
-            ReadCoreProperties(archive, ToZipEntryPath(corePropsPath), presentation.Properties);
+            OpcDocumentProperties.ReadCoreProperties(
+                archive,
+                presentation.Properties,
+                ToZipEntryPath(corePropsPath));
 
         // Parse presentation.xml
         var presXml = OpcXml.TryLoadXml(archive, presPath);
@@ -253,13 +256,6 @@ public static class PptxPackageReader
         }
 
         return new PptxPackageSnapshot(entries);
-    }
-
-    // ── Core properties ──────────────────────────────────────────────────────────
-
-    private static void ReadCoreProperties(ZipArchive archive, string path, DocumentProperties props)
-    {
-        props.ApplyCoreProperties(OpcDocumentProperties.ReadCoreProperties(archive, path));
     }
 
     // ── Sections ─────────────────────────────────────────────────────────────────

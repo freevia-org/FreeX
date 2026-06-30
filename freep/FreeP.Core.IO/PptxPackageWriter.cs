@@ -284,7 +284,7 @@ public static class PptxPackageWriter
             archive,
             OpcPackageProperties.CorePropertiesZipEntry,
             OpcDocumentProperties.BuildCorePropertiesDocument(
-                presentation.Properties.ToCoreProperties(),
+                presentation.Properties,
                 includeEmptyStrings: true,
                 includeXmlDeclaration: true));
 
