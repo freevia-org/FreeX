@@ -1,4 +1,3 @@
-using System.Globalization;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.Text;
@@ -171,7 +170,7 @@ public static class ChartLayoutEngine
 
             if (chart.ShowDataLabels)
             {
-                var text = BuildPieLabel(chart, series?.Name ?? "", label, value, fraction);
+                var text = ChartDataLabelTextPlanner.FormatPieDataLabel(chart, series?.Name ?? "", label, value, fraction);
                 if (!string.IsNullOrEmpty(text))
                     dataLabels.Add(BuildPieDataLabel(request, arc, index, text));
             }
@@ -889,7 +888,7 @@ public static class ChartLayoutEngine
         {
             var label = !string.IsNullOrEmpty(numberFormatCode)
                 ? NumberFormatter.Format(new NumberValue(value), numberFormatCode)
-                : FormatAxisValue(numberFormat, value);
+                : ChartDataLabelTextPlanner.FormatAxisValue(numberFormat, value);
             ticks.Add(new AxisTick(value, scale.Transform(value), label));
         }
 
@@ -1182,82 +1181,13 @@ public static class ChartLayoutEngine
             return;
 
         var category = pointIndex < request.Categories.Count ? request.Categories[pointIndex] : "";
-        var text = BuildCartesianLabel(chart, series.Name ?? "", category, value);
+        var text = ChartDataLabelTextPlanner.FormatDataLabel(chart, series.Name ?? "", category, value);
         if (string.IsNullOrEmpty(text))
             return;
 
         var size = request.TextMeasurer.Measure(text, null, chart.DataLabelFontSize, false, false);
         dataLabels.Add(new DataLabelBox(series.SeriesIndex, pointIndex, text, anchor, CenteredRect(anchor, size)));
     }
-
-    private static string BuildCartesianLabel(ChartModel chart, string seriesName, string categoryName, double value)
-    {
-        var hasSeries = chart.ShowDataLabelSeriesName && !string.IsNullOrWhiteSpace(seriesName);
-        var hasCategory = chart.ShowDataLabelCategoryName && !string.IsNullOrWhiteSpace(categoryName);
-        var hasValue = chart.ShowDataLabelValue || (!hasSeries && !hasCategory);
-        var valueText = hasValue ? FormatLabelValue(chart, value) : "";
-        var sep = SeparatorText(chart.DataLabelSeparator);
-
-        return (hasSeries, hasCategory, hasValue) switch
-        {
-            (true, true, true) => $"{seriesName}{sep}{categoryName}{sep}{valueText}",
-            (true, true, false) => $"{seriesName}{sep}{categoryName}",
-            (true, false, true) => $"{seriesName}{sep}{valueText}",
-            (true, false, false) => seriesName,
-            (false, true, true) => $"{categoryName}{sep}{valueText}",
-            (false, true, false) => categoryName,
-            _ => valueText,
-        };
-    }
-
-    private static string BuildPieLabel(ChartModel chart, string seriesName, string categoryName, double value, double fraction)
-    {
-        var sep = SeparatorText(chart.DataLabelSeparator);
-        var hasSeries = chart.ShowDataLabelSeriesName && !string.IsNullOrWhiteSpace(seriesName);
-        var hasCategory = chart.ShowDataLabelCategoryName && !string.IsNullOrWhiteSpace(categoryName);
-        var parts = new List<string>(3);
-        if (hasSeries) parts.Add(seriesName);
-        if (hasCategory) parts.Add(categoryName);
-        if (chart.ShowDataLabelPercentage)
-            parts.Add(fraction.ToString("0%", CultureInfo.InvariantCulture));
-        else if (chart.ShowDataLabelValue || parts.Count == 0)
-            parts.Add(FormatLabelValue(chart, value));
-
-        return string.Join(sep, parts);
-    }
-
-    private static string FormatLabelValue(ChartModel chart, double value) =>
-        chart.ShowDataLabelPercentage && IsPercentageCapable(chart.Type)
-            ? value.ToString("0%", CultureInfo.InvariantCulture)
-            : chart.DataLabelNumberFormat switch
-            {
-                ChartDataLabelNumberFormat.Number => value.ToString("0.00", CultureInfo.InvariantCulture),
-                ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", CultureInfo.InvariantCulture),
-                ChartDataLabelNumberFormat.Percent => value.ToString("0%", CultureInfo.InvariantCulture),
-                _ => value.ToString("0.###", CultureInfo.InvariantCulture),
-            };
-
-    private static bool IsPercentageCapable(ChartType type) =>
-        type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut
-            or ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
-
-    internal static string FormatAxisValue(ChartDataLabelNumberFormat format, double value) =>
-        format switch
-        {
-            ChartDataLabelNumberFormat.Number => value.ToString("0.00", CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Percent => value.ToString("0%", CultureInfo.InvariantCulture),
-            _ => value.ToString("0.###", CultureInfo.InvariantCulture),
-        };
-
-    private static string SeparatorText(ChartDataLabelSeparator separator) =>
-        separator switch
-        {
-            ChartDataLabelSeparator.Semicolon => "; ",
-            ChartDataLabelSeparator.NewLine => "\n",
-            ChartDataLabelSeparator.Space => " ",
-            _ => ", ",
-        };
 
     // ---- Shared geometry helpers ----------------------------------------------------------
 

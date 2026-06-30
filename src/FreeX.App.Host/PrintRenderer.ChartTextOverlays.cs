@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
-using FreeX.App.UI;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -418,7 +418,7 @@ public static partial class PrintRenderer
         var maxWidth = Math.Max(1, plotRect.Left - chartRect.Left - 8);
         foreach (var tick in BuildPrintedChartValueTicks(chart, valueRange, useHorizontalAxis: false))
         {
-            var text = FormatPrintedChartAxisValue(chart.YAxisNumberFormat, tick);
+            var text = ChartDataLabelTextPlanner.FormatAxisValue(chart.YAxisNumberFormat, tick);
             var bounded = BoundPrintedChartOverlayText(text, maxWidth, fontSize);
             if (bounded.Length == 0)
                 continue;
@@ -463,7 +463,7 @@ public static partial class PrintRenderer
 
             AddPrintedChartCenteredOverlay(
                 textOverlays,
-                FormatPrintedChartAxisValue(chart.XAxisNumberFormat, tick),
+                ChartDataLabelTextPlanner.FormatAxisValue(chart.XAxisNumberFormat, tick),
                 plotRect.Left + normalized * plotRect.Width,
                 plotRect.Bottom + 3,
                 slotWidth,
@@ -508,15 +508,6 @@ public static partial class PrintRenderer
             automaticTicks.Add(NormalizePrintedChartAxisZero(valueRange.Minimum + step * i));
         return automaticTicks;
     }
-
-    private static string FormatPrintedChartAxisValue(ChartDataLabelNumberFormat format, double value) =>
-        format switch
-        {
-            ChartDataLabelNumberFormat.Number => value.ToString("0.00", CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Percent => value.ToString("0%", CultureInfo.InvariantCulture),
-            _ => value.ToString("0.###", CultureInfo.InvariantCulture)
-        };
 
     private static double NormalizePrintedChartAxisZero(double value) =>
         Math.Abs(value) < 0.000001 ? 0 : value;
@@ -624,7 +615,7 @@ public static partial class PrintRenderer
                 if (labelCount++ >= MaxPrintedChartDataLabelOverlays)
                     return;
 
-                var text = ChartDataLabelFormatter.FormatDataLabel(chart, item.Name, point.Category, point.Value);
+                var text = ChartDataLabelTextPlanner.FormatDataLabel(chart, item.Name, point.Category, point.Value);
                 var bounded = BoundPrintedChartOverlayText(text, 86, fontSize);
                 if (bounded.Length == 0)
                     continue;
@@ -678,10 +669,10 @@ public static partial class PrintRenderer
             var midAngle = accumulatedAngle + sweep / 2.0;
             accumulatedAngle += sweep;
 
-            var value = ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
+            var value = ChartDataLabelTextPlanner.ShouldRenderPercentageLabels(chart)
                 ? point.Value / total
                 : point.Value;
-            var text = ChartDataLabelFormatter.FormatDataLabel(chart, pieSeries.Name, point.Category, value);
+            var text = ChartDataLabelTextPlanner.FormatDataLabel(chart, pieSeries.Name, point.Category, value);
             var bounded = BoundPrintedChartOverlayText(text, maxWidth, fontSize);
             if (bounded.Length == 0)
                 continue;

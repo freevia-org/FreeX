@@ -1,43 +1,25 @@
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
-using System.Globalization;
 
 namespace FreeX.App.UI;
 
 public static class ChartDataLabelFormatter
 {
     public static bool ShouldRenderPercentageLabels(ChartModel chart) =>
-        chart.ShowDataLabelPercentage
-            && ChartTypeSupport.SupportsPercentageDataLabels(chart.Type);
+        ChartDataLabelTextPlanner.ShouldRenderPercentageLabels(chart);
 
     public static bool IsPercentStackedChart(ChartModel chart) =>
-        chart.Type is ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
+        ChartDataLabelTextPlanner.IsPercentStackedChart(chart);
 
     public static string GetCategory(IReadOnlyList<string> categories, int index) =>
-        index >= 0 && index < categories.Count ? categories[index] : "";
+        ChartDataLabelTextPlanner.GetCategory(categories, index);
 
-    public static string FormatDataLabel(ChartModel chart, string seriesName, string categoryName, double value)
-    {
-        var hasSeriesName = chart.ShowDataLabelSeriesName && !string.IsNullOrWhiteSpace(seriesName);
-        var hasCategoryName = chart.ShowDataLabelCategoryName && !string.IsNullOrWhiteSpace(categoryName);
-        var hasValue = chart.ShowDataLabelValue || (!hasSeriesName && !hasCategoryName);
-        var valueText = hasValue ? FormatLabelValue(chart, value) : "";
-        var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
-
-        return (hasSeriesName, hasCategoryName, hasValue) switch
-        {
-            (true, true, true) => $"{seriesName}{separator}{categoryName}{separator}{valueText}",
-            (true, true, false) => $"{seriesName}{separator}{categoryName}",
-            (true, false, true) => $"{seriesName}{separator}{valueText}",
-            (true, false, false) => seriesName,
-            (false, true, true) => $"{categoryName}{separator}{valueText}",
-            (false, true, false) => categoryName,
-            _ => valueText
-        };
-    }
+    public static string FormatDataLabel(ChartModel chart, string seriesName, string categoryName, double value) =>
+        ChartDataLabelTextPlanner.FormatDataLabel(chart, seriesName, categoryName, value);
 
     public static string GetPieLabelFormat(ChartModel chart, string seriesName)
     {
-        var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
+        var separator = ChartDataLabelTextPlanner.GetDataLabelSeparatorText(chart.DataLabelSeparator);
         // The result is consumed by OxyPlot as a composite format string ({1}=label, {2}=percentage,
         // {0}=value), so literal braces in the user-controlled series name must be escaped or OxyPlot
         // would parse them as placeholders (malformed label or FormatException).
@@ -98,24 +80,10 @@ public static class ChartDataLabelFormatter
                 || RequiresDataLabelAnnotationFormatting(chart));
 
     public static string FormatLabelValue(ChartModel chart, double value) =>
-        ShouldRenderPercentageLabels(chart)
-            ? value.ToString("0%", CultureInfo.InvariantCulture)
-            : chart.DataLabelNumberFormat switch
-            {
-                ChartDataLabelNumberFormat.Number => value.ToString("0.00", CultureInfo.InvariantCulture),
-                ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", CultureInfo.InvariantCulture),
-                ChartDataLabelNumberFormat.Percent => value.ToString("0%", CultureInfo.InvariantCulture),
-                _ => value.ToString("0.###", CultureInfo.InvariantCulture)
-            };
+        ChartDataLabelTextPlanner.FormatLabelValue(chart, value);
 
     public static string GetDataLabelSeparatorText(ChartDataLabelSeparator separator) =>
-        separator switch
-        {
-            ChartDataLabelSeparator.Semicolon => "; ",
-            ChartDataLabelSeparator.NewLine => Environment.NewLine,
-            ChartDataLabelSeparator.Space => " ",
-            _ => ", "
-        };
+        ChartDataLabelTextPlanner.GetDataLabelSeparatorText(separator);
 
     private static string GetPieValueFormat(ChartDataLabelNumberFormat format) =>
         format switch

@@ -1,6 +1,7 @@
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Series;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -60,7 +61,7 @@ public static partial class ChartRenderer
                 if (seriesIndex == 0)
                     trendPoints.Add(new DataPoint(x, y));
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, fallbackIndex, ChartDataLabelFormatter.GetCategory(categories, fallbackIndex), x, y, y);
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, fallbackIndex, ChartDataLabelTextPlanner.GetCategory(categories, fallbackIndex), x, y, y);
             }
 
             model.Series.Add(series);
