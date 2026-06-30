@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -73,7 +74,13 @@ public sealed class SisterAppFrameHelperTests
         {
             "SisterAppClientFrameBuilder.cs",
             "SisterAppWindowFrameBuilder.cs",
-            "SisterAppStatusBarChrome.cs"
+            "SisterAppStatusBarChrome.cs",
+            "BackstageFrame.cs",
+            "BackstageFrameComposer.cs",
+            "BackstageViewShell.cs",
+            "SisterBackstageEntryBuilder.cs",
+            "SisterBackstageHostController.cs",
+            "SisterBackstageTheme.cs"
         })
         {
             var source = File.ReadAllText(Path.Combine(shellProject, fileName));

@@ -56,7 +56,10 @@ internal sealed class BackstageView : UserControl
             new SisterBackstageHostSpec(
                 Theme,
                 BuildEntries,
-                _actions.OnClosed));
+                _actions.OnClosed)
+            {
+                Chrome = BackstageRibbonChrome.Create()
+            });
     }
 
     public void Show() => _backstage.Show();

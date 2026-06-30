@@ -5,9 +5,47 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using Free.Shared.Ribbon;
+using Free.Shared.Shell;
 
-namespace Free.Shared.Ribbon.Wpf;
+namespace Free.Shared.Shell.Wpf;
+
+public readonly record struct BackstageIconSpec(BackstageIconKind Kind, string? CommandName);
+
+public sealed record BackstageFrameChrome(
+    Uri ResourceDictionarySource,
+    Func<BackstageIconSpec, double, Brush, FrameworkElement> CreateIcon,
+    Action<DependencyObject, string>? SetKeyTip = null,
+    Action<DependencyObject, string>? SetTooltipTitle = null,
+    Action<DependencyObject, string>? SetTooltipDescription = null)
+{
+    public static BackstageFrameChrome Default { get; } = new(
+        new Uri("/Free.Shared.Shell.Wpf;component/BackstageChromeResources.xaml", UriKind.Relative),
+        CreateDefaultIcon);
+
+    private static FrameworkElement CreateDefaultIcon(BackstageIconSpec icon, double size, Brush brush) =>
+        new TextBlock
+        {
+            Text = DefaultGlyph(icon.Kind),
+            Width = size,
+            Height = size,
+            Foreground = brush,
+            FontSize = Math.Max(12, size - 4),
+            FontFamily = new FontFamily("Segoe UI Symbol"),
+            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+    private static string DefaultGlyph(BackstageIconKind kind) =>
+        kind switch
+        {
+            BackstageIconKind.Previous => "\uE72B",
+            BackstageIconKind.Save => "\uE74E",
+            BackstageIconKind.Print => "\uE749",
+            BackstageIconKind.Info => "i",
+            BackstageIconKind.WindowClose => "\uE711",
+            _ => "\uE10F"
+        };
+}
 
 /// <summary>
 /// One entry on the Backstage sidebar. Two flavours:
@@ -24,7 +62,7 @@ public sealed class BackstageEntry
     public string Label { get; init; } = string.Empty;
 
     /// <summary>Optional leading glyph drawn left of the label.</summary>
-    public RibbonCommandIconKind? Icon { get; init; }
+    public BackstageIconKind? Icon { get; init; }
 
     /// <summary>
     /// Optional command-icon slug (e.g. <c>"save-as"</c>) used to resolve a host-supplied rich icon (the
@@ -63,7 +101,7 @@ public sealed class BackstageEntry
     /// <summary>Optional rich-tooltip description (the body line under the title).</summary>
     public string? TooltipDescription { get; init; }
 
-    public static BackstageEntry Pane(string label, RibbonCommandIconKind? icon, Func<UIElement> content, bool dockBottom = false,
+    public static BackstageEntry Pane(string label, BackstageIconKind? icon, Func<UIElement> content, bool dockBottom = false,
         string? keyTip = null, string? automationId = null, string? automationName = null, string? automationHelpText = null,
         string? tooltipTitle = null, string? tooltipDescription = null, string? iconName = null) =>
         new()
@@ -73,7 +111,7 @@ public sealed class BackstageEntry
             TooltipTitle = tooltipTitle, TooltipDescription = tooltipDescription
         };
 
-    public static BackstageEntry Command(string label, RibbonCommandIconKind? icon, Action action, bool dockBottom = false,
+    public static BackstageEntry Command(string label, BackstageIconKind? icon, Action action, bool dockBottom = false,
         string? keyTip = null, string? automationId = null, string? automationName = null, string? automationHelpText = null,
         string? tooltipTitle = null, string? tooltipDescription = null, string? iconName = null) =>
         new()
@@ -100,6 +138,7 @@ public sealed class BackstageEntry
 /// </summary>
 public sealed class BackstageFrame : UserControl
 {
+    private readonly BackstageFrameChrome _chrome;
     private readonly StackPanel _topNav;       // back arrow + top entries
     private readonly StackPanel _bottomNav;     // bottom-docked entries (Options / Close)
     private readonly Border _rail;
@@ -113,15 +152,16 @@ public sealed class BackstageFrame : UserControl
     /// <summary>Raised after the frame hides (the host restores document focus / state).</summary>
     public event Action? Closed;
 
-    public BackstageFrame()
+    public BackstageFrame(BackstageFrameChrome? chrome = null)
     {
+        _chrome = chrome ?? BackstageFrameChrome.Default;
         // Be self-sufficient: merge the shared chrome dictionary into the frame's own scope so the
         // BackstageSidebar* styles/brushes resolve even if the host window hasn't merged it. Merging here
         // (rather than relying on a tree walk to the window) also lets SetAccent override the brush keys
         // locally without disturbing the app's copy.
         Resources.MergedDictionaries.Add(new ResourceDictionary
         {
-            Source = new Uri("/Free.Shared.Ribbon.Wpf;component/SharedChromeResources.xaml", UriKind.Relative)
+            Source = _chrome.ResourceDictionarySource
         });
 
         Visibility = Visibility.Collapsed;
@@ -138,7 +178,7 @@ public sealed class BackstageFrame : UserControl
 
         _back = new Button { ToolTip = "Back (Esc)" };
         ApplyStyle(_back, "BackstageSidebarBackButton");
-        _back.Content = BuildIcon(RibbonCommandIconKind.Previous, size: 20);
+        _back.Content = BuildIcon(BackstageIconKind.Previous, size: 20);
         _back.Click += (_, _) => Hide();
         DockPanel.SetDock(_back, Dock.Top);
         railDock.Children.Add(_back);
@@ -335,9 +375,9 @@ public sealed class BackstageFrame : UserControl
         if (toolTip is { } tip)
             _back.ToolTip = tip;
         if (keyTip is { } badge)
-            RibbonTooltip.SetKeyTip(_back, badge);
+            _chrome.SetKeyTip?.Invoke(_back, badge);
         if (tooltipTitle is { } title)
-            RibbonTooltip.SetTitle(_back, title);
+            _chrome.SetTooltipTitle?.Invoke(_back, title);
         if (automationId is { } id)
             System.Windows.Automation.AutomationProperties.SetAutomationId(_back, id);
         if (automationName is { } name)
@@ -450,11 +490,11 @@ public sealed class BackstageFrame : UserControl
         // FreeX parity metadata — key-tip badge, rich-tooltip card and the accessibility tree. All
         // optional: FreeW's entries set none of these, so the guards keep its rail byte-for-byte the same.
         if (entry.KeyTip is { } keyTip)
-            RibbonTooltip.SetKeyTip(button, keyTip);
+            _chrome.SetKeyTip?.Invoke(button, keyTip);
         if (entry.TooltipTitle is { } title)
-            RibbonTooltip.SetTitle(button, title);
+            _chrome.SetTooltipTitle?.Invoke(button, title);
         if (entry.TooltipDescription is { } description)
-            RibbonTooltip.SetDescription(button, description);
+            _chrome.SetTooltipDescription?.Invoke(button, description);
         if (entry.AutomationId is { } automationId)
             System.Windows.Automation.AutomationProperties.SetAutomationId(button, automationId);
         if (entry.AutomationName is { } automationName)
@@ -502,15 +542,13 @@ public sealed class BackstageFrame : UserControl
     // Builds a rail glyph. When a commandName is supplied, RibbonIcon routes through the host's command-icon
     // provider (the FreeX/Word SVG library) and recolours it white for the dark rail, falling back to the
     // kind geometry when the host has no artwork — so the backstage reuses the same Office icons the ribbon does.
-    private RibbonIcon BuildIcon(RibbonCommandIconKind kind, double size, string? commandName = null) => new()
+    private FrameworkElement BuildIcon(BackstageIconKind kind, double size, string? commandName = null)
     {
-        Kind = kind,
-        CommandName = commandName ?? string.Empty,
-        IconSize = size,
-        Foreground = Brushes.White,
-        VerticalAlignment = VerticalAlignment.Center,
-        Margin = kind == RibbonCommandIconKind.Previous ? new Thickness(0) : new Thickness(0, 0, 12, 0)
-    };
+        var icon = _chrome.CreateIcon(new BackstageIconSpec(kind, commandName), size, Brushes.White);
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        icon.Margin = kind == BackstageIconKind.Previous ? new Thickness(0) : new Thickness(0, 0, 12, 0);
+        return icon;
+    }
 
     private void ApplyStyle(Button button, string key)
     {

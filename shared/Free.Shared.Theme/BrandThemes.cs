@@ -79,7 +79,7 @@ public static class BrandThemes
     /// Colors are BYTE-IDENTICAL to FreeW's current chrome:
     ///   <c>freew/FreeW.App.Host/MainWindow.cs</c> (title-bar <c>#17324D</c> / badge <c>#0F6D8C</c>),
     ///   <c>freew/FreeW.App.Host/Ribbon/FreeWRibbonResources.xaml</c> (ribbon brushes),
-    ///   <c>shared/Free.Shared.Ribbon.Wpf/SisterBackstageTheme.cs</c> (backstage sidebar/link).
+    ///   <c>shared/Free.Shared.Shell.Wpf/SisterBackstageTheme.cs</c> (backstage sidebar/link).
     ///
     /// <para>
     /// NOTE — internal inconsistency (intentionally preserved, not unified):
@@ -134,7 +134,7 @@ public static class BrandThemes
     ///     FileTabAccent = <c>#B7472A</c> (RibbonShellBuilder, line 237)
     ///     FileTabHover  = <c>#8F3721</c> (RibbonShellBuilder, line 238)
     ///     StatusBar surface = <c>#B7472A</c> (BuildStatusBar, line 192)
-    ///   <c>shared/Free.Shared.Ribbon.Wpf/SisterBackstageTheme.cs</c>
+    ///   <c>shared/Free.Shared.Shell.Wpf/SisterBackstageTheme.cs</c>
     ///     FreeP.LinkColor = <c>#B7472A</c> (now routed through Accent token — byte-identical).
     /// Surfaces/text/borders reuse FreeX neutrals (FreeP scaffold has no distinct neutral chrome).
     /// </summary>

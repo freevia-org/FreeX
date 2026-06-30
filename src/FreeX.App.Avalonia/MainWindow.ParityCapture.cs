@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Shell;
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
@@ -2263,7 +2264,7 @@ public sealed partial class MainWindow
 
             var text = UiText.Get(entry.LabelKey!);
             panel.Children.Add(CreateParityCapturedBackstageRailButton(
-                entry.Icon ?? RibbonCommandIconKind.Info,
+                MapBackstageIcon(entry.Icon),
                 text,
                 entry.IconCommandName ?? text,
                 IsParityCapturedBackstageEntrySelected(entry, selectedPane)));
@@ -2281,6 +2282,22 @@ public sealed partial class MainWindow
             "Export" => entry.Command == FreeXBackstageCommandId.Export,
             "Account" => entry.Command == FreeXBackstageCommandId.Account,
             _ => false
+        };
+
+    private static RibbonCommandIconKind MapBackstageIcon(BackstageIconKind? icon) =>
+        icon switch
+        {
+            BackstageIconKind.Previous => RibbonCommandIconKind.Previous,
+            BackstageIconKind.Grid => RibbonCommandIconKind.Grid,
+            BackstageIconKind.Info => RibbonCommandIconKind.Info,
+            BackstageIconKind.Insert => RibbonCommandIconKind.Insert,
+            BackstageIconKind.GetData => RibbonCommandIconKind.GetData,
+            BackstageIconKind.Share => RibbonCommandIconKind.Share,
+            BackstageIconKind.Save => RibbonCommandIconKind.Save,
+            BackstageIconKind.Print => RibbonCommandIconKind.Print,
+            BackstageIconKind.View => RibbonCommandIconKind.View,
+            BackstageIconKind.WindowClose => RibbonCommandIconKind.WindowClose,
+            _ => RibbonCommandIconKind.Info
         };
 
     private static Control CreateParityCapturedBackstageBackButton()

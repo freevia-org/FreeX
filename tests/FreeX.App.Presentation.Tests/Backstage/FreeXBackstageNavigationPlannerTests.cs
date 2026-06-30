@@ -1,5 +1,5 @@
 using FluentAssertions;
-using Free.Shared.Ribbon;
+using Free.Shared.Shell;
 using FreeX.App.Presentation.Backstage;
 
 namespace FreeX.App.Presentation.Tests.Backstage;
@@ -55,14 +55,14 @@ public sealed class FreeXBackstageNavigationPlannerTests
         saveAs.AutomationNameKey.Should().Be("MainWindow_TooltipTitle_SaveAs");
         saveAs.AutomationHelpTextKey.Should().Be("MainWindow_TooltipDescription_SaveTheWorkbookWithANewNameOrFormat");
         saveAs.KeyTip.Should().Be("A");
-        saveAs.Icon.Should().Be(RibbonCommandIconKind.Save);
+        saveAs.Icon.Should().Be(BackstageIconKind.Save);
         saveAs.IconCommandName.Should().Be("Save As");
 
         var export = entries.Single(entry => entry.Command == FreeXBackstageCommandId.Export);
         export.AutomationId.Should().Be("BackstageExportButton");
         export.AutomationNameKey.Should().Be("MainWindow_TooltipTitle_ExportPDFXPS");
         export.TooltipDescriptionKey.Should().Be("MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage");
-        export.Icon.Should().Be(RibbonCommandIconKind.Share);
+        export.Icon.Should().Be(BackstageIconKind.Share);
 
         var account = entries.Single(entry => entry.Command == FreeXBackstageCommandId.Account);
         account.DockBottom.Should().BeTrue();

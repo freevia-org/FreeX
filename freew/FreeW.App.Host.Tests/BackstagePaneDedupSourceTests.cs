@@ -133,7 +133,7 @@ public sealed class BackstagePaneDedupSourceTests
         var source = File.ReadAllText(Path.Combine(
             FindRepositoryRoot(),
             "shared",
-            "Free.Shared.Ribbon.Wpf",
+            "Free.Shared.Shell.Wpf",
             "SisterBackstageHostController.cs"));
 
         source.Should().Contain("new BackstageViewShell(");
@@ -143,6 +143,12 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("public Action HideThen(Action action)");
         source.Should().Contain("public Action<T> HideThen<T>(Action<T> action)");
         source.Should().Contain("public Action<T1, T2> HideThen<T1, T2>(Action<T1, T2> action)");
+
+        File.Exists(Path.Combine(
+            FindRepositoryRoot(),
+            "shared",
+            "Free.Shared.Ribbon.Wpf",
+            "SisterBackstageHostController.cs")).Should().BeFalse();
     }
 
     private static string FindRepositoryRoot()

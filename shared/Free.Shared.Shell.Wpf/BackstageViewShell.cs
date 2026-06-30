@@ -4,7 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
-namespace Free.Shared.Ribbon.Wpf;
+namespace Free.Shared.Shell.Wpf;
 
 /// <summary>Accent brushes used by a WPF Backstage host wrapper.</summary>
 public readonly record struct BackstageAccent(
@@ -26,7 +26,8 @@ public sealed class BackstageViewShell
         UserControl host,
         BackstageAccent accent,
         IEnumerable<BackstageEntry> entries,
-        Action onClosed)
+        Action onClosed,
+        BackstageFrameChrome? chrome = null)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(entries);
@@ -36,6 +37,7 @@ public sealed class BackstageViewShell
         _onClosed = onClosed;
         Frame = BackstageFrameComposer.Build(new BackstageFrameComposerSpec(accent, entries)
         {
+            Chrome = chrome,
             Closed = OnFrameClosed
         });
 

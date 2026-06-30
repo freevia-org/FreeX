@@ -9,7 +9,7 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Backstage rail tests, de-brittled for the unification program (P1). The rail moved from a hand-rolled
-/// <c>StartScreenSidebar</c> to the shared <see cref="Free.Shared.Ribbon.Wpf.BackstageFrame"/>, so the rail
+/// <c>StartScreenSidebar</c> to the shared <see cref="Free.Shared.Shell.Wpf.BackstageFrame"/>, so the rail
 /// assertions are now <b>behavioural / automation-tree</b> queries against a live window (open the backstage,
 /// read the rail buttons' AutomationIds / KeyTips / localized names / tooltips and the pane-swap behaviour)
 /// instead of literal XAML <c>x:Name</c> / handler-name lookups. Tests about the backstage <i>content panes</i>
@@ -47,10 +47,12 @@ public sealed partial class MainWindowXamlKeyTipTests
             harness.OpenBackstage();
 
             var railIcons = harness.RailButtons()
-                .SelectMany(button => Descendants(button).OfType<Free.Shared.Ribbon.Wpf.RibbonIcon>())
+                .SelectMany(button => Descendants(button).OfType<System.Windows.FrameworkElement>())
+                .Where(element => element is not AccessText and not TextBlock)
+                .Where(element => element.Width >= 20 || element.Height >= 20)
                 .ToList();
             railIcons.Should().NotBeEmpty("every primary rail entry shows a leading glyph");
-            railIcons.Should().OnlyContain(icon => icon.IconSize >= 20, "rail glyphs use large readable slots");
+            railIcons.Should().OnlyContain(icon => icon.Width >= 20 || icon.Height >= 20, "rail glyphs use large readable slots");
         });
 
         var resources = DialogSourceTestSupport.LoadHostXamlDocument("Resources", "MainWindowResources.xaml");

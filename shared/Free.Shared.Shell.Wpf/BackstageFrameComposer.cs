@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 
-namespace Free.Shared.Ribbon.Wpf;
+namespace Free.Shared.Shell.Wpf;
 
 public sealed record BackstageBackButtonSpec(
     string? AutomationId = null,
@@ -21,6 +21,8 @@ public sealed record BackstageFrameComposerSpec(
 
     public BackstageBackButtonSpec? BackButton { get; init; }
 
+    public BackstageFrameChrome? Chrome { get; init; }
+
     public Action<BackstageEntry?, Button>? DecorateNavButtons { get; init; }
 
     public Action? Closed { get; init; }
@@ -37,7 +39,7 @@ public static class BackstageFrameComposer
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(spec.Entries);
 
-        var frame = new BackstageFrame();
+        var frame = new BackstageFrame(spec.Chrome);
         frame.SetAccent(
             spec.Accent.Sidebar,
             spec.Accent.Hover,

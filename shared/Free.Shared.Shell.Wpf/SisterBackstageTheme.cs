@@ -1,6 +1,6 @@
 using System.Windows.Media;
 
-namespace Free.Shared.Ribbon.Wpf;
+namespace Free.Shared.Shell.Wpf;
 
 /// <summary>
 /// Shared Backstage rail and tile presets for the WPF sister apps.
