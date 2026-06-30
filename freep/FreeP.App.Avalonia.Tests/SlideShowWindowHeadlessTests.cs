@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -244,6 +245,20 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public void OpenExternalUrl_RoutesThroughSharedLauncher()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+
+        source.Should().Contain("ExternalUriLauncher.Open(");
+        source.Should().NotContain("new Uri(url");
+        source.Should().NotContain("uri.Scheme is not");
+    }
+
+    [Fact]
     public void OpenExternalUrl_rejects_file_scheme()
     {
         // Security guard: file:// must be silently rejected (no exception thrown).
@@ -254,7 +269,7 @@ public sealed class SlideShowWindowHeadlessTests
     [Fact]
     public void OpenExternalUrl_rejects_unknown_scheme()
     {
-        var act = () => SlideShowWindow.OpenExternalUrl("ftp://example.com/file");
+        var act = () => SlideShowWindow.OpenExternalUrl("gopher://example.com/file");
         act.Should().NotThrow();
     }
 
@@ -517,4 +532,16 @@ public sealed class SlideShowWindowHeadlessTests
             "Controller.CurrentSlideIndex must track the current slide for DA5 exit restore");
     }
 
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
 }

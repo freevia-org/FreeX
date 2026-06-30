@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
@@ -288,22 +289,14 @@ public sealed class SlideShowWindow : Window
     }
 
     /// <summary>
-    /// Opens an external URL in the default browser.
-    /// Only http, https, and mailto schemes are allowed; all others are silently ignored.
+    /// Opens an external URL in the default browser through the shared URI allowlist.
+    /// Blocked schemes and launch failures are silently ignored so a bad slideshow link never crashes playback.
     /// </summary>
     internal static void OpenExternalUrl(string url)
     {
-        try
-        {
-            var uri = new Uri(url, UriKind.Absolute);
-            if (uri.Scheme is not ("http" or "https" or "mailto"))
-                return; // security guard: reject file:// and other schemes
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-        }
-        catch
-        {
-            // Swallow — never crash the slideshow over a bad URL.
-        }
+        ExternalUriLauncher.Open(
+            url,
+            uri => Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
     }
 
     // ── Trigger shape hit-testing ─────────────────────────────────────────────────
