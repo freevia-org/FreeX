@@ -1,7 +1,10 @@
 using System.Reflection;
+using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
+using FreeP.App.Localization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Tests;
@@ -49,6 +52,27 @@ public sealed class SlideSizeDialogTests
         GetField<TextBox>(dlg, "_heightBox").Text.Should().Be("7.500");
         GetField<Label>(dlg, "_widthUnitLabel").Content.Should().Be("in");
         GetField<Label>(dlg, "_heightUnitLabel").Content.Should().Be("in");
+    }
+
+    [StaFact]
+    public void SlideSizeDialog_UsesSharedLocalizedButtonRow()
+    {
+        AppLocalization.InstallSharedSeams();
+
+        var dlg = new SlideSizeDialog(MakeSession());
+        var buttons = FindButtons((DependencyObject)dlg.Content);
+
+        var ok = buttons.Single(button => Equals(button.Content, LocalizedUiText.Ok));
+        ok.MinWidth.Should().Be(80);
+        ok.IsDefault.Should().BeTrue();
+        AutomationProperties.GetName(ok).Should().Be(LocalizedUiText.CreateAutomationName(LocalizedUiText.Ok));
+        AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+O");
+
+        var cancel = buttons.Single(button => Equals(button.Content, LocalizedUiText.Cancel));
+        cancel.MinWidth.Should().Be(80);
+        cancel.IsCancel.Should().BeTrue();
+        AutomationProperties.GetName(cancel).Should().Be(LocalizedUiText.CreateAutomationName(LocalizedUiText.Cancel));
+        AutomationProperties.GetAcceleratorKey(cancel).Should().Be("Alt+C");
     }
 
     [StaFact]
@@ -109,5 +133,21 @@ public sealed class SlideSizeDialogTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return (T)field!.GetValue(dialog)!;
+    }
+
+    private static IReadOnlyList<Button> FindButtons(DependencyObject root)
+    {
+        var buttons = new List<Button>();
+        Visit(root);
+        return buttons;
+
+        void Visit(DependencyObject current)
+        {
+            if (current is Button button)
+                buttons.Add(button);
+
+            foreach (var child in LogicalTreeHelper.GetChildren(current).OfType<DependencyObject>())
+                Visit(child);
+        }
     }
 }

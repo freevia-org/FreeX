@@ -102,31 +102,10 @@ public sealed class ChartDataDialog : Window
         };
 
         // ── OK / Cancel ───────────────────────────────────────────────────────────
-        var okBtn = new Button
-        {
-            Content = "OK",
-            Width   = 80,
-            Margin  = new Thickness(0, 0, 8, 0),
-            IsDefault = true,
-        };
-        okBtn.Click += (_, _) => OnOk();
-
-        var cancelBtn = new Button
-        {
-            Content   = "Cancel",
-            Width     = 80,
-            IsCancel  = true,
-        };
-        cancelBtn.Click += (_, _) => { DialogResult = false; Close(); };
-
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(4, 4, 8, 8),
-        };
-        btnRow.Children.Add(okBtn);
-        btnRow.Children.Add(cancelBtn);
+        var btnRow = DialogButtonRowFactory.Create(
+            OnOk,
+            buttonWidth: 80,
+            rowMargin: new Thickness(4, 4, 8, 8));
 
         // ── Layout ────────────────────────────────────────────────────────────────
         var root = new Grid();

@@ -1375,12 +1375,10 @@ public static class AvaloniaRibbonRenderer
         Action? afterExecute)
     {
         var flyout = new MenuFlyout();
-        foreach (var control in group.Controls)
+        foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group, includeSeparators: true))
         {
             switch (control)
             {
-                case RibbonRowBreak:
-                    break;
                 case RibbonSeparator:
                     flyout.Items.Add(new Separator());
                     break;
@@ -1484,8 +1482,7 @@ public static class AvaloniaRibbonRenderer
 
         private Control BuildCollapsedButton()
         {
-            var iconSource = _group.Controls.FirstOrDefault(control =>
-                control is not RibbonRowBreak and not RibbonSeparator && control.Icon is not null);
+            var representativeIcon = RibbonCollapsedGroupPresentationPlanner.GetRepresentativeIcon(_group);
 
             var stack = new StackPanel
             {
@@ -1494,9 +1491,9 @@ public static class AvaloniaRibbonRenderer
                 VerticalAlignment = VerticalAlignment.Center,
             };
             stack.Children.Add(AvaloniaRibbonIcons.Build(
-                iconSource?.Icon?.Kind ?? RibbonCommandIconKind.Generic,
+                representativeIcon.Icon.Kind,
                 34,
-                iconSource?.CommandId.Value ?? _group.Header));
+                representativeIcon.CommandName ?? _group.Header));
             stack.Children.Add(new TextBlock
             {
                 Text = _group.Header,

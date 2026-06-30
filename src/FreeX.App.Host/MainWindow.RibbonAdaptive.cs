@@ -1301,34 +1301,9 @@ public partial class MainWindow
         RibbonMetadata.TryGetCatalogId(group, out var catalogId) ? catalogId : null;
 
     private static string CreateGroupKeyTip(string groupName, ISet<string>? usedKeyTips = null)
-    {
-        var letters = groupName.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray();
-        var candidates = new List<string>();
-        if (letters.Length >= 2)
-        {
-            candidates.Add(new string([letters[0], letters[1]]));
-            for (var i = 2; i < letters.Length; i++)
-                candidates.Add(new string([letters[0], letters[i]]));
-        }
-        else if (letters.Length == 1)
-        {
-            candidates.Add(new string([letters[0]]));
-        }
-
-        candidates.Add("G");
-        for (var index = 1; index <= 9; index++)
-            candidates.Add($"G{index}");
-
-        foreach (var candidate in candidates)
-        {
-            if (usedKeyTips is not null && !usedKeyTips.Add(candidate))
-                continue;
-
-            return candidate;
-        }
-
-        return "G";
-    }
+        => Free.Shared.Ribbon.RibbonCollapsedGroupPresentationPlanner.DeriveGroupKeyTip(
+            groupName,
+            usedKeyTips);
 
     private StackPanel? GetActiveRibbonPanel()
     {
