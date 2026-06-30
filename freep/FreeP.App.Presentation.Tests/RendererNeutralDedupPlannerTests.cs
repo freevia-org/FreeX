@@ -201,9 +201,15 @@ public sealed class RendererNeutralDedupPlannerTests
         {
             source.Should().Contain("ChartRenderPlanner.BuildAreaSeriesPrimitives");
             source.Should().Contain("ChartRenderPlanner.BuildScatterPrimitivePlan");
+            source.Should().Contain("ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot, seriesColors)");
+            source.Should().Contain("primitive.LineSegments");
+            source.Should().Contain("primitive.Markers");
+            source.Should().Contain("plan.DataLabels");
             source.Should().Contain("ChartRenderPlanner.BuildBubblePrimitivePlan");
             source.Should().Contain("ChartRenderPlanner.BuildRadarPrimitivePlan");
             source.Should().NotContain("ComputeNiceScatterAxisRange(chart, useX: true)");
+            source.Should().NotContain("ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot);");
+            source.Should().NotContain("RenderScatterSeriesPrimitive");
             source.Should().NotContain("double maxBubble =");
             source.Should().NotContain("chart.ScatterStyle is");
             source.Should().NotContain("catCount = Math.Max(3");

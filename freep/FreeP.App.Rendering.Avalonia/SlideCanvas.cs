@@ -353,6 +353,18 @@ public sealed class SlideCanvas : Control
     private static Point ToPoint(ChartPlanPoint point) =>
         new(point.X, point.Y);
 
+    private static IBrush ToBrush(ChartFillPlan fill) =>
+        new SolidColorBrush(Color.FromArgb(
+            fill.Alpha,
+            fill.Color.R,
+            fill.Color.G,
+            fill.Color.B));
+
+    private static Pen ToPen(ChartStrokePlan stroke) =>
+        new(
+            ToBrush(new ChartFillPlan(stroke.Color, stroke.Alpha)),
+            stroke.Thickness);
+
     private static TextAlignment ToTextAlignment(ChartPlanTextAlignment alignment) =>
         alignment switch
         {
@@ -991,48 +1003,36 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot);
-        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5);
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot, seriesColors);
+        var gridPen = ToPen(plan.GridLineStroke);
 
         foreach (var gridLine in plan.GridLines)
             dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
 
         foreach (var primitive in plan.Series)
-            RenderScatterSeriesPrimitive(dc, chart, seriesColors, primitive);
+        {
+            foreach (var segment in primitive.LineSegments)
+                dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+
+            foreach (var marker in primitive.Markers)
+                dc.DrawEllipse(
+                    marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null,
+                    marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null,
+                    ToPoint(marker.Center),
+                    marker.Radius,
+                    marker.Radius);
+        }
 
         foreach (var label in plan.XAxisLabels)
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
         foreach (var label in plan.YAxisLabels)
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
-    }
-
-    private static void RenderScatterSeriesPrimitive(
-        DrawingContext dc,
-        ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartScatterSeriesPrimitive primitive)
-    {
-        var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
-        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-        var pen = primitive.DrawLines ? new Pen(brush, 1.5) : null;
-        var markerBrush = primitive.DrawMarkers ? brush : null;
-
-        Point? previous = null;
-        foreach (var plannedPoint in primitive.Points)
+        foreach (var label in plan.DataLabels)
         {
-            if (!plannedPoint.HasValue)
-            {
-                previous = null;
-                continue;
-            }
-
-            var point = ToPoint(plannedPoint.Value);
-            if (primitive.DrawLines && pen is not null && previous.HasValue)
-                dc.DrawLine(pen, previous.Value, point);
-            if (primitive.DrawMarkers && markerBrush is not null)
-                dc.DrawEllipse(markerBrush, null, point, 3.5, 3.5);
-
-            previous = point;
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+                label.IsBold,
+                label.FontSize,
+                ToTextAlignment(label.Alignment));
         }
     }
 
