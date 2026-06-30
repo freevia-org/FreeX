@@ -7,6 +7,12 @@ namespace FreeW.App.Presentation.Backstage;
 public static class BackstageSaveAsFileTypePlanner
 {
     private const string DefaultSaveExtension = ".docx";
+    private static readonly IReadOnlyList<BackstageFileTypeActionGroupSpec<SaveAsFileTypeCategory>> FileTypeGroups =
+    [
+        new(SaveAsFileTypeCategory.Word, "Word Documents"),
+        new(SaveAsFileTypeCategory.Web, "Web Pages"),
+        new(SaveAsFileTypeCategory.Other, "Other Formats"),
+    ];
 
     public static IReadOnlyList<BackstageActionGroup> Build(
         IEnumerable<FileFormatDescriptor> formats,
@@ -15,14 +21,8 @@ public static class BackstageSaveAsFileTypePlanner
         ArgumentNullException.ThrowIfNull(formats);
         ArgumentNullException.ThrowIfNull(saveAsExtension);
 
-        var rows = Collapse(formats.Where(format => format.CanSave && !format.IsLegacy)).ToList();
-
-        return
-        [
-            new("Word Documents", BuildRows(rows, SaveAsFileTypeCategory.Word, saveAsExtension)),
-            new("Web Pages", BuildRows(rows, SaveAsFileTypeCategory.Web, saveAsExtension)),
-            new("Other Formats", BuildRows(rows, SaveAsFileTypeCategory.Other, saveAsExtension)),
-        ];
+        var rows = BuildRows(formats);
+        return BackstageFileTypeActionPlanner.BuildGroups(rows, FileTypeGroups, saveAsExtension);
     }
 
     public static BackstageSaveAsInlinePlan BuildInlinePlan(
@@ -32,9 +32,10 @@ public static class BackstageSaveAsFileTypePlanner
     {
         ArgumentNullException.ThrowIfNull(formats);
 
-        var rows = Collapse(formats.Where(format => format.CanSave && !format.IsLegacy)).ToList();
-        var choices = rows
-            .Select(row => new BackstageSaveAsFileTypeChoice(row.Label, row.PrimaryExtension))
+        var rows = BuildRows(formats);
+        var choices = BackstageFileTypeActionPlanner
+            .BuildChoices(rows)
+            .Select(choice => new BackstageSaveAsFileTypeChoice(choice.Label, choice.PrimaryExtension))
             .ToArray();
 
         var currentExtension = DocumentFileFormatResolver.NormalizeExtension(
@@ -53,19 +54,16 @@ public static class BackstageSaveAsFileTypePlanner
         return new BackstageSaveAsInlinePlan(suggestedFileName, selectedExtension, choices);
     }
 
-    private static IReadOnlyList<BackstageActionRow> BuildRows(
-        IEnumerable<SaveAsFileTypeRow> rows,
-        SaveAsFileTypeCategory category,
-        Action<string> saveAsExtension) =>
-        rows
-            .Where(row => row.Category == category)
-            .Select(row => new BackstageActionRow(
-                row.Label,
-                row.Description,
-                () => saveAsExtension(row.PrimaryExtension)))
-            .ToArray();
+    internal static IReadOnlyList<BackstageFileTypeActionRow<SaveAsFileTypeCategory>> BuildRows(
+        IEnumerable<FileFormatDescriptor> formats)
+    {
+        ArgumentNullException.ThrowIfNull(formats);
 
-    private static IEnumerable<SaveAsFileTypeRow> Collapse(IEnumerable<FileFormatDescriptor> formats)
+        return Collapse(formats.Where(format => format.CanSave && !format.IsLegacy)).ToArray();
+    }
+
+    private static IEnumerable<BackstageFileTypeActionRow<SaveAsFileTypeCategory>> Collapse(
+        IEnumerable<FileFormatDescriptor> formats)
     {
         var pending = formats
             .Select(format => format with { Extension = DocumentFileFormatResolver.NormalizeExtension(format.Extension) })
@@ -125,27 +123,21 @@ public static class BackstageSaveAsFileTypePlanner
         return rows;
     }
 
-    private static SaveAsFileTypeRow Row(
+    private static BackstageFileTypeActionRow<SaveAsFileTypeCategory> Row(
         SaveAsFileTypeCategory category,
         string displayName,
         IReadOnlyList<FileFormatDescriptor> formats,
         string description)
     {
         var extensions = formats.Select(format => "*" + format.Extension).ToArray();
-        return new SaveAsFileTypeRow(
+        return new BackstageFileTypeActionRow<SaveAsFileTypeCategory>(
             category,
             formats[0].Extension,
             $"{displayName} ({string.Join(", ", extensions)})",
             description);
     }
 
-    private sealed record SaveAsFileTypeRow(
-        SaveAsFileTypeCategory Category,
-        string PrimaryExtension,
-        string Label,
-        string Description);
-
-    private enum SaveAsFileTypeCategory
+    internal enum SaveAsFileTypeCategory
     {
         Word,
         Web,
