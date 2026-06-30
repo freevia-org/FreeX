@@ -197,11 +197,17 @@ public sealed class ScenarioManagerDialogPlannerTests
             presentationRoot,
             "ScenarioManager",
             "ScenarioManagerDialogPlanner.cs"));
-        var hostSource = File.ReadAllText(Path.Combine(
+        var hostPlanningSource = File.ReadAllText(Path.Combine(
             repoRoot,
             "src",
             "FreeX.App.Host",
             "ScenarioManagerDialog.Planning.cs"));
+        var hostDialogSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "ScenarioManagerDialog.cs"));
+        var hostSource = hostPlanningSource + hostDialogSource;
 
         plannerSource.Should().Contain("public sealed record ScenarioManagerDialogItem");
         plannerSource.Should().Contain("public sealed record ScenarioManagerDialogAcceptResult");
@@ -212,11 +218,24 @@ public sealed class ScenarioManagerDialogPlannerTests
         plannerSource.Should().NotContain("Avalonia");
         plannerSource.Should().NotContain("FreeX.App.Host");
 
+        hostPlanningSource.Should().Contain("public static IReadOnlyList<ScenarioManagerDialogItem> BuildScenarioItems");
         hostSource.Should().Contain("SharedScenarioManagerDialogPlanner.BuildItems");
         hostSource.Should().Contain("SharedScenarioManagerDialogPlanner.ValidateAcceptRequest");
         hostSource.Should().Contain("SharedScenarioManagerDialogPlanner.ProjectSelectionFields");
         hostSource.Should().Contain("SharedScenarioManagerDialogPlanner.ProjectAcceptResult");
         hostSource.Should().Contain("LocalizeValidationError");
+        hostSource.Should().Contain("ScenarioManagerDialogSelectionFields");
+        hostSource.Should().Contain("ScenarioManagerDialogAcceptResult");
+        hostSource.Should().Contain("ScenarioManagerDialogValidationField");
+        hostSource.Should().NotContain("ScenarioManagerItem");
+        hostSource.Should().NotContain("ScenarioManagerSelectionFields");
+        hostSource.Should().NotContain("ScenarioManagerAcceptResult");
+        hostSource.Should().NotContain("ScenarioManagerValidationField");
+        hostSource.Should().NotContain("ToHostItem");
+        hostSource.Should().NotContain("ToPlannerItem");
+        hostSource.Should().NotContain("ToHostSelectionFields");
+        hostSource.Should().NotContain("ToHostAcceptResult");
+        hostSource.Should().NotContain("ToHostValidationField");
         hostSource.Should().NotContain("WorkbookRangeTextCodec.TryParse");
         hostSource.Should().NotContain("WorkbookRangeTextCodec.TryParseMany");
         hostSource.Should().NotContain("new GridRange");
