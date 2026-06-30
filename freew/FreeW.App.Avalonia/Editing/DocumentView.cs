@@ -125,7 +125,7 @@ public sealed class DocumentView : Control
     // AV-WRAP: unified list of wrap-exclusion zones (Square/Tight/TopAndBottom only).
     // Populated during Collect* calls; consulted by EmitLinePaged and LayoutParagraphPaged.
     // Each entry is a page-space rect + the wrapping mode (Behind/InFront entries are never added).
-    private readonly List<(Rect Rect, ImageWrapping Wrapping)> _wrapExclusions = new();
+    private readonly List<DocumentFloatingWrapExclusionZone> _wrapExclusions = new();
     // HF: pre-computed header/footer render items (rebuilt in Relayout when PrintLayout).
     private readonly List<HfRenderItem> _headerFooterItems = new();
     // AV-NOTERENDER: pre-computed footnote/endnote text render items (rebuilt in Relayout when PrintLayout).
@@ -2128,7 +2128,9 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            return _wrapExclusions.ToList();
+            return _wrapExclusions
+                .Select(zone => (ToAvaloniaRect(zone.Rect), zone.Wrapping))
+                .ToList();
         }
     }
 
@@ -3602,140 +3604,16 @@ public sealed class DocumentView : Control
     // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Small horizontal gap (DIP) added between text and the edge of a Square/Tight-wrapped float.
-    /// Matches Word's default wrap distance (approximately 9pt = 12 DIP).
-    /// </summary>
-    private const double WrapGap = 9.0;
-
-    /// <summary>
     /// Registers a page-space rect as a text-wrap exclusion zone for the given wrapping mode.
     /// Behind and InFront objects are silently ignored (they never push text aside).
     /// </summary>
     private void AddWrapExclusion(Rect pageSpaceRect, ImageWrapping wrapping)
     {
-        if (wrapping is ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom)
-            _wrapExclusions.Add((pageSpaceRect, wrapping));
-    }
-
-    /// <summary>
-    /// For a line whose top is at <paramref name="lineTopY"/> (page-space) and whose height is
-    /// <paramref name="lineHeight"/>, computes the adjusted left offset and available width
-    /// after applying all registered exclusion zones for the column band
-    /// [<paramref name="colLeft"/>, <paramref name="colLeft"/> + <paramref name="colW"/>).
-    /// </summary>
-    /// <remarks>
-    /// Square/Tight floats narrowing the line: the float is classified as left or right of the
-    /// line's centre point.  A float on the left pushes the left start inward; a float on the
-    /// right narrows the right edge.  If two floats are present (left + right simultaneously)
-    /// both adjustments are applied.  If a float spans the full column width it is treated as
-    /// TopAndBottom (handled separately in <see cref="LayoutParagraphPaged"/>).
-    /// </remarks>
-    /// <returns>
-    /// <c>leftDelta</c>: amount to ADD to the line's left start (≥ 0).<br/>
-    /// <c>rightShrink</c>: amount to SUBTRACT from the line's available width (≥ 0).<br/>
-    /// Neither value will make the line degenerate (minimum 20 DIP usable width is guaranteed).
-    /// </returns>
-    private (double LeftDelta, double RightShrink) ComputeSquareTightExclusion(
-        double lineTopY, double lineHeight, double colLeft, double colW)
-    {
-        var lineBottomY = lineTopY + lineHeight;
-        var colRight    = colLeft + colW;
-
-        var maxLeftDelta  = 0.0;
-        var maxRightShrink = 0.0;
-
-        foreach (var (rect, wrapping) in _wrapExclusions)
-        {
-            // Only Square/Tight in this helper; TopAndBottom is handled in the paragraph loop.
-            if (wrapping == ImageWrapping.TopAndBottom)
-                continue;
-
-            // Vertical overlap check.
-            if (rect.Bottom <= lineTopY || rect.Top >= lineBottomY)
-                continue;
-
-            // Horizontal overlap with the column band?
-            if (rect.Right <= colLeft || rect.Left >= colRight)
-                continue;
-
-            // BB1: Classify by which side of the column has MORE free room, not by float centre.
-            // A wide left-anchored float (>50% col width) had its centre past colCentre and was
-            // incorrectly classified as a RIGHT float, squeezing text into the float's own area.
-            var freeLeft  = rect.Left  - colLeft;   // gap on the left  side of the float
-            var freeRight = colRight   - rect.Right; // gap on the right side of the float
-
-            // If neither side has enough room (< 20 DIP each), this float is handled as
-            // TopAndBottom by TopAndBottomExclusionBottom + AdvancePastTopAndBottomExclusions.
-            // Skip it here so we do not apply a lateral exclusion (which would leave text over the float).
-            if (freeLeft < 20 && freeRight < 20)
-                continue;
-
-            if (freeLeft >= freeRight)
-            {
-                // Float is on the RIGHT side (more free space on the left) — reduce the available width.
-                var shrinkTo = colRight - Math.Max(rect.Left - WrapGap, colLeft + 20);
-                if (shrinkTo > maxRightShrink) maxRightShrink = shrinkTo;
-            }
-            else
-            {
-                // Float is on the LEFT side (more free space on the right) — push the line start rightward.
-                var pushTo = Math.Min(rect.Right + WrapGap, colRight - 20) - colLeft;
-                if (pushTo > maxLeftDelta) maxLeftDelta = pushTo;
-            }
-        }
-
-        // Ensure the combined adjustment doesn't make width < 20 DIP.
-        var totalShrink = maxLeftDelta + maxRightShrink;
-        if (totalShrink > colW - 20)
-        {
-            // Scale back proportionally so at least 20 DIP remain.
-            var scale = (colW - 20) / totalShrink;
-            maxLeftDelta   *= scale;
-            maxRightShrink *= scale;
-        }
-
-        return (maxLeftDelta, maxRightShrink);
-    }
-
-    /// <summary>
-    /// Returns the page-space Y of the bottom edge of the lowest TopAndBottom exclusion zone that
-    /// intersects the vertical band [<paramref name="lineTopY"/>, <paramref name="lineTopY"/> +
-    /// <paramref name="lineHeight"/>), or −1 if none does.  The caller should advance
-    /// <c>_layoutContentY</c> past this bottom so the line lands below the float.
-    /// Also includes wide Square/Tight floats (BB1) that leave < 20 DIP free on BOTH sides,
-    /// as those behave like TopAndBottom — text must go below them rather than beside them.
-    /// </summary>
-    private double TopAndBottomExclusionBottom(double lineTopY, double lineHeight)
-    {
-        var lineBottomY = lineTopY + lineHeight;
-        var colW = _colCount > 1 ? _colWidth : _contentWidth;
-        var maxBottom   = -1.0;
-        foreach (var (rect, wrapping) in _wrapExclusions)
-        {
-            if (rect.Bottom <= lineTopY || rect.Top >= lineBottomY) continue;
-            if (wrapping == ImageWrapping.TopAndBottom)
-            {
-                if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
-            }
-            else
-            {
-                // BB1 / BD1: wide Square/Tight float with < 20 DIP free on both sides → treat as TopAndBottom.
-                // BD1: derive the float's own column so freeLeft/freeRight are measured against that
-                // column's band, not always column 0 (_contentLeft). A float in column 2+ would
-                // otherwise show inflated freeLeft (> 20) and never be promoted to push text below.
-                var colIndex = _colCount > 1
-                    ? Math.Clamp((int)Math.Round((rect.Left - _contentLeft) / (_colWidth + _colGap)), 0, _colCount - 1)
-                    : 0;
-                var colLeft  = _contentLeft + colIndex * (_colWidth + _colGap);
-                var freeLeft  = rect.Left  - colLeft;
-                var freeRight = (colLeft + colW) - rect.Right;
-                if (freeLeft < 20 && freeRight < 20)
-                {
-                    if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
-                }
-            }
-        }
-        return maxBottom;
+        var zone = DocumentViewLayoutPlanner.BuildWrapExclusionZone(
+            ToPlannerRect(pageSpaceRect),
+            wrapping);
+        if (zone is not null)
+            _wrapExclusions.Add(zone);
     }
 
     /// <summary>
@@ -3754,28 +3632,23 @@ public sealed class DocumentView : Control
         {
             var peekContentY  = PeekFirstLineContentY(estimatedLineHeight);
             var peekPageSpaceY = ContentYToPageSpaceY(peekContentY);
-            var exclusionBottom = TopAndBottomExclusionBottom(peekPageSpaceY, estimatedLineHeight);
-            if (exclusionBottom < 0) break; // no overlap → done
+            var wrapColumnWidth = _colCount > 1 ? _colWidth : _contentWidth;
+            var exclusionBottom = DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(
+                _wrapExclusions,
+                peekPageSpaceY,
+                estimatedLineHeight,
+                _contentLeft,
+                _colCount,
+                wrapColumnWidth,
+                _colGap);
+            if (exclusionBottom is null) break; // no overlap: done
 
-            // Convert the exclusion bottom (page-space) back to content-space and advance past it.
-            // Content Y = slot * textAreaHeight + offsetWithinPage.
-            // PageSpaceY = DeskPadding + pageIndex*(pageHeight+gap) + marginTopDip + offsetWithinPage
-            // We read the page index from the current slot, then:
-            // offsetWithinPage = exclusionBottom - DeskPadding - pageIndex*(pageHeight+gap) - marginTopDip
-            var slot          = (int)(peekContentY / _layoutTextAreaHeight);
-            var pageIndex     = _colCount > 1 ? slot / _colCount : slot;
-            var pageTop       = _viewMode == DocumentViewMode.PrintLayout
-                                    ? _surfacePlan.PageTopDip(pageIndex)
-                                    : 0;
-            var offsetInPage  = exclusionBottom - pageTop - _marginTopDip;
-            // Clamp offsetInPage so we never jump past this page's text area (wrong-page placement).
-            var clampedOffset = Math.Clamp(offsetInPage, 0, _layoutTextAreaHeight);
-
-            // BB2: A TopAndBottom float blocks ALL columns on this page. Advance to the last column
-            // slot of this page so that content does not flow into earlier sibling columns that share
-            // the same Y-band. lastSlotOnPage is the index of the rightmost column on pageIndex.
-            var lastSlotOnPage   = (pageIndex + 1) * _colCount - 1;
-            var targetContentY   = lastSlotOnPage * _layoutTextAreaHeight + clampedOffset;
+            var targetContentY = DocumentViewLayoutPlanner.BuildContentYAfterTopAndBottomWrapExclusion(
+                _surfacePlan,
+                _layoutContentY,
+                peekContentY,
+                exclusionBottom.Value,
+                _colCount);
 
             if (targetContentY <= _layoutContentY)
                 break; // safety: do not regress
@@ -3902,8 +3775,13 @@ public sealed class DocumentView : Control
             var slot       = _layoutTextAreaHeight > 0 ? (int)(peekContentY / _layoutTextAreaHeight) : 0;
             var colIdx     = slot % _colCount;
             var cLeft      = _contentLeft + colIdx * (_colWidth + _colGap);
-            var (ld, rs)   = ComputeSquareTightExclusion(peekPageSpaceY, estimatedH, cLeft, wrapColW);
-            return Math.Max(20, baseAlignWidth - ld - rs);
+            var exclusion  = DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
+                _wrapExclusions,
+                peekPageSpaceY,
+                estimatedH,
+                cLeft,
+                wrapColW);
+            return Math.Max(20, baseAlignWidth - exclusion.LeftDeltaDip - exclusion.RightShrinkDip);
         }
 
         while (i < cells.Count)
@@ -4064,9 +3942,16 @@ public sealed class DocumentView : Control
 
         // AV-WRAP: apply Square/Tight exclusion zones for this line.
         // TopAndBottom is handled in LayoutParagraphPaged (advances _layoutContentY before we arrive here).
-        var (wrapLeftDelta, wrapRightShrink) = _wrapExclusions.Count > 0
-            ? ComputeSquareTightExclusion(pageSpaceY, lineHeight, colLeft, colW)
-            : (0.0, 0.0);
+        var lineExclusion = _wrapExclusions.Count > 0
+            ? DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(
+                _wrapExclusions,
+                pageSpaceY,
+                lineHeight,
+                colLeft,
+                colW)
+            : new DocumentFloatingLineExclusionPlan(0, 0);
+        var wrapLeftDelta = lineExclusion.LeftDeltaDip;
+        var wrapRightShrink = lineExclusion.RightShrinkDip;
         var effectiveLeftInset = leftInset + wrapLeftDelta;
         var effectiveWidth     = availableWidth - wrapLeftDelta - wrapRightShrink;
         if (effectiveWidth < 20) effectiveWidth = 20; // safety floor
@@ -5859,6 +5744,43 @@ public sealed class DocumentView : Control
         new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
     private const double FloatHandleSize = 7; // handle square side length in px
 
+    private static DocumentFloatRect ToPlannerRect(Rect rect) =>
+        new(rect.X, rect.Y, rect.Width, rect.Height);
+
+    private static Rect ToAvaloniaRect(DocumentFloatRect rect) =>
+        new(rect.XDip, rect.YDip, rect.WidthDip, rect.HeightDip);
+
+    private static DocumentFloatPoint ToPlannerPoint(Point point) =>
+        new(point.X, point.Y);
+
+    private static DocumentFloatingHandle ToPlannerHandle(FloatHandle handle) => handle switch
+    {
+        FloatHandle.Body => DocumentFloatingHandle.Body,
+        FloatHandle.TopLeft => DocumentFloatingHandle.TopLeft,
+        FloatHandle.Top => DocumentFloatingHandle.Top,
+        FloatHandle.TopRight => DocumentFloatingHandle.TopRight,
+        FloatHandle.Left => DocumentFloatingHandle.Left,
+        FloatHandle.Right => DocumentFloatingHandle.Right,
+        FloatHandle.BottomLeft => DocumentFloatingHandle.BottomLeft,
+        FloatHandle.Bottom => DocumentFloatingHandle.Bottom,
+        FloatHandle.BottomRight => DocumentFloatingHandle.BottomRight,
+        _ => DocumentFloatingHandle.None,
+    };
+
+    private static FloatHandle FromPlannerHandle(DocumentFloatingHandle handle) => handle switch
+    {
+        DocumentFloatingHandle.Body => FloatHandle.Body,
+        DocumentFloatingHandle.TopLeft => FloatHandle.TopLeft,
+        DocumentFloatingHandle.Top => FloatHandle.Top,
+        DocumentFloatingHandle.TopRight => FloatHandle.TopRight,
+        DocumentFloatingHandle.Left => FloatHandle.Left,
+        DocumentFloatingHandle.Right => FloatHandle.Right,
+        DocumentFloatingHandle.BottomLeft => FloatHandle.BottomLeft,
+        DocumentFloatingHandle.Bottom => FloatHandle.Bottom,
+        DocumentFloatingHandle.BottomRight => FloatHandle.BottomRight,
+        _ => FloatHandle.None,
+    };
+
     /// <summary>
     /// Draws the selection outline (dashed blue rectangle) and 8 resize handles around
     /// the selected floating object's page-space bounding rect.
@@ -5887,23 +5809,10 @@ public sealed class DocumentView : Control
     /// </summary>
     private static IEnumerable<(FloatHandle Handle, Rect Rect)> HandleRects(Rect rect)
     {
-        var hx = new[] { rect.X, rect.X + rect.Width / 2, rect.Right };
-        var hy = new[] { rect.Y, rect.Y + rect.Height / 2, rect.Bottom };
-        var half = FloatHandleSize / 2;
-        // Row/col → handle map (centre is skipped).
-        var map = new[,]
-        {
-            { FloatHandle.TopLeft,    FloatHandle.Top,    FloatHandle.TopRight    },
-            { FloatHandle.Left,       FloatHandle.None,   FloatHandle.Right       },
-            { FloatHandle.BottomLeft, FloatHandle.Bottom, FloatHandle.BottomRight },
-        };
-        for (var row = 0; row < 3; row++)
-        for (var col = 0; col < 3; col++)
-        {
-            if (row == 1 && col == 1) continue; // centre is not a handle
-            yield return (map[row, col],
-                new Rect(hx[col] - half, hy[row] - half, FloatHandleSize, FloatHandleSize));
-        }
+        foreach (var handle in DocumentViewLayoutPlanner.BuildFloatingHandleRects(
+                     ToPlannerRect(rect),
+                     FloatHandleSize))
+            yield return (FromPlannerHandle(handle.Handle), ToAvaloniaRect(handle.Rect));
     }
 
     /// <summary>
@@ -5929,10 +5838,11 @@ public sealed class DocumentView : Control
     private FloatHandle HitTestHandle(Point point)
     {
         if (_selectedFloating is not { } sel) return FloatHandle.None;
-        const double pad = 2; // grab tolerance around each handle square
-        foreach (var (h, r) in HandleRects(sel.Rect))
-            if (r.Inflate(pad).Contains(point)) return h;
-        return sel.Rect.Contains(point) ? FloatHandle.Body : FloatHandle.None;
+        return FromPlannerHandle(DocumentViewLayoutPlanner.HitTestFloatingHandle(
+            ToPlannerRect(sel.Rect),
+            ToPlannerPoint(point),
+            FloatHandleSize,
+            hitPaddingDip: 2));
     }
 
     /// <summary>The mouse cursor appropriate for hovering a given handle (or moving the body).</summary>
@@ -5955,41 +5865,12 @@ public sealed class DocumentView : Control
     /// </summary>
     private static Rect ResizeRect(Rect baseRect, FloatHandle handle, Point pointer, bool aspect)
     {
-        var minPx = MinFloatSizePt * PxPerPoint;
-        double left = baseRect.Left, top = baseRect.Top, right = baseRect.Right, bottom = baseRect.Bottom;
-
-        bool movesLeft   = handle is FloatHandle.TopLeft or FloatHandle.Left or FloatHandle.BottomLeft;
-        bool movesRight  = handle is FloatHandle.TopRight or FloatHandle.Right or FloatHandle.BottomRight;
-        bool movesTop    = handle is FloatHandle.TopLeft or FloatHandle.Top or FloatHandle.TopRight;
-        bool movesBottom = handle is FloatHandle.BottomLeft or FloatHandle.Bottom or FloatHandle.BottomRight;
-
-        if (movesLeft)   left   = Math.Min(pointer.X, right  - minPx);
-        if (movesRight)  right  = Math.Max(pointer.X, left   + minPx);
-        if (movesTop)    top    = Math.Min(pointer.Y, bottom - minPx);
-        if (movesBottom) bottom = Math.Max(pointer.Y, top    + minPx);
-
-        var newW = right - left;
-        var newH = bottom - top;
-
-        // Aspect lock (corners only — an edge handle changes a single dimension by definition).
-        bool isCorner = handle is FloatHandle.TopLeft or FloatHandle.TopRight
-                                or FloatHandle.BottomLeft or FloatHandle.BottomRight;
-        if (aspect && isCorner && baseRect.Width > 0 && baseRect.Height > 0)
-        {
-            var ratio = baseRect.Width / baseRect.Height;
-            // Drive the larger relative change so the box tracks the pointer along its dominant axis.
-            if (newW / baseRect.Width >= newH / baseRect.Height)
-                newH = newW / ratio;
-            else
-                newW = newH * ratio;
-            newW = Math.Max(minPx, newW);
-            newH = Math.Max(minPx, newH);
-            // Re-anchor the moved corner so the OPPOSITE corner stays fixed.
-            if (movesLeft) left = right - newW; else right = left + newW;
-            if (movesTop)  top  = bottom - newH; else bottom = top + newH;
-        }
-
-        return new Rect(left, top, Math.Max(minPx, right - left), Math.Max(minPx, bottom - top));
+        return ToAvaloniaRect(DocumentViewLayoutPlanner.BuildFloatingResizeRect(
+            ToPlannerRect(baseRect),
+            ToPlannerHandle(handle),
+            ToPlannerPoint(pointer),
+            preserveAspect: aspect,
+            minimumSizeDip: MinFloatSizePt * PxPerPoint));
     }
 
     /// <summary>
@@ -6105,10 +5986,10 @@ public sealed class DocumentView : Control
         Rect newRect;
         if (drag.Handle == FloatHandle.Body)
         {
-            var dx = point.X - drag.PointerDown.X;
-            var dy = point.Y - drag.PointerDown.Y;
-            newRect = new Rect(drag.FloatRect.X + dx, drag.FloatRect.Y + dy,
-                               drag.FloatRect.Width, drag.FloatRect.Height);
+            newRect = ToAvaloniaRect(DocumentViewLayoutPlanner.BuildFloatingMoveRect(
+                ToPlannerRect(drag.FloatRect),
+                ToPlannerPoint(drag.PointerDown),
+                ToPlannerPoint(point)));
         }
         else
         {
