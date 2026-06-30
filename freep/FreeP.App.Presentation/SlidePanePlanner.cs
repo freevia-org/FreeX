@@ -21,6 +21,8 @@ public static class SlidePanePlanner
     public const string NewSlideMenuText = "New Slide";
     public const string DuplicateSlideMenuText = "Duplicate Slide";
     public const string DeleteSlideMenuText = "Delete Slide";
+    public const double DefaultThumbnailWidth = 150.0;
+    public const double DefaultThumbnailHeight = DefaultThumbnailWidth * 9.0 / 16.0;
     public const double DefaultSectionHeaderHeight = 30.0;
 
     public static IReadOnlyList<SlidePaneEntry> BuildEntries(
