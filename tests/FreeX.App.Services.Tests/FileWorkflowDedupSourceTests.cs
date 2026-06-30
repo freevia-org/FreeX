@@ -170,6 +170,41 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
+    public void FreeXWorkbookOpenSaveCompletionContext_StaysInSharedPlanner()
+    {
+        var completionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFileCompletionPlanner.cs"));
+        var saveCompletionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "SaveCompletionPlanner.cs"));
+        var sessionFactorySource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookSessionFactory.cs"));
+        var wpfSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.Backstage.cs"));
+
+        completionSource.Should().Contain("PlanOpen(");
+        completionSource.Should().Contain("ResolveActiveSheetId(result.Workbook)");
+        completionSource.Should().Contain("CurrentFilePath: result.OpenedAsTemplate ? null : target.Path");
+        completionSource.Should().Contain("new RecentFileRegistrationRequest(");
+        completionSource.Should().Contain("PlanSaveFileContext(");
+        saveCompletionSource.Should().Contain("WorkbookFileCompletionPlanner.PlanSaveFileContext(");
+        sessionFactorySource.Should().Contain("WorkbookFileCompletionPlanner.PlanOpen(");
+        wpfSource.Should().Contain("WorkbookFileCompletionPlanner.PlanOpen(");
+        wpfSource.Should().Contain("new FreeX.App.Services.WorkbookOpenResult(");
+        wpfSource.Should().Contain("plan.FileContext is { } fileContext");
+        wpfSource.Should().NotContain("_currentFilePath = result.OpenedAsTemplate");
+        wpfSource.Should().NotContain("var activeSheetIndex =");
+        wpfSource.Should().NotContain("WorkbookTitleFormatter.DisplayNameFromPath(target.Path)");
+    }
+
+    [Fact]
     public void FreeXWorkbookPickerPlans_UseSharedDialogPlanRecords()
     {
         var pickerSource = File.ReadAllText(RepositoryFileLocator.Find(

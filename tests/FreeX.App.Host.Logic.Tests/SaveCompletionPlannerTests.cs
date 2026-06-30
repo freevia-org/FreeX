@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using FreeX.App.Services;
 
@@ -108,6 +109,39 @@ public sealed class SaveCompletionPlannerTests
     }
 
     // ── Record equality (sanity) ─────────────────────────────────────────────
+
+    [Fact]
+    public void Plan_WithPath_AttachesFileContextForCurrentWorkbook()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "SavedWorkbook.fxl");
+
+        var plan = SaveCompletionPlanner.Plan(
+            generationAtSaveStart: 3,
+            generationNow: 4,
+            sameWorkbook: true,
+            path);
+
+        plan.MarkSaved.Should().BeFalse();
+        plan.ApplyFileContext.Should().BeTrue();
+        plan.FileContext.Should().NotBeNull();
+        plan.FileContext!.Path.Should().Be(path);
+        plan.FileContext.DisplayName.Should().Be("SavedWorkbook");
+        plan.FileContext.RecentFileRegistration.FilePath.Should().Be(path);
+    }
+
+    [Fact]
+    public void Plan_WithPath_SkipsFileContextWhenWorkbookWasReplaced()
+    {
+        var plan = SaveCompletionPlanner.Plan(
+            generationAtSaveStart: 3,
+            generationNow: 3,
+            sameWorkbook: false,
+            Path.Combine(Path.GetTempPath(), "StaleSave.fxl"));
+
+        plan.MarkSaved.Should().BeFalse();
+        plan.ApplyFileContext.Should().BeFalse();
+        plan.FileContext.Should().BeNull();
+    }
 
     [Fact]
     public void SaveCompletionPlan_RecordEquality_WorksByValue()

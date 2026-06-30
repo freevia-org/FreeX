@@ -598,25 +598,25 @@ public partial class MainWindow
                 operationCancellation.Token);
             operationCancellation.Token.ThrowIfCancellationRequested();
 
+            var plan = WorkbookFileCompletionPlanner.PlanOpen(
+                target,
+                new FreeX.App.Services.WorkbookOpenResult(
+                    result.Workbook,
+                    result.FeatureReport,
+                    result.DisplayName,
+                    result.OpenedAsTemplate,
+                    result.LoadWarnings ?? []),
+                suppressRecentFiles);
             CloseFindReplaceDialogIfOpen();
-            _currentXlsxFeatureReport = result.FeatureReport;
-            _workbook = result.Workbook;
-            _workbookRef.Current = result.Workbook;
+            _currentXlsxFeatureReport = plan.FeatureReport;
+            _workbook = plan.Workbook;
+            _workbookRef.Current = plan.Workbook;
             InvalidateToolbarVisualState();
-            _workbook.Name = result.DisplayName;
+            _workbook.Name = plan.DisplayName;
             _worksheetSelections.Clear();
-            // Honor the workbook's saved active sheet (Excel's activeTab) instead of always landing on
-            // the first sheet.  ApplyOpenedWorksheetViewState below then restores that sheet's saved
-            // active cell / scroll position, so the file reopens exactly where it was saved.
-            var activeSheetIndex =
-                _workbook.ActiveSheetIndex is { } savedActiveIndex &&
-                savedActiveIndex >= 0 &&
-                savedActiveIndex < _workbook.Sheets.Count
-                    ? savedActiveIndex
-                    : 0;
-            _currentSheetId = _workbook.Sheets[activeSheetIndex].Id;
+            _currentSheetId = plan.ActiveSheetId;
             InvalidateNavigationCaches();
-            _currentFilePath = result.OpenedAsTemplate ? null : target.Path;
+            _currentFilePath = plan.CurrentFilePath;
             UpdateTitleBar();
             MarkWorkbookSaved();
             // Notify sibling windows so they rebind their viewports to the new workbook.
@@ -624,9 +624,7 @@ public partial class MainWindow
             // resolves the new one — their mutations would target the wrong workbook.
             NotifyOtherWindowsOfWorkbookChange();
 
-            RecentFileRegistrationService.RegisterIfNeeded(
-                _recentFiles,
-                new RecentFileRegistrationRequest(target.Path, suppressRecentFiles));
+            RecentFileRegistrationService.RegisterIfNeeded(_recentFiles, plan.RecentFileRegistration);
             ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
             operationCancellation.Token.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
@@ -1114,15 +1112,14 @@ public partial class MainWindow
             var plan = SaveCompletionPlanner.Plan(
                 generationAtSaveStart,
                 _workbookDirtyGeneration,
-                sameWorkbook: ReferenceEquals(_workbook, workbookAtSaveStart));
+                sameWorkbook: ReferenceEquals(_workbook, workbookAtSaveStart),
+                target.Path);
 
-            if (plan.ApplyFileContext)
+            if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
             {
-                _currentFilePath = target.Path;
-                _workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);
-                RecentFileRegistrationService.RegisterIfNeeded(
-                    _recentFiles,
-                    new RecentFileRegistrationRequest(target.Path));
+                _currentFilePath = fileContext.Path;
+                _workbook.Name = fileContext.DisplayName;
+                RecentFileRegistrationService.RegisterIfNeeded(_recentFiles, fileContext.RecentFileRegistration);
             }
 
             if (plan.MarkSaved)

@@ -617,7 +617,7 @@ public sealed partial class MainWindowSourceHygieneTests
         lifecycleSource.Should().Contain("_documentState.MarkDirty();");
         lifecycleSource.Should().Contain("_documentState.MarkSavedAtUndoDepth(undoDepth);");
         lifecycleSource.Should().Contain("UpdateTitleBar();");
-        backstageSource.Should().Contain("_workbook.Name = WorkbookTitleFormatter.DisplayNameFromPath(target.Path);");
+        backstageSource.Should().Contain("_workbook.Name = fileContext.DisplayName;");
         backstageSource.Should().Contain("MarkWorkbookSaved();");
     }
 

@@ -2770,22 +2770,40 @@ public sealed class WorkbookSession
         string path,
         WorkbookFileAccessIdentity? fileAccessIdentity = null)
     {
+        var plan = CreateSaveCompletionPlan(generationAtSaveStart, path, fileAccessIdentity);
+        return ApplySaveCompletion(plan);
+    }
+
+    public SaveCompletionPlan CreateSaveCompletionPlan(
+        int generationAtSaveStart,
+        string path,
+        WorkbookFileAccessIdentity? fileAccessIdentity = null)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var plan = SaveCompletionPlanner.Plan(
+        var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
+        return SaveCompletionPlanner.Plan(
             generationAtSaveStart,
             DirtyGeneration,
-            sameWorkbook: true);
-        var resolvedIdentity = ResolveSavedFileAccessIdentity(path, fileAccessIdentity);
+            sameWorkbook: true,
+            path,
+            resolvedIdentity,
+            displayName: Path.GetFileName(path));
+    }
+
+    public bool ApplySaveCompletion(SaveCompletionPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
         if (plan.MarkSaved)
             IsDirty = false;
 
-        if (plan.ApplyFileContext)
+        if (plan.ApplyFileContext && plan.FileContext is { } fileContext)
         {
-            CurrentFilePath = path;
-            CurrentFileAccessIdentity = resolvedIdentity;
+            CurrentFilePath = fileContext.Path;
+            CurrentFileAccessIdentity = fileContext.FileAccessIdentity;
             CurrentXlsxFeatureReport = null;
-            Workbook.Name = Path.GetFileName(path);
+            Workbook.Name = fileContext.DisplayName;
         }
 
         return plan.MarkSaved;
