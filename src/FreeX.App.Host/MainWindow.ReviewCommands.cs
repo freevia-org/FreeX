@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Free.Shared.AppServices;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
@@ -125,7 +126,7 @@ public partial class MainWindow
         var issues = AccessibilityCheckerService.FindIssues(_workbook);
         var dialog = new AccessibilityCheckerDialog(issues) { Owner = this };
         if (dialog.ShowDialog() == true)
-            NavigateToCell(AccessibilityCheckerDialog.GetNavigationTarget(dialog.Result!.Issue));
+            NavigateToCell(AccessibilityCheckerDialogPlanner.GetNavigationTarget(dialog.Result!.Issue));
     }
 
     private void SetAltTextBtn_Click(object sender, RoutedEventArgs e)

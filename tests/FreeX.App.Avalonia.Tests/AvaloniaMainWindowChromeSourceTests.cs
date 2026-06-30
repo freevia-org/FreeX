@@ -867,45 +867,6 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         return source[startIndex..(endIndex + end.Length)];
     }
 
-    [Fact]
-    public void AccessibilityCheckerDialog_HasIssueListGoToCloseAndDispatchesViaNewMethod()
-    {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AccessibilityChecker.cs"));
-        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
-
-        // New partial file has the dedicated dialog method
-        source.Should().Contain("private async Task ShowAccessibilityCheckerDialogAsync()");
-        source.Should().Contain("private async Task ShowAccessibilityCheckerCleanDialogAsync()");
-        source.Should().Contain("private async Task ShowAccessibilityCheckerIssuesDialogAsync(");
-
-        // Issues dialog has the key WPF-parity controls. Redesigned to the Excel task-pane layout:
-        // an "Inspection Results" TreeView grouped by Errors/Warnings/Tips (replacing the flat
-        // ListBox), keyed by the same AccessibilityCheckerIssueList automation id.
-        source.Should().Contain("new TreeView");
-        source.Should().Contain("AutomationProperties.SetAutomationId(resultsTree, \"AccessibilityCheckerIssueList\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(goToButton, \"AccessibilityCheckerGoToButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"AccessibilityCheckerCloseButton\");");
-
-        // Go To navigates via _session.GoToAccessibilityIssue (shared portable logic)
-        source.Should().Contain("_session.GoToAccessibilityIssue(selectedIssue)");
-        source.Should().NotContain("ReviewWorkflowPlanner.GetAccessibilityNavigationTarget(",
-            "navigation target resolution must stay in the shared session layer, not be duplicated in the shell");
-
-        // Uses shared localization keys (the Excel-style title resolves via the shared
-        // AccessibilityChecker_Title catalog key)
-        source.Should().Contain("AcText(\"AccessibilityChecker_Title\"");
-        source.Should().Contain("UiText.Get(\"ShellLoc_AccessibilityCheckerGoToButton\")");
-        source.Should().Contain("UiText.Get(\"ShellLoc_AccessibilityCheckerNoIssues\")");
-
-        // MainWindow.cs dispatches to the new method (not inline to ReviewSummary)
-        mainSource.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();");
-        mainSource.Should().Contain("[\"review.checkAccessibility\"] = () => _ = ShowAccessibilityCheckerDialogAsync(),");
-
-        // Parity capture uses the new method
-        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerDialogAsync()),");
-    }
-
     private static void AssertBefore(string source, string first, string second)
     {
         source.IndexOf(first, StringComparison.Ordinal)

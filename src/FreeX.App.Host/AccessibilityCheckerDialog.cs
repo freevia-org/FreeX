@@ -3,23 +3,19 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using Free.Shared.Localization;
-using FreeX.App.Services;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.Core.Commands;
-using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public sealed record AccessibilityCheckerDialogResult(AccessibilityIssue Issue);
 
 /// <summary>
-/// Excel-style Accessibility Checker task pane. Inspection Results are grouped by severity
-/// (Errors / Warnings / Tips) and, within each section, by issue type; selecting an item reveals an
-/// "Additional Information" area with "Why Fix" and "How To Fix" guidance and enables [Go To].
+/// Excel-style Accessibility Checker task pane renderer.
 /// </summary>
 public sealed class AccessibilityCheckerDialog : Window
 {
-    private readonly IReadOnlyList<AccessibilityInspectionSection> _sections;
+    private readonly AccessibilityCheckerDialogPlan _plan;
     private readonly TreeView _resultsTree = new();
     private readonly TextBlock _statusText = new();
     private readonly StackPanel _additionalInfoPanel = new();
@@ -28,61 +24,41 @@ public sealed class AccessibilityCheckerDialog : Window
     private readonly TextBlock _howToFixHeader = new();
     private readonly TextBlock _howToFixText = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBox _messageBox = new();
-    private readonly Button _goToButton = new() { Content = UiText.Get("AccessibilityChecker_GoToButton"), Width = 76, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-    private readonly Button _closeButton = new() { Content = UiText.Get("AccessibilityChecker_CloseButton"), Width = 76, IsCancel = true };
+    private readonly Button _goToButton = new() { Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _closeButton = new() { Width = 76 };
 
     public AccessibilityCheckerDialogResult? Result { get; private set; }
 
     public AccessibilityCheckerDialog(IReadOnlyList<AccessibilityIssue> issues)
     {
-        _sections = AccessibilityInspectionResult.Build(issues);
+        _plan = AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get);
 
-        Title = Text("AccessibilityChecker_Title", "Accessibility Checker");
+        Title = _plan.Title;
         Width = 360;
         Height = 520;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
 
-        AutomationProperties.SetName(_messageBox, UiText.Get("AccessibilityChecker_ResultAutomationName"));
-        AutomationProperties.SetAutomationId(_messageBox, "AccessibilityCheckerResultText");
-        AutomationProperties.SetHelpText(_messageBox, UiText.Get("AccessibilityChecker_ResultHelpText"));
-        AutomationProperties.SetName(_resultsTree, UiText.Get("AccessibilityChecker_IssueListAutomationName"));
-        AutomationProperties.SetAutomationId(_resultsTree, "AccessibilityCheckerIssueList");
-        AutomationProperties.SetHelpText(_resultsTree, UiText.Get("AccessibilityChecker_IssueListHelpText"));
-        AutomationProperties.SetName(_goToButton, UiText.Get("AccessibilityChecker_GoToAutomationName"));
-        AutomationProperties.SetAutomationId(_goToButton, "AccessibilityCheckerGoToButton");
-        AutomationProperties.SetHelpText(_goToButton, UiText.Get("AccessibilityChecker_GoToHelpText"));
-        AutomationProperties.SetName(_closeButton, UiText.Get("AccessibilityChecker_CloseAutomationName"));
-        AutomationProperties.SetAutomationId(_closeButton, "AccessibilityCheckerCloseButton");
-        AutomationProperties.SetHelpText(_closeButton, UiText.Get("AccessibilityChecker_CloseHelpText"));
+        ApplyAutomation(_messageBox, _plan.ResultAutomation);
+        ApplyAutomation(_resultsTree, _plan.IssueListAutomation);
+        ApplyAction(_goToButton, _plan.GoToAction);
+        ApplyAction(_closeButton, _plan.CloseAction);
 
         Content = BuildContent();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static string CreateMessage(IReadOnlyList<AccessibilityIssue> issues) =>
-        issues.Count == 0
-            ? UiText.Get("AccessibilityChecker_NoIssuesMessage")
-            : AccessibilityIssueFormatter.Format(issues);
-
-    public static CellAddress GetNavigationTarget(AccessibilityIssue issue)
-    {
-        var location = issue.Location.Trim();
-        var firstLocation = location.Split(':', 2)[0];
-        return CellAddress.TryParse(firstLocation, issue.SheetId, out var address)
-            ? address
-            : new CellAddress(issue.SheetId, 1, 1);
-    }
+        AccessibilityCheckerDialogPlanner.CreateMessage(issues, UiText.Get);
 
     private UIElement BuildContent()
     {
         var root = new DockPanel { Margin = new Thickness(16) };
 
-        // Title — task-pane heading.
         var title = new TextBlock
         {
-            Text = Text("AccessibilityChecker_Title", "Accessibility Checker"),
+            Text = _plan.Title,
             FontSize = 16,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8),
@@ -90,22 +66,19 @@ public sealed class AccessibilityCheckerDialog : Window
         DockPanel.SetDock(title, Dock.Top);
         root.Children.Add(title);
 
-        // Button row — anchored to the bottom.
         _goToButton.Click += (_, _) => GoToSelectedIssue();
         var buttons = DialogButtonRowFactory.Create(_goToButton, _closeButton, new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        // Status line — just above the buttons.
         _statusText.TextWrapping = TextWrapping.Wrap;
         _statusText.Margin = new Thickness(0, 8, 0, 0);
         DockPanel.SetDock(_statusText, Dock.Bottom);
         root.Children.Add(_statusText);
 
-        if (_sections.Count == 0)
+        if (_plan.State == AccessibilityCheckerDialogState.Clean)
         {
-            // Clean workbook — keep the read-only message box used by automation/tests.
-            _messageBox.Text = CreateMessage(System.Array.Empty<AccessibilityIssue>());
+            _messageBox.Text = _plan.CleanMessage;
             _messageBox.IsReadOnly = true;
             _messageBox.AcceptsReturn = true;
             _messageBox.TextWrapping = TextWrapping.Wrap;
@@ -115,12 +88,10 @@ public sealed class AccessibilityCheckerDialog : Window
             root.Children.Add(_messageBox);
 
             _goToButton.Visibility = Visibility.Collapsed;
-            _statusText.Text = Text("AccessibilityChecker_StatusClean",
-                "No accessibility issues found. People with disabilities should not have difficulty reading this workbook.");
+            _statusText.Text = _plan.StatusText;
             return root;
         }
 
-        // Inspection Results heading + tree, with the Additional Information area below it.
         var body = new Grid();
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -128,7 +99,7 @@ public sealed class AccessibilityCheckerDialog : Window
 
         var resultsHeader = new TextBlock
         {
-            Text = Text("AccessibilityChecker_InspectionResults", "Inspection Results"),
+            Text = _plan.InspectionResultsHeader,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         };
@@ -159,17 +130,17 @@ public sealed class AccessibilityCheckerDialog : Window
 
         _additionalInfoPanel.Children.Add(new TextBlock
         {
-            Text = Text("AccessibilityChecker_AdditionalInformation", "Additional Information"),
+            Text = _plan.AdditionalInformationHeader,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 6),
         });
 
-        _whyFixHeader.Text = Text("AccessibilityChecker_WhyFixHeader", "Why Fix:");
+        _whyFixHeader.Text = _plan.WhyFixHeader;
         _whyFixHeader.FontWeight = FontWeights.SemiBold;
         _additionalInfoPanel.Children.Add(_whyFixHeader);
         _additionalInfoPanel.Children.Add(_whyFixText);
 
-        _howToFixHeader.Text = Text("AccessibilityChecker_HowToFixHeader", "How To Fix:");
+        _howToFixHeader.Text = _plan.HowToFixHeader;
         _howToFixHeader.FontWeight = FontWeights.SemiBold;
         _additionalInfoPanel.Children.Add(_howToFixHeader);
         _additionalInfoPanel.Children.Add(_howToFixText);
@@ -179,11 +150,11 @@ public sealed class AccessibilityCheckerDialog : Window
 
     private void PopulateTree()
     {
-        foreach (var section in _sections)
+        foreach (var section in _plan.Sections)
         {
             var sectionNode = new TreeViewItem
             {
-                Header = $"{SeverityHeader(section.Severity)} ({section.IssueCount})",
+                Header = $"{section.Header} ({section.IssueCount})",
                 FontWeight = FontWeights.SemiBold,
                 IsExpanded = true,
             };
@@ -192,7 +163,7 @@ public sealed class AccessibilityCheckerDialog : Window
             {
                 var groupNode = new TreeViewItem
                 {
-                    Header = $"{group.Descriptor.Label} ({group.Items.Count})",
+                    Header = $"{group.Label} ({group.Items.Count})",
                     FontWeight = FontWeights.Normal,
                     IsExpanded = true,
                     Tag = group,
@@ -215,13 +186,6 @@ public sealed class AccessibilityCheckerDialog : Window
         }
     }
 
-    private string SeverityHeader(AccessibilitySeverity severity) => severity switch
-    {
-        AccessibilitySeverity.Error => Text("AccessibilityChecker_SectionErrors", "Errors"),
-        AccessibilitySeverity.Warning => Text("AccessibilityChecker_SectionWarnings", "Warnings"),
-        _ => Text("AccessibilityChecker_SectionTips", "Tips"),
-    };
-
     private void SelectFirstIssue()
     {
         foreach (TreeViewItem section in _resultsTree.Items)
@@ -237,48 +201,42 @@ public sealed class AccessibilityCheckerDialog : Window
         }
     }
 
-    private AccessibilityInspectionItem? SelectedItem()
+    private AccessibilityCheckerItemPlan? SelectedItem()
     {
         if (_resultsTree.SelectedItem is not TreeViewItem node)
             return null;
         return node.Tag switch
         {
-            AccessibilityInspectionItem item => item,
-            AccessibilityInspectionGroup group => group.Items.Count > 0 ? group.Items[0] : null,
+            AccessibilityCheckerItemPlan item => item,
+            AccessibilityCheckerGroupPlan group => group.Items.Count > 0 ? group.Items[0] : null,
             _ => null,
         };
     }
 
-    private AccessibilityIssueDescriptor? SelectedDescriptor()
+    private AccessibilityCheckerGroupPlan? SelectedGroup()
     {
         if (_resultsTree.SelectedItem is not TreeViewItem node)
             return null;
-        return node.Tag switch
-        {
-            AccessibilityInspectionItem item => AccessibilityIssueClassification.Describe(item.Issue.Kind),
-            AccessibilityInspectionGroup group => group.Descriptor,
-            _ => null,
-        };
+        return node.Tag as AccessibilityCheckerGroupPlan;
     }
 
     private void OnSelectionChanged()
     {
-        var descriptor = SelectedDescriptor();
-        var item = SelectedItem();
+        var selection = AccessibilityCheckerDialogPlanner.CreateSelection(SelectedItem(), SelectedGroup(), _plan);
 
-        _goToButton.IsEnabled = item is not null;
+        _goToButton.IsEnabled = selection.CanNavigate;
 
-        if (descriptor is null)
+        if (!selection.HasAdditionalInformation)
         {
             _additionalInfoPanel.Visibility = Visibility.Collapsed;
-            _statusText.Text = Text("AccessibilityChecker_StatusReady", "Ready");
+            _statusText.Text = selection.StatusText;
             return;
         }
 
         _additionalInfoPanel.Visibility = Visibility.Visible;
-        _whyFixText.Text = Text(descriptor.WhyFixKey, descriptor.WhyFix);
-        _howToFixText.Text = Text(descriptor.HowToFixKey, descriptor.HowToFix);
-        _statusText.Text = item is not null ? item.Description : descriptor.Label;
+        _whyFixText.Text = selection.WhyFix;
+        _howToFixText.Text = selection.HowToFix;
+        _statusText.Text = selection.StatusText;
     }
 
     private void GoToSelectedIssue()
@@ -301,7 +259,7 @@ public sealed class AccessibilityCheckerDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        if (_sections.Count > 0)
+        if (_plan.State == AccessibilityCheckerDialogState.Issues)
         {
             _resultsTree.Focus();
             Keyboard.Focus(_resultsTree);
@@ -312,6 +270,18 @@ public sealed class AccessibilityCheckerDialog : Window
         Keyboard.Focus(_messageBox);
     }
 
-    private static string Text(string key, string fallback) =>
-        LocalizedFallbackTextResolver.Resolve(key, fallback, UiText.Get);
+    private static void ApplyAction(Button button, AccessibilityCheckerActionSpec action)
+    {
+        button.Content = action.Text;
+        button.IsDefault = action.IsDefault;
+        button.IsCancel = action.IsCancel;
+        ApplyAutomation(button, action.Automation);
+    }
+
+    private static void ApplyAutomation(DependencyObject target, AccessibilityCheckerAutomationSpec automation)
+    {
+        AutomationProperties.SetName(target, automation.Name);
+        AutomationProperties.SetAutomationId(target, automation.AutomationId);
+        AutomationProperties.SetHelpText(target, automation.HelpText);
+    }
 }
