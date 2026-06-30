@@ -83,6 +83,18 @@ public static class OpcMediaTypes
             _ => "png"
         };
 
+    public static string GetDrawingMediaContentType(string path)
+    {
+        var extension = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+        if (extension is "jpg" or "jpeg" or "gif" or "bmp" or "tif" or "tiff" or "svg" or "wmf" or "emf" &&
+            TryGetDefaultContentType(extension, out var contentType))
+        {
+            return contentType;
+        }
+
+        return "image/png";
+    }
+
     public static string GetAudioVideoExtension(string contentType) =>
         contentType.Trim().ToLowerInvariant() switch
         {
@@ -98,4 +110,19 @@ public static class OpcMediaTypes
             "audio/aac" => "aac",
             _ => "mp4"
         };
+
+    public static string GetAudioVideoContentType(string path)
+    {
+        var extension = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+        if (extension == "m4v")
+            return "video/mp4";
+
+        if (extension is "mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma" &&
+            TryGetDefaultContentType(extension, out var contentType))
+        {
+            return contentType;
+        }
+
+        return "video/mp4";
+    }
 }

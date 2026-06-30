@@ -357,32 +357,106 @@ public sealed partial class MainWindow
 
     private async Task<ChartAxisInput?> ShowChartAxisFormatDialogAsync(ChartAxisInput current, string commandLabel)
     {
-        var minimumBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.Minimum, FormatNullableDouble(current.Minimum));
-        minimumBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
-        var maximumBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.Maximum, FormatNullableDouble(current.Maximum));
-        maximumBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
-        var majorUnitBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.MajorUnit, FormatNullableDouble(current.MajorUnit));
-        majorUnitBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
+        var state = ChartAxisPlanner.Normalize(current);
+        const int ControlWidth = 300;
 
-        var logCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.LogScale, current.LogScale);
+        var axisOptionsSection = ChartAxisPlanner.GetAxisOptionsSection();
+        var gridlinesSection = ChartAxisPlanner.GetGridlinesSection();
+        var tickMarksSection = ChartAxisPlanner.GetTickMarksSection();
+
+        var minimumBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.Minimum, FormatNullableDouble(state.Minimum));
+        minimumBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
+        var maximumBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.Maximum, FormatNullableDouble(state.Maximum));
+        maximumBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
+        var majorUnitBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.MajorUnit, FormatNullableDouble(state.MajorUnit));
+        majorUnitBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
+        var minorUnitBox = MakeAxisDescriptorNumberBox(ChartAxisDialogFieldId.MinorUnit, FormatNullableDouble(state.MinorUnit));
+        minorUnitBox.PlaceholderText = UiText.Get("ChartLoc_AutoPlaceholder");
+
+        var logCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.LogScale, state.LogScale);
 
         var numberFormatChoices = ChartAxisPlanner.GetNumberFormatChoices();
         var numberFormatCombo = new ComboBox
         {
-            Width = 260,
+            Width = ControlWidth,
             ItemsSource = numberFormatChoices,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartAxisNumberFormatChoice.DisplayName)),
         };
         ApplyAxisDescriptorAutomation(numberFormatCombo, ChartAxisDialogFieldId.NumberFormat);
         ApplyChartComboBoxChrome(numberFormatCombo);
         numberFormatCombo.SelectedItem =
-            numberFormatChoices.FirstOrDefault(c => c.NumberFormat == current.NumberFormat)
+            numberFormatChoices.FirstOrDefault(c => c.NumberFormat == state.NumberFormat)
             ?? (numberFormatChoices.Count > 0 ? numberFormatChoices[0] : null);
 
-        var majorGridCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.MajorGridlines, current.ShowMajorGridlines);
-        var minorGridCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.MinorGridlines, current.ShowMinorGridlines);
+        var majorGridCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.MajorGridlines, state.ShowMajorGridlines);
+        var minorGridCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.MinorGridlines, state.ShowMinorGridlines);
+        var majorGridColorButton = MakeAxisColorButton(ChartAxisDialogFieldId.MajorGridlineColor, state.MajorGridlineColor);
+        var minorGridColorButton = MakeAxisColorButton(ChartAxisDialogFieldId.MinorGridlineColor, state.MinorGridlineColor);
+        var gridlineThicknessBox = MakeAxisDescriptorNumberBox(
+            ChartAxisDialogFieldId.GridlineThickness,
+            (state.GridlineThickness ?? 1).ToString(CultureInfo.InvariantCulture));
+
+        var tickStyleChoices = ChartAxisPlanner.GetTickStyleChoices();
+        var majorTickCombo = MakeAxisTickStyleCombo(ChartAxisDialogFieldId.MajorTickMarks);
+        majorTickCombo.SelectedItem = state.MajorTickStyle ?? ChartAxisTickStyle.Outside;
+        var minorTickCombo = MakeAxisTickStyleCombo(ChartAxisDialogFieldId.MinorTickMarks);
+        minorTickCombo.SelectedItem = state.MinorTickStyle ?? ChartAxisTickStyle.None;
+
+        var labelsCheck = MakeAxisDescriptorCheck(ChartAxisDialogFieldId.ShowLabels, state.ShowLabels ?? true);
+        var labelColorButton = MakeAxisColorButton(ChartAxisDialogFieldId.LabelTextColor, state.LabelTextColor);
+        var labelFontSizeBox = MakeAxisDescriptorNumberBox(
+            ChartAxisDialogFieldId.LabelFontSize,
+            (state.LabelFontSize ?? 11).ToString(CultureInfo.InvariantCulture));
+        var labelAngleBox = MakeAxisDescriptorNumberBox(
+            ChartAxisDialogFieldId.LabelAngle,
+            (state.LabelAngle ?? 0).ToString(CultureInfo.InvariantCulture));
+        var lineColorButton = MakeAxisColorButton(ChartAxisDialogFieldId.LineColor, state.LineColor);
+        var lineThicknessBox = MakeAxisDescriptorNumberBox(
+            ChartAxisDialogFieldId.LineThickness,
+            (state.LineThickness ?? 1).ToString(CultureInfo.InvariantCulture));
+
+        async Task PickAxisColor(
+            ChartAxisDialogFieldId fieldId,
+            Func<CellColor?> getColor,
+            Action<CellColor> setColor,
+            Button button)
+        {
+            var label = AxisFieldLabel(fieldId);
+            var chosen = await ShowMoreColorsDialogAsync(
+                label,
+                getColor() ?? ChartQuickFormatCycler.DefaultSeriesColor);
+            if (chosen is { } color)
+            {
+                setColor(color);
+                button.Content = DescribeColor(label, color);
+            }
+        }
+
+        majorGridColorButton.Click += async (_, _) => await PickAxisColor(
+            ChartAxisDialogFieldId.MajorGridlineColor,
+            () => state.MajorGridlineColor,
+            color => state = state with { MajorGridlineColor = color },
+            majorGridColorButton);
+        minorGridColorButton.Click += async (_, _) => await PickAxisColor(
+            ChartAxisDialogFieldId.MinorGridlineColor,
+            () => state.MinorGridlineColor,
+            color => state = state with { MinorGridlineColor = color },
+            minorGridColorButton);
+        labelColorButton.Click += async (_, _) => await PickAxisColor(
+            ChartAxisDialogFieldId.LabelTextColor,
+            () => state.LabelTextColor,
+            color => state = state with { LabelTextColor = color },
+            labelColorButton);
+        lineColorButton.Click += async (_, _) => await PickAxisColor(
+            ChartAxisDialogFieldId.LineColor,
+            () => state.LineColor,
+            color => state = state with { LineColor = color },
+            lineColorButton);
 
         var dialog = NewChartDialog($"Format {commandLabel}", "ChartAxisFormatDialog");
+        dialog.SizeToContent = SizeToContent.Manual;
+        dialog.Width = 432;
+        dialog.Height = 720;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartAxisFormat");
         okButton.Click += (_, _) =>
@@ -390,15 +464,33 @@ public sealed partial class MainWindow
             var numberFormat = numberFormatCombo.SelectedItem is ChartAxisNumberFormatChoice picked
                 ? picked.NumberFormat
                 : ChartDataLabelNumberFormat.General;
+            var majorTickStyle = majorTickCombo.SelectedItem is ChartAxisTickStyle selectedMajorTick
+                ? selectedMajorTick
+                : (ChartAxisTickStyle?)null;
+            var minorTickStyle = minorTickCombo.SelectedItem is ChartAxisTickStyle selectedMinorTick
+                ? selectedMinorTick
+                : (ChartAxisTickStyle?)null;
             if (!ChartAxisPlanner.TryParseDialogInput(
-                    current.UseXAxis,
+                    state.UseXAxis,
                     minimumBox.Text,
                     maximumBox.Text,
                     majorUnitBox.Text,
+                    minorUnitBox.Text,
                     logCheck.IsChecked == true,
                     numberFormat,
                     majorGridCheck.IsChecked == true,
                     minorGridCheck.IsChecked == true,
+                    FormatOptionalColorText(state.MajorGridlineColor),
+                    FormatOptionalColorText(state.MinorGridlineColor),
+                    gridlineThicknessBox.Text,
+                    majorTickStyle,
+                    minorTickStyle,
+                    labelsCheck.IsChecked == true,
+                    FormatOptionalColorText(state.LabelTextColor),
+                    labelFontSizeBox.Text,
+                    labelAngleBox.Text,
+                    FormatOptionalColorText(state.LineColor),
+                    lineThicknessBox.Text,
                     out var input,
                     out var issue))
             {
@@ -406,6 +498,15 @@ public sealed partial class MainWindow
                 {
                     ChartAxisFormatParseIssue.Maximum => UiText.Get("ChartAxisFormat_InvalidMaximumMessage"),
                     ChartAxisFormatParseIssue.MajorUnit => UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"),
+                    ChartAxisFormatParseIssue.MinorUnit => UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"),
+                    ChartAxisFormatParseIssue.MajorGridlineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
+                    ChartAxisFormatParseIssue.MinorGridlineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
+                    ChartAxisFormatParseIssue.GridlineThickness => UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"),
+                    ChartAxisFormatParseIssue.LabelTextColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
+                    ChartAxisFormatParseIssue.LabelFontSize => UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"),
+                    ChartAxisFormatParseIssue.LabelAngle => UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"),
+                    ChartAxisFormatParseIssue.LineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
+                    ChartAxisFormatParseIssue.LineThickness => UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"),
                     _ => UiText.Get("ChartAxisFormat_InvalidMinimumMessage"),
                 });
                 return;
@@ -415,24 +516,90 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close((ChartAxisInput?)null);
 
-        dialog.Content = new StackPanel
+        var axisOptionsPanel = new StackPanel
         {
-            Margin = new Thickness(16),
             Spacing = 8,
-            MinWidth = 300,
             Children =
             {
+                MakeAxisSectionHelp(axisOptionsSection),
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.Minimum),
                 minimumBox,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.Maximum),
                 maximumBox,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MajorUnit),
                 majorUnitBox,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MinorUnit),
+                minorUnitBox,
                 logCheck,
                 MakeAxisDescriptorLabel(ChartAxisDialogFieldId.NumberFormat, new Thickness(0, 6, 0, 0)),
                 numberFormatCombo,
+            },
+        };
+
+        var gridlinePanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
                 majorGridCheck,
                 minorGridCheck,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MajorGridlineColor),
+                majorGridColorButton,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MinorGridlineColor),
+                minorGridColorButton,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.GridlineThickness),
+                gridlineThicknessBox,
+            },
+        };
+
+        var tickMarksPanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MajorTickMarks),
+                majorTickCombo,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.MinorTickMarks),
+                minorTickCombo,
+                labelsCheck,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LabelTextColor),
+                labelColorButton,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LabelFontSize),
+                labelFontSizeBox,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LabelAngle),
+                labelAngleBox,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LineColor),
+                lineColorButton,
+                MakeAxisDescriptorLabel(ChartAxisDialogFieldId.LineThickness),
+                lineThicknessBox,
+            },
+        };
+
+        var body = new StackPanel
+        {
+            Spacing = 0,
+            Children =
+            {
+                MakeAxisDescriptorGroup(axisOptionsSection, axisOptionsPanel),
+                MakeAxisDescriptorGroup(gridlinesSection, gridlinePanel),
+                MakeAxisDescriptorGroup(tickMarksSection, tickMarksPanel),
+            },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Spacing = 0,
+            MinWidth = 380,
+            Children =
+            {
+                new ScrollViewer
+                {
+                    HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                    MaxHeight = 624,
+                    Content = body,
+                },
                 buttonRow,
             },
         };
@@ -478,12 +645,58 @@ public sealed partial class MainWindow
             var box = new TextBox
             {
                 Text = text,
-                Width = 260,
+                Width = ControlWidth,
             };
             ApplyChartTextBoxChrome(box);
             ApplyAxisDescriptorAutomation(box, fieldId);
             return box;
         }
+
+        ComboBox MakeAxisTickStyleCombo(ChartAxisDialogFieldId fieldId)
+        {
+            var combo = new ComboBox
+            {
+                Width = ControlWidth,
+                ItemsSource = tickStyleChoices,
+            };
+            ApplyAxisDescriptorAutomation(combo, fieldId);
+            ApplyChartComboBoxChrome(combo);
+            return combo;
+        }
+
+        Button MakeAxisColorButton(ChartAxisDialogFieldId fieldId, CellColor? color)
+        {
+            var label = AxisFieldLabel(fieldId);
+            var button = new Button
+            {
+                Content = DescribeColor(label, color),
+                Width = ControlWidth,
+            };
+            ApplyChartButtonChrome(button, ControlWidth);
+            ApplyAxisDescriptorAutomation(button, fieldId);
+            return button;
+        }
+
+        TextBlock MakeAxisSectionHelp(ChartAxisDialogSectionDescriptor section) =>
+            new()
+            {
+                Text = section.HelpResourceKey is { } helpKey ? UiText.Get(helpKey) : string.Empty,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 96)),
+                Margin = section.HelpResourceKey is null ? new Thickness(0) : new Thickness(0, 0, 0, 4),
+                IsVisible = section.HelpResourceKey is not null,
+            };
+
+        GroupBox MakeAxisDescriptorGroup(ChartAxisDialogSectionDescriptor section, Control content) =>
+            new()
+            {
+                Header = StripDisplayMnemonic(UiText.Get(section.HeaderResourceKey)),
+                Content = content,
+                Padding = new Thickness(10, 8),
+                Margin = new Thickness(0, 0, 0, 8),
+            };
     }
 
     // ---- Format Series (real, SetChartLayoutCommand via ChartSeriesFormatPlanner) ---------------------

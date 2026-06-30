@@ -61,6 +61,25 @@ public static class SymbolPickerCatalogPlanner
         .Select(static subset => subset.Name)
         .ToArray();
 
+    private static readonly string[] PreferredFontChoicesValue =
+    [
+        "Segoe UI Symbol",
+        "Segoe UI Emoji",
+        "Segoe UI Historic",
+        "Segoe UI",
+        "Calibri",
+        "Cambria Math",
+        "Arial",
+        "Times New Roman",
+        "Courier New",
+        "Consolas",
+        "Symbol",
+        "Wingdings",
+        "Wingdings 2",
+        "Wingdings 3",
+        "Webdings"
+    ];
+
     private static readonly string[] DefaultRecentSymbolsValue =
     [
         "\u20ac",
@@ -194,6 +213,8 @@ public static class SymbolPickerCatalogPlanner
     ];
 
     public static IReadOnlyList<string> DefaultRecentSymbols => DefaultRecentSymbolsValue;
+
+    public static IReadOnlyList<string> GetPreferredFontChoices() => PreferredFontChoicesValue;
 
     public static IReadOnlyList<string> GetSubsetNames() => SubsetChoices;
 

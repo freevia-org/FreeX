@@ -124,6 +124,53 @@ internal static class FreeWRibbonText
 
     public static readonly RibbonText FontDialogCommand = new(
         "Ribbon_Command_FontDialog_Label");
+
+    public static readonly RibbonText ParagraphGroup = new(
+        "Ribbon_Group_Paragraph_Label",
+        "Ribbon_Group_Paragraph_KeyTip");
+
+    public static readonly RibbonText BulletsCommand = new(
+        "Ribbon_Command_Bullets_Label");
+
+    public static readonly RibbonText NumberingCommand = new(
+        "Ribbon_Command_Numbering_Label");
+
+    public static readonly RibbonText MultilevelListCommand = new(
+        "Ribbon_Command_MultilevelList_Label");
+
+    public static readonly RibbonText MultilevelPromoteCommand = new(
+        "Ribbon_Command_MultilevelPromote_Label",
+        "Ribbon_Command_MultilevelPromote_KeyTip");
+
+    public static readonly RibbonText MultilevelDemoteCommand = new(
+        "Ribbon_Command_MultilevelDemote_Label",
+        "Ribbon_Command_MultilevelDemote_KeyTip");
+
+    public static readonly RibbonText MultilevelDefineCommand = new(
+        "Ribbon_Command_MultilevelDefine_Label",
+        "Ribbon_Command_MultilevelDefine_KeyTip");
+
+    public static readonly RibbonText SymbolsGroup = new(
+        "Ribbon_Group_Symbols_Label",
+        "Ribbon_Group_Symbols_KeyTip");
+
+    public static readonly RibbonText SymbolCommand = new(
+        "Ribbon_Command_Symbol_Label");
+
+    public static readonly RibbonText PageBackgroundGroup = new(
+        "Ribbon_Group_PageBackground_Label",
+        "Ribbon_Group_PageBackground_KeyTip");
+
+    public static readonly RibbonText WatermarkCommand = new(
+        "Ribbon_Command_Watermark_Label");
+
+    public static readonly RibbonText PageColorCommand = new(
+        "Ribbon_Command_PageColor_Label");
+
+    public static readonly RibbonText PageBordersCommand = new(
+        "Ribbon_Command_PageBorders_Label");
+
+    public static string PageColorNoColorOption => Loc.Get("Ribbon_Palette_PageColor_NoColor_Label");
 }
 
 internal readonly record struct RibbonText(string LabelKey, string? KeyTipKey = null)

@@ -75,6 +75,7 @@ public sealed partial class SymbolPickerDialogSourceTests
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("using FreeX.App.Presentation.Dialogs;");
+        source.Should().Contain("SymbolPickerCatalogPlanner.GetPreferredFontChoices()");
         source.Should().Contain("SymbolPickerCatalogPlanner.GetSubsetNames()");
         source.Should().Contain("SymbolPickerCatalogPlanner.PlanSymbolList(");
         source.Should().Contain("SymbolPickerCatalogPlanner.DefaultRecentSymbols");

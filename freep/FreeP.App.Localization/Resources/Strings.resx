@@ -442,4 +442,409 @@
   <data name="Ribbon_Command_ShapeEllipse_KeyTip" xml:space="preserve">
     <value>E</value>
   </data>
+  <data name="Ribbon_Group_Arrange_Label" xml:space="preserve">
+    <value>Arrange</value>
+  </data>
+  <data name="Ribbon_Group_Arrange_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeGroup_Label" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeGroup_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeUngroup_Label" xml:space="preserve">
+    <value>Ungroup</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeUngroup_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeBringToFront_Label" xml:space="preserve">
+    <value>Bring to Front</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeBringToFront_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeBringForward_Label" xml:space="preserve">
+    <value>Bring Forward</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeBringForward_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeSendBackward_Label" xml:space="preserve">
+    <value>Send Backward</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeSendBackward_KeyTip" xml:space="preserve">
+    <value>K</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeSendToBack_Label" xml:space="preserve">
+    <value>Send to Back</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeSendToBack_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignLeft_Label" xml:space="preserve">
+    <value>Align Left</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignLeft_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignCenterHorizontal_Label" xml:space="preserve">
+    <value>Center Horiz.</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignCenterHorizontal_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignRight_Label" xml:space="preserve">
+    <value>Align Right</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignRight_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignTop_Label" xml:space="preserve">
+    <value>Align Top</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignTop_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignMiddle_Label" xml:space="preserve">
+    <value>Center Vert.</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignMiddle_KeyTip" xml:space="preserve">
+    <value>M</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignBottom_Label" xml:space="preserve">
+    <value>Align Bottom</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignBottom_KeyTip" xml:space="preserve">
+    <value>E</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeDistributeHorizontal_Label" xml:space="preserve">
+    <value>Distribute Horiz.</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeDistributeHorizontal_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeDistributeVertical_Label" xml:space="preserve">
+    <value>Distribute Vert.</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeDistributeVertical_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Tab_Design_Label" xml:space="preserve">
+    <value>Design</value>
+  </data>
+  <data name="Ribbon_Tab_Design_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Group_Themes_Label" xml:space="preserve">
+    <value>Themes</value>
+  </data>
+  <data name="Ribbon_Group_Themes_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_ThemeOffice_Label" xml:space="preserve">
+    <value>Office</value>
+  </data>
+  <data name="Ribbon_Command_ThemeOffice_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
+  <data name="Ribbon_Command_ThemeBerlin_Label" xml:space="preserve">
+    <value>Berlin</value>
+  </data>
+  <data name="Ribbon_Command_ThemeBerlin_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_ThemeFacet_Label" xml:space="preserve">
+    <value>Facet</value>
+  </data>
+  <data name="Ribbon_Command_ThemeFacet_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
+  <data name="Ribbon_Command_ThemeIon_Label" xml:space="preserve">
+    <value>Ion</value>
+  </data>
+  <data name="Ribbon_Command_ThemeIon_KeyTip" xml:space="preserve">
+    <value>I</value>
+  </data>
+  <data name="Ribbon_Command_ThemeSlice_Label" xml:space="preserve">
+    <value>Slice</value>
+  </data>
+  <data name="Ribbon_Command_ThemeSlice_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Group_Customize_Label" xml:space="preserve">
+    <value>Customize</value>
+  </data>
+  <data name="Ribbon_Group_Customize_KeyTip" xml:space="preserve">
+    <value>Z</value>
+  </data>
+  <data name="Ribbon_Command_SlideSizeWidescreen_Label" xml:space="preserve">
+    <value>Widescreen (16:9)</value>
+  </data>
+  <data name="Ribbon_Command_SlideSizeWidescreen_KeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Command_SlideSizeStandard_Label" xml:space="preserve">
+    <value>Standard (4:3)</value>
+  </data>
+  <data name="Ribbon_Command_SlideSizeStandard_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_SlideSizeCustom_Label" xml:space="preserve">
+    <value>Slide Size&#x2026;</value>
+  </data>
+  <data name="Ribbon_Command_SlideSizeCustom_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Tab_Transitions_Label" xml:space="preserve">
+    <value>Transitions</value>
+  </data>
+  <data name="Ribbon_Tab_Transitions_KeyTip" xml:space="preserve">
+    <value>K</value>
+  </data>
+  <data name="Ribbon_Group_TransitionGallery_Label" xml:space="preserve">
+    <value>Transition to This Slide</value>
+  </data>
+  <data name="Ribbon_Group_TransitionGallery_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_TransitionNone_Label" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="Ribbon_Command_TransitionNone_KeyTip" xml:space="preserve">
+    <value>0</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFade_Label" xml:space="preserve">
+    <value>Fade</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFade_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPush_Label" xml:space="preserve">
+    <value>Push</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPush_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWipe_Label" xml:space="preserve">
+    <value>Wipe</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWipe_KeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Command_TransitionSplit_Label" xml:space="preserve">
+    <value>Split</value>
+  </data>
+  <data name="Ribbon_Command_TransitionSplit_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_TransitionCut_Label" xml:space="preserve">
+    <value>Cut</value>
+  </data>
+  <data name="Ribbon_Command_TransitionCut_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_TransitionCover_Label" xml:space="preserve">
+    <value>Cover</value>
+  </data>
+  <data name="Ribbon_Command_TransitionCover_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_TransitionUncover_Label" xml:space="preserve">
+    <value>Uncover</value>
+  </data>
+  <data name="Ribbon_Command_TransitionUncover_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_TransitionBlinds_Label" xml:space="preserve">
+    <value>Blinds</value>
+  </data>
+  <data name="Ribbon_Command_TransitionBlinds_KeyTip" xml:space="preserve">
+    <value>B</value>
+  </data>
+  <data name="Ribbon_Command_TransitionDissolve_Label" xml:space="preserve">
+    <value>Dissolve</value>
+  </data>
+  <data name="Ribbon_Command_TransitionDissolve_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_TransitionZoom_Label" xml:space="preserve">
+    <value>Zoom</value>
+  </data>
+  <data name="Ribbon_Command_TransitionZoom_KeyTip" xml:space="preserve">
+    <value>Z</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWheel_Label" xml:space="preserve">
+    <value>Wheel</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWheel_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
+  <data name="Ribbon_Group_TransitionTiming_Label" xml:space="preserve">
+    <value>Timing</value>
+  </data>
+  <data name="Ribbon_Group_TransitionTiming_KeyTip" xml:space="preserve">
+    <value>I</value>
+  </data>
+  <data name="Ribbon_Command_TransitionDuration_Label" xml:space="preserve">
+    <value>Duration</value>
+  </data>
+  <data name="Ribbon_Command_TransitionAdvanceOnClick_Label" xml:space="preserve">
+    <value>On Mouse Click</value>
+  </data>
+  <data name="Ribbon_Command_TransitionAdvanceOnClick_KeyTip" xml:space="preserve">
+    <value>M</value>
+  </data>
+  <data name="Ribbon_Command_TransitionAdvanceAfter_Label" xml:space="preserve">
+    <value>After</value>
+  </data>
+  <data name="Ribbon_Command_TransitionApplyAll_Label" xml:space="preserve">
+    <value>Apply To All</value>
+  </data>
+  <data name="Ribbon_Command_TransitionApplyAll_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Option_TransitionAdvanceAfterNone_Label" xml:space="preserve">
+    <value>(none)</value>
+  </data>
+  <data name="Ribbon_Tab_Animations_Label" xml:space="preserve">
+    <value>Animations</value>
+  </data>
+  <data name="Ribbon_Tab_Animations_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Group_AnimationEffects_Label" xml:space="preserve">
+    <value>Animation</value>
+  </data>
+  <data name="Ribbon_Group_AnimationEffects_KeyTip" xml:space="preserve">
+    <value>N</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceAppear_Label" xml:space="preserve">
+    <value>Appear</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceAppear_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceFade_Label" xml:space="preserve">
+    <value>Fade In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceFade_KeyTip" xml:space="preserve">
+    <value>F</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceFlyIn_Label" xml:space="preserve">
+    <value>Fly In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceFlyIn_KeyTip" xml:space="preserve">
+    <value>Y</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceWipe_Label" xml:space="preserve">
+    <value>Wipe</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceWipe_KeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceZoom_Label" xml:space="preserve">
+    <value>Zoom In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceZoom_KeyTip" xml:space="preserve">
+    <value>Z</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceSplit_Label" xml:space="preserve">
+    <value>Split</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceSplit_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisPulse_Label" xml:space="preserve">
+    <value>Pulse</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisPulse_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisSpin_Label" xml:space="preserve">
+    <value>Spin</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisSpin_KeyTip" xml:space="preserve">
+    <value>I</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisGrowShrink_Label" xml:space="preserve">
+    <value>Grow/Shrink</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisGrowShrink_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitDisappear_Label" xml:space="preserve">
+    <value>Disappear</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitDisappear_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitFadeOut_Label" xml:space="preserve">
+    <value>Fade Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitFadeOut_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitFlyOut_Label" xml:space="preserve">
+    <value>Fly Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitFlyOut_KeyTip" xml:space="preserve">
+    <value>X</value>
+  </data>
+  <data name="Ribbon_Command_AnimationNone_Label" xml:space="preserve">
+    <value>No Animation</value>
+  </data>
+  <data name="Ribbon_Command_AnimationNone_KeyTip" xml:space="preserve">
+    <value>E</value>
+  </data>
+  <data name="Ribbon_Group_AnimationTiming_Label" xml:space="preserve">
+    <value>Timing</value>
+  </data>
+  <data name="Ribbon_Group_AnimationTiming_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_AnimationTrigger_Label" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="Ribbon_Command_AnimationDuration_Label" xml:space="preserve">
+    <value>Duration</value>
+  </data>
+  <data name="Ribbon_Command_AnimationDelay_Label" xml:space="preserve">
+    <value>Delay</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMoveEarlier_Label" xml:space="preserve">
+    <value>Move Earlier</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMoveEarlier_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMoveLater_Label" xml:space="preserve">
+    <value>Move Later</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMoveLater_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Group_AdvancedAnimation_Label" xml:space="preserve">
+    <value>Advanced Animation</value>
+  </data>
+  <data name="Ribbon_Group_AdvancedAnimation_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_AnimationPane_Label" xml:space="preserve">
+    <value>Animation Pane</value>
+  </data>
+  <data name="Ribbon_Command_AnimationPane_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Option_AnimationTriggerOnClick_Label" xml:space="preserve">
+    <value>On Click</value>
+  </data>
+  <data name="Ribbon_Option_AnimationTriggerWithPrevious_Label" xml:space="preserve">
+    <value>With Previous</value>
+  </data>
+  <data name="Ribbon_Option_AnimationTriggerAfterPrevious_Label" xml:space="preserve">
+    <value>After Previous</value>
+  </data>
 </root>

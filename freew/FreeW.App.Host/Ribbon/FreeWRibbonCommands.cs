@@ -7648,7 +7648,7 @@ internal static class FreeWRibbonCommands
             string? hex = null;
             var window = new Window
             {
-                Title = "Page Color",
+                Title = UiText.Get("Ribbon_Dialog_PageColor_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null
@@ -7679,7 +7679,7 @@ internal static class FreeWRibbonCommands
 
             var noColor = new Button
             {
-                Content = "No Color",
+                Content = UiText.Get("Ribbon_Palette_PageColor_NoColor_Label"),
                 Margin = new Thickness(2, 6, 2, 0),
                 Padding = new Thickness(8, 2, 8, 2)
             };
@@ -7688,20 +7688,27 @@ internal static class FreeWRibbonCommands
 
             var more = new Button
             {
-                Content = "More Colors…",
+                Content = UiText.Get("Ribbon_Dialog_PageColor_MoreColors_Label"),
                 Margin = new Thickness(2, 4, 2, 0),
                 Padding = new Thickness(8, 2, 8, 2)
             };
             more.Click += (_, _) =>
             {
                 var seed = editor.Model.Page.BackgroundColorHex ?? "#";
-                var typed = TextPrompt.Ask(window, "More Colors", "Hex colour (e.g. #FFCC00):", seed);
+                var typed = TextPrompt.Ask(
+                    window,
+                    UiText.Get("Ribbon_Dialog_PageColor_MoreColors_Title"),
+                    UiText.Get("Ribbon_Dialog_PageColor_HexPrompt"),
+                    seed);
                 if (typed is null)
                     return; // stay on the palette
                 var normalized = NormalizeHex(typed);
                 if (normalized is null)
                 {
-                    DialogMessageHelper.ShowWarning(window, "Enter a colour as a 6-digit hex value, e.g. #FFCC00.", "Page Color");
+                    DialogMessageHelper.ShowWarning(
+                        window,
+                        UiText.Get("Ribbon_Dialog_PageColor_InvalidHexWarning"),
+                        UiText.Get("Ribbon_Dialog_PageColor_Title"));
                     return;
                 }
                 chosen = true; hex = normalized; window.Close();

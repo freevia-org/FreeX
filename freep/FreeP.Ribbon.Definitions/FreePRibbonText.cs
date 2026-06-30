@@ -118,5 +118,88 @@ internal static class FreePRibbonText
     public static string ShapeEllipseLabel => Get("Ribbon_Command_ShapeEllipse_Label");
     public static string ShapeEllipseKeyTip => Get("Ribbon_Command_ShapeEllipse_KeyTip");
 
+    public static RibbonText ArrangeGroup { get; } = new("Ribbon_Group_Arrange_Label", "Ribbon_Group_Arrange_KeyTip");
+    public static RibbonText ArrangeGroupCommand { get; } = new("Ribbon_Command_ArrangeGroup_Label", "Ribbon_Command_ArrangeGroup_KeyTip");
+    public static RibbonText ArrangeUngroupCommand { get; } = new("Ribbon_Command_ArrangeUngroup_Label", "Ribbon_Command_ArrangeUngroup_KeyTip");
+    public static RibbonText ArrangeBringToFrontCommand { get; } = new("Ribbon_Command_ArrangeBringToFront_Label", "Ribbon_Command_ArrangeBringToFront_KeyTip");
+    public static RibbonText ArrangeBringForwardCommand { get; } = new("Ribbon_Command_ArrangeBringForward_Label", "Ribbon_Command_ArrangeBringForward_KeyTip");
+    public static RibbonText ArrangeSendBackwardCommand { get; } = new("Ribbon_Command_ArrangeSendBackward_Label", "Ribbon_Command_ArrangeSendBackward_KeyTip");
+    public static RibbonText ArrangeSendToBackCommand { get; } = new("Ribbon_Command_ArrangeSendToBack_Label", "Ribbon_Command_ArrangeSendToBack_KeyTip");
+    public static RibbonText ArrangeAlignLeftCommand { get; } = new("Ribbon_Command_ArrangeAlignLeft_Label", "Ribbon_Command_ArrangeAlignLeft_KeyTip");
+    public static RibbonText ArrangeAlignCenterHorizontalCommand { get; } = new("Ribbon_Command_ArrangeAlignCenterHorizontal_Label", "Ribbon_Command_ArrangeAlignCenterHorizontal_KeyTip");
+    public static RibbonText ArrangeAlignRightCommand { get; } = new("Ribbon_Command_ArrangeAlignRight_Label", "Ribbon_Command_ArrangeAlignRight_KeyTip");
+    public static RibbonText ArrangeAlignTopCommand { get; } = new("Ribbon_Command_ArrangeAlignTop_Label", "Ribbon_Command_ArrangeAlignTop_KeyTip");
+    public static RibbonText ArrangeAlignMiddleCommand { get; } = new("Ribbon_Command_ArrangeAlignMiddle_Label", "Ribbon_Command_ArrangeAlignMiddle_KeyTip");
+    public static RibbonText ArrangeAlignBottomCommand { get; } = new("Ribbon_Command_ArrangeAlignBottom_Label", "Ribbon_Command_ArrangeAlignBottom_KeyTip");
+    public static RibbonText ArrangeDistributeHorizontalCommand { get; } = new("Ribbon_Command_ArrangeDistributeHorizontal_Label", "Ribbon_Command_ArrangeDistributeHorizontal_KeyTip");
+    public static RibbonText ArrangeDistributeVerticalCommand { get; } = new("Ribbon_Command_ArrangeDistributeVertical_Label", "Ribbon_Command_ArrangeDistributeVertical_KeyTip");
+
+    public static RibbonText DesignTab { get; } = new("Ribbon_Tab_Design_Label", "Ribbon_Tab_Design_KeyTip");
+    public static RibbonText ThemesGroup { get; } = new("Ribbon_Group_Themes_Label", "Ribbon_Group_Themes_KeyTip");
+    public static RibbonText ThemeOfficeCommand { get; } = new("Ribbon_Command_ThemeOffice_Label", "Ribbon_Command_ThemeOffice_KeyTip");
+    public static RibbonText ThemeBerlinCommand { get; } = new("Ribbon_Command_ThemeBerlin_Label", "Ribbon_Command_ThemeBerlin_KeyTip");
+    public static RibbonText ThemeFacetCommand { get; } = new("Ribbon_Command_ThemeFacet_Label", "Ribbon_Command_ThemeFacet_KeyTip");
+    public static RibbonText ThemeIonCommand { get; } = new("Ribbon_Command_ThemeIon_Label", "Ribbon_Command_ThemeIon_KeyTip");
+    public static RibbonText ThemeSliceCommand { get; } = new("Ribbon_Command_ThemeSlice_Label", "Ribbon_Command_ThemeSlice_KeyTip");
+    public static RibbonText CustomizeGroup { get; } = new("Ribbon_Group_Customize_Label", "Ribbon_Group_Customize_KeyTip");
+    public static RibbonText SlideSizeWidescreenCommand { get; } = new("Ribbon_Command_SlideSizeWidescreen_Label", "Ribbon_Command_SlideSizeWidescreen_KeyTip");
+    public static RibbonText SlideSizeStandardCommand { get; } = new("Ribbon_Command_SlideSizeStandard_Label", "Ribbon_Command_SlideSizeStandard_KeyTip");
+    public static RibbonText SlideSizeCustomCommand { get; } = new("Ribbon_Command_SlideSizeCustom_Label", "Ribbon_Command_SlideSizeCustom_KeyTip");
+
+    public static RibbonText TransitionsTab { get; } = new("Ribbon_Tab_Transitions_Label", "Ribbon_Tab_Transitions_KeyTip");
+    public static RibbonText TransitionGalleryGroup { get; } = new("Ribbon_Group_TransitionGallery_Label", "Ribbon_Group_TransitionGallery_KeyTip");
+    public static RibbonText TransitionNoneCommand { get; } = new("Ribbon_Command_TransitionNone_Label", "Ribbon_Command_TransitionNone_KeyTip");
+    public static RibbonText TransitionFadeCommand { get; } = new("Ribbon_Command_TransitionFade_Label", "Ribbon_Command_TransitionFade_KeyTip");
+    public static RibbonText TransitionPushCommand { get; } = new("Ribbon_Command_TransitionPush_Label", "Ribbon_Command_TransitionPush_KeyTip");
+    public static RibbonText TransitionWipeCommand { get; } = new("Ribbon_Command_TransitionWipe_Label", "Ribbon_Command_TransitionWipe_KeyTip");
+    public static RibbonText TransitionSplitCommand { get; } = new("Ribbon_Command_TransitionSplit_Label", "Ribbon_Command_TransitionSplit_KeyTip");
+    public static RibbonText TransitionCutCommand { get; } = new("Ribbon_Command_TransitionCut_Label", "Ribbon_Command_TransitionCut_KeyTip");
+    public static RibbonText TransitionCoverCommand { get; } = new("Ribbon_Command_TransitionCover_Label", "Ribbon_Command_TransitionCover_KeyTip");
+    public static RibbonText TransitionUncoverCommand { get; } = new("Ribbon_Command_TransitionUncover_Label", "Ribbon_Command_TransitionUncover_KeyTip");
+    public static RibbonText TransitionBlindsCommand { get; } = new("Ribbon_Command_TransitionBlinds_Label", "Ribbon_Command_TransitionBlinds_KeyTip");
+    public static RibbonText TransitionDissolveCommand { get; } = new("Ribbon_Command_TransitionDissolve_Label", "Ribbon_Command_TransitionDissolve_KeyTip");
+    public static RibbonText TransitionZoomCommand { get; } = new("Ribbon_Command_TransitionZoom_Label", "Ribbon_Command_TransitionZoom_KeyTip");
+    public static RibbonText TransitionWheelCommand { get; } = new("Ribbon_Command_TransitionWheel_Label", "Ribbon_Command_TransitionWheel_KeyTip");
+    public static RibbonText TransitionTimingGroup { get; } = new("Ribbon_Group_TransitionTiming_Label", "Ribbon_Group_TransitionTiming_KeyTip");
+    public static RibbonText TransitionDurationCommand { get; } = new("Ribbon_Command_TransitionDuration_Label");
+    public static RibbonText TransitionAdvanceOnClickCommand { get; } = new("Ribbon_Command_TransitionAdvanceOnClick_Label", "Ribbon_Command_TransitionAdvanceOnClick_KeyTip");
+    public static RibbonText TransitionAdvanceAfterCommand { get; } = new("Ribbon_Command_TransitionAdvanceAfter_Label");
+    public static RibbonText TransitionApplyAllCommand { get; } = new("Ribbon_Command_TransitionApplyAll_Label", "Ribbon_Command_TransitionApplyAll_KeyTip");
+    public static string TransitionAdvanceAfterNoneOption => Get("Ribbon_Option_TransitionAdvanceAfterNone_Label");
+
+    public static RibbonText AnimationsTab { get; } = new("Ribbon_Tab_Animations_Label", "Ribbon_Tab_Animations_KeyTip");
+    public static RibbonText AnimationEffectsGroup { get; } = new("Ribbon_Group_AnimationEffects_Label", "Ribbon_Group_AnimationEffects_KeyTip");
+    public static RibbonText AnimationEntranceAppearCommand { get; } = new("Ribbon_Command_AnimationEntranceAppear_Label", "Ribbon_Command_AnimationEntranceAppear_KeyTip");
+    public static RibbonText AnimationEntranceFadeCommand { get; } = new("Ribbon_Command_AnimationEntranceFade_Label", "Ribbon_Command_AnimationEntranceFade_KeyTip");
+    public static RibbonText AnimationEntranceFlyInCommand { get; } = new("Ribbon_Command_AnimationEntranceFlyIn_Label", "Ribbon_Command_AnimationEntranceFlyIn_KeyTip");
+    public static RibbonText AnimationEntranceWipeCommand { get; } = new("Ribbon_Command_AnimationEntranceWipe_Label", "Ribbon_Command_AnimationEntranceWipe_KeyTip");
+    public static RibbonText AnimationEntranceZoomCommand { get; } = new("Ribbon_Command_AnimationEntranceZoom_Label", "Ribbon_Command_AnimationEntranceZoom_KeyTip");
+    public static RibbonText AnimationEntranceSplitCommand { get; } = new("Ribbon_Command_AnimationEntranceSplit_Label", "Ribbon_Command_AnimationEntranceSplit_KeyTip");
+    public static RibbonText AnimationEmphasisPulseCommand { get; } = new("Ribbon_Command_AnimationEmphasisPulse_Label", "Ribbon_Command_AnimationEmphasisPulse_KeyTip");
+    public static RibbonText AnimationEmphasisSpinCommand { get; } = new("Ribbon_Command_AnimationEmphasisSpin_Label", "Ribbon_Command_AnimationEmphasisSpin_KeyTip");
+    public static RibbonText AnimationEmphasisGrowShrinkCommand { get; } = new("Ribbon_Command_AnimationEmphasisGrowShrink_Label", "Ribbon_Command_AnimationEmphasisGrowShrink_KeyTip");
+    public static RibbonText AnimationExitDisappearCommand { get; } = new("Ribbon_Command_AnimationExitDisappear_Label", "Ribbon_Command_AnimationExitDisappear_KeyTip");
+    public static RibbonText AnimationExitFadeOutCommand { get; } = new("Ribbon_Command_AnimationExitFadeOut_Label", "Ribbon_Command_AnimationExitFadeOut_KeyTip");
+    public static RibbonText AnimationExitFlyOutCommand { get; } = new("Ribbon_Command_AnimationExitFlyOut_Label", "Ribbon_Command_AnimationExitFlyOut_KeyTip");
+    public static RibbonText AnimationNoneCommand { get; } = new("Ribbon_Command_AnimationNone_Label", "Ribbon_Command_AnimationNone_KeyTip");
+    public static RibbonText AnimationTimingGroup { get; } = new("Ribbon_Group_AnimationTiming_Label", "Ribbon_Group_AnimationTiming_KeyTip");
+    public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label");
+    public static RibbonText AnimationDurationCommand { get; } = new("Ribbon_Command_AnimationDuration_Label");
+    public static RibbonText AnimationDelayCommand { get; } = new("Ribbon_Command_AnimationDelay_Label");
+    public static RibbonText AnimationMoveEarlierCommand { get; } = new("Ribbon_Command_AnimationMoveEarlier_Label", "Ribbon_Command_AnimationMoveEarlier_KeyTip");
+    public static RibbonText AnimationMoveLaterCommand { get; } = new("Ribbon_Command_AnimationMoveLater_Label", "Ribbon_Command_AnimationMoveLater_KeyTip");
+    public static RibbonText AdvancedAnimationGroup { get; } = new("Ribbon_Group_AdvancedAnimation_Label", "Ribbon_Group_AdvancedAnimation_KeyTip");
+    public static RibbonText AnimationPaneCommand { get; } = new("Ribbon_Command_AnimationPane_Label", "Ribbon_Command_AnimationPane_KeyTip");
+    public static string AnimationTriggerOnClickOption => Get("Ribbon_Option_AnimationTriggerOnClick_Label");
+    public static string AnimationTriggerWithPreviousOption => Get("Ribbon_Option_AnimationTriggerWithPrevious_Label");
+    public static string AnimationTriggerAfterPreviousOption => Get("Ribbon_Option_AnimationTriggerAfterPrevious_Label");
+
     private static string Get(string key) => Loc.Get(key);
+}
+
+internal readonly record struct RibbonText(string LabelKey, string? KeyTipKey = null)
+{
+    public string Label => Loc.Get(LabelKey);
+
+    public string? KeyTip => KeyTipKey is null ? null : Loc.Get(KeyTipKey);
 }
