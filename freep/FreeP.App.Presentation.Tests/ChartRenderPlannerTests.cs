@@ -193,6 +193,120 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildAreaSeriesPrimitives_PlansBackToFrontFilledPolygons()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Area };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+
+        var first = new ChartSeries { Name = "Actual" };
+        first.Values.AddRange(new double?[] { 0, 40, 80 });
+        chart.Series.Add(first);
+
+        var second = new ChartSeries { Name = "Forecast" };
+        second.Values.AddRange(new double?[] { 10, 20, 30 });
+        chart.Series.Add(second);
+
+        var primitives = ChartRenderPlanner.BuildAreaSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        primitives.Should().HaveCount(2);
+        primitives[0].SeriesIndex.Should().Be(1);
+        primitives[1].SeriesIndex.Should().Be(0);
+        primitives[0].BaselineStart.Should().Be(new ChartPlanPoint(0, 100));
+        primitives[0].BaselineEnd.Should().Be(new ChartPlanPoint(200, 100));
+        primitives[0].Points.Should().Equal(
+            new ChartPlanPoint(0, 90),
+            new ChartPlanPoint(100, 80),
+            new ChartPlanPoint(200, 70));
+    }
+
+    [Fact]
+    public void BuildScatterPrimitivePlan_PlansAxesAndPreservesSeriesGaps()
+    {
+        var series = new ChartSeries { Name = "XY" };
+        series.XValues.AddRange(new double?[] { 0, 50, 100 });
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Scatter,
+            ScatterStyle = ScatterStyle.LineMarker
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        plan.GridLines.Should().HaveCount(11);
+        plan.XAxisLabels.Should().HaveCount(6);
+        plan.YAxisLabels.Should().HaveCount(5);
+        plan.Series.Should().ContainSingle();
+        plan.Series[0].DrawLines.Should().BeTrue();
+        plan.Series[0].DrawMarkers.Should().BeTrue();
+        plan.Series[0].Points[0].Should().Be(new ChartPlanPoint(0, 75));
+        plan.Series[0].Points[1].Should().BeNull();
+        plan.Series[0].Points[2]!.Value.X.Should().BeApproximately(160, 0.0001);
+        plan.Series[0].Points[2]!.Value.Y.Should().BeApproximately(25, 0.0001);
+    }
+
+    [Fact]
+    public void BuildBubblePrimitivePlan_NormalizesBubbleRadiiAndAxisLabels()
+    {
+        var series = new ChartSeries { Name = "Bubble" };
+        series.XValues.AddRange(new double?[] { 0, 100 });
+        series.Values.AddRange(new double?[] { 0, 40 });
+        series.BubbleSizes.AddRange(new double?[] { 25, 100 });
+
+        var chart = new ChartShape { ChartType = ChartType.Bubble };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 160, 80));
+
+        plan.GridLines.Should().HaveCount(12);
+        plan.XAxisLabels.Should().HaveCount(6);
+        plan.YAxisLabels.Should().HaveCount(6);
+        plan.Bubbles.Should().HaveCount(2);
+        plan.Bubbles[0].Radius.Should().BeApproximately(5, 0.0001);
+        plan.Bubbles[0].Center.Should().Be(new ChartPlanPoint(0, 80));
+        plan.Bubbles[1].Radius.Should().BeApproximately(10, 0.0001);
+        plan.Bubbles[1].Center.X.Should().BeApproximately(128, 0.0001);
+        plan.Bubbles[1].Center.Y.Should().BeApproximately(16, 0.0001);
+    }
+
+    [Fact]
+    public void BuildRadarPrimitivePlan_PlansRingsSpokesLabelsAndSeries()
+    {
+        var series = new ChartSeries { Name = "Radar" };
+        series.Values.AddRange(new double?[] { 1, 2, 3, 4 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            RadarStyle = RadarStyle.Filled
+        };
+        chart.Categories.AddRange(new[] { "North", "East", "South", "West" });
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        plan.Rings.Should().HaveCount(4);
+        plan.Rings[0].Points.Should().HaveCount(4);
+        plan.Spokes.Should().HaveCount(4);
+        plan.CategoryLabels.Should().HaveCount(4);
+        plan.Series.Should().ContainSingle();
+        plan.Series[0].IsFilled.Should().BeTrue();
+        plan.Series[0].WithMarkers.Should().BeFalse();
+        plan.Series[0].Points[0].X.Should().BeApproximately(100, 0.0001);
+        plan.Series[0].Points[0].Y.Should().BeApproximately(40.625, 0.0001);
+    }
+
+    [Fact]
     public void BuildPieSlicePrimitives_ComputesClockwiseWedgesFromTop()
     {
         var series = new ChartSeries { Name = "Share" };
