@@ -1,3 +1,4 @@
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -111,10 +112,9 @@ public static class CanvasGesturePlanner
         double cx = request.CenterSlide.X * request.Transform.Scale + request.Transform.OffsetX;
         double cy = request.CenterSlide.Y * request.Transform.Scale + request.Transform.OffsetY;
 
-        double angle = Math.Atan2(request.CurrentScreen.Y - cy, request.CurrentScreen.X - cx) *
-            (180.0 / Math.PI) + 90.0;
-        angle = ((angle % 360) + 360) % 360;
-        angle = request.OriginalRotationDeg + (angle - request.OriginalRotationDeg);
+        double angle = DrawingObjectInteractionPlanner.CalculateRotationDegrees(
+            new LayoutPoint(cx, cy),
+            new LayoutPoint(request.CurrentScreen.X, request.CurrentScreen.Y));
 
         if (request.SnapToFifteenDegrees)
             angle = Math.Round(angle / 15.0) * 15.0;
@@ -273,37 +273,35 @@ public static class CanvasGesturePlanner
         CanvasResizeBounds bounds,
         double rotation)
     {
-        (double anchorLocalX, double anchorLocalY) = GetOriginalAnchorLocal(state);
+        var originalAnchorLocal = GetOriginalAnchorLocal(state);
 
         double origCenterX = SlideTransformCore.EmuToDip(state.XEmu) +
             SlideTransformCore.EmuToDip(state.CxEmu) / 2.0;
         double origCenterY = SlideTransformCore.EmuToDip(state.YEmu) +
             SlideTransformCore.EmuToDip(state.CyEmu) / 2.0;
 
-        var (anchorWorldX, anchorWorldY) =
-            SlideTransformCore.RotatePoint(anchorLocalX, anchorLocalY, origCenterX, origCenterY, rotation);
+        var anchorWorld = DrawingObjectInteractionPlanner.RotatePoint(
+            originalAnchorLocal,
+            new LayoutPoint(origCenterX, origCenterY),
+            rotation);
 
         double newXDip = SlideTransformCore.EmuToDip(bounds.XEmu);
         double newYDip = SlideTransformCore.EmuToDip(bounds.YEmu);
         double newCxDip = SlideTransformCore.EmuToDip(bounds.CxEmu);
         double newCyDip = SlideTransformCore.EmuToDip(bounds.CyEmu);
 
-        (double newAnchorLocalX, double newAnchorLocalY) =
-            GetNewAnchorLocal(state.Handle, newXDip, newYDip, newCxDip, newCyDip);
+        var newAnchorLocal = GetNewAnchorLocal(state.Handle, newXDip, newYDip, newCxDip, newCyDip);
 
         double newCenterLocalX = newXDip + newCxDip / 2.0;
         double newCenterLocalY = newYDip + newCyDip / 2.0;
 
-        var (newAnchorWorldX, newAnchorWorldY) =
-            SlideTransformCore.RotatePoint(
-                newAnchorLocalX,
-                newAnchorLocalY,
-                newCenterLocalX,
-                newCenterLocalY,
-                rotation);
+        var newAnchorWorld = DrawingObjectInteractionPlanner.RotatePoint(
+            newAnchorLocal,
+            new LayoutPoint(newCenterLocalX, newCenterLocalY),
+            rotation);
 
-        double shiftX = anchorWorldX - newAnchorWorldX;
-        double shiftY = anchorWorldY - newAnchorWorldY;
+        double shiftX = anchorWorld.X - newAnchorWorld.X;
+        double shiftY = anchorWorld.Y - newAnchorWorld.Y;
 
         return bounds with
         {
@@ -312,43 +310,41 @@ public static class CanvasGesturePlanner
         };
     }
 
-    private static (double X, double Y) GetOriginalAnchorLocal(CanvasResizeState state)
+    private static LayoutPoint GetOriginalAnchorLocal(CanvasResizeState state)
     {
         double x = SlideTransformCore.EmuToDip(state.XEmu);
         double y = SlideTransformCore.EmuToDip(state.YEmu);
         double cx = SlideTransformCore.EmuToDip(state.CxEmu);
         double cy = SlideTransformCore.EmuToDip(state.CyEmu);
 
-        return state.Handle switch
-        {
-            CanvasGestureHandleKind.ResizeSE => (x, y),
-            CanvasGestureHandleKind.ResizeNW => (x + cx, y + cy),
-            CanvasGestureHandleKind.ResizeNE => (x, y + cy),
-            CanvasGestureHandleKind.ResizeSW => (x + cx, y),
-            CanvasGestureHandleKind.ResizeN => (x + cx / 2, y + cy),
-            CanvasGestureHandleKind.ResizeS => (x + cx / 2, y),
-            CanvasGestureHandleKind.ResizeW => (x + cx, y + cy / 2),
-            CanvasGestureHandleKind.ResizeE => (x, y + cy / 2),
-            _ => (x, y)
-        };
+        return DrawingObjectInteractionPlanner.GetFixedResizeAnchor(
+            ToSharedHandle(state.Handle),
+            new LayoutRect(x, y, cx, cy));
     }
 
-    private static (double X, double Y) GetNewAnchorLocal(
+    private static LayoutPoint GetNewAnchorLocal(
         CanvasGestureHandleKind handle,
         double x,
         double y,
         double cx,
         double cy)
-        => handle switch
+        => DrawingObjectInteractionPlanner.GetFixedResizeAnchor(
+            ToSharedHandle(handle),
+            new LayoutRect(x, y, cx, cy));
+
+    private static DrawingObjectInteractionKind ToSharedHandle(CanvasGestureHandleKind handle) =>
+        handle switch
         {
-            CanvasGestureHandleKind.ResizeSE => (x, y),
-            CanvasGestureHandleKind.ResizeNW => (x + cx, y + cy),
-            CanvasGestureHandleKind.ResizeNE => (x, y + cy),
-            CanvasGestureHandleKind.ResizeSW => (x + cx, y),
-            CanvasGestureHandleKind.ResizeN => (x + cx / 2, y + cy),
-            CanvasGestureHandleKind.ResizeS => (x + cx / 2, y),
-            CanvasGestureHandleKind.ResizeW => (x + cx, y + cy / 2),
-            CanvasGestureHandleKind.ResizeE => (x, y + cy / 2),
-            _ => (x, y)
+            CanvasGestureHandleKind.Body => DrawingObjectInteractionKind.Body,
+            CanvasGestureHandleKind.ResizeN => DrawingObjectInteractionKind.ResizeN,
+            CanvasGestureHandleKind.ResizeNE => DrawingObjectInteractionKind.ResizeNE,
+            CanvasGestureHandleKind.ResizeE => DrawingObjectInteractionKind.ResizeE,
+            CanvasGestureHandleKind.ResizeSE => DrawingObjectInteractionKind.ResizeSE,
+            CanvasGestureHandleKind.ResizeS => DrawingObjectInteractionKind.ResizeS,
+            CanvasGestureHandleKind.ResizeSW => DrawingObjectInteractionKind.ResizeSW,
+            CanvasGestureHandleKind.ResizeW => DrawingObjectInteractionKind.ResizeW,
+            CanvasGestureHandleKind.ResizeNW => DrawingObjectInteractionKind.ResizeNW,
+            CanvasGestureHandleKind.Rotate => DrawingObjectInteractionKind.Rotate,
+            _ => DrawingObjectInteractionKind.None
         };
 }

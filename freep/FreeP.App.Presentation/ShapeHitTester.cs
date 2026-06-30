@@ -1,3 +1,4 @@
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -7,16 +8,13 @@ namespace FreeP.App.Compositor;
 /// (topmost shape wins).
 ///
 /// This type is framework-free so it can be unit-tested without STA or a live window.
-/// It works in slide DIP coordinates — callers convert screen→slide with
+/// It works in slide DIP coordinates; callers convert screen to slide with
 /// <see cref="SlideTransformCore"/> before calling.
 ///
 /// This shared implementation is used by both the WPF and Avalonia renderers.
 /// </summary>
 public static class ShapeHitTester
 {
-    // 1 EMU = 1/9525 DIP
-    private const double EmuPerDip = 9525.0;
-
     /// <summary>
     /// Returns the id of the topmost shape whose axis-aligned bounding box contains
     /// <paramref name="slidePtX"/>,<paramref name="slidePtY"/> (slide DIP coords), or null if none.
@@ -28,13 +26,15 @@ public static class ShapeHitTester
         double slidePtX,
         double slidePtY)
     {
-        // Iterate in reverse z-order (topmost first).
-        for (int i = slide.Shapes.Count - 1; i >= 0; i--)
+        var point = new LayoutPoint(slidePtX, slidePtY);
+        for (var i = slide.Shapes.Count - 1; i >= 0; i--)
         {
             var shape = slide.Shapes[i];
-            if (HitTestShape(shape, presentation, slidePtX, slidePtY))
+            var bounds = GetShapeBoundsDip(shape, presentation).ToLayoutRect();
+            if (DrawingBoundsHitTester.Contains(bounds, point, shape.RotationDeg))
                 return shape.Id;
         }
+
         return null;
     }
 
@@ -45,62 +45,41 @@ public static class ShapeHitTester
     public static IReadOnlyList<uint> MarqueeHitTest(
         Slide slide,
         Presentation presentation,
-        double left, double top, double right, double bottom)
+        double left,
+        double top,
+        double right,
+        double bottom)
     {
-        // Normalise
-        double l = Math.Min(left, right);
-        double r = Math.Max(left, right);
-        double t = Math.Min(top, bottom);
-        double b = Math.Max(top, bottom);
-
+        var marquee = DrawingObjectInteractionPlanner.NormalizeRect(left, top, right, bottom);
         var result = new List<uint>();
         foreach (var shape in slide.Shapes)
         {
-            var bounds = GetShapeBoundsDip(shape, presentation);
-            // Intersects when both axes overlap
-            if (bounds.Right > l && bounds.Left < r &&
-                bounds.Bottom > t && bounds.Top < b)
+            if (DrawingObjectInteractionPlanner.Intersects(
+                GetShapeBoundsDip(shape, presentation).ToLayoutRect(),
+                marquee))
+            {
                 result.Add(shape.Id);
+            }
         }
+
         return result;
     }
-
-    // ── Bounds helpers ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Returns the axis-aligned bounding box of a shape in slide DIP coords,
     /// respecting placeholder inheritance (uses OffsetX/Y/ExtentCx/Cy; groups use child union).
-    /// Does NOT apply rotation (uses AABB for simplicity — good enough for hit-testing).
+    /// Does NOT apply rotation (uses AABB for simplicity - good enough for hit-testing).
     /// </summary>
     public static ShapeBoundsDip GetShapeBoundsDip(SlideShape shape, Presentation presentation)
     {
-        // Placeholder resolution: defer to PlaceholderResolver.
         var anchor = PlaceholderResolver.ResolveAnchor(shape, presentation);
-        double x  = anchor.OffsetXEmu / EmuPerDip;
-        double y  = anchor.OffsetYEmu / EmuPerDip;
-        double cx = anchor.ExtentCxEmu / EmuPerDip;
-        double cy = anchor.ExtentCyEmu / EmuPerDip;
-        return new ShapeBoundsDip(x, y, cx, cy);
+        return new ShapeBoundsDip(
+            DrawingMlCoordinateUnits.EmuToPixels(anchor.OffsetXEmu),
+            DrawingMlCoordinateUnits.EmuToPixels(anchor.OffsetYEmu),
+            DrawingMlCoordinateUnits.EmuToPixels(anchor.ExtentCxEmu),
+            DrawingMlCoordinateUnits.EmuToPixels(anchor.ExtentCyEmu));
     }
 
-    // ── Internal ────────────────────────────────────────────────────────────────────────────────
-
-    private static bool HitTestShape(SlideShape shape, Presentation presentation,
-                                      double px, double py)
-    {
-        var b = GetShapeBoundsDip(shape, presentation);
-
-        // AD4: Un-rotate the test point into the shape's local (axis-aligned) frame before
-        // comparing against the AABB.  For a 0° shape this is a no-op.
-        if (shape.RotationDeg != 0)
-        {
-            double cx = b.Left + b.Width  / 2.0;
-            double cy = b.Top  + b.Height / 2.0;
-            (px, py)  = SlideTransformCore.UnRotatePoint(px, py, cx, cy, shape.RotationDeg);
-        }
-
-        return px >= b.Left && px <= b.Right && py >= b.Top && py <= b.Bottom;
-    }
 }
 
 /// <summary>
@@ -108,19 +87,21 @@ public static class ShapeHitTester
 /// </summary>
 public readonly struct ShapeBoundsDip
 {
-    public double Left   { get; }
-    public double Top    { get; }
-    public double Width  { get; }
+    public double Left { get; }
+    public double Top { get; }
+    public double Width { get; }
     public double Height { get; }
 
-    public double Right  => Left + Width;
-    public double Bottom => Top  + Height;
+    public double Right => Left + Width;
+    public double Bottom => Top + Height;
 
     public ShapeBoundsDip(double left, double top, double width, double height)
     {
-        Left   = left;
-        Top    = top;
-        Width  = width;
+        Left = left;
+        Top = top;
+        Width = width;
         Height = height;
     }
+
+    public LayoutRect ToLayoutRect() => new(Left, Top, Width, Height);
 }
