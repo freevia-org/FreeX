@@ -41,6 +41,27 @@ public sealed class XlsxDrawingColorWriterTests
     }
 
     [Theory]
+    [InlineData(WorkbookThemeColorSlot.Accent3, 0.25)]
+    [InlineData(WorkbookThemeColorSlot.Light1, -0.4)]
+    public void ToSolidFill_TintedThemeColorRoundTripsThroughDrawingColorReader(
+        WorkbookThemeColorSlot slot,
+        double tint)
+    {
+        var fill = XlsxDrawingColorWriter.ToSolidFill(
+            new WorkbookThemeColorReference(slot, tint),
+            null,
+            DrawingNs);
+
+        XlsxDrawingColorReader.TryReadThemeColorReference(
+                fill.Should().NotBeNull().And.Subject!,
+                DrawingNs,
+                out var reference)
+            .Should()
+            .BeTrue();
+        reference.Should().Be(new WorkbookThemeColorReference(slot, tint));
+    }
+
+    [Theory]
     [InlineData(WorkbookThemeColorSlot.Dark1, DrawingMlThemeColorSlot.Dark1, "dk1")]
     [InlineData(WorkbookThemeColorSlot.Light1, DrawingMlThemeColorSlot.Light1, "lt1")]
     [InlineData(WorkbookThemeColorSlot.Accent6, DrawingMlThemeColorSlot.Accent6, "accent6")]

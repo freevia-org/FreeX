@@ -11,15 +11,17 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
         {
             "XlsxChartXmlWriter.Format.cs",
             "XlsxWorkbookThemeWriter.cs",
-            "XlsxWorksheetDrawingObjectWriter.cs"
+            "XlsxWorksheetDrawingObjectWriter.cs",
+            "XlsxColorReader.cs"
         })
         {
             var source = TestWorkspaceFiles.ReadCoreIoRepoSource(fileName);
 
-            source.Should().Contain("XlsxDrawingColorWriter.ToSolidFill");
+            if (fileName != "XlsxColorReader.cs")
+                source.Should().Contain("XlsxDrawingColorWriter.ToSolidFill");
             source.Should().NotContain(
                 "ApplyTint(",
-                $"{fileName} should not grow another local DrawingML tint writer");
+                $"{fileName} should not grow another local tint writer");
             source.Should().NotContain(
                 "new XElement(drawingNs + \"lumMod\"",
                 $"{fileName} should delegate modeled tint XML through the shared color writer");
