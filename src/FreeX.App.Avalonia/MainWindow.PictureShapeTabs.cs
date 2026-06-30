@@ -186,6 +186,11 @@ public sealed partial class MainWindow
         RefreshShell(successStatus);
     }
 
+    private static string FormatDrawingObjectResourceText(DrawingObjectResourceText text) =>
+        text.Arguments.Length == 0
+            ? UiText.Get(text.ResourceKey)
+            : UiText.Format(text.ResourceKey, text.Arguments);
+
     // -------------------------------------------------------------------------------------------------------
     // Drawing-object z-order (shared target policy + command planner)
     // -------------------------------------------------------------------------------------------------------
@@ -226,14 +231,9 @@ public sealed partial class MainWindow
                 DrawingObjectCommandPlanner.ToSelectionPaneObjectKind(target.Kind),
                 target.Id,
                 forward),
-            ResolveZOrderSuccessStatus(target.Kind, forward),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ZOrderSuccess(target.Kind, forward)),
             forward ? UiText.Get("Drawing_BringForwardLabel") : UiText.Get("Drawing_SendBackwardLabel"));
     }
-
-    private static string ResolveZOrderSuccessStatus(DrawingObjectTargetKind kind, bool forward) =>
-        kind == DrawingObjectTargetKind.Picture
-            ? UiText.Get(forward ? "Drawing_PictureBroughtForward" : "Drawing_PictureSentBackward")
-            : UiText.Get(forward ? "InsertLoc_BroughtShapeForward" : "InsertLoc_SentShapeBackward");
 
     // -------------------------------------------------------------------------------------------------------
     // Shape fill / outline / gradient / effects (real)
@@ -261,7 +261,7 @@ public sealed partial class MainWindow
                 current.Kind,
                 current.Id,
                 chosen),
-            UiText.Format("InsertLoc_ShapeFillSet", FormatHex(chosen)),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ShapeFillSuccess(FormatHex(chosen))),
             UiText.Get("InsertLoc_ShapeFillTitle"));
     }
 
@@ -285,7 +285,7 @@ public sealed partial class MainWindow
                 current.Kind,
                 current.Id,
                 chosen),
-            UiText.Format("InsertLoc_ShapeOutlineSet", FormatHex(chosen)),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ShapeOutlineSuccess(FormatHex(chosen))),
             UiText.Get("InsertLoc_ShapeOutlineTitle"));
     }
 
@@ -297,9 +297,8 @@ public sealed partial class MainWindow
         // Single-source the preset normalization through the portable ShapeEffectsPlanner so an unsupported
         // value collapses to None identically across shells.
         var normalized = ShapeEffectsPlanner.NormalizePreset(preset);
-        var status = normalized == DrawingShapeEffectPreset.None
-            ? UiText.Get("ShapeEffects_Cleared")
-            : UiText.Format("ShapeEffects_Applied", ShapeEffectPresetLabel(normalized));
+        var status = FormatDrawingObjectResourceText(
+            DrawingObjectActionPlanner.ShapeEffectSuccess(normalized, ShapeEffectPresetLabel(normalized)));
         RunDrawingObjectCommand(
             new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, shape.Id, normalized),
             status,
@@ -343,7 +342,7 @@ public sealed partial class MainWindow
 
         RunDrawingObjectCommand(
             DrawingObjectFormatCommandPolicy.BuildRotationCommand(_session.ActiveSheet.Id, target, rotation),
-            UiText.Format("InsertLoc_RotatedObject", rotation.Degrees),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.RotationSuccess(rotation)),
             UiText.Get("InsertLoc_RotateObjectTitle"));
     }
 
@@ -367,7 +366,7 @@ public sealed partial class MainWindow
                 _session.ActiveSheet.Id,
                 target,
                 chosen),
-            UiText.Format("InsertLoc_ResizedObject", chosen.Width, chosen.Height),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ResizeSuccess(chosen)),
             UiText.Get("InsertLoc_ObjectSizeTitle"));
     }
 
@@ -392,7 +391,7 @@ public sealed partial class MainWindow
 
         RunDrawingObjectCommand(
             DrawingObjectFormatCommandPolicy.BuildAltTextCommand(_session.ActiveSheet.Id, target, input),
-            string.IsNullOrWhiteSpace(input) ? UiText.Get("InsertLoc_AltTextCleared") : UiText.Get("InsertLoc_AltTextUpdated"),
+            FormatDrawingObjectResourceText(DrawingObjectActionPlanner.AltTextSuccess(input)),
             UiText.Get("InsertLoc_AltTextTitle"));
     }
 

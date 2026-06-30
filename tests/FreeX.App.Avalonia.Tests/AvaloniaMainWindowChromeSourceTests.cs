@@ -628,6 +628,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         insertObjectsSource.Should().Contain("foreach (var group in DrawingInsertionPlanner.ShapeGroups)");
         insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(");
         insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(");
+        insertObjectsSource.Should().Contain("DrawingObjectActionPlanner.InsertShapeSuccess(");
+        insertObjectsSource.Should().Contain("DrawingObjectActionPlanner.InsertTextBoxSuccess(");
         mainSource.Should().Contain("DrawingInsertionPlanner.DefaultShape");
         File.Exists(RepoFile("src", "FreeX.App.Avalonia", "InsertShapeCommandFactory.cs")).Should().BeFalse();
         File.Exists(RepoFile("src", "FreeX.App.Avalonia", "InsertTextBoxCommandFactory.cs")).Should().BeFalse();
@@ -645,6 +647,13 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildAltTextCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildFillColorCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildOutlineColorCommand(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ZOrderSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ShapeFillSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ShapeOutlineSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ShapeEffectSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.RotationSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.ResizeSuccess(");
+        contextualTabsSource.Should().Contain("DrawingObjectActionPlanner.AltTextSuccess(");
         contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveSelectedFormatTarget(");
         contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.SupportsFillAndOutline(");
         contextualTabsSource.Should().Contain("DrawingObjectFormatCommandPolicy.ResolveFillColor(");
@@ -660,10 +669,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         formatDialogSource.Should().Contain("ShapeGradientPlanner.CreateDirectionOptions()");
         formatDialogSource.Should().Contain("ShapeGradientPlanner.PreviewVector(");
         formatDialogSource.Should().Contain("ShapeGradientPlanner.CreateResult(");
+        formatDialogSource.Should().Contain("DrawingObjectActionPlanner.ShapeGradientSuccess(");
 
         contextualTabsSource.Should().NotContain("_session.ActiveSheet.Pictures.FirstOrDefault(");
         contextualTabsSource.Should().NotContain("_session.ActiveSheet.DrawingShapes.FirstOrDefault(");
         contextualTabsSource.Should().NotContain("switch (_selectedDrawingObjectKind)");
+        contextualTabsSource.Should().NotContain("ResolveZOrderSuccessStatus(");
         contextualTabsSource.Should().NotContain("new MoveSelectionPaneObjectCommand(");
         contextualTabsSource.Should().NotContain("new BringDrawingShapeForwardCommand(");
         contextualTabsSource.Should().NotContain("new SendDrawingShapeBackwardCommand(");

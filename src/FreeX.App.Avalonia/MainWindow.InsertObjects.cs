@@ -149,7 +149,8 @@ public sealed partial class MainWindow
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell(UiText.Format("InsertLoc_InsertedShapeAt", kind, FormatCellReference(anchor)));
+        RefreshShell(FormatDrawingObjectResourceText(
+            DrawingObjectActionPlanner.InsertShapeSuccess(kind, FormatCellReference(anchor))));
     }
 
     /// <summary>
@@ -173,7 +174,8 @@ public sealed partial class MainWindow
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell(UiText.Format("InsertLoc_InsertedTextBoxAt", FormatCellReference(anchor)));
+        RefreshShell(FormatDrawingObjectResourceText(
+            DrawingObjectActionPlanner.InsertTextBoxSuccess(FormatCellReference(anchor))));
     }
 
     /// <summary>Decodes the image's native pixel size via Avalonia, or null when decoding fails.</summary>
