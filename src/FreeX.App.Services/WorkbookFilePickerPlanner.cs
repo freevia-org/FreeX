@@ -3,6 +3,7 @@ using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescrip
 using FileOpenDialogPlan = Free.Shared.IO.FileOpenDialogPlan;
 using FileOpenPickerPlan = Free.Shared.IO.FileOpenPickerPlan;
 using FileDialogRequestPlanner = Free.Shared.IO.FileDialogRequestPlanner;
+using FileDialogSaveSelectionResolver = Free.Shared.IO.FileDialogSaveSelectionResolver;
 using FileSaveDialogPlan = Free.Shared.IO.FileSaveDialogPlan;
 using FileSavePickerPlan = Free.Shared.IO.FileSavePickerPlan;
 
@@ -36,7 +37,14 @@ public static class WorkbookFilePickerPlanner
         IEnumerable<IFileAdapter> adapters,
         string path,
         out FileSaveTarget? target) =>
-        FileSavePlanner.TryResolveExistingPath(path, adapters, out target);
+        TryResolveSaveDialogTarget(adapters, path, filterIndex: 0, out target);
+
+    public static bool TryResolveSaveDialogTarget(
+        IEnumerable<IFileAdapter> adapters,
+        string path,
+        int filterIndex,
+        out FileSaveTarget? target) =>
+        TryResolveSaveDialogTargetCore(adapters, path, filterIndex, out target);
 
     public static FileOpenPickerPlan BuildOpenPickerPlan(IEnumerable<FileFormatDescriptor> openFormats) =>
         FileDialogRequestPlanner.BuildOpenPickerPlan(
@@ -87,4 +95,32 @@ public static class WorkbookFilePickerPlanner
 
     private static List<FileFormatDescriptor> GetFormats(IEnumerable<IFileAdapter> adapters) =>
         adapters.SelectMany(adapter => adapter.Formats).ToList();
+
+    private static bool TryResolveSaveDialogTargetCore(
+        IEnumerable<IFileAdapter> adapters,
+        string path,
+        int filterIndex,
+        out FileSaveTarget? target)
+    {
+        target = null;
+        var adapterRows = adapters.ToList();
+        if (!FileSavePlanner.TryResolveExistingPath(path, adapterRows, out var resolvedTarget) ||
+            resolvedTarget is null)
+        {
+            return false;
+        }
+
+        var chosenExtension = Path.GetExtension(resolvedTarget.Path);
+        var adapter = FileDialogSaveSelectionResolver.ResolveAdapter(
+            adapterRows,
+            static candidate => candidate.Formats,
+            static (candidateAdapters, extension) => FileFormatResolver.FindSaveAdapter(candidateAdapters, extension, out _),
+            chosenExtension,
+            filterIndex);
+        if (adapter is null)
+            return false;
+
+        target = new FileSaveTarget(resolvedTarget.Path, adapter);
+        return true;
+    }
 }

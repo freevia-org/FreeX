@@ -171,14 +171,26 @@ public sealed class FileWorkflowDedupSourceTests
             "shared",
             "Free.Shared.IO",
             "FileDialogSaveSelectionResolver.cs"));
+        var workbookPlannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookFilePickerPlanner.cs"));
+        var wpfWorkbookSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.Backstage.cs"));
         var freewSource = File.ReadAllText(RepositoryFileLocator.Find(
             "freew",
-            "FreeW.App.Host",
-            "FileCommands.cs"));
+            "FreeW.App.Presentation",
+            "Shell",
+            "DocumentPersistenceWorkflow.cs"));
 
         resolverSource.Should().Contain("ResolveAdapter");
         resolverSource.Should().Contain("FindSelectedSaveFormat");
         resolverSource.Should().Contain("resolveByExtension(adapterRows, chosenExtension)");
+        workbookPlannerSource.Should().Contain("FileDialogSaveSelectionResolver.ResolveAdapter(");
+        workbookPlannerSource.Should().Contain("filterIndex");
+        wpfWorkbookSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, result.FilterIndex, out var target)");
         freewSource.Should().Contain("FileDialogSaveSelectionResolver.ResolveAdapter(");
         freewSource.Should().NotContain("private IDocumentFileAdapter? ResolveSaveAdapter");
         freewSource.Should().NotContain("savePairs");

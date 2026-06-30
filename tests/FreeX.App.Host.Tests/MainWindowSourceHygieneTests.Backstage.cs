@@ -145,7 +145,7 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("plan.SuggestedFileName");
         backstageSource.Should().Contain("plan.DefaultExtensionWithDot");
         backstageSource.Should().Contain("plan.FilterIndex");
-        backstageSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, out var target)");
+        backstageSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, result.FilterIndex, out var target)");
         backstageSource.Should().Contain("return await SaveWorkbookToTargetAsync(target);");
         backstageSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
         backstageSource.Should().NotContain("new Microsoft.Win32.SaveFileDialog");
