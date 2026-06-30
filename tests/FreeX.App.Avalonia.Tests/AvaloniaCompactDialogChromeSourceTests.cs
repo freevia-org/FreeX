@@ -12,7 +12,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("private static AvaloniaCompactDialogChromeStyle PivotDialogChromeStyle => new(FormulaBarFontFamily);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, PivotDialogChromeStyle, minWidth, isDefault);");
-        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PivotDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, PivotDialogChromeStyle, fixedHeight);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, PivotDialogChromeStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
 

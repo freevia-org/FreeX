@@ -569,7 +569,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().Contain("new ObjectSizeDialogSubmission(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
         contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedDrawingShape(");
-        contextualTabsSource.Should().Contain("[\"shapeFormat.shapeGradient\"] = () => RunGuarded(OpenShapeGradientDialogAsync),");
+        contextualTabsSource.Should().Contain("DrawingObjectContextualCommandAction.ShapeGradient => () => RunGuarded(OpenShapeGradientDialogAsync),");
         formatDialogSource.Should().Contain("DrawingObjectFormatCommandPolicy.BuildFormatCommands(");
         formatDialogSource.Should().Contain("ShapeGradientPlanner.Capture(shape)");
         formatDialogSource.Should().Contain("ShapeGradientPlanner.CreateDirectionOptions()");
