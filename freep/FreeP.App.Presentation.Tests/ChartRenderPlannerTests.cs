@@ -122,4 +122,122 @@ public sealed class ChartRenderPlannerTests
         ChartRenderPlanner.FormatDataLabel(labels, 0.25, 1.0, "Q1", "Sales")
             .Should().Be("Sales Q1 25.0% 25%");
     }
+
+    [Fact]
+    public void BuildFramePlan_BarChart_ReservesLeftCategoryAndBottomValueAxisBands()
+    {
+        var chart = new ChartShape { ChartType = ChartType.BarClustered };
+
+        var plan = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        plan.Family.Should().Be(ChartRenderFamily.HorizontalBar);
+        plan.Plot.Should().Be(new ChartPlanRect(52, 8, 340, 244));
+    }
+
+    [Fact]
+    public void BuildColumnPrimitives_MatchesPowerPointClusterGeometry()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
+            SeriesIndex: 0,
+            CategoryIndex: 0,
+            Bounds: new ChartPlanRect(30, 80, 19, 20)));
+        primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
+            SeriesIndex: 1,
+            CategoryIndex: 0,
+            Bounds: new ChartPlanRect(50, 40, 19, 60)));
+    }
+
+    [Fact]
+    public void BuildBarPrimitives_ReversesCategoryAndClusterSeriesOrder()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.BarClustered);
+
+        var primitives = ChartRenderPlanner.BuildBarPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
+            SeriesIndex: 0,
+            CategoryIndex: 0,
+            Bounds: new ChartPlanRect(0, 75, 40, 9)));
+        primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
+            SeriesIndex: 1,
+            CategoryIndex: 0,
+            Bounds: new ChartPlanRect(0, 65, 120, 9)));
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_PreservesGapsBetweenSegments()
+    {
+        var series = new ChartSeries { Name = "Line" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: true).Single();
+
+        primitive.WithMarkers.Should().BeTrue();
+        primitive.Points[0].Should().Be(new ChartPlanPoint(0, 75));
+        primitive.Points[1].Should().BeNull();
+        primitive.Points[2].Should().Be(new ChartPlanPoint(200, 25));
+    }
+
+    [Fact]
+    public void BuildDataLabelPlans_StackedColumnPercentUsesCategoryTotal()
+    {
+        var labels = new ChartDataLabels
+        {
+            ShowValue = true,
+            ShowPercent = true,
+            Position = DataLabelPosition.Center
+        };
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnStacked,
+            DataLabels = labels
+        };
+        chart.Categories.Add("Q1");
+        var first = new ChartSeries { Name = "Actual" };
+        first.Values.Add(2);
+        var second = new ChartSeries { Name = "Forecast" };
+        second.Values.Add(6);
+        chart.Series.Add(first);
+        chart.Series.Add(second);
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 100, 100));
+
+        planned.Should().Contain(label =>
+            label.SeriesIndex == 1 &&
+            label.CategoryIndex == 0 &&
+            label.Text == "6 75%" &&
+            label.Bounds == new ChartPlanRect(30, 32, 40, 11));
+    }
+
+    private static ChartShape MakeTwoSeriesChart(ChartType chartType)
+    {
+        var chart = new ChartShape { ChartType = chartType };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+
+        var first = new ChartSeries { Name = "Actual" };
+        first.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(first);
+
+        var second = new ChartSeries { Name = "Forecast" };
+        second.Values.AddRange(new double?[] { 30, 40 });
+        chart.Series.Add(second);
+
+        return chart;
+    }
 }

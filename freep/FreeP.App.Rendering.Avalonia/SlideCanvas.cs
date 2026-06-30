@@ -347,6 +347,23 @@ public sealed class SlideCanvas : Control
             transform.OffsetX,
             transform.OffsetY);
 
+    private static ChartPlanRect ToPlanRect(LayoutRect rect) =>
+        new(rect.X, rect.Y, rect.Width, rect.Height);
+
+    private static Rect ToRect(ChartPlanRect rect) =>
+        new(rect.X, rect.Y, rect.Width, rect.Height);
+
+    private static Point ToPoint(ChartPlanPoint point) =>
+        new(point.X, point.Y);
+
+    private static TextAlignment ToTextAlignment(ChartPlanTextAlignment alignment) =>
+        alignment switch
+        {
+            ChartPlanTextAlignment.Left => TextAlignment.Left,
+            ChartPlanTextAlignment.Right => TextAlignment.Right,
+            _ => TextAlignment.Center
+        };
+
     // ── Picture ──────────────────────────────────────────────────────────────
 
     private static void RenderPicture(DrawingContext dc, DrawOp.Picture pic)
@@ -652,66 +669,37 @@ public sealed class SlideCanvas : Control
         dc.DrawRectangle(null, framePen,
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
 
-        const double margin       = 8.0;
-        const double titleH       = 18.0;
-        const double legendH      = 14.0;
-        const double axisLabelW   = 40.0;
-        const double catLabelH    = 16.0;
-        const double barCatLabelW = 44.0;
-        const double gridlinePad  = 2.0;
-
-        double titleAreaH = chart.Title is not null ? titleH + margin : 0;
-        bool   hasLegend  = chart.Legend.HasValue;
-        bool   isPie      = chart.ChartType is ChartType.Pie or ChartType.Doughnut;
-        bool   isBar      = chart.ChartType is ChartType.BarClustered
-                                            or ChartType.BarStacked
-                                            or ChartType.BarStacked100;
-        bool   isScatterLike = chart.ChartType is ChartType.Scatter or ChartType.Bubble;
-        bool   isRadar    = chart.ChartType == ChartType.Radar;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, ToPlanRect(bounds));
+        bool hasLegend = frame.HasLegend;
+        bool legendRight = frame.LegendRight;
+        bool isPie = frame.IsPie;
+        bool isBar = frame.IsBar;
+        bool isScatterLike = frame.IsScatterLike;
+        bool isRadar = frame.IsRadar;
+        double legendAreaW = frame.LegendAreaWidth;
+        double legendAreaH = frame.LegendAreaHeight;
+        double margin = ChartRenderPlanner.Margin;
+        double legendH = ChartRenderPlanner.LegendHeight;
 
         if (chart.Title is not null)
             DrawChartLabel(dc, chart.Title,
-                new Rect(bounds.X + margin, bounds.Y + margin, bounds.Width - 2 * margin, titleH),
+                ToRect(frame.TitleBounds!.Value),
                 isBold: true, fontSize: 9.0, align: TextAlignment.Center);
 
-        double legendAreaW = 0, legendAreaH = 0;
-        bool   legendRight = chart.Legend is LegendPosition.Right or LegendPosition.Left;
-        if (hasLegend)
-        {
-            if (legendRight) legendAreaW = Math.Min(90, bounds.Width * 0.20);
-            else             legendAreaH = legendH + margin;
-        }
+        if (!frame.HasPlot) return;
 
-        double plotLeft   = bounds.X + margin + (isPie || isRadar || isScatterLike ? 0 : (isBar ? barCatLabelW : axisLabelW));
-        double plotTop    = bounds.Y + margin + titleAreaH;
-        double plotRight  = bounds.X + bounds.Width  - margin - legendAreaW;
-        double plotBottom = bounds.Y + bounds.Height - margin - legendAreaH
-                                     - (isPie || isRadar || isScatterLike ? 0 : (isBar ? axisLabelW : catLabelH));
-        double plotW      = plotRight  - plotLeft;
-        double plotH      = plotBottom - plotTop;
-        if (plotW <= 0 || plotH <= 0) return;
+        var plot = frame.Plot;
+        double plotLeft = plot.X;
+        double plotTop = plot.Y;
+        double plotW = plot.Width;
+        double plotH = plot.Height;
 
-        if (!isPie && !isRadar && !isScatterLike && chart.ValueAxis.HasMajorGridlines)
+        var gridLinePlans = ChartRenderPlanner.BuildMajorGridLinePlans(chart, frame);
+        if (gridLinePlans.Count > 0)
         {
             var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5);
-            var (minG, maxG, muG) = ComputeNiceAxisRange(chart);
-            double stepsG = (maxG - minG) / muG;
-            if (isBar)
-            {
-                for (int gi = 0; gi <= (int)Math.Round(stepsG); gi++)
-                {
-                    double gx = plotLeft + plotW * gi / stepsG;
-                    dc.DrawLine(gridPen, new Point(gx, plotTop), new Point(gx, plotTop + plotH));
-                }
-            }
-            else
-            {
-                for (int gi = 0; gi <= (int)Math.Round(stepsG); gi++)
-                {
-                    double gy = plotTop + plotH - plotH * gi / stepsG;
-                    dc.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotLeft + plotW, gy));
-                }
-            }
+            foreach (var gridLine in gridLinePlans)
+                dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
         }
 
         switch (chart.ChartType)
@@ -764,97 +752,43 @@ public sealed class SlideCanvas : Control
         }
 
         // ── Data labels ────────────────────────────────────────────────────────
-        if (!isRadar && !isScatterLike)
+        foreach (var label in ChartRenderPlanner.BuildDataLabelPlans(chart, plot))
         {
-            if (isPie)
-            {
-                RenderPieDataLabels(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
-            }
-            else
-            {
-                var (dlMin, dlMax, _) = ComputeNiceAxisRange(chart);
-                bool isLineOrArea = chart.ChartType is ChartType.Line or ChartType.LineMarkers
-                                                    or ChartType.Area or ChartType.AreaStacked;
-                for (int si = 0; si < chart.Series.Count; si++)
-                {
-                    var serOverride = chart.Series[si].OverrideChartType;
-                    bool serIsLineOrArea = serOverride.HasValue
-                        ? serOverride.Value is ChartType.Line or ChartType.LineMarkers
-                                           or ChartType.Area or ChartType.AreaStacked
-                        : isLineOrArea;
-                    bool serIsBar = serOverride.HasValue
-                        ? serOverride.Value is ChartType.BarClustered or ChartType.BarStacked
-                                           or ChartType.BarStacked100
-                        : isBar;
-                    if (serIsLineOrArea)
-                        RenderLineDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
-                    else if (serIsBar)
-                        RenderBarDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
-                    else
-                        RenderColumnDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
-                }
-            }
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+                label.IsBold,
+                label.FontSize,
+                ToTextAlignment(label.Alignment));
         }
 
         // ── Secondary value axis (right side) ──────────────────────────────────
         if (chart.SecondaryValueAxis is not null && !isPie && !isRadar && !isScatterLike && !isBar)
-            RenderSecondaryValueAxis(dc, chart, plotLeft, plotTop, plotW, plotH,
-                bounds.X + bounds.Width - legendAreaW - margin);
-
-        if (!isPie && !isRadar && !isScatterLike && chart.Categories.Count > 0)
         {
-            if (isBar)
+            foreach (var label in ChartRenderPlanner.BuildSecondaryValueAxisLabelPlans(
+                chart,
+                plot,
+                bounds.X + bounds.Width - legendAreaW - margin))
             {
-                int catN = chart.Categories.Count;
-                double catStep = plotH / Math.Max(1, catN);
-                for (int ci = 0; ci < catN; ci++)
-                {
-                    int renderRow = catN - 1 - ci;
-                    double ly = plotTop + renderRow * catStep;
-                    DrawChartLabel(dc, chart.Categories[ci],
-                        new Rect(bounds.X + margin, ly, barCatLabelW - 4, catStep),
-                        false, 6.5, TextAlignment.Right);
-                }
-            }
-            else
-            {
-                double catStep = plotW / Math.Max(1, chart.Categories.Count);
-                for (int ci = 0; ci < chart.Categories.Count; ci++)
-                {
-                    double lx = plotLeft + ci * catStep;
-                    DrawChartLabel(dc, chart.Categories[ci],
-                        new Rect(lx, plotTop + plotH + 2, catStep, catLabelH),
-                        false, 7.0, TextAlignment.Center);
-                }
+                DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+                    label.IsBold,
+                    label.FontSize,
+                    ToTextAlignment(label.Alignment));
             }
         }
 
-        if (!isPie && !isRadar && !isScatterLike)
+        foreach (var label in ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame))
         {
-            var (minV, maxV, mu) = ComputeNiceAxisRange(chart);
-            double stepsV = (maxV - minV) / mu;
-            if (isBar)
-            {
-                for (int ti = 0; ti <= (int)Math.Round(stepsV); ti++)
-                {
-                    double val = minV + mu * ti;
-                    double vx  = plotLeft + plotW * ti / stepsV;
-                    DrawChartLabel(dc, FormatAxisValue(val),
-                        new Rect(vx - axisLabelW / 2, plotTop + plotH + 2, axisLabelW, catLabelH),
-                        false, 6.5, TextAlignment.Center);
-                }
-            }
-            else
-            {
-                for (int ti = 0; ti <= (int)Math.Round(stepsV); ti++)
-                {
-                    double val = minV + mu * ti;
-                    double vy  = plotTop + plotH - plotH * ti / stepsV;
-                    DrawChartLabel(dc, FormatAxisValue(val),
-                        new Rect(bounds.X + margin, vy - 6, axisLabelW - gridlinePad, 12),
-                        false, 6.5, TextAlignment.Right);
-                }
-            }
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+                label.IsBold,
+                label.FontSize,
+                ToTextAlignment(label.Alignment));
+        }
+
+        foreach (var label in ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame))
+        {
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+                label.IsBold,
+                label.FontSize,
+                ToTextAlignment(label.Alignment));
         }
 
         if (hasLegend && chart.Series.Count > 0)
@@ -926,59 +860,12 @@ public sealed class SlideCanvas : Control
         DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        int catCount = Math.Max(1, chart.Categories.Count);
-        if (chart.Series.Count == 0) return;
-        var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
-        double range = maxVal - minVal;
-        if (range <= 0) return;
-        // CB1: compute a separate range for secondary-axis series
-        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
-        double secRange = secMax - secMin;
-        bool stacked    = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
-        const double gapRatio = 1.5;
-        double catW    = plotW / catCount;
-        double clusterW = catW / (1.0 + gapRatio);
-        double halfGap  = (catW - clusterW) / 2.0;
-        int serCount    = Math.Max(1, chart.Series.Count);
-        double serW     = stacked ? clusterW : clusterW / serCount;
-
-        for (int ci = 0; ci < catCount; ci++)
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildColumnPrimitives(chart, plot))
         {
-            double catLeft  = plotX + ci * catW + halfGap;
-            double stackedY = plotY + plotH;
-            for (int si = 0; si < chart.Series.Count; si++)
-            {
-                var series = chart.Series[si];
-                // Combo chart: skip series whose OverrideChartType is a line/scatter type.
-                if (series.OverrideChartType.HasValue &&
-                    series.OverrideChartType.Value is ChartType.Line or ChartType.LineMarkers
-                                                   or ChartType.Scatter or ChartType.Bubble)
-                    continue;
-
-                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
-                if (rawVal is null) continue;
-                double val  = rawVal.Value;
-                // CB1: pick the axis range by whether this series is on the secondary axis
-                double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
-                double effRange = series.OnSecondaryAxis ? secRange : range;
-                if (effRange <= 0) continue;
-                var color   = GetSeriesColor(chart, si, ci, seriesColors);
-                var brush   = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-                double drawW = Math.Max(1, stacked ? serW : serW - 1);
-                double barX  = stacked ? catLeft : catLeft + si * serW;
-                if (stacked)
-                {
-                    double h = Math.Max(0.5, Math.Abs(val / effRange) * plotH);
-                    dc.FillRectangle(brush, new Rect(barX, stackedY - h, drawW, h));
-                    stackedY -= h;
-                }
-                else
-                {
-                    double barH = Math.Max(0.5, Math.Abs((val - effMin) / effRange * plotH));
-                    double barY = plotY + plotH - (val - effMin) / effRange * plotH;
-                    dc.FillRectangle(brush, new Rect(barX, barY, drawW, barH));
-                }
-            }
+            var color = GetSeriesColor(chart, primitive.SeriesIndex, primitive.CategoryIndex, seriesColors);
+            var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+            dc.FillRectangle(brush, ToRect(primitive.Bounds));
         }
     }
 
@@ -992,91 +879,21 @@ public sealed class SlideCanvas : Control
         DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        int catCount = Math.Max(1, chart.Categories.Count);
-        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
-        double secRange = secMax - secMin;
-        var (priMin, priMax, _) = ComputeNiceAxisRange(chart);
-        double priRange = priMax - priMin;
-        double stepX = catCount > 1 ? plotW / (catCount - 1) : plotW / 2;
-
-        for (int si = 0; si < chart.Series.Count; si++)
-        {
-            var series = chart.Series[si];
-            var overrideType = series.OverrideChartType;
-            if (!overrideType.HasValue) continue;
-            if (overrideType.Value is not (ChartType.Line or ChartType.LineMarkers)) continue;
-
-            bool withMarkers = overrideType.Value == ChartType.LineMarkers;
-            double effMin   = series.OnSecondaryAxis ? secMin   : priMin;
-            double effRange = series.OnSecondaryAxis ? secRange : priRange;
-            if (effRange <= 0) continue;
-
-            var color = GetSeriesColor(chart, si, 0, seriesColors);
-            var pen   = new Pen(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), 1.5);
-
-            Point? prevPt = null;
-            for (int ci = 0; ci < catCount; ci++)
-            {
-                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
-                if (rawVal is null) { prevPt = null; continue; }
-                double px = catCount == 1 ? plotX + plotW / 2 : plotX + ci * stepX;
-                double py = plotY + plotH - (rawVal.Value - effMin) / effRange * plotH;
-                var pt = new Point(px, py);
-                if (prevPt.HasValue)
-                    dc.DrawLine(pen, prevPt.Value, pt);
-                if (withMarkers)
-                    dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)),
-                        null, pt, 3, 3);
-                prevPt = pt;
-            }
-        }
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot))
+            RenderLineSeriesPrimitive(dc, chart, seriesColors, primitive);
     }
 
     private static void RenderBarChart(
         DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        int catCount = Math.Max(1, chart.Categories.Count);
-        if (chart.Series.Count == 0) return;
-        var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
-        double range = maxVal - minVal;
-        if (range <= 0) return;
-        // CB1: compute a separate range for secondary-axis series
-        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
-        double secRange = secMax - secMin;
-        bool stacked    = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
-        const double gapRatio = 1.5;
-        double catH    = plotH / catCount;
-        double clusterH = catH / (1.0 + gapRatio);
-        double halfGap  = (catH - clusterH) / 2.0;
-        int serCount    = Math.Max(1, chart.Series.Count);
-        double serH     = stacked ? clusterH : clusterH / serCount;
-
-        for (int ci = 0; ci < catCount; ci++)
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildBarPrimitives(chart, plot))
         {
-            int    renderRow = catCount - 1 - ci;
-            double catTop    = plotY + renderRow * catH + halfGap;
-            double stackedX  = plotX;
-            for (int si = 0; si < chart.Series.Count; si++)
-            {
-                var series = chart.Series[si];
-                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
-                if (rawVal is null) continue;
-                double val     = rawVal.Value;
-                // CB1: pick the axis range by whether this series is on the secondary axis
-                double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
-                double effRange = series.OnSecondaryAxis ? secRange : range;
-                if (effRange <= 0) continue;
-                double barW    = Math.Max(0.5, Math.Abs((val - effMin) / effRange * plotW));
-                int    renderSer = stacked ? si : (serCount - 1 - si);
-                double barY    = stacked ? catTop : catTop + renderSer * serH;
-                double barX    = stacked ? stackedX : plotX;
-                var color      = GetSeriesColor(chart, si, ci, seriesColors);
-                var brush      = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
-                double drawH   = Math.Max(1, stacked ? serH : serH - 1);
-                dc.FillRectangle(brush, new Rect(barX, barY, barW, drawH));
-                if (stacked) stackedX += barW;
-            }
+            var color = GetSeriesColor(chart, primitive.SeriesIndex, primitive.CategoryIndex, seriesColors);
+            var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+            dc.FillRectangle(brush, ToRect(primitive.Bounds));
         }
     }
 
@@ -1084,38 +901,38 @@ public sealed class SlideCanvas : Control
         DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH, bool withMarkers)
     {
-        int catCount = Math.Max(1, chart.Categories.Count);
-        if (chart.Series.Count == 0) return;
-        var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
-        double range = maxVal - minVal;
-        if (range <= 0) return;
-        // CB1: compute a separate range for secondary-axis series
-        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
-        double secRange = secMax - secMin;
-        double stepX = plotW / Math.Max(1, catCount - 1);
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers))
+            RenderLineSeriesPrimitive(dc, chart, seriesColors, primitive);
+    }
 
-        for (int si = 0; si < chart.Series.Count; si++)
+    private static void RenderLineSeriesPrimitive(
+        DrawingContext dc,
+        ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        ChartLineSeriesPrimitive primitive)
+    {
+        var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
+        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        var pen = new Pen(brush, 1.5);
+
+        Point? previous = null;
+        foreach (var plannedPoint in primitive.Points)
         {
-            var series = chart.Series[si];
-            // CB1: pick the axis range by whether this series is on the secondary axis
-            double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
-            double effRange = series.OnSecondaryAxis ? secRange : range;
-            if (effRange <= 0) continue;
-            var color  = GetSeriesColor(chart, si, 0, seriesColors);
-            var pen    = new Pen(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), 1.5);
-            Point? prev = null;
-            for (int ci = 0; ci < catCount; ci++)
+            if (!plannedPoint.HasValue)
             {
-                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
-                if (rawVal is null) { prev = null; continue; }
-                double px = plotX + ci * stepX;
-                double py = plotY + plotH - (rawVal.Value - effMin) / effRange * plotH;
-                var pt = new Point(px, py);
-                if (prev.HasValue) dc.DrawLine(pen, prev.Value, pt);
-                if (withMarkers)
-                    dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), null, pt, 3, 3);
-                prev = pt;
+                previous = null;
+                continue;
             }
+
+            var point = ToPoint(plannedPoint.Value);
+            if (previous.HasValue)
+                dc.DrawLine(pen, previous.Value, point);
+
+            if (primitive.WithMarkers)
+                dc.DrawEllipse(brush, null, point, 3, 3);
+
+            previous = point;
         }
     }
 
@@ -1512,370 +1329,6 @@ public sealed class SlideCanvas : Control
 
     private static string FormatAxisValue(double v) =>
         ChartRenderPlanner.FormatAxisValue(v);
-
-    // ── Data label helpers ────────────────────────────────────────────────────
-
-    private static ChartDataLabels? EffectiveLabels(ChartShape chart, int seriesIndex) =>
-        ChartRenderPlanner.ResolveEffectiveLabels(chart, seriesIndex);
-
-    private static string FormatDataLabel(
-        ChartDataLabels dl, double value, double total,
-        string? categoryName, string? seriesName) =>
-        ChartRenderPlanner.FormatDataLabel(dl, value, total, categoryName, seriesName);
-
-    private static string FormatWithCode(double value, string code) =>
-        ChartRenderPlanner.FormatWithCode(value, code);
-
-    /// <summary>
-    /// CB2: passes correct category-sum total for ShowPercent.
-    /// CB3: tracks stacked accumulator so stacked-column labels sit on actual segment.
-    /// CB6: flips OutsideEnd offset below the bar for negative values.
-    /// </summary>
-    private static void RenderColumnDataLabels(
-        DrawingContext dc, ChartShape chart, int seriesIndex,
-        double plotX, double plotY, double plotW, double plotH,
-        double minVal, double maxVal)
-    {
-        var dl = EffectiveLabels(chart, seriesIndex);
-        if (dl is null) return;
-
-        var series = chart.Series[seriesIndex];
-        int catCount = Math.Max(1, chart.Categories.Count);
-        double range = maxVal - minVal;
-        if (range <= 0) return;
-
-        // CC3: pick the axis range by whether this series is on the secondary axis,
-        // mirroring RenderColumnChart's CB1 effMin/effRange selection so bar geometry
-        // (barH, barY, stacked accumulator) uses the correct scale.
-        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
-        double secRange = secMax - secMin;
-        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
-        double effRange = series.OnSecondaryAxis ? secRange : range;
-        if (effRange <= 0) return;
-
-        bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
-        const double gapRatio = 1.5;
-        double catW     = plotW / catCount;
-        double clusterW = catW / (1.0 + gapRatio);
-        double halfGap  = (catW - clusterW) / 2.0;
-        double serW     = stacked ? clusterW : clusterW / Math.Max(1, chart.Series.Count);
-
-        var position = dl.Position ?? DataLabelPosition.OutsideEnd;
-
-        for (int ci = 0; ci < catCount; ci++)
-        {
-            double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
-            if (rawVal is null) continue;
-            double val  = rawVal.Value;
-            double barX = stacked
-                ? plotX + ci * catW + halfGap
-                : plotX + ci * catW + halfGap + seriesIndex * serW;
-
-            double barH, barY;
-            if (stacked)
-            {
-                // CB3: compute stacked Y by mirroring RenderColumnChart's stackedY accumulator
-                double stackedY = plotY + plotH;
-                for (int prevSi = 0; prevSi < seriesIndex; prevSi++)
-                {
-                    double? prevRaw = ci < chart.Series[prevSi].Values.Count
-                        ? chart.Series[prevSi].Values[ci] : null;
-                    if (prevRaw is null) continue;
-                    double h = Math.Max(0.5, Math.Abs(prevRaw.Value / effRange) * plotH);
-                    stackedY -= h;
-                }
-                barH = Math.Max(0.5, Math.Abs(val / effRange) * plotH);
-                barY = stackedY - barH;
-            }
-            else
-            {
-                barH = Math.Abs((val - effMin) / effRange * plotH);
-                barY = plotY + plotH - (val - effMin) / effRange * plotH;
-            }
-
-            // CB2: compute the correct percent denominator
-            double total = 0;
-            if (dl.ShowPercent)
-            {
-                if (stacked)
-                {
-                    foreach (var s in chart.Series)
-                        if (ci < s.Values.Count && s.Values[ci].HasValue)
-                            total += Math.Abs(s.Values[ci]!.Value);
-                }
-                else
-                {
-                    foreach (var v in series.Values)
-                        if (v.HasValue) total += Math.Abs(v.Value);
-                }
-            }
-
-            string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
-            string txt = FormatDataLabel(dl, val, total, cat, series.Name);
-            if (string.IsNullOrEmpty(txt)) continue;
-
-            const double lblH = 11.0;
-            double lblY;
-            if (val < 0)
-            {
-                // CB6: negative bar — flip positions relative to bar extent
-                lblY = position switch
-                {
-                    DataLabelPosition.InsideEnd  => barY + barH - lblH - 2,
-                    DataLabelPosition.Center     => barY + barH / 2 - lblH / 2,
-                    DataLabelPosition.InsideBase => barY + 2,
-                    _                            => barY + barH + 1  // OutsideEnd below bar
-                };
-            }
-            else
-            {
-                lblY = position switch
-                {
-                    DataLabelPosition.InsideEnd  => barY + 2,
-                    DataLabelPosition.Center     => barY + barH / 2 - lblH / 2,
-                    DataLabelPosition.InsideBase => barY + barH - lblH - 2,
-                    _                            => barY - lblH - 1
-                };
-            }
-            DrawChartLabel(dc, txt, new Rect(barX, lblY, serW, lblH),
-                false, 6.5, TextAlignment.Center);
-        }
-    }
-
-    private static void RenderLineDataLabels(
-        DrawingContext dc, ChartShape chart, int seriesIndex,
-        double plotX, double plotY, double plotW, double plotH,
-        double minVal, double maxVal)
-    {
-        var dl = EffectiveLabels(chart, seriesIndex);
-        if (dl is null) return;
-
-        var series = chart.Series[seriesIndex];
-        int catCount = Math.Max(1, chart.Categories.Count);
-        double range = maxVal - minVal;
-        if (range <= 0) return;
-
-        // CC2: pick the axis range by whether this series is on the secondary axis,
-        // mirroring RenderLineChart's CB1 effMin/effRange selection so the label Y
-        // matches the marker Y (both use the same scale).
-        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
-        double secRange = secMax - secMin;
-        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
-        double effRange = series.OnSecondaryAxis ? secRange : range;
-        if (effRange <= 0) return;
-
-        double stepX = plotW / Math.Max(1, catCount - 1);
-
-        // CB2: compute series total for ShowPercent denominator
-        double seriesTotal = 0;
-        if (dl.ShowPercent)
-            foreach (var v in series.Values)
-                if (v.HasValue) seriesTotal += Math.Abs(v.Value);
-
-        for (int ci = 0; ci < catCount; ci++)
-        {
-            double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
-            if (rawVal is null) continue;
-            double px = plotX + ci * stepX;
-            double py = plotY + plotH - (rawVal.Value - effMin) / effRange * plotH;
-
-            string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
-            string txt = FormatDataLabel(dl, rawVal.Value, seriesTotal, cat, series.Name);
-            if (string.IsNullOrEmpty(txt)) continue;
-
-            DrawChartLabel(dc, txt, new Rect(px - 20, py - 14, 40, 11),
-                false, 6.5, TextAlignment.Center);
-        }
-    }
-
-    /// <summary>
-    /// CB4: Data labels for horizontal bar charts. Mirrors RenderBarChart geometry:
-    /// bars run left→right, categories top→bottom (reversed: index 0 at bottom).
-    /// OutsideEnd = just right of bar tip; Center = horizontally centered in bar.
-    /// CB2: correct percent denominator (category total for stacked, series total otherwise).
-    /// </summary>
-    private static void RenderBarDataLabels(
-        DrawingContext dc, ChartShape chart, int seriesIndex,
-        double plotX, double plotY, double plotW, double plotH,
-        double minVal, double maxVal)
-    {
-        var dl = EffectiveLabels(chart, seriesIndex);
-        if (dl is null) return;
-
-        var series = chart.Series[seriesIndex];
-        int catCount = Math.Max(1, chart.Categories.Count);
-        double range = maxVal - minVal;
-        if (range <= 0) return;
-
-        // CC4: pick the axis range by whether this series is on the secondary axis,
-        // mirroring RenderBarChart's CB1 effMin/effRange selection so bar geometry
-        // (barW, stackedX accumulator) uses the correct scale.
-        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
-        double secRange = secMax - secMin;
-        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
-        double effRange = series.OnSecondaryAxis ? secRange : range;
-        if (effRange <= 0) return;
-
-        bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
-        const double gapRatio = 1.5;
-        double catH     = plotH / catCount;
-        double clusterH = catH / (1.0 + gapRatio);
-        double halfGap  = (catH - clusterH) / 2.0;
-        int serCount    = Math.Max(1, chart.Series.Count);
-        double serH     = stacked ? clusterH : clusterH / serCount;
-
-        var position = dl.Position ?? DataLabelPosition.OutsideEnd;
-
-        for (int ci = 0; ci < catCount; ci++)
-        {
-            double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
-            if (rawVal is null) continue;
-            double val = rawVal.Value;
-
-            // Mirror RenderBarChart: category index 0 is at the BOTTOM (reversed row)
-            int    renderRow = catCount - 1 - ci;
-            double catTop    = plotY + renderRow * catH + halfGap;
-
-            double barW, barX, barY;
-            if (stacked)
-            {
-                // Accumulate stackedX from previous series (mirrors RenderBarChart stackedX logic)
-                double stackedX = plotX;
-                for (int prevSi = 0; prevSi < seriesIndex; prevSi++)
-                {
-                    double? prevRaw = ci < chart.Series[prevSi].Values.Count
-                        ? chart.Series[prevSi].Values[ci] : null;
-                    if (prevRaw is null) continue;
-                    stackedX += Math.Max(0.5, Math.Abs((prevRaw.Value - effMin) / effRange * plotW));
-                }
-                barW = Math.Max(0.5, Math.Abs((val - effMin) / effRange * plotW));
-                barX = stackedX;
-                barY = catTop;
-            }
-            else
-            {
-                int renderSer = serCount - 1 - seriesIndex;
-                barW = Math.Abs((val - effMin) / effRange * plotW);
-                barX = plotX;
-                barY = catTop + renderSer * serH;
-            }
-
-            // CB2: compute percent denominator
-            double total = 0;
-            if (dl.ShowPercent)
-            {
-                if (stacked)
-                {
-                    foreach (var s in chart.Series)
-                        if (ci < s.Values.Count && s.Values[ci].HasValue)
-                            total += Math.Abs(s.Values[ci]!.Value);
-                }
-                else
-                {
-                    foreach (var v in series.Values)
-                        if (v.HasValue) total += Math.Abs(v.Value);
-                }
-            }
-
-            string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
-            string txt = FormatDataLabel(dl, val, total, cat, series.Name);
-            if (string.IsNullOrEmpty(txt)) continue;
-
-            const double lblH = 11.0;
-            // Horizontal bar label X placement
-            double lblX = position switch
-            {
-                DataLabelPosition.InsideEnd  => barX + barW - 22 - 2,
-                DataLabelPosition.Center     => barX + barW / 2 - 22,
-                DataLabelPosition.InsideBase => barX + 2,
-                _                            => barX + barW + 2  // OutsideEnd: right of bar tip
-            };
-            double lblY = barY + serH / 2 - lblH / 2;
-
-            DrawChartLabel(dc, txt, new Rect(lblX, lblY, 44, lblH),
-                false, 6.5, TextAlignment.Center);
-        }
-    }
-
-    private static void RenderPieDataLabels(
-        DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
-        double plotX, double plotY, double plotW, double plotH)
-    {
-        var dl = EffectiveLabels(chart, 0);
-        if (dl is null || chart.Series.Count == 0) return;
-
-        var firstSeries = chart.Series[0];
-        var values = firstSeries.Values.Where(v => v.HasValue && v.Value > 0).Select(v => v!.Value).ToList();
-        if (values.Count == 0) return;
-        double total = values.Sum();
-        if (total <= 0) return;
-
-        double cx = plotX + plotW / 2;
-        double cy = plotY + plotH / 2;
-        double r  = Math.Min(plotW, plotH) / 2 * 0.85;
-        double startAngle = -Math.PI / 2;
-
-        var position = dl.Position ?? DataLabelPosition.BestFit;
-        double labelR = position == DataLabelPosition.InsideEnd ? r * 0.65 : r * 1.15;
-
-        for (int i = 0; i < values.Count; i++)
-        {
-            double sweepAngle = values[i] / total * 2 * Math.PI;
-            double midAngle   = startAngle + sweepAngle / 2;
-
-            string cat = i < chart.Categories.Count ? chart.Categories[i] : string.Empty;
-            string txt = FormatDataLabel(dl, values[i], total, cat, firstSeries.Name);
-            if (!string.IsNullOrEmpty(txt))
-            {
-                double lx = cx + labelR * Math.Cos(midAngle);
-                double ly = cy + labelR * Math.Sin(midAngle);
-                DrawChartLabel(dc, txt, new Rect(lx - 22, ly - 6, 44, 12),
-                    false, 6.5, TextAlignment.Center);
-            }
-
-            startAngle += sweepAngle;
-        }
-    }
-
-    private static void RenderSecondaryValueAxis(
-        DrawingContext dc, ChartShape chart,
-        double plotX, double plotY, double plotW, double plotH,
-        double boundsRight)
-    {
-        if (chart.SecondaryValueAxis is null) return;
-
-        double secMin = 0, secMax = 0;
-        foreach (var s in chart.Series)
-        {
-            if (!s.OnSecondaryAxis) continue;
-            foreach (var v in s.Values)
-                if (v.HasValue) { secMin = Math.Min(secMin, v.Value); secMax = Math.Max(secMax, v.Value); }
-        }
-
-        double axMin = chart.SecondaryValueAxis.Min ?? (secMin >= 0 ? 0 : secMin);
-        double axMax = chart.SecondaryValueAxis.Max ?? secMax;
-        if (axMax <= axMin) axMax = axMin + 1;
-
-        double range  = axMax - axMin;
-        double rawU   = range / 4.0;
-        double mag    = Math.Pow(10, Math.Floor(Math.Log10(Math.Max(rawU, 1e-9))));
-        double norm   = rawU / mag;
-        double nmult  = norm < 1.5 ? 1.0 : norm < 2.25 ? 2.0 : norm < 3.75 ? 2.5 : norm < 7.5 ? 5.0 : 10.0;
-        double mu     = nmult * mag;
-        double niceMax = Math.Ceiling(axMax / mu) * mu;
-        double niceMin = axMin >= 0 ? 0 : Math.Floor(axMin / mu) * mu;
-        double steps   = (niceMax - niceMin) / mu;
-        if (steps <= 0) return;
-
-        for (int ti = 0; ti <= (int)Math.Round(steps); ti++)
-        {
-            double val = niceMin + mu * ti;
-            double vy  = plotY + plotH - plotH * ti / steps;
-            DrawChartLabel(dc, FormatAxisValue(val),
-                new Rect(boundsRight + 2, vy - 6, 40.0, 12),
-                false, 6.5, TextAlignment.Left);
-        }
-    }
 
     private static void DrawChartLabel(
         DrawingContext dc, string text, Rect rect,
