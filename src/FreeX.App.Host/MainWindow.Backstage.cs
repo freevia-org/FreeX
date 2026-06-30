@@ -208,7 +208,7 @@ public partial class MainWindow
     }
 
     // The Up/Down/Home/End rail navigation that used to live here is now owned by the shared
-    // BackstageFrame (see Free.Shared.Ribbon.Wpf.BackstageFrame.OnKeyDown), so the overlay no longer
+    // BackstageFrame (see Free.Shared.Shell.Wpf.BackstageFrame.OnKeyDown), so the overlay no longer
     // hooks PreviewKeyDown for it.
 
     private bool TryOpenFocusedBackstageContextMenu()

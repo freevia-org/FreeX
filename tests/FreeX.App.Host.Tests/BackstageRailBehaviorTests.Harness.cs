@@ -16,7 +16,7 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Behavioural harness for the backstage rail, now hosted on the shared
-/// <see cref="Free.Shared.Ribbon.Wpf.BackstageFrame"/>. Replaces the old source-text rail assertions
+/// <see cref="Free.Shared.Shell.Wpf.BackstageFrame"/>. Replaces the old source-text rail assertions
 /// (literal <c>x:Name</c>s, handler-name strings) with automation-tree queries against a live MainWindow:
 /// the tests open the backstage and assert the rail exposes the expected AutomationIds, KeyTips, localized
 /// names and pane-swap behaviour — refactor-proof and reusable, the de-brittling pattern this pilot proves.

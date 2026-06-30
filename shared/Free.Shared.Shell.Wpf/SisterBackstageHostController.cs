@@ -1,6 +1,6 @@
 using System.Windows.Controls;
 
-namespace Free.Shared.Ribbon.Wpf;
+namespace Free.Shared.Shell.Wpf;
 
 /// <summary>
 /// Shared setup contract for WPF sister-app Backstage hosts.
@@ -8,7 +8,10 @@ namespace Free.Shared.Ribbon.Wpf;
 public sealed record SisterBackstageHostSpec(
     SisterBackstageTheme Theme,
     Func<SisterBackstageHostController, SisterBackstageEntrySpec> BuildEntries,
-    Action OnClosed);
+    Action OnClosed)
+{
+    public BackstageFrameChrome? Chrome { get; init; }
+}
 
 /// <summary>
 /// Owns the repeated WPF Backstage host lifecycle, entry construction, and command callback adapters.
@@ -26,7 +29,7 @@ public sealed class SisterBackstageHostController
         ArgumentNullException.ThrowIfNull(spec.OnClosed);
 
         var entries = SisterBackstageEntryBuilder.Build(spec.BuildEntries(this));
-        _shell = new BackstageViewShell(host, spec.Theme.Accent, entries, spec.OnClosed);
+        _shell = new BackstageViewShell(host, spec.Theme.Accent, entries, spec.OnClosed, spec.Chrome);
     }
 
     public BackstageFrame Frame => Shell.Frame;

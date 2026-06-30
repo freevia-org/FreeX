@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
-using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 
 namespace FreeW.App.Host.Tests;
 

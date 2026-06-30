@@ -6,6 +6,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -63,7 +65,7 @@ public sealed class SharedBackstageFrameTests
                 Color.FromRgb(0x24, 0x44, 0x5E),
                 Color.FromRgb(0x18, 0x3A, 0x58),
                 Color.FromRgb(0x24, 0x44, 0x5E)),
-            new[] { BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, () => new TextBlock()) },
+            new[] { BackstageEntry.Pane("Info", BackstageIconKind.Info, () => new TextBlock()) },
             () => closedCount++);
 
         Assert.Same(shell.Frame, host.Content);
@@ -92,7 +94,7 @@ public sealed class SharedBackstageFrameTests
                 Color.FromRgb(0x24, 0x44, 0x5E),
                 Color.FromRgb(0x18, 0x3A, 0x58),
                 Color.FromRgb(0x24, 0x44, 0x5E)),
-            new[] { BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, () => new TextBlock()) })
+            new[] { BackstageEntry.Pane("Info", BackstageIconKind.Info, () => new TextBlock()) })
         {
             ContentPadding = new Thickness(0),
             BackButton = new BackstageBackButtonSpec(
@@ -102,6 +104,7 @@ public sealed class SharedBackstageFrameTests
                 ToolTip: "Back",
                 TooltipTitle: "Back",
                 KeyTip: "B"),
+            Chrome = BackstageRibbonChrome.Create(),
             DecorateNavButtons = (entry, _) => decorated.Add(entry?.Label ?? "back"),
             Closed = () => closedCount++
         });
@@ -126,12 +129,12 @@ public sealed class SharedBackstageFrameTests
     [StaFact]
     public void Entry_WithKeyTipAndAutomationId_ProducesButtonExposingThem()
     {
-        var frame = new BackstageFrame();
+        var frame = new BackstageFrame(BackstageRibbonChrome.Create());
         frame.SetEntries(new[]
         {
             BackstageEntry.Pane(
                 "Info",
-                RibbonCommandIconKind.Info,
+                BackstageIconKind.Info,
                 () => new TextBlock(),
                 keyTip: "I",
                 automationId: "BackstageInfoNavButton",
@@ -158,8 +161,8 @@ public sealed class SharedBackstageFrameTests
         var frame = new BackstageFrame();
         frame.SetEntries(new[]
         {
-            BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, () => new TextBlock()),
-            BackstageEntry.Command("Open", RibbonCommandIconKind.GetData, () => { })
+            BackstageEntry.Pane("Info", BackstageIconKind.Info, () => new TextBlock()),
+            BackstageEntry.Command("Open", BackstageIconKind.GetData, () => { })
         });
 
         foreach (var button in NavButtons(frame))
@@ -179,9 +182,9 @@ public sealed class SharedBackstageFrameTests
         var frame = new BackstageFrame();
         frame.SetEntries(new[]
         {
-            BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, () => new TextBlock()),
-            BackstageEntry.Command("New", RibbonCommandIconKind.Insert, () => { }),
-            BackstageEntry.Command("Close", RibbonCommandIconKind.Previous, () => { }, dockBottom: true)
+            BackstageEntry.Pane("Info", BackstageIconKind.Info, () => new TextBlock()),
+            BackstageEntry.Command("New", BackstageIconKind.Insert, () => { }),
+            BackstageEntry.Command("Close", BackstageIconKind.Previous, () => { }, dockBottom: true)
         });
 
         var buttons = NavButtons(frame);
@@ -199,8 +202,8 @@ public sealed class SharedBackstageFrameTests
         var frame = new BackstageFrame();
         frame.SetEntries(new[]
         {
-            BackstageEntry.Pane("Info", RibbonCommandIconKind.Info, () => new TextBlock()),
-            BackstageEntry.Command("New", RibbonCommandIconKind.Insert, () => { })
+            BackstageEntry.Pane("Info", BackstageIconKind.Info, () => new TextBlock()),
+            BackstageEntry.Command("New", BackstageIconKind.Insert, () => { })
         });
 
         // Host the frame in a focus-scoped, loaded window so MoveFocus has a live visual tree to traverse.

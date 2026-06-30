@@ -1,4 +1,4 @@
-using Free.Shared.Ribbon;
+using Free.Shared.Shell;
 
 namespace FreeX.App.Presentation.Backstage;
 
@@ -34,7 +34,7 @@ public sealed record FreeXBackstageNavigationEntry(
     FreeXBackstagePaneId? Pane,
     FreeXBackstageCommandId? Command,
     string? LabelKey,
-    RibbonCommandIconKind? Icon,
+    BackstageIconKind? Icon,
     string? IconCommandName,
     bool DockBottom = false,
     string? KeyTip = null,
@@ -59,7 +59,7 @@ public static class FreeXBackstageNavigationPlanner
         Pane(
             FreeXBackstagePaneId.Home,
             "MainWindow_Text_Home",
-            RibbonCommandIconKind.Grid,
+            BackstageIconKind.Grid,
             "Home",
             "H",
             HomePaneAutomationId,
@@ -70,7 +70,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.New,
             "MainWindow_Text_New",
-            RibbonCommandIconKind.Insert,
+            BackstageIconKind.Insert,
             "New",
             "N",
             "BackstageNewButton",
@@ -81,7 +81,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.Open,
             "MainWindow_Text_Open",
-            RibbonCommandIconKind.GetData,
+            BackstageIconKind.GetData,
             "Open",
             "O",
             "BackstageOpenButton",
@@ -92,7 +92,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.Share,
             "MainWindow_Text_Share",
-            RibbonCommandIconKind.Share,
+            BackstageIconKind.Share,
             "Share",
             "SH",
             "BackstageShareButton",
@@ -106,7 +106,7 @@ public static class FreeXBackstageNavigationPlanner
         Pane(
             FreeXBackstagePaneId.Info,
             "MainWindow_Text_Info",
-            RibbonCommandIconKind.Info,
+            BackstageIconKind.Info,
             "Info",
             "I",
             InfoPaneAutomationId,
@@ -117,7 +117,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.Save,
             "MainWindow_Text_Save",
-            RibbonCommandIconKind.Save,
+            BackstageIconKind.Save,
             "Save",
             "S",
             "BackstageSaveButton",
@@ -128,7 +128,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.SaveAs,
             "MainWindow_Text_SaveAs",
-            RibbonCommandIconKind.Save,
+            BackstageIconKind.Save,
             "Save As",
             "A",
             "BackstageSaveAsButton",
@@ -139,7 +139,7 @@ public static class FreeXBackstageNavigationPlanner
         Pane(
             FreeXBackstagePaneId.Print,
             "MainWindow_Text_Print",
-            RibbonCommandIconKind.Print,
+            BackstageIconKind.Print,
             "Print",
             "P",
             PrintPaneAutomationId,
@@ -151,7 +151,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.Export,
             "MainWindow_Text_Export",
-            RibbonCommandIconKind.Share,
+            BackstageIconKind.Share,
             "Export",
             "E",
             "BackstageExportButton",
@@ -163,7 +163,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.Close,
             "MainWindow_Text_Close",
-            RibbonCommandIconKind.WindowClose,
+            BackstageIconKind.WindowClose,
             "Close",
             "C",
             "BackstageCloseButton",
@@ -176,7 +176,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.Account,
             "MainWindow_Text_Account",
-            RibbonCommandIconKind.Info,
+            BackstageIconKind.Info,
             "Account",
             "AC",
             "BackstageAccountButton",
@@ -189,7 +189,7 @@ public static class FreeXBackstageNavigationPlanner
         Command(
             FreeXBackstageCommandId.Options,
             "MainWindow_Text_Options",
-            RibbonCommandIconKind.View,
+            BackstageIconKind.View,
             "Options",
             "T",
             "BackstageOptionsButton",
@@ -202,7 +202,7 @@ public static class FreeXBackstageNavigationPlanner
     private static FreeXBackstageNavigationEntry Pane(
         FreeXBackstagePaneId pane,
         string labelKey,
-        RibbonCommandIconKind icon,
+        BackstageIconKind icon,
         string iconCommandName,
         string keyTip,
         string automationId,
@@ -229,7 +229,7 @@ public static class FreeXBackstageNavigationPlanner
     private static FreeXBackstageNavigationEntry Command(
         FreeXBackstageCommandId command,
         string labelKey,
-        RibbonCommandIconKind icon,
+        BackstageIconKind icon,
         string iconCommandName,
         string keyTip,
         string automationId,

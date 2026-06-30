@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.PageLayout;
 
@@ -45,6 +46,7 @@ public partial class MainWindow
                 ToolTip: UiText.Get("MainWindow_ToolTip_BackToWorkbook"),
                 TooltipTitle: UiText.Get("MainWindow_TooltipTitle_Back"),
                 KeyTip: "B"),
+            Chrome = BackstageRibbonChrome.Create(),
             DecorateNavButtons = DecorateBackstageNavButton,
             Closed = OnBackstageFrameClosed
         });
