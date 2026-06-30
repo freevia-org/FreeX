@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Compositor.Tests;
@@ -63,7 +64,7 @@ public sealed class FindReplaceDialogPlannerTests
         plan.HasMatch.Should().BeTrue();
         plan.MatchIndex.Should().Be(expectedIndex);
         plan.StatusText.Should().Be(expectedStatus);
-        plan.StatusKind.Should().Be(FindReplaceStatusKind.Match);
+        plan.StatusKind.Should().Be(FindReplacePolicyStatusKind.Match);
     }
 
     [Fact]
@@ -73,14 +74,14 @@ public sealed class FindReplaceDialogPlannerTests
 
         plan.HasMatch.Should().BeFalse();
         plan.MatchIndex.Should().Be(-1);
-        plan.StatusText.Should().Be(FindReplaceDialogPlanner.NoMatchesStatus);
-        plan.StatusKind.Should().Be(FindReplaceStatusKind.NoMatches);
+        plan.StatusText.Should().Be(FindReplaceDialogPolicy.NoMatchesStatus);
+        plan.StatusKind.Should().Be(FindReplacePolicyStatusKind.NoMatches);
     }
 
     [Theory]
-    [InlineData(0, FindReplaceDialogPlanner.NoReplacementsStatus, FindReplaceStatusKind.NoReplacements)]
-    [InlineData(2, "2 replacement(s) made.", FindReplaceStatusKind.Replacements)]
-    public void ReplacementStatus_FormatsDialogStatus(int count, string expectedStatus, FindReplaceStatusKind expectedKind)
+    [InlineData(0, FindReplaceDialogPolicy.NoReplacementsStatus, FindReplacePolicyStatusKind.NoReplacements)]
+    [InlineData(2, "2 replacement(s) made.", FindReplacePolicyStatusKind.Replacements)]
+    public void ReplacementStatus_FormatsDialogStatus(int count, string expectedStatus, FindReplacePolicyStatusKind expectedKind)
     {
         var status = FindReplaceDialogPlanner.ReplacementStatus(count);
 

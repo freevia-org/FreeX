@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -270,14 +271,14 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _matchCaseBox.IsChecked == true,
         _wholeWordBox.IsChecked == true);
 
-    private void ApplyStatus(string text, FindReplaceStatusKind kind)
+    private void ApplyStatus(string text, FindReplacePolicyStatusKind kind)
     {
         _statusText.Text = text;
         _statusText.Foreground = kind switch
         {
-            FindReplaceStatusKind.NoMatches or FindReplaceStatusKind.NoReplacements =>
+            FindReplacePolicyStatusKind.NoMatches or FindReplacePolicyStatusKind.NoReplacements =>
                 new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),
-            FindReplaceStatusKind.Match or FindReplaceStatusKind.Replacements =>
+            FindReplacePolicyStatusKind.Match or FindReplacePolicyStatusKind.Replacements =>
                 new SolidColorBrush(Color.FromRgb(0x1B, 0x7E, 0x30)),
             _ => new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
         };
