@@ -92,6 +92,17 @@ public sealed class CommonMessageTextTests
     }
 
     [Fact]
+    public void StartupPrompts_UseSharedWpfUserMessageService()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
+
+        source.Should().Contain("new WpfUserMessageService()");
+        source.Should().Contain("StartupMessageService.ShowMessage(");
+        source.Should().Contain("UserMessageButtons.YesNo");
+        source.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void SharedFileCommandMessageBox_IsServiceBacked()
     {
         var source = DialogSourceTestSupport.ReadShellSources("FileCommandMessageBox.cs");
