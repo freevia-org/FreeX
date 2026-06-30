@@ -343,14 +343,18 @@ internal static class ParityCapture
 
     private static UIElement CreateBackstageAccountPane()
     {
-        var pane = BuildParityCapturedBackstageAccountPanePlan();
+        var projection = FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(
+            BuildParityCapturedBackstageAccountPanePlan());
+        var heading = projection.Elements.OfType<FreeXBackstageHeadingProjectionElement>().Single();
+        var sectionHeader = projection.Elements.OfType<FreeXBackstageSectionHeaderProjectionElement>().First();
+        var detailRows = projection.Elements.OfType<FreeXBackstageDetailRowsProjectionElement>().Single();
         var root = new StackPanel
         {
             Margin = new Thickness(40, 34, 46, 0),
         };
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get(pane.TitleKey),
+            Text = UiText.Get(heading.TextKey),
             FontSize = 30,
             FontWeight = FontWeights.SemiBold,
             Foreground = Brushes.Black,
@@ -358,7 +362,7 @@ internal static class ParityCapture
         });
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get(pane.LocalInfoHeadingKey),
+            Text = UiText.Get(sectionHeader.TextKey),
             FontSize = 16,
             FontWeight = FontWeights.SemiBold,
             Foreground = Brushes.Black,
@@ -368,9 +372,9 @@ internal static class ParityCapture
         var details = new Grid();
         details.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
         details.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < pane.Details.Count; i++)
+        for (var i = 0; i < detailRows.Rows.Count; i++)
         {
-            var detail = pane.Details[i];
+            var detail = detailRows.Rows[i];
             details.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             AddAccountDetail(
                 details,

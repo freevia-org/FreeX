@@ -2479,7 +2479,11 @@ public sealed partial class MainWindow
 
     private static Control CreateParityCapturedBackstageAccountPane()
     {
-        var pane = BuildParityCapturedBackstageAccountPanePlan();
+        var projection = FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(
+            BuildParityCapturedBackstageAccountPanePlan());
+        var heading = projection.Elements.OfType<FreeXBackstageHeadingProjectionElement>().Single();
+        var sectionHeader = projection.Elements.OfType<FreeXBackstageSectionHeaderProjectionElement>().First();
+        var detailRows = projection.Elements.OfType<FreeXBackstageDetailRowsProjectionElement>().Single();
         var root = new StackPanel
         {
             Margin = new Thickness(44, 34, 46, 0),
@@ -2487,7 +2491,7 @@ public sealed partial class MainWindow
         };
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get(pane.TitleKey),
+            Text = UiText.Get(heading.TextKey),
             FontSize = 30,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
@@ -2497,7 +2501,7 @@ public sealed partial class MainWindow
         // local workbook/sharing/export readiness — and no cloud-account note. Mirror that here.
         root.Children.Add(new TextBlock
         {
-            Text = BackstageAccountText(pane.LocalInfoHeadingKey),
+            Text = BackstageAccountText(sectionHeader.TextKey),
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
@@ -2511,7 +2515,7 @@ public sealed partial class MainWindow
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
-        var rows = BuildParityCapturedBackstageAccountRows(pane);
+        var rows = BuildParityCapturedBackstageAccountRows(detailRows.Rows);
         for (var i = 0; i < rows.Length; i++)
         {
             details.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -2566,12 +2570,12 @@ public sealed partial class MainWindow
     }
 
     private static (string Label, string Value)[] BuildParityCapturedBackstageAccountRows(
-        FreeXBackstageAccountPanePlan pane)
+        IReadOnlyList<FreeXBackstageDetailRowProjection> details)
     {
-        var rows = new (string Label, string Value)[pane.Details.Count];
-        for (var i = 0; i < pane.Details.Count; i++)
+        var rows = new (string Label, string Value)[details.Count];
+        for (var i = 0; i < details.Count; i++)
         {
-            var detail = pane.Details[i];
+            var detail = details[i];
             rows[i] = (
                 BackstageAccountText(detail.LabelKey),
                 ResolveParityCapturedBackstageAccountValue(detail.Value));
@@ -2820,7 +2824,12 @@ public sealed partial class MainWindow
 
     private static Control CreateParityCapturedBackstageInfoPane()
     {
-        var pane = BuildParityCapturedBackstageInfoPanePlan();
+        var projection = FreeXBackstagePaneProjectionPlanner.BuildInfoPane(
+            BuildParityCapturedBackstageInfoPanePlan());
+        var heading = projection.Elements.OfType<FreeXBackstageHeadingProjectionElement>().Single();
+        var sectionHeaders = projection.Elements.OfType<FreeXBackstageSectionHeaderProjectionElement>().ToArray();
+        var actionRow = projection.Elements.OfType<FreeXBackstageInfoActionRowProjectionElement>().Single();
+        var detailRows = projection.Elements.OfType<FreeXBackstageDetailRowsProjectionElement>().Single();
         var root = new AvaloniaGrid
         {
             Margin = new Thickness(44, 34, 46, 0),
@@ -2834,19 +2843,19 @@ public sealed partial class MainWindow
         var actions = new StackPanel { Spacing = 14 };
         actions.Children.Add(new TextBlock
         {
-            Text = UiText.Get(pane.TitleKey),
+            Text = UiText.Get(heading.TextKey),
             FontSize = 30,
             FontWeight = FontWeight.Normal,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
         actions.Children.Add(new TextBlock
         {
-            Text = UiText.Get(pane.ActionsHeadingKey),
+            Text = UiText.Get(sectionHeaders[0].TextKey),
             FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
-        foreach (var action in pane.Actions)
+        foreach (var action in actionRow.Actions)
         {
             actions.Children.Add(CreateParityCapturedBackstageInfoAction(
                 action.Icon,
@@ -2868,12 +2877,12 @@ public sealed partial class MainWindow
         };
         properties.Children.Add(new TextBlock
         {
-            Text = UiText.Get(pane.PropertiesHeadingKey),
+            Text = UiText.Get(sectionHeaders[1].TextKey),
             FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
-        foreach (var detail in pane.Details)
+        foreach (var detail in detailRows.Rows)
         {
             properties.Children.Add(CreateParityCapturedBackstageProperty(
                 UiText.Get(detail.LabelKey),

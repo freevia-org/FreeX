@@ -66,6 +66,23 @@ public sealed record FreeXBackstageExportOutputKindRadioOptionProjection(
 /// </summary>
 public static class FreeXBackstagePaneProjectionPlanner
 {
+    public static FreeXBackstagePaneProjectionPlan BuildInfoPane(
+        FreeXBackstageInfoPanePlan pane)
+    {
+        ArgumentNullException.ThrowIfNull(pane);
+
+        var elements = new List<FreeXBackstagePaneProjectionElement>
+        {
+            new FreeXBackstageHeadingProjectionElement(pane.TitleKey),
+            new FreeXBackstageSectionHeaderProjectionElement(pane.ActionsHeadingKey),
+            new FreeXBackstageInfoActionRowProjectionElement(pane.Actions),
+            new FreeXBackstageSectionHeaderProjectionElement(pane.PropertiesHeadingKey),
+            new FreeXBackstageDetailRowsProjectionElement(ProjectInfoDetails(pane.Details)),
+        };
+
+        return new FreeXBackstagePaneProjectionPlan(elements);
+    }
+
     public static FreeXBackstagePaneProjectionPlan BuildInfoDialog(
         FreeXBackstageInfoPanePlan pane)
     {

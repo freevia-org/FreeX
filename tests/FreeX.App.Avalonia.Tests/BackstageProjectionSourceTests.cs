@@ -67,6 +67,7 @@ public sealed class BackstageProjectionSourceTests
         exportPlannerSource.Should().Contain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(request.OutputKind");
         exportPlannerSource.Should().Contain("Backstage_Export_ScopeHeader");
         projectionPlannerSource.Should().Contain("public static FreeXBackstagePaneProjectionPlan BuildInfoDialog(");
+        projectionPlannerSource.Should().Contain("public static FreeXBackstagePaneProjectionPlan BuildInfoPane(");
         projectionPlannerSource.Should().Contain("public static FreeXBackstagePaneProjectionPlan BuildExportDialog(");
         projectionPlannerSource.Should().Contain("public static FreeXBackstagePaneProjectionPlan BuildAccountDialog(");
         projectionPlannerSource.Should().Contain("new FreeXBackstageSectionHeaderProjectionElement(pane.FileSectionHeaderKey)");
@@ -125,6 +126,34 @@ public sealed class BackstageProjectionSourceTests
         sharedSource.Should().Contain("public static Grid CreateDetailRows(");
         sharedSource.Should().Contain("public static StackPanel CreateActionRow(");
         sharedSource.Should().Contain("public static StackPanel CreateRadioGroup(");
+    }
+
+    [Fact]
+    public void ParityCaptureBackstagePanes_UseSharedProjectionPlanner()
+    {
+        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var hostCaptureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var projectionPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "Backstage",
+            "FreeXBackstagePaneProjectionPlanner.cs"));
+
+        projectionPlannerSource.Should().Contain("public static FreeXBackstagePaneProjectionPlan BuildInfoPane(");
+        projectionPlannerSource.Should().Contain("new FreeXBackstageHeadingProjectionElement(pane.TitleKey)");
+        projectionPlannerSource.Should().Contain("new FreeXBackstageSectionHeaderProjectionElement(pane.ActionsHeadingKey)");
+        projectionPlannerSource.Should().Contain("new FreeXBackstageDetailRowsProjectionElement(ProjectInfoDetails(pane.Details))");
+
+        captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildInfoPane(");
+        captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
+        captureSource.Should().Contain("FreeXBackstageDetailRowsProjectionElement");
+        captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows(detailRows.Rows)");
+        captureSource.Should().NotContain("foreach (var action in pane.Actions)");
+        captureSource.Should().NotContain("foreach (var detail in pane.Details)");
+
+        hostCaptureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
+        hostCaptureSource.Should().Contain("FreeXBackstageDetailRowsProjectionElement");
+        hostCaptureSource.Should().NotContain("pane.Details");
     }
 
     private static string RepoFile(params string[] parts)
