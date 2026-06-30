@@ -27,6 +27,10 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         if (appFolder == "freew")
         {
+            source.Should().Contain("DocumentPersistenceWorkflow");
+            source.Should().Contain("_persistence.Open(path)");
+            source.Should().Contain("_persistence.Save(_editor.Model, target)");
+            source.Should().Contain("_persistence.BuildSaveDialogPlan(");
             source.Should().Contain("OpenRecentPath(string path)");
             source.Should().Contain("_workflow.Open(\"opening another document\", () => path, OpenPath)");
             source.Should().Contain("OpenFromFolder(string folderPath)");
@@ -34,6 +38,10 @@ public sealed class FileCommandWorkflowSourceTests
             source.Should().Contain("initialDirectory: initialDirectory");
             source.Should().Contain("SaveAsSuggested(string? suggestedFileName, string? preferredExtension)");
             source.Should().Contain("TryPromptSaveTarget(preferredExtension, suggestedFileName");
+            source.Should().NotContain("DocumentFileFormatResolver.FindOpenAdapter");
+            source.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter");
+            source.Should().NotContain("FileDialogSaveSelectionResolver.ResolveAdapter");
+            source.Should().NotContain("ExportAtomicWriter.CreateTempPath");
         }
         source.Should().NotContain("new FileCommandSession");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");

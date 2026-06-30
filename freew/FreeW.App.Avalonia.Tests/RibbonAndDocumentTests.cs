@@ -72,9 +72,13 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;");
         mainWindow.Should().Contain("new SisterAvaloniaFileCommandWorkflow(");
         mainWindow.Should().Contain("new SisterAvaloniaFileTitleSpec(");
+        mainWindow.Should().Contain("private readonly DocumentPersistenceWorkflow _documentPersistence");
         mainWindow.Should().Contain("_fileWorkflow.New(");
         mainWindow.Should().Contain("_fileWorkflow.OpenAsync(");
         mainWindow.Should().Contain("_fileWorkflow.SaveAsync(");
+        mainWindow.Should().Contain("_documentPersistence.Open(path)");
+        mainWindow.Should().Contain("_documentPersistence.Save(_editor.Document, target)");
+        mainWindow.Should().Contain("_documentPersistence.BuildSavePickerPlan(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
         // suppressRecentFiles was true (stub) and is now false so files register in the store.
         mainWindow.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles:");
@@ -90,6 +94,8 @@ public class RibbonAndDocumentTests
         mainWindow.Should().NotContain("_state.");
         mainWindow.Should().NotContain("CurrentFilePath");
         mainWindow.Should().NotContain("private string? _currentPath");
+        mainWindow.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
+        mainWindow.Should().NotContain("File.Create(path)");
     }
 
     [Fact]

@@ -25,7 +25,6 @@ namespace FreeW.App.Avalonia;
 public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeW";
-    private const string DefaultSaveExtension = ".docx";
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Document;
 
     /// <summary>
@@ -41,7 +40,7 @@ public sealed class MainWindow : Window
         MimeTypes = ["application/pdf"],
     };
 
-    private readonly IReadOnlyList<IDocumentFileAdapter> _adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
+    private readonly DocumentPersistenceWorkflow _documentPersistence = new();
     private readonly DocumentView _editor = new();
     private readonly TextBlock _status = SisterAppStatusBarChrome.CreateInfoText(margin: new Thickness(8, 0));
     // AV-MAIL: the Mailings engine (recipients / merge fields / preview / finish-merge) shared with the ribbon.
@@ -787,7 +786,7 @@ public sealed class MainWindow : Window
         {
             Title = FileText.OpenPickerTitle,
             AllowMultiple = false,
-            FileTypeFilter = [.. DocumentFilePickerTypes.BuildOpenTypes(_adapters)],
+            FileTypeFilter = [.. DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)],
         });
 
         if (files.Count == 0)
@@ -798,8 +797,7 @@ public sealed class MainWindow : Window
 
     private Task<bool> OpenPathAsync(string path)
     {
-        var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out var format);
-        if (adapter is null)
+        if (!_documentPersistence.CanOpenPath(path))
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
                 SisterAppFileTextPlanner.OpenCommand,
@@ -809,18 +807,7 @@ public sealed class MainWindow : Window
 
         try
         {
-            using var stream = File.OpenRead(path);
-            var document = adapter.Load(stream);
-
-            if (format?.OpensAsTemplate == true)
-            {
-                // Templates seed a new untitled document: clearing the path makes the next Save a Save-As.
-                LoadDocumentAsSaved(document, path: null);
-            }
-            else
-            {
-                LoadDocumentAsSaved(document, path);
-            }
+            ApplyOpenResult(_documentPersistence.Open(path));
 
             return Task.FromResult(true);
         }
@@ -834,18 +821,17 @@ public sealed class MainWindow : Window
     private Task<bool> SaveAsync() =>
         _fileWorkflow.SaveAsync(SaveToCurrentPathAsync, SaveAsAsync);
 
-    private Task<bool> SaveToCurrentPathAsync(string path) => SaveToPathAsync(path);
+    private Task<bool> SaveToCurrentPathAsync(string path) =>
+        _documentPersistence.TryResolveCurrentSaveTarget(path, out var target)
+            ? SaveToTargetAsync(target)
+            : SaveAsAsync();
 
     private async Task<bool> SaveAsAsync()
     {
-        var defaultExtension = _fileWorkflow.CurrentPath is null
-            ? DefaultSaveExtension
-            : Path.GetExtension(_fileWorkflow.CurrentPath);
-        var savePlan = DocumentFileDialogRequestPlanner.BuildSavePickerPlan(
-            _adapters,
+        var savePlan = _documentPersistence.BuildSavePickerPlan(
+            _fileWorkflow.CurrentPath,
             _fileWorkflow.CurrentFileName,
-            FileText.FallbackDisplayName,
-            defaultExtension);
+            FileText.FallbackDisplayName);
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = FileText.SavePickerTitle,
@@ -860,8 +846,7 @@ public sealed class MainWindow : Window
 
     private Task<bool> SaveToPathAsync(string path)
     {
-        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
-        if (adapter is null)
+        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex: 0, out var target))
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
                 SisterAppFileTextPlanner.SaveCommand,
@@ -869,12 +854,16 @@ public sealed class MainWindow : Window
             return Task.FromResult(false);
         }
 
+        return SaveToTargetAsync(target);
+    }
+
+    private Task<bool> SaveToTargetAsync(DocumentSaveTarget target)
+    {
         try
         {
-            using (var stream = File.Create(path))
-                adapter.Save(_editor.Document, stream);
-            MarkDocumentSavedWithPath(path);
-            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(path));
+            _documentPersistence.Save(_editor.Document, target);
+            MarkDocumentSavedWithPath(target.Path);
+            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(target.Path));
             return Task.FromResult(true);
         }
         catch (Exception ex)
@@ -1064,7 +1053,7 @@ public sealed class MainWindow : Window
             }
             else
             {
-                var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, ext, out _);
+                var adapter = DocumentFileFormatResolver.FindOpenAdapter(_documentPersistence.Adapters, ext, out _);
                 if (adapter is null)
                 {
                     _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType("Insert text", ext);
@@ -1089,6 +1078,9 @@ public sealed class MainWindow : Window
         Patterns = ["*.docx", "*.txt"],
         MimeTypes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"],
     };
+
+    private void ApplyOpenResult(DocumentOpenResult result) =>
+        LoadDocumentAsSaved(result.Document, result.SavedPath);
 
     private void LoadDocumentAsSaved(TextDocument document, string? path)
     {
@@ -1164,7 +1156,7 @@ public sealed class MainWindow : Window
             DisplayName: _fileWorkflow.DisplayName,
             CurrentPath: _fileWorkflow.CurrentPath,
             GetRecentEntries: () => _fileWorkflow.RecentEntries,
-            GetFileFormats: () => _adapters.SelectMany(a => a.Formats),
+            GetFileFormats: () => _documentPersistence.Adapters.SelectMany(a => a.Formats),
             GetPageSettings: () => _editor.Document.Page,
 
             NewDocument: NewDocument,
@@ -1218,20 +1210,23 @@ public sealed class MainWindow : Window
     private async Task SaveAsWithExtensionAsync(string extension)
     {
         var normalizedExt = DocumentFileFormatResolver.NormalizeExtension(extension);
-        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, normalizedExt, out var format);
-        if (adapter is null)
+        if (!_documentPersistence.TryGetSaveFormat(normalizedExt, out var format))
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(extension);
             return;
         }
 
-        var suggestedName = _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + normalizedExt;
+        var savePlan = _documentPersistence.BuildSavePickerPlan(
+            _fileWorkflow.CurrentPath,
+            _fileWorkflow.CurrentFileName,
+            FileText.FallbackDisplayName,
+            normalizedExt);
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = SisterAppFileTextPlanner.FormatSaveAsTitle(format?.FormatName ?? extension),
-            DefaultExtension = normalizedExt.TrimStart('.'),
-            SuggestedFileName = suggestedName,
+            DefaultExtension = savePlan.DefaultExtensionWithoutDot,
+            SuggestedFileName = savePlan.SuggestedFileName,
             FileTypeChoices = [DocumentFilePickerTypes.ToFileType(
                 new Free.Shared.IO.FileDialogPickerTypeDescriptor(
                     format?.FormatName ?? extension,
