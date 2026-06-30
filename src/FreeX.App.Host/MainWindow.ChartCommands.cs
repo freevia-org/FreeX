@@ -276,17 +276,28 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult(command.Label, chart, dialog.Result.ToOptions()))
+        if (!ApplyChartLayoutDialogResult(ChartWorkflowCaption(command), chart, dialog.Result.ToOptions()))
             return;
 
         UpdateViewport();
     }
 
     private bool TryGetActiveNormalChart(ChartWorkflowCommandDescriptor command, out ChartModel chart) =>
-        TryGetActiveNormalChart(command.Label, out chart);
+        TryGetActiveNormalChart(ChartWorkflowCaption(command), out chart);
 
     private bool TryGetFirstChartForDialog(ChartWorkflowCommandDescriptor command, out ChartModel chart) =>
-        TryGetFirstChartForDialog(command.Label, UiText.Get(command.HostMissingSelectionMessageResourceKey), out chart);
+        TryGetFirstChartForDialog(ChartWorkflowCaption(command), UiText.Get(command.HostMissingSelectionMessageResourceKey), out chart);
+
+    private static string ChartWorkflowCaption(ChartWorkflowCommandDescriptor command) =>
+        command.TitleResourceKey is { } resourceKey ? UiText.Get(resourceKey) : command.Label;
+
+    private void ShowUnsupportedChartWorkflow(ChartWorkflowCommandDescriptor command)
+    {
+        var message = command.HostUnsupportedMessageResourceKey is { } resourceKey
+            ? UiText.Get(resourceKey)
+            : UiText.Get(ChartWorkflowCommandCatalog.DefaultHostMissingSelectionMessageResourceKey);
+        ShowCommandError(new CommandOutcome(false, message), ChartWorkflowCaption(command));
+    }
 
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
@@ -378,17 +389,14 @@ public partial class MainWindow
 
     private void ChartBarFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog(
-                "Format Bar/Column",
-                UiText.Get("MainWindowMessage_ChartSelectBarColumnForGapWidth"),
-                out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatBarColumn;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (!ChartTypeSupport.SupportsBarGapWidth(chart.Type))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_ChartGapWidthUnsupported"),
-                UiText.Get("MainWindowMessage_FormatBarColumnTitle"));
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -396,22 +404,19 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Bar/Column", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartBubbleFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog(
-                "Format Bubble Chart",
-                UiText.Get("MainWindowMessage_ChartSelectBubbleForOptions"),
-                out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatBubbleChart;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (chart.Type != ChartType.Bubble)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_ChartBubbleOptionsUnsupported"),
-                UiText.Get("MainWindowMessage_FormatBubbleChartTitle"));
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -419,22 +424,19 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Bubble Chart", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartPieFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog(
-                "Format Pie/Doughnut",
-                UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForOptions"),
-                out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatPieDoughnut;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_ChartPieOptionsUnsupported"),
-                UiText.Get("MainWindowMessage_FormatPieDoughnutTitle"));
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -442,22 +444,19 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Pie/Doughnut", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartStockFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog(
-                "Format Stock Chart",
-                UiText.Get("MainWindowMessage_ChartSelectStockForOptions"),
-                out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatStockChart;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (chart.Type != ChartType.Stock)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_ChartStockOptionsUnsupported"),
-                UiText.Get("MainWindowMessage_FormatStockChartTitle"));
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -465,7 +464,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Stock Chart", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
@@ -475,14 +474,16 @@ public partial class MainWindow
 
     private void ShowChartDataLabelsDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Data Labels", UiText.Get("MainWindowMessage_ChartSelectForDataLabels"), out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatDataLabels;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
         var dialog = new ChartDataLabelsDialog(chart) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Data Labels", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartDataLabelPositionBtn_Click(object sender, RoutedEventArgs e)
@@ -562,8 +563,9 @@ public partial class MainWindow
 
     private void ChartTitlesBtn_Click(object sender, RoutedEventArgs e)
     {
-        const string caption = "Chart Titles";
-        if (!TryGetFirstChartForDialog(caption, UiText.Get("MainWindowMessage_ChartSelectForTitles"), out var chart))
+        var command = ChartWorkflowCommandCatalog.ChartTitles;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
         var dialog = new ChartTitlesDialog(chart.Title, chart.XAxisTitle, chart.YAxisTitle) { Owner = this };
@@ -630,12 +632,14 @@ public partial class MainWindow
 
     private void ShowChartTrendlineDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Trendline", UiText.Get("MainWindowMessage_ChartSelectForTrendlines"), out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatTrendline;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            ShowCommandError(new CommandOutcome(false, UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes")), "Format Trendline");
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -643,7 +647,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Trendline", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ChartTrendlineTypeBtn_Click(object sender, RoutedEventArgs e)
@@ -688,14 +692,22 @@ public partial class MainWindow
 
     private void ChartErrorBarsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog("Format Error Bars", UiText.Get("MainWindowMessage_ChartSelectForErrorBars"), out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatErrorBars;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
+
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
+        {
+            ShowUnsupportedChartWorkflow(command);
+            return;
+        }
 
         var dialog = new ChartErrorBarsDialog(chart) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult("Format Error Bars", chart, dialog.Result.ToOptions()))
+        if (!ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions()))
             return;
 
         UpdateViewport();
@@ -738,21 +750,23 @@ public partial class MainWindow
 
     private void ShowChartSeriesFormatDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Data Series", UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"), out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatDataSeries;
+        var caption = ChartWorkflowCaption(command);
+        if (!TryGetFirstChartForDialog(command, out var chart))
             return;
 
-        var seriesCount = ChartSeriesFormatPlanner.GetSeriesCount(chart);
-        if (seriesCount <= 0)
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            ShowCommandError(new CommandOutcome(false, UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries")), "Format Data Series");
+            ShowUnsupportedChartWorkflow(command);
             return;
         }
 
+        var seriesCount = ChartSeriesFormatPlanner.GetSeriesCount(chart);
         var dialog = new ChartSeriesFormatDialog(chart, seriesCount) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult("Format Data Series", chart, dialog.Result.ToOptions(chart));
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions(chart));
     }
 
     private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)

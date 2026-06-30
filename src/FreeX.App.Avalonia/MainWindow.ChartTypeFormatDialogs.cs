@@ -33,13 +33,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        var commandLabel = UiText.Get(ChartBarFormatPlanner.TitleResourceKey);
-        if (!TryGetSelectedChart(commandLabel, out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatBarColumn;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartBarFormatPlanner.Supports(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_GapWidthOverlapAvailableOn"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -55,10 +55,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart(commandLabel, out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout(commandLabel, chart, ChartBarFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartBarFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartBarFormatInput?> ShowChartBarFormatDialogAsync(ChartBarFormatInput current)
@@ -116,13 +116,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        var commandLabel = UiText.Get(ChartPieFormatPlanner.TitleResourceKey);
-        if (!TryGetSelectedChart(commandLabel, out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatPieDoughnut;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartPieFormatPlanner.Supports(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_OptionsAvailablePieDoughnut"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -138,10 +138,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart(commandLabel, out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout(commandLabel, chart, ChartPieFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartPieFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartPieFormatInput?> ShowChartPieFormatDialogAsync(ChartPieFormatInput current, bool isDoughnut)
@@ -219,13 +219,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        var commandLabel = UiText.Get(ChartBubbleFormatPlanner.TitleResourceKey);
-        if (!TryGetSelectedChart(commandLabel, out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatBubbleChart;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartBubbleFormatPlanner.Supports(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_OptionsAvailableBubble"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -241,10 +241,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart(commandLabel, out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout(commandLabel, chart, ChartBubbleFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartBubbleFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartBubbleFormatInput?> ShowChartBubbleFormatDialogAsync(ChartBubbleFormatInput current)
@@ -314,13 +314,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        var commandLabel = UiText.Get(ChartStockFormatPlanner.TitleResourceKey);
-        if (!TryGetSelectedChart(commandLabel, out var chart))
+        var command = ChartWorkflowCommandCatalog.FormatStockChart;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartStockFormatPlanner.Supports(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_OptionsAvailableStock"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -336,10 +336,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        if (!TryGetSelectedChart(commandLabel, out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout(commandLabel, chart, ChartStockFormatPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartStockFormatPlanner.Plan(edited));
     }
 
     private async Task<ChartStockFormatInput?> ShowChartStockFormatDialogAsync(ChartStockFormatInput current)

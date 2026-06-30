@@ -36,12 +36,13 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Combo Chart", out var chart))
+        var command = ChartWorkflowCommandCatalog.ComboChart;
+        if (!TryGetSelectedChart(command, out var chart))
             return;
 
-        if (!ChartComboPlanner.SupportsCombo(chart))
+        if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, command))
         {
-            RefreshShell(UiText.Get("ChartLoc_ComboChartsNeed"));
+            RefreshUnsupportedChartWorkflow(command);
             return;
         }
 
@@ -50,10 +51,10 @@ public sealed partial class MainWindow
         if (result is not { } edited)
             return;
 
-        if (!TryGetSelectedChart("Combo Chart", out chart))
+        if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout("Combo Chart", chart, ChartComboPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartComboPlanner.Plan(edited));
     }
 
     private async Task<ChartComboInput?> ShowChartComboDialogAsync(ChartComboInput current)

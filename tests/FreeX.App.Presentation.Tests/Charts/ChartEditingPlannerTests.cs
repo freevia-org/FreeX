@@ -62,7 +62,18 @@ public sealed class ChartEditingPlannerTests
             ChartWorkflowCommandId.ChangeChartType,
             ChartWorkflowCommandId.SelectDataSource,
             ChartWorkflowCommandId.MoveChart,
-            ChartWorkflowCommandId.FormatChartArea);
+            ChartWorkflowCommandId.FormatChartArea,
+            ChartWorkflowCommandId.ChartTitles,
+            ChartWorkflowCommandId.FormatBarColumn,
+            ChartWorkflowCommandId.FormatBubbleChart,
+            ChartWorkflowCommandId.FormatPieDoughnut,
+            ChartWorkflowCommandId.FormatStockChart,
+            ChartWorkflowCommandId.FormatDataLabels,
+            ChartWorkflowCommandId.FormatTrendline,
+            ChartWorkflowCommandId.FormatErrorBars,
+            ChartWorkflowCommandId.FormatDataSeries,
+            ChartWorkflowCommandId.ComboChart,
+            ChartWorkflowCommandId.SecondaryAxis);
 
         ChartWorkflowCommandCatalog.ChangeChartType.Label.Should().Be("Change Chart Type");
         ChartWorkflowCommandCatalog.SelectDataSource.Label.Should().Be("Select Data Source");

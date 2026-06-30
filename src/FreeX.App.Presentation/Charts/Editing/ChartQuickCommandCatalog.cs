@@ -4,7 +4,8 @@ public sealed record ChartQuickCommandDescriptor(
     ChartQuickCommand Command,
     string Label,
     string HostMissingSelectionMessageResourceKey,
-    string? HostUnsupportedMessageResourceKey = null);
+    string? HostUnsupportedMessageResourceKey = null,
+    string? UnsupportedStatusResourceKey = null);
 
 /// <summary>
 /// Shared labels and host resource keys for chart contextual-tab quick commands. Shells still own
@@ -219,7 +220,8 @@ public static class ChartQuickCommandCatalog
         ChartQuickCommand.ComboSeries,
         "Combo Chart Series",
         "MainWindowMessage_ChartSelectForComboSeries",
-        "MainWindowMessage_ChartComboUnsupported");
+        "MainWindowMessage_ChartComboUnsupported",
+        "ChartLoc_ComboChartsNeed");
 
     public static readonly ChartQuickCommandDescriptor SeriesWidth = new(
         ChartQuickCommand.SeriesWidth,
@@ -231,13 +233,15 @@ public static class ChartQuickCommandCatalog
         ChartQuickCommand.SeriesDash,
         "Series Dash",
         SeriesFormattingHostMissingSelectionMessageResourceKey,
-        "MainWindowMessage_ChartSeriesFormattingNeedsDataSeries");
+        "MainWindowMessage_ChartSeriesFormattingNeedsDataSeries",
+        "ChartLoc_NoDataSeriesToFormat");
 
     public static readonly ChartQuickCommandDescriptor SeriesMarkerSize = new(
         ChartQuickCommand.SeriesMarkerSize,
         "Marker Size",
         SeriesFormattingHostMissingSelectionMessageResourceKey,
-        "MainWindowMessage_ChartSeriesMarkersSupportedTypes");
+        "MainWindowMessage_ChartSeriesMarkersSupportedTypes",
+        "ChartLoc_MarkersAvailableOn");
 
     private static readonly ChartQuickCommandDescriptor[] Commands =
     [
