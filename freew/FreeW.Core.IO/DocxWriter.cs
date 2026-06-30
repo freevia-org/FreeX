@@ -188,19 +188,19 @@ public static class DocxWriter
         // only re-emitted for macro-enabled targets (.docm/.dotm); a .docx/.dotx must not carry them. Filtered
         // once here and used for the content types, document rels, the inline-drawing rel ids and the byte parts
         // so the four stay in lock-step.
-        var hasExtendedProps = preservedParts.Any(p => p.PartName == ExtendedPropertiesPartName);
+        var hasExtendedProps = preservedParts.Any(p => p.PartName == OpcPackageProperties.ExtendedPropertiesPartName);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Count > 0, smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps, hasExtendedProps));
         WritePart(
             archive,
-            "docProps/core.xml",
+            OpcPackageProperties.CorePropertiesZipEntry,
             OpcDocumentProperties.BuildCorePropertiesDocument(
                 document.Properties,
                 includeDcmiTypeNamespace: true));
         if (hasCustomProps)
-            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
+            WritePart(archive, OpcPackageProperties.CustomPropertiesZipEntry, BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
@@ -796,11 +796,11 @@ public static class DocxWriter
             // The theme part is always present (one per document).
             new XElement(Ct + "Override", new XAttribute("PartName", ThemePartName),
                 new XAttribute("ContentType", ThemeContentType)),
-            new XElement(Ct + "Override", new XAttribute("PartName", CorePropertiesPartName),
-                new XAttribute("ContentType", CorePropertiesContentType)),
+            new XElement(Ct + "Override", new XAttribute("PartName", OpcPackageProperties.CorePropertiesPartName),
+                new XAttribute("ContentType", OpcPackageProperties.CorePropertiesContentType)),
             hasCustomProps
-                ? new XElement(Ct + "Override", new XAttribute("PartName", CustomPropertiesPartName),
-                    new XAttribute("ContentType", CustomPropertiesContentType))
+                ? new XElement(Ct + "Override", new XAttribute("PartName", OpcPackageProperties.CustomPropertiesPartName),
+                    new XAttribute("ContentType", OpcPackageProperties.CustomPropertiesContentType))
                 : null,
             // One Override per chart part declares the DrawingML chart content type.
             charts.Select(chart => new XElement(Ct + "Override",
@@ -838,12 +838,21 @@ public static class DocxWriter
     private static XDocument BuildPackageRels(bool hasCustomProps, bool hasExtendedProps) => new(
         OpcRelationships.CreateRoot(
             OpcRelationships.CreateRelationship("rId1", OfficeDocumentRel, "word/document.xml"),
-            OpcRelationships.CreateRelationship("rIdCore", CorePropertiesRelType, "docProps/core.xml"),
+            OpcRelationships.CreateRelationship(
+                "rIdCore",
+                OpcPackageProperties.CorePropertiesRelationshipType,
+                OpcPackageProperties.CorePropertiesZipEntry),
             hasCustomProps
-                ? OpcRelationships.CreateRelationship("rIdCustom", CustomPropertiesRelType, "docProps/custom.xml")
+                ? OpcRelationships.CreateRelationship(
+                    "rIdCustom",
+                    OpcPackageProperties.CustomPropertiesRelationshipType,
+                    OpcPackageProperties.CustomPropertiesZipEntry)
                 : null,
             hasExtendedProps
-                ? OpcRelationships.CreateRelationship("rIdExtended", ExtendedPropertiesRelType, "docProps/app.xml")
+                ? OpcRelationships.CreateRelationship(
+                    "rIdExtended",
+                    OpcPackageProperties.ExtendedPropertiesRelationshipType,
+                    OpcPackageProperties.ExtendedPropertiesZipEntry)
                 : null));
 
     /// <summary>
