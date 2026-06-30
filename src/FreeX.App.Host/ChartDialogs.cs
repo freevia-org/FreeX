@@ -6,6 +6,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using static FreeX.App.Host.ChartDialogHelpers;
@@ -217,7 +218,8 @@ public sealed record MoveChartDialogResult(MoveChartTargetKind TargetKind, strin
 
 public sealed class MoveChartDialog : Window
 {
-    private readonly RadioButton _objectInSheet = new() { Content = UiText.Get("MoveChart_ObjectInSheet"), IsChecked = true };
+    private readonly RadioButton _objectInSheet = new() { Content = MoveTargetLabel(ChartMoveTargetKind.ObjectInSheet), IsChecked = true };
+    private readonly RadioButton _newChartSheet = new() { Content = MoveTargetLabel(ChartMoveTargetKind.NewSheet), Margin = new Thickness(0, 4, 0, 8) };
     private readonly TextBox _targetBox = new();
 
     public MoveChartDialogResult Result { get; private set; }
@@ -234,11 +236,15 @@ public sealed class MoveChartDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         _targetBox.Text = currentSheetName;
-        AutomationProperties.SetName(_targetBox, UiText.Get("MoveChart_TargetNameAutomationName"));
-        AutomationProperties.SetHelpText(_targetBox, UiText.Get("MoveChart_TargetNameHelpText"));
+        var targetField = ChartMovePlanner.GetTargetNameField();
+        AutomationProperties.SetName(_targetBox, UiText.Get(targetField.AutomationNameResourceKey!));
+        AutomationProperties.SetAutomationId(_targetBox, targetField.AutomationId);
+        AutomationProperties.SetHelpText(_targetBox, UiText.Get(targetField.HelpResourceKey!));
+        ApplyTargetAutomation(_objectInSheet, ChartMoveTargetKind.ObjectInSheet);
+        ApplyTargetAutomation(_newChartSheet, ChartMoveTargetKind.NewSheet);
         stack.Children.Add(_objectInSheet);
-        stack.Children.Add(new RadioButton { Content = UiText.Get("MoveChart_NewChartSheet"), Margin = new Thickness(0, 4, 0, 8) });
-        stack.Children.Add(new Label { Content = UiText.Get("MoveChart_TargetNameLabel"), Target = _targetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(_newChartSheet);
+        stack.Children.Add(new Label { Content = UiText.Get(targetField.LabelResourceKey), Target = _targetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         stack.Children.Add(_targetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
@@ -246,10 +252,10 @@ public sealed class MoveChartDialog : Window
     }
 
     public static MoveChartDialogResult CreateObjectResult(string? sheetName) =>
-        new(MoveChartTargetKind.ObjectInSheet, RequireTargetName(sheetName));
+        CreateResult(ChartMoveTargetKind.ObjectInSheet, sheetName);
 
     public static MoveChartDialogResult CreateNewSheetResult(string? sheetName) =>
-        new(MoveChartTargetKind.NewChartSheet, RequireTargetName(sheetName));
+        CreateResult(ChartMoveTargetKind.NewSheet, sheetName);
 
     private void Accept()
     {
@@ -282,11 +288,31 @@ public sealed class MoveChartDialog : Window
         Keyboard.Focus(_targetBox);
     }
 
-    private static string RequireTargetName(string? name)
+    private static MoveChartDialogResult CreateResult(ChartMoveTargetKind kind, string? name)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        var plan = ChartMovePlanner.Plan(new ChartMoveInput(kind, name ?? string.Empty), _ => true);
+        if (!plan.IsValid)
             throw new ArgumentException(UiText.Get("MoveChart_TargetNameRequiredMessage"), nameof(name));
-        return name.Trim();
+
+        return new MoveChartDialogResult(ToDialogTargetKind(plan.TargetKind), plan.TargetName);
+    }
+
+    private static MoveChartTargetKind ToDialogTargetKind(ChartMoveTargetKind kind) =>
+        kind == ChartMoveTargetKind.NewSheet
+            ? MoveChartTargetKind.NewChartSheet
+            : MoveChartTargetKind.ObjectInSheet;
+
+    private static ChartMoveDialogTargetDescriptor MoveTargetDescriptor(ChartMoveTargetKind kind) =>
+        ChartMovePlanner.GetTargetChoices().Single(choice => choice.TargetKind == kind);
+
+    private static string MoveTargetLabel(ChartMoveTargetKind kind) =>
+        UiText.Get(MoveTargetDescriptor(kind).LabelResourceKey);
+
+    private static void ApplyTargetAutomation(RadioButton radio, ChartMoveTargetKind kind)
+    {
+        var descriptor = MoveTargetDescriptor(kind);
+        radio.GroupName = ChartMovePlanner.TargetGroupName;
+        AutomationProperties.SetAutomationId(radio, descriptor.AutomationId);
     }
 }
 

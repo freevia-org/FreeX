@@ -127,7 +127,8 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task<ChartType?> ShowChartTypePickerAsync(ChartType currentType)
     {
-        var categories = ChartTypeChangePlanner.GetCategories();
+        var categories = ChartTypePickerPlanner.GetCategories();
+        var panel = ChartTypePickerPlanner.GetAllChartsPanel();
 
         // ---- Category list (left) ------------------------------------------------------------------
         var categoryList = new ListBox
@@ -138,10 +139,10 @@ public sealed partial class MainWindow
             ItemsSource = categories,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(string.Empty)
             {
-                Converter = new FuncValueConverter<ChartTypeCategory, string>(c => c is null ? string.Empty : UiText.Get(c.NameKey)),
+                Converter = new FuncValueConverter<ChartTypePickerCategoryPlan, string>(c => c is null ? string.Empty : UiText.Get(c.NameKey)),
             },
         };
-        AutomationProperties.SetName(categoryList, UiText.Get("ChartTypePicker_CategoriesAutomationName"));
+        AutomationProperties.SetName(categoryList, UiText.Get(panel.CategoryListAutomationNameResourceKey!));
         AutomationProperties.SetAutomationId(categoryList, "ChangeChartTypeCategoryList");
 
         // ---- Subtype gallery (right top) -----------------------------------------------------------
@@ -150,34 +151,37 @@ public sealed partial class MainWindow
             Width = 200,
             Height = 230,
             SelectionMode = SelectionMode.Single,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartTypeChoice.DisplayName)),
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(string.Empty)
+            {
+                Converter = new FuncValueConverter<ChartTypePickerOptionPlan, string>(o => o is null ? string.Empty : UiText.Get(o.DisplayNameKey)),
+            },
         };
-        AutomationProperties.SetName(subtypeGallery, UiText.Get("ChartTypePicker_SubtypeGalleryAutomationName"));
+        AutomationProperties.SetName(subtypeGallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
         AutomationProperties.SetAutomationId(subtypeGallery, "ChangeChartTypeSubtypeGallery");
 
         categoryList.SelectionChanged += (_, _) =>
         {
-            if (categoryList.SelectedItem is not ChartTypeCategory category)
+            if (categoryList.SelectedItem is not ChartTypePickerCategoryPlan category)
                 return;
-            subtypeGallery.ItemsSource = category.Choices;
-            subtypeGallery.SelectedIndex = category.Choices.Count > 0 ? 0 : -1;
+            subtypeGallery.ItemsSource = category.Options;
+            subtypeGallery.SelectedIndex = category.Options.Count > 0 ? 0 : -1;
         };
 
         // Select the category/subtype that owns the chart's current type (fall back to the first).
         var initialCategory =
-            categories.FirstOrDefault(c => c.Choices.Any(o => o.Type == currentType))
+            categories.FirstOrDefault(c => c.Options.Any(o => o.Type == currentType))
             ?? (categories.Count > 0 ? categories[0] : null);
         categoryList.SelectedItem = initialCategory;
         if (initialCategory is not null)
         {
-            subtypeGallery.ItemsSource = initialCategory.Choices;
+            subtypeGallery.ItemsSource = initialCategory.Options;
             subtypeGallery.SelectedItem =
-                initialCategory.Choices.FirstOrDefault(o => o.Type == currentType)
-                ?? (initialCategory.Choices.Count > 0 ? initialCategory.Choices[0] : null);
+                initialCategory.Options.FirstOrDefault(o => o.Type == currentType)
+                ?? (initialCategory.Options.Count > 0 ? initialCategory.Options[0] : null);
         }
 
         // ---- Preview panel (right side) ------------------------------------------------------------
-        var preview = BuildChartTypePreviewPanel();
+        var preview = BuildChartTypePreviewPanel(panel.Preview);
 
         var dialog = new Window
         {
@@ -194,7 +198,7 @@ public sealed partial class MainWindow
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChangeChartTypeOkButton");
         ApplyChartButtonChrome(okButton, 80, isDefault: true);
-        okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypeChoice picked ? (ChartType?)picked.Type : null);
+        okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);
 
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChangeChartTypeCancelButton");
@@ -227,14 +231,14 @@ public sealed partial class MainWindow
                 // WPF "Choose a chart type" heading + "All Charts" subheading and help text.
                 new TextBlock
                 {
-                    Text = UiText.Get("ChartTypePicker_ChooseChartTypeHeading"),
+                    Text = UiText.Get(ChartTypePickerPlanner.ChooseChartTypeHeadingKey),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     FontWeight = FontWeight.SemiBold,
                 },
                 new TextBlock
                 {
-                    Text = UiText.Get("ChartTypePicker_AllChartsHeading"),
+                    Text = UiText.Get(panel.HeadingResourceKey),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     FontWeight = FontWeight.SemiBold,
@@ -242,7 +246,7 @@ public sealed partial class MainWindow
                 },
                 new TextBlock
                 {
-                    Text = UiText.Get("ChartTypePicker_AllChartsHelpText"),
+                    Text = UiText.Get(panel.HelpResourceKey),
                     FontSize = 11,
                     FontFamily = FormulaBarFontFamily,
                     TextWrapping = TextWrapping.Wrap,
@@ -268,7 +272,7 @@ public sealed partial class MainWindow
     /// The "Preview" side panel for the Change Chart Type dialog: a bordered box with the preview
     /// title/body text and a small bar-chart sample, mirroring WPF's <c>CreatePreviewPanel</c>.
     /// </summary>
-    private Border BuildChartTypePreviewPanel()
+    private Border BuildChartTypePreviewPanel(ChartTypePickerPreviewDescriptor preview)
     {
         var sampleBars = new StackPanel
         {
@@ -309,14 +313,14 @@ public sealed partial class MainWindow
                 {
                     new TextBlock
                     {
-                        Text = UiText.Get("ChartTypePicker_PreviewTitle"),
+                        Text = UiText.Get(preview.TitleResourceKey),
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
                         FontWeight = FontWeight.SemiBold,
                     },
                     new TextBlock
                     {
-                        Text = UiText.Get("ChartTypePicker_ChartPreviewBody"),
+                        Text = UiText.Get(preview.BodyResourceKey),
                         FontSize = 11,
                         FontFamily = FormulaBarFontFamily,
                         TextWrapping = TextWrapping.Wrap,
@@ -324,7 +328,7 @@ public sealed partial class MainWindow
                     },
                     new TextBlock
                     {
-                        Text = UiText.Get("ChartTypePicker_PreviewSampleLabel"),
+                        Text = UiText.Get(preview.SampleLabelResourceKey),
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
                         FontWeight = FontWeight.SemiBold,
@@ -381,6 +385,13 @@ public sealed partial class MainWindow
         string initialRange,
         bool firstColumnIsCategories)
     {
+        var rangeField = SelectDataSourcePlanner.GetChartDataRangeField();
+        var switchField = SelectDataSourcePlanner.GetSwitchRowColumnField();
+        var seriesPanel = SelectDataSourcePlanner.GetSeriesPanel();
+        var axisLabelsPanel = SelectDataSourcePlanner.GetAxisLabelsPanel();
+        var firstColumnField = SelectDataSourcePlanner.GetFirstColumnCategoriesField();
+        var hiddenEmptyAction = SelectDataSourcePlanner.GetHiddenEmptyCellsAction();
+
         // ---- Range text box -------------------------------------------------------------------
         var rangeBox = new TextBox
         {
@@ -388,8 +399,8 @@ public sealed partial class MainWindow
             Width = 380,
             PlaceholderText = UiText.Get("ChartLoc_RangePlaceholder"),
         };
-        AutomationProperties.SetName(rangeBox, "Chart data range");
-        AutomationProperties.SetAutomationId(rangeBox, "SelectChartDataRangeBox");
+        AutomationProperties.SetName(rangeBox, UiText.Get(rangeField.AutomationNameResourceKey!));
+        AutomationProperties.SetAutomationId(rangeBox, rangeField.AutomationId);
         ApplyChartTextBoxChrome(rangeBox);
 
         // Reference-picker ("...") button to the left of the range box, matching the WPF
@@ -397,7 +408,7 @@ public sealed partial class MainWindow
         // rather than driving a collapse-to-grid pick, but keeps the layout at parity with Windows.
         var rangePickButton = new Button { Content = "...", Width = 30 };
         ApplyChartButtonChrome(rangePickButton, 30);
-        AutomationProperties.SetName(rangePickButton, UiText.Get("ChartLoc_ChartDataRangeLabel"));
+        AutomationProperties.SetName(rangePickButton, UiText.Get(SelectDataSourcePlanner.SelectRangeAutomationNameResourceKey));
         AutomationProperties.SetAutomationId(rangePickButton, "SelectChartDataRangePickButton");
         rangePickButton.Click += (_, _) => rangeBox.Focus();
 
@@ -411,11 +422,11 @@ public sealed partial class MainWindow
         // ---- Switch Row/Column checkbox -------------------------------------------------------
         var switchRowColumnCheck = new CheckBox
         {
-            Content = UiText.Get("ChartLoc_SwitchRowColumn"),
+            Content = UiText.Get(switchField.LabelResourceKey),
             IsChecked = false,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        AutomationProperties.SetAutomationId(switchRowColumnCheck, "SelectChartDataSwitchRowColumnCheck");
+        AutomationProperties.SetAutomationId(switchRowColumnCheck, switchField.AutomationId);
 
         // ---- Series ListBox + buttons ---------------------------------------------------------
         var seriesList = new ListBox
@@ -424,19 +435,23 @@ public sealed partial class MainWindow
             Width = 320,
             SelectionMode = SelectionMode.Single,
         };
-        AutomationProperties.SetName(seriesList, "Series list");
-        AutomationProperties.SetAutomationId(seriesList, "SelectChartDataSeriesList");
+        AutomationProperties.SetName(seriesList, UiText.Get(seriesPanel.ListField.AutomationNameResourceKey!));
+        AutomationProperties.SetAutomationId(seriesList, seriesPanel.ListField.AutomationId);
+        AutomationProperties.SetHelpText(seriesList, UiText.Get(seriesPanel.ListField.HelpResourceKey!));
 
-        var addSeriesButton = new Button { Content = UiText.Get("ChartLoc_AddSeriesButton"), Width = 100 };
-        AutomationProperties.SetAutomationId(addSeriesButton, "SelectChartDataAddSeriesButton");
+        var addSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.AddSeries);
+        var addSeriesButton = new Button { Content = UiText.Get(addSeriesAction.LabelResourceKey), Width = 100 };
+        AutomationProperties.SetAutomationId(addSeriesButton, addSeriesAction.AutomationId);
         ApplyChartButtonChrome(addSeriesButton, 100);
 
-        var editSeriesButton = new Button { Content = UiText.Get("ChartLoc_EditSeriesButton"), Width = 100, IsEnabled = false };
-        AutomationProperties.SetAutomationId(editSeriesButton, "SelectChartDataEditSeriesButton");
+        var editSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.EditSeries);
+        var editSeriesButton = new Button { Content = UiText.Get(editSeriesAction.LabelResourceKey), Width = 100, IsEnabled = false };
+        AutomationProperties.SetAutomationId(editSeriesButton, editSeriesAction.AutomationId);
         ApplyChartButtonChrome(editSeriesButton, 100);
 
-        var removeSeriesButton = new Button { Content = UiText.Get("ChartLoc_RemoveSeriesButton"), Width = 100, IsEnabled = false };
-        AutomationProperties.SetAutomationId(removeSeriesButton, "SelectChartDataRemoveSeriesButton");
+        var removeSeriesAction = seriesPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.RemoveSeries);
+        var removeSeriesButton = new Button { Content = UiText.Get(removeSeriesAction.LabelResourceKey), Width = 100, IsEnabled = false };
+        AutomationProperties.SetAutomationId(removeSeriesButton, removeSeriesAction.AutomationId);
         ApplyChartButtonChrome(removeSeriesButton, 100);
 
         // ---- Axis Labels ListBox + button -----------------------------------------------------
@@ -446,21 +461,23 @@ public sealed partial class MainWindow
             Width = 320,
             SelectionMode = SelectionMode.Single,
         };
-        AutomationProperties.SetName(axisLabelsList, "Axis label list");
-        AutomationProperties.SetAutomationId(axisLabelsList, "SelectChartDataAxisLabelsList");
+        AutomationProperties.SetName(axisLabelsList, UiText.Get(axisLabelsPanel.ListField.AutomationNameResourceKey!));
+        AutomationProperties.SetAutomationId(axisLabelsList, axisLabelsPanel.ListField.AutomationId);
+        AutomationProperties.SetHelpText(axisLabelsList, UiText.Get(axisLabelsPanel.ListField.HelpResourceKey!));
 
-        var editAxisLabelsButton = new Button { Content = UiText.Get("ChartLoc_EditAxisLabelsButton"), Width = 100, IsEnabled = false };
-        AutomationProperties.SetAutomationId(editAxisLabelsButton, "SelectChartDataEditAxisLabelsButton");
+        var editAxisLabelsAction = axisLabelsPanel.Actions.Single(action => action.Id == SelectDataSourceDialogActionId.EditAxisLabels);
+        var editAxisLabelsButton = new Button { Content = UiText.Get(editAxisLabelsAction.LabelResourceKey), Width = 100, IsEnabled = false };
+        AutomationProperties.SetAutomationId(editAxisLabelsButton, editAxisLabelsAction.AutomationId);
         ApplyChartButtonChrome(editAxisLabelsButton, 100);
 
         // ---- First column contains category labels checkbox -----------------------------------
         var categoriesCheck = new CheckBox
         {
-            Content = UiText.Get("ChartLoc_FirstColumnContainsCategories"),
+            Content = UiText.Get(firstColumnField.LabelResourceKey),
             IsChecked = firstColumnIsCategories,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        AutomationProperties.SetAutomationId(categoriesCheck, "SelectChartDataCategoriesCheck");
+        AutomationProperties.SetAutomationId(categoriesCheck, firstColumnField.AutomationId);
 
         // ---- State management helpers --------------------------------------------------------
         // The series ListBox items: stored as a mutable list so Add/Remove work independently of
@@ -558,7 +575,7 @@ public sealed partial class MainWindow
         // ---- Dialog layout -------------------------------------------------------------------
         var dialog = new Window
         {
-            Title = UiText.Get("ChartLoc_SelectDataSourceTitle"),
+            Title = UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey),
             SizeToContent = SizeToContent.WidthAndHeight,
             MinWidth = 460,
             Background = Brushes.White,
@@ -566,7 +583,7 @@ public sealed partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "SelectChartDataDialog");
+        AutomationProperties.SetAutomationId(dialog, SelectDataSourcePlanner.DialogAutomationId);
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "SelectChartDataOkButton");
@@ -593,7 +610,7 @@ public sealed partial class MainWindow
         cancelButton.Click += (_, _) => dialog.Close((SelectDataSourceResult?)null);
 
         // Helper to build a panel with a list on the left and buttons stacked on the right.
-        Grid MakeListPanel(string title, string helpText, ListBox list, IEnumerable<Button> buttons)
+        Grid MakeListPanel(SelectDataSourceListPanelDescriptor panel, ListBox list, IEnumerable<Button> buttons)
         {
             var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -602,8 +619,8 @@ public sealed partial class MainWindow
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var header = new StackPanel { Spacing = 2 };
-            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(title), FontSize = 12, FontFamily = FormulaBarFontFamily, FontWeight = FontWeight.SemiBold });
-            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(helpText), FontSize = 11, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.TitleResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, FontWeight = FontWeight.SemiBold });
+            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.ListField.HelpResourceKey!)), FontSize = 11, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
             grid.Children.Add(header);
 
             Grid.SetRow(list, 1);
@@ -622,18 +639,18 @@ public sealed partial class MainWindow
         // ---- Hidden and Empty Cells info button -----------------------------------------------
         var hiddenEmptyButton = new Button
         {
-            Content = UiText.Get("ChartLoc_HiddenEmptyCellsButton"),
+            Content = UiText.Get(hiddenEmptyAction.LabelResourceKey),
             Width = 180,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 8),
         };
-        AutomationProperties.SetAutomationId(hiddenEmptyButton, "SelectChartDataHiddenEmptyButton");
+        AutomationProperties.SetAutomationId(hiddenEmptyButton, hiddenEmptyAction.AutomationId);
         ApplyChartButtonChrome(hiddenEmptyButton, 180);
         hiddenEmptyButton.Click += async (_, _) =>
         {
             var infoDialog = new Window
             {
-                Title = UiText.Get("ChartLoc_HiddenEmptyCellsTitle"),
+                Title = UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsTitleResourceKey),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 Background = Brushes.White,
                 CanResize = false,
@@ -652,7 +669,7 @@ public sealed partial class MainWindow
                 {
                     new TextBlock
                     {
-                        Text = UiText.Get("ChartLoc_HiddenEmptyCellsMessage"),
+                        Text = UiText.Get(SelectDataSourcePlanner.HiddenEmptyCellsMessageResourceKey),
                         FontSize = 12,
                         FontFamily = FormulaBarFontFamily,
                         TextWrapping = TextWrapping.Wrap,
@@ -677,19 +694,17 @@ public sealed partial class MainWindow
             Children =
             {
                 // Range label + ("...") picker button + text box
-                new TextBlock { Text = UiText.Get("ChartLoc_ChartDataRangeLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = UiText.Get(rangeField.LabelResourceKey), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 rangeRow,
                 switchRowColumnCheck,
                 // Legend Entries (Series) panel
                 MakeListPanel(
-                    UiText.Get("ChartLoc_SeriesPanelTitle"),
-                    UiText.Get("ChartLoc_SeriesListHelpText"),
+                    seriesPanel,
                     seriesList,
                     new[] { addSeriesButton, editSeriesButton, removeSeriesButton }),
                 // Horizontal (Category) Axis Labels panel
                 MakeListPanel(
-                    UiText.Get("ChartLoc_AxisLabelsPanelTitle"),
-                    UiText.Get("ChartLoc_AxisLabelsListHelpText"),
+                    axisLabelsPanel,
                     axisLabelsList,
                     new[] { editAxisLabelsButton }),
                 // First column is categories checkbox

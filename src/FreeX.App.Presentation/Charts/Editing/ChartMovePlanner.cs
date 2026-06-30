@@ -27,6 +27,26 @@ public readonly record struct ChartMovePlan(ChartMoveTargetKind TargetKind, stri
     public bool IsValid => Error is null;
 }
 
+public enum ChartMoveDialogFieldId
+{
+    ObjectInSheet,
+    NewSheet,
+    TargetName,
+}
+
+public sealed record ChartMoveDialogTargetDescriptor(
+    ChartMoveDialogFieldId Id,
+    ChartMoveTargetKind TargetKind,
+    string LabelResourceKey,
+    string AutomationId);
+
+public sealed record ChartMoveDialogFieldDescriptor(
+    ChartMoveDialogFieldId Id,
+    string LabelResourceKey,
+    string AutomationId,
+    string? AutomationNameResourceKey = null,
+    string? HelpResourceKey = null);
+
 /// <summary>
 /// Portable (no UI) planner for the "Move Chart" dialog. Single-sources the target-name validation the
 /// classic Excel move dialog enforces (non-empty; for an existing-sheet target the name must resolve to a
@@ -36,9 +56,37 @@ public readonly record struct ChartMovePlan(ChartMoveTargetKind TargetKind, stri
 /// </summary>
 public static class ChartMovePlanner
 {
+    public const string DialogAutomationId = "MoveChartDialog";
+    public const string TargetGroupName = "MoveChartTarget";
+
+    private static readonly IReadOnlyList<ChartMoveDialogTargetDescriptor> TargetChoices =
+    [
+        new(
+            ChartMoveDialogFieldId.ObjectInSheet,
+            ChartMoveTargetKind.ObjectInSheet,
+            "MoveChart_ObjectInSheet",
+            "MoveChartObjectRadio"),
+        new(
+            ChartMoveDialogFieldId.NewSheet,
+            ChartMoveTargetKind.NewSheet,
+            "MoveChart_NewChartSheet",
+            "MoveChartNewSheetRadio"),
+    ];
+
+    private static readonly ChartMoveDialogFieldDescriptor TargetNameField = new(
+        ChartMoveDialogFieldId.TargetName,
+        "MoveChart_TargetNameLabel",
+        "MoveChartTargetBox",
+        "MoveChart_TargetNameAutomationName",
+        "MoveChart_TargetNameHelpText");
+
     /// <summary>The dialog's default: keep the chart as an object in the sheet it currently lives on.</summary>
     public static ChartMoveInput DefaultFor(string currentSheetName) =>
         new(ChartMoveTargetKind.ObjectInSheet, (currentSheetName ?? string.Empty).Trim());
+
+    public static IReadOnlyList<ChartMoveDialogTargetDescriptor> GetTargetChoices() => TargetChoices;
+
+    public static ChartMoveDialogFieldDescriptor GetTargetNameField() => TargetNameField;
 
     /// <summary>
     /// Validates a move request. <paramref name="sheetNameExists"/> reports whether a candidate name

@@ -71,24 +71,24 @@ public sealed partial class PivotWorkflowDialogTests
     {
         var source = ReadPivotWorkflowSource();
 
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_ChartStyle\")");
+        source.Should().Contain("FieldLabel(PivotChartOptionsDialogFieldId.ChartStyle)");
         source.Should().Contain("_styleGallery");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_PivotChartStyleGallery\")");
+        source.Should().Contain("ApplyFieldAutomation(_styleGallery, PivotChartOptionsDialogFieldId.ChartStyle)");
         source.Should().Contain("ChartStyleDialog.GetStyleOptions()");
-        source.Should().Contain("ChartStylePlanner.Read(chart).StyleId");
-        source.Should().Contain("ChartStylePlanner.ParseStyleId(text)");
+        source.Should().Contain("PivotChartOptionsPlanner.Read(chart)");
+        source.Should().Contain("PivotChartOptionsPlanner.CreateResult(");
         source.Should().NotContain("Chart _style ID");
         source.Should().NotContain("Math.Clamp(value.Value, 1, 48)");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_FieldButtonsGroup\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_ShowFieldButtonsOnChart\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_ReportFilterButtons\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_AxisFieldButtons\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_ValueFieldButtons\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_ShowDataTable\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_ShowLegendKeys\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_RoundedCorners\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_ShowDataInHiddenRowsAndColumns\")");
-        source.Should().Contain("UiText.Get(\"PivotChartOptions_BlankCells\")");
+        source.Should().Contain("PivotChartOptionsPlanner.GetFieldButtonsSection().HeaderResourceKey");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.ShowFieldButtons");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.ShowReportFilterButtons");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.ShowAxisFieldButtons");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.ShowValueFieldButtons");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.ShowDataTable");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.ShowDataTableLegendKeys");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.RoundedCorners");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.ShowHiddenData");
+        source.Should().Contain("PivotChartOptionsDialogFieldId.BlankDisplayMode");
         source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
         source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
     }
@@ -135,10 +135,10 @@ public sealed partial class PivotWorkflowDialogTests
     {
         var source = ReadPivotWorkflowSource();
 
-        source.Should().Contain("Content = UiText.Get(\"PivotChartOptions_ShowFieldButtonsOnChart\")");
-        source.Should().Contain("Content = UiText.Get(\"PivotChartOptions_ReportFilterButtons\")");
-        source.Should().Contain("Content = UiText.Get(\"PivotChartOptions_AxisFieldButtons\")");
-        source.Should().Contain("Content = UiText.Get(\"PivotChartOptions_ValueFieldButtons\")");
+        source.Should().Contain("FieldLabel(PivotChartOptionsDialogFieldId.ShowFieldButtons)");
+        source.Should().Contain("FieldLabel(PivotChartOptionsDialogFieldId.ShowReportFilterButtons)");
+        source.Should().Contain("FieldLabel(PivotChartOptionsDialogFieldId.ShowAxisFieldButtons)");
+        source.Should().Contain("FieldLabel(PivotChartOptionsDialogFieldId.ShowValueFieldButtons)");
         source.Should().Contain("Content = UiText.Get(\"PivotFieldGrouping_UngroupSelectedField\")");
     }
 }

@@ -212,29 +212,33 @@ public sealed partial class MainWindow
 
     private async Task<ChartMoveInput?> ShowMoveChartDialogAsync(ChartMoveInput current)
     {
+        var objectTarget = ChartMovePlanner.GetTargetChoices().Single(choice => choice.TargetKind == ChartMoveTargetKind.ObjectInSheet);
+        var newSheetTarget = ChartMovePlanner.GetTargetChoices().Single(choice => choice.TargetKind == ChartMoveTargetKind.NewSheet);
+        var targetField = ChartMovePlanner.GetTargetNameField();
+
         var objectRadio = new RadioButton
         {
-            Content = StripDisplayMnemonic(UiText.Get("MoveChart_ObjectInSheet")),
-            GroupName = "MoveChartTarget",
+            Content = StripDisplayMnemonic(UiText.Get(objectTarget.LabelResourceKey)),
+            GroupName = ChartMovePlanner.TargetGroupName,
             IsChecked = current.TargetKind == ChartMoveTargetKind.ObjectInSheet,
             MinHeight = 20,
             MaxHeight = 20,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetAutomationId(objectRadio, "MoveChartObjectRadio");
+        AutomationProperties.SetAutomationId(objectRadio, objectTarget.AutomationId);
 
         var newSheetRadio = new RadioButton
         {
-            Content = StripDisplayMnemonic(UiText.Get("MoveChart_NewChartSheet")),
-            GroupName = "MoveChartTarget",
+            Content = StripDisplayMnemonic(UiText.Get(newSheetTarget.LabelResourceKey)),
+            GroupName = ChartMovePlanner.TargetGroupName,
             IsChecked = current.TargetKind == ChartMoveTargetKind.NewSheet,
             MinHeight = 20,
             MaxHeight = 20,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetAutomationId(newSheetRadio, "MoveChartNewSheetRadio");
+        AutomationProperties.SetAutomationId(newSheetRadio, newSheetTarget.AutomationId);
 
         var targetBox = new TextBox
         {
@@ -250,10 +254,11 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(1),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
-        AutomationProperties.SetName(targetBox, "Move chart target sheet");
-        AutomationProperties.SetAutomationId(targetBox, "MoveChartTargetBox");
+        AutomationProperties.SetName(targetBox, StripDisplayMnemonic(UiText.Get(targetField.AutomationNameResourceKey!)));
+        AutomationProperties.SetAutomationId(targetBox, targetField.AutomationId);
+        AutomationProperties.SetHelpText(targetBox, UiText.Get(targetField.HelpResourceKey!));
 
-        var dialog = NewChartDialog(UiText.Get("MoveChart_Title"), "MoveChartDialog");
+        var dialog = NewChartDialog(UiText.Get("MoveChart_Title"), ChartMovePlanner.DialogAutomationId);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("MoveChart");
         okButton.Click += (_, _) =>
@@ -272,7 +277,7 @@ public sealed partial class MainWindow
             {
                 objectRadio,
                 newSheetRadio,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("MoveChart_TargetNameLabel")), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get(targetField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 0) },
                 targetBox,
                 buttonRow,
             },

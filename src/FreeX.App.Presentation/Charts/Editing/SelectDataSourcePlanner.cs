@@ -28,6 +28,41 @@ public readonly record struct SelectDataSourceResult(
 /// <summary>A shell request to pick a replacement chart data range.</summary>
 public readonly record struct SelectDataSourceRangeSelectionRequest(string CurrentText, bool CollapseDialog = true);
 
+public enum SelectDataSourceDialogFieldId
+{
+    ChartDataRange,
+    SwitchRowColumn,
+    SeriesList,
+    AxisLabelsList,
+    FirstColumnCategories,
+}
+
+public enum SelectDataSourceDialogActionId
+{
+    AddSeries,
+    EditSeries,
+    RemoveSeries,
+    EditAxisLabels,
+    HiddenEmptyCells,
+}
+
+public sealed record SelectDataSourceDialogFieldDescriptor(
+    SelectDataSourceDialogFieldId Id,
+    string LabelResourceKey,
+    string AutomationId,
+    string? AutomationNameResourceKey = null,
+    string? HelpResourceKey = null);
+
+public sealed record SelectDataSourceDialogActionDescriptor(
+    SelectDataSourceDialogActionId Id,
+    string LabelResourceKey,
+    string AutomationId);
+
+public sealed record SelectDataSourceListPanelDescriptor(
+    SelectDataSourceDialogFieldDescriptor ListField,
+    string TitleResourceKey,
+    IReadOnlyList<SelectDataSourceDialogActionDescriptor> Actions);
+
 // ---- Planner -------------------------------------------------------------------------------------
 
 /// <summary>
@@ -42,7 +77,87 @@ public readonly record struct SelectDataSourceRangeSelectionRequest(string Curre
 /// </summary>
 public static class SelectDataSourcePlanner
 {
+    public const string DialogTitleResourceKey = "SelectDataSource_Title";
+    public const string DialogAutomationId = "SelectChartDataDialog";
+    public const string SelectRangeAutomationNameResourceKey = "SelectDataSource_SelectChartDataRangeAutomationName";
+    public const string HiddenEmptyCellsTitleResourceKey = "SelectDataSource_HiddenEmptyCellsTitle";
+    public const string HiddenEmptyCellsMessageResourceKey = "SelectDataSource_HiddenEmptyCellsMessage";
+    public const string InvalidRangeMessageResourceKey = "SelectDataSource_InvalidRangeMessage";
+
+    private static readonly SelectDataSourceDialogFieldDescriptor ChartDataRangeField = new(
+        SelectDataSourceDialogFieldId.ChartDataRange,
+        "SelectDataSource_ChartDataRangeLabel",
+        "SelectChartDataRangeBox",
+        "SelectDataSource_ChartDataRangeAutomationName");
+
+    private static readonly SelectDataSourceDialogFieldDescriptor SwitchRowColumnField = new(
+        SelectDataSourceDialogFieldId.SwitchRowColumn,
+        "SelectDataSource_SwitchRowColumn",
+        "SelectChartDataSwitchRowColumnCheck");
+
+    private static readonly SelectDataSourceDialogFieldDescriptor FirstColumnCategoriesField = new(
+        SelectDataSourceDialogFieldId.FirstColumnCategories,
+        "SelectDataSource_FirstColumnCategories",
+        "SelectChartDataCategoriesCheck");
+
+    private static readonly SelectDataSourceDialogActionDescriptor AddSeriesAction = new(
+        SelectDataSourceDialogActionId.AddSeries,
+        "SelectDataSource_AddSeriesButton",
+        "SelectChartDataAddSeriesButton");
+
+    private static readonly SelectDataSourceDialogActionDescriptor EditSeriesAction = new(
+        SelectDataSourceDialogActionId.EditSeries,
+        "SelectDataSource_EditSeriesButton",
+        "SelectChartDataEditSeriesButton");
+
+    private static readonly SelectDataSourceDialogActionDescriptor RemoveSeriesAction = new(
+        SelectDataSourceDialogActionId.RemoveSeries,
+        "SelectDataSource_RemoveSeriesButton",
+        "SelectChartDataRemoveSeriesButton");
+
+    private static readonly SelectDataSourceDialogActionDescriptor EditAxisLabelsAction = new(
+        SelectDataSourceDialogActionId.EditAxisLabels,
+        "SelectDataSource_EditAxisLabelsButton",
+        "SelectChartDataEditAxisLabelsButton");
+
+    private static readonly SelectDataSourceDialogActionDescriptor HiddenEmptyCellsAction = new(
+        SelectDataSourceDialogActionId.HiddenEmptyCells,
+        "SelectDataSource_HiddenEmptyCellsButton",
+        "SelectChartDataHiddenEmptyButton");
+
+    private static readonly SelectDataSourceListPanelDescriptor SeriesPanel = new(
+        new SelectDataSourceDialogFieldDescriptor(
+            SelectDataSourceDialogFieldId.SeriesList,
+            "SelectDataSource_SeriesPanelTitle",
+            "SelectChartDataSeriesList",
+            "SelectDataSource_SeriesListAutomationName",
+            "SelectDataSource_SeriesListHelpText"),
+        "SelectDataSource_SeriesPanelTitle",
+        [AddSeriesAction, EditSeriesAction, RemoveSeriesAction]);
+
+    private static readonly SelectDataSourceListPanelDescriptor AxisLabelsPanel = new(
+        new SelectDataSourceDialogFieldDescriptor(
+            SelectDataSourceDialogFieldId.AxisLabelsList,
+            "SelectDataSource_AxisLabelsPanelTitle",
+            "SelectChartDataAxisLabelsList",
+            "SelectDataSource_AxisLabelsListAutomationName",
+            "SelectDataSource_AxisLabelsListHelpText"),
+        "SelectDataSource_AxisLabelsPanelTitle",
+        [EditAxisLabelsAction]);
+
     // ---- Public API ------------------------------------------------------------------------------
+
+    public static SelectDataSourceDialogFieldDescriptor GetChartDataRangeField() => ChartDataRangeField;
+
+    public static SelectDataSourceDialogFieldDescriptor GetSwitchRowColumnField() => SwitchRowColumnField;
+
+    public static SelectDataSourceDialogFieldDescriptor GetFirstColumnCategoriesField() => FirstColumnCategoriesField;
+
+    public static SelectDataSourceListPanelDescriptor GetSeriesPanel() => SeriesPanel;
+
+    public static SelectDataSourceListPanelDescriptor GetAxisLabelsPanel() => AxisLabelsPanel;
+
+    public static SelectDataSourceDialogActionDescriptor GetHiddenEmptyCellsAction() => HiddenEmptyCellsAction;
 
     /// <summary>
     /// Builds preview entries (series list + category list + category range text) by parsing
