@@ -136,14 +136,11 @@ public sealed class SlideCanvas : Control
         double renderH = Bounds.Height;
         if (renderW <= 0 || renderH <= 0) return;
 
-        double scale   = Math.Min(renderW / _slideWidthDip, renderH / _slideHeightDip);
-        double offsetX = (renderW - _slideWidthDip * scale) / 2;
-        double offsetY = (renderH - _slideHeightDip * scale) / 2;
-
         // Expose the slide→screen transform so the editing layer can use it.
-        CurrentTransform = new SlideTransformCore(scale, offsetX, offsetY, _slideWidthDip, _slideHeightDip);
+        CurrentTransform = SlideTransformCore.Compute(renderW, renderH, _slideWidthDip, _slideHeightDip);
 
-        var matrix = Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(offsetX, offsetY);
+        var matrix = Matrix.CreateScale(CurrentTransform.Scale, CurrentTransform.Scale)
+            * Matrix.CreateTranslation(CurrentTransform.OffsetX, CurrentTransform.OffsetY);
         using var _ = context.PushTransform(matrix);
 
         foreach (var op in _cachedOps)

@@ -52,9 +52,107 @@ public readonly record struct CanvasRotationRequest(
     double OriginalRotationDeg,
     bool SnapToFifteenDegrees);
 
+public readonly record struct CanvasMoveShapeState(
+    uint ShapeId,
+    long OffsetXEmu,
+    long OffsetYEmu,
+    long ExtentCxEmu,
+    long ExtentCyEmu);
+
+public readonly record struct CanvasMoveRequest(
+    CanvasGesturePoint StartScreen,
+    CanvasGesturePoint CurrentScreen,
+    SlideTransformCore Transform,
+    IReadOnlyList<CanvasMoveShapeState> Shapes,
+    Slide? CurrentSlide,
+    bool SnapToGrid,
+    bool SnapToShapes,
+    bool BypassSnap);
+
+public readonly record struct CanvasMovePreviewRect(
+    uint ShapeId,
+    SlideScreenRect ScreenRect);
+
+public readonly record struct CanvasMovePlan(
+    long DeltaXEmu,
+    long DeltaYEmu,
+    IReadOnlyList<CanvasMovePreviewRect> PreviewRects,
+    SlideScreenRect? PreviewBounds,
+    IReadOnlyList<SnapGuideLine> SnapGuides)
+{
+    public static readonly CanvasMovePlan Empty = new(
+        0,
+        0,
+        Array.Empty<CanvasMovePreviewRect>(),
+        null,
+        Array.Empty<SnapGuideLine>());
+}
+
 public static class CanvasGesturePlanner
 {
     public const long MinimumShapeSizeEmu = 91440L;
+
+    public static IReadOnlyList<CanvasMoveShapeState> CaptureMoveState(
+        Slide slide,
+        IEnumerable<uint> selectedShapeIds)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(selectedShapeIds);
+
+        var states = new List<CanvasMoveShapeState>();
+        foreach (var id in selectedShapeIds)
+        {
+            var shape = slide.Shapes.FirstOrDefault(s => s.Id == id);
+            if (shape is null)
+                continue;
+
+            states.Add(new CanvasMoveShapeState(
+                id,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu));
+        }
+
+        return states;
+    }
+
+    public static CanvasMovePlan PlanMove(CanvasMoveRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request.Transform);
+        ArgumentNullException.ThrowIfNull(request.Shapes);
+
+        if (request.Shapes.Count == 0)
+            return CanvasMovePlan.Empty;
+
+        double dxPx = request.CurrentScreen.X - request.StartScreen.X;
+        double dyPx = request.CurrentScreen.Y - request.StartScreen.Y;
+        double dxDip = request.Transform.ScaleScreenToDip(dxPx);
+        double dyDip = request.Transform.ScaleScreenToDip(dyPx);
+        var snap = ComputeMoveSnap(request, dxDip, dyDip);
+
+        double snappedDxDip = dxDip + snap.SnapDx;
+        double snappedDyDip = dyDip + snap.SnapDy;
+        var previewRects = request.Shapes
+            .Select(shape => new CanvasMovePreviewRect(
+                shape.ShapeId,
+                SlideCanvasGeometryPlanner.DipBoundsToScreen(
+                    SlideTransformCore.EmuToDip(shape.OffsetXEmu) + snappedDxDip,
+                    SlideTransformCore.EmuToDip(shape.OffsetYEmu) + snappedDyDip,
+                    SlideTransformCore.EmuToDip(shape.ExtentCxEmu),
+                    SlideTransformCore.EmuToDip(shape.ExtentCyEmu),
+                    request.Transform)))
+            .ToArray();
+
+        double snapDxPx = snap.SnapDx * request.Transform.Scale;
+        double snapDyPx = snap.SnapDy * request.Transform.Scale;
+        return new CanvasMovePlan(
+            request.Transform.ScreenDeltaToEmu(dxPx + snapDxPx),
+            request.Transform.ScreenDeltaToEmu(dyPx + snapDyPx),
+            previewRects,
+            SlideCanvasGeometryPlanner.Union(previewRects.Select(r => r.ScreenRect)),
+            snap.Guides);
+    }
 
     public static CanvasResizeBounds ComputeResizeBounds(CanvasResizeRequest request)
     {
@@ -120,6 +218,35 @@ public static class CanvasGesturePlanner
             angle = Math.Round(angle / 15.0) * 15.0;
 
         return angle;
+    }
+
+    private static SnapResult ComputeMoveSnap(
+        CanvasMoveRequest request,
+        double dxDip,
+        double dyDip)
+    {
+        bool snapEnabled = (request.SnapToGrid || request.SnapToShapes) && !request.BypassSnap;
+        if (!snapEnabled || request.CurrentSlide is null || request.Shapes.Count == 0)
+            return SnapResult.None;
+
+        var anchor = request.Shapes[0];
+        double newLeftDip = SlideTransformCore.EmuToDip(anchor.OffsetXEmu) + dxDip;
+        double newTopDip = SlideTransformCore.EmuToDip(anchor.OffsetYEmu) + dyDip;
+        double newRightDip = newLeftDip + SlideTransformCore.EmuToDip(anchor.ExtentCxEmu);
+        double newBottomDip = newTopDip + SlideTransformCore.EmuToDip(anchor.ExtentCyEmu);
+        var candidates = request.SnapToShapes
+            ? SnapEngine.BuildShapeCandidates(
+                request.CurrentSlide,
+                request.Shapes.Select(shape => shape.ShapeId))
+            : null;
+
+        return SnapEngine.Snap(
+            (newLeftDip, newTopDip, newRightDip, newBottomDip),
+            candidates,
+            request.Transform.SlideWidthDip,
+            request.Transform.SlideHeightDip,
+            snapEnabled: true,
+            gridPitchDip: request.SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0);
     }
 
     private static void ApplyResizeSnap(

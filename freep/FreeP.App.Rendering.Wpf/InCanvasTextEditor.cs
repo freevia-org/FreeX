@@ -61,12 +61,11 @@ public sealed class InCanvasTextEditor
             shape.TextBody);
 
         var xf = _canvas.CurrentTransform;
-        var b = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation);
-
-        double x = b.Left * xf.Scale + xf.OffsetX;
-        double y = b.Top * xf.Scale + xf.OffsetY;
-        double w = b.Width * xf.Scale;
-        double h = b.Height * xf.Scale;
+        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
+            shape,
+            _editor.Presentation,
+            xf.Core);
+        var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(screenRect, 40, 20);
 
         double fallbackPt = shape.TextBody.Paragraphs
             .SelectMany(p => p.Runs)
@@ -80,18 +79,18 @@ public sealed class InCanvasTextEditor
             Background = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
             BorderThickness = new Thickness(1.5),
-            MinWidth = Math.Max(40, w),
-            MinHeight = Math.Max(20, h),
-            Width = Math.Max(40, w),
-            Height = Math.Max(20, h),
+            MinWidth = placement.Width,
+            MinHeight = placement.Height,
+            Width = placement.Width,
+            Height = placement.Height,
             SpellCheck = { IsEnabled = false },
             IsUndoEnabled = false,
             VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
         };
 
-        Canvas.SetLeft(_richBox, x);
-        Canvas.SetTop(_richBox, y);
+        Canvas.SetLeft(_richBox, placement.Left);
+        Canvas.SetTop(_richBox, placement.Top);
 
         _richBox.LostFocus += (_, _) => Commit();
         _richBox.KeyDown += OnRichBoxKeyDown;
