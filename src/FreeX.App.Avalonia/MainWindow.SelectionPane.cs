@@ -313,7 +313,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "SelectionPaneDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 78, Margin = new Thickness(0, 0, 6, 0) };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 78 };
         ApplySelectionPaneButtonChrome(ok, 78, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "SelectionPaneOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, Width = 78 };
@@ -349,12 +349,7 @@ public sealed partial class MainWindow
             Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton },
         };
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children = { ok, cancel },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
         var content = new Grid { Margin = new Thickness(16) };
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 140 });

@@ -11,7 +11,6 @@ using FreeX.App.Services;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
@@ -163,14 +162,7 @@ public sealed partial class MainWindow
             Children = { newButton, editButton, deleteButton },
         };
 
-        var bottomRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { closeButton },
-        };
+        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([closeButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(bottomRow, Dock.Bottom);
 
         var filterRow = new StackPanel
@@ -374,14 +366,9 @@ public sealed partial class MainWindow
         AddDefineNameRow(form, 2, UiText.Get("InsertLoc_CommentFieldLabel"), commentBox);
         AddDefineNameRow(form, 3, UiText.Get("InsertLoc_RefersToFieldLabel"), refersToBox);
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [cancelButton, okButton],
+            new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         dialog.Content = new DockPanel
@@ -423,12 +410,16 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "CreateNamesFromSelectionDialog");
 
         var topRowBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesTopRow"), IsChecked = true };
+        ApplyNamesCheckBoxChrome(topRowBox);
         AutomationProperties.SetAutomationId(topRowBox, "CreateNamesTopRowBox");
         var leftColumnBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesLeftColumn") };
+        ApplyNamesCheckBoxChrome(leftColumnBox);
         AutomationProperties.SetAutomationId(leftColumnBox, "CreateNamesLeftColumnBox");
         var bottomRowBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesBottomRow") };
+        ApplyNamesCheckBoxChrome(bottomRowBox);
         AutomationProperties.SetAutomationId(bottomRowBox, "CreateNamesBottomRowBox");
         var rightColumnBox = new CheckBox { Content = UiText.Get("InsertLoc_CreateNamesRightColumn") };
+        ApplyNamesCheckBoxChrome(rightColumnBox);
         AutomationProperties.SetAutomationId(rightColumnBox, "CreateNamesRightColumnBox");
 
         var warningText = new TextBlock
@@ -497,14 +488,9 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [cancelButton, okButton],
+            new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         dialog.Content = new DockPanel
@@ -677,6 +663,12 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplyNamesComboBoxChrome(ComboBox comboBox)
         => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, NamesDialogChromeStyle);
+
+    /// <summary>
+    /// Applies standard Names-dialog check-box chrome (FontSize=12, FontFamily=FormulaBarFontFamily).
+    /// </summary>
+    private static void ApplyNamesCheckBoxChrome(CheckBox checkBox)
+        => AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, NamesDialogChromeStyle);
 
     /// <summary>
     /// Applies standard Names-dialog list-box row chrome (MinHeight=24 per row, FontSize=12).
