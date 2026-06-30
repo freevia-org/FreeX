@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.AppServices;
 
-namespace Free.Shared.Ribbon.Wpf;
+namespace Free.Shared.Shell.Wpf;
 
 public sealed record SisterAppClientFrameSpec(
     UIElement Chrome,

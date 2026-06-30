@@ -4,7 +4,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using Free.Shared.AppServices;
 
-namespace Free.Shared.Ribbon.Wpf;
+namespace Free.Shared.Shell.Wpf;
 
 public sealed record SisterAppStatusBarSpec(
     Brush Background,

@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 
-namespace Free.Shared.Ribbon.Wpf;
+namespace Free.Shared.Shell.Wpf;
 
 public sealed record SisterAppWindowFrameSpec(
     UIElement TitleBar,

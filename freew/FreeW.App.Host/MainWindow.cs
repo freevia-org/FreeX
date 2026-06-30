@@ -12,6 +12,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;

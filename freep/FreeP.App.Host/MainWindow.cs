@@ -4,6 +4,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Host.Backstage;
 using FreeP.App.Rendering.Wpf;
