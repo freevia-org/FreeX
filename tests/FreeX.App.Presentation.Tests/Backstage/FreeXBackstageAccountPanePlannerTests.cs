@@ -70,6 +70,32 @@ public sealed class FreeXBackstageAccountPanePlannerTests
         plan.Actions.Select(action => action.Id).Should().Equal(FreeXBackstageAccountActionId.LegalNotices);
     }
 
+    [Fact]
+    public void Build_UsesHostSuppliedLocalReadinessValues()
+    {
+        var plan = FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+            UserName: "Analyst",
+            DeviceName: "FREEX-PC",
+            VersionText: "Version 1.2.3",
+            OptionsAvailable: true,
+            CurrentWorkbookPath: null,
+            CurrentWorkbookName: @"Budget.xlsx (C:\Work\Budget.xlsx)",
+            TrademarkNotice: "Trademark",
+            LicenseNotice: "License",
+            PrivacyNotice: "Privacy",
+            LocalOsAccount: @"DESKTOP\quinn",
+            OptionsFile: @"C:\Users\quinn\AppData\Roaming\FreeX\options.json",
+            SharingStatus: @"Ready for Windows Share from C:\Work\Budget.xlsx.",
+            ExportStatus: "Ready for local PDF/XPS export."));
+
+        TextFor(plan, FreeXBackstageAccountDetailId.FreeXUserName).Should().Be("Analyst");
+        TextFor(plan, FreeXBackstageAccountDetailId.LocalOsAccount).Should().Be(@"DESKTOP\quinn");
+        TextFor(plan, FreeXBackstageAccountDetailId.OptionsFile).Should().Be(@"C:\Users\quinn\AppData\Roaming\FreeX\options.json");
+        TextFor(plan, FreeXBackstageAccountDetailId.CurrentWorkbook).Should().Be(@"Budget.xlsx (C:\Work\Budget.xlsx)");
+        TextFor(plan, FreeXBackstageAccountDetailId.Sharing).Should().Be(@"Ready for Windows Share from C:\Work\Budget.xlsx.");
+        TextFor(plan, FreeXBackstageAccountDetailId.Export).Should().Be("Ready for local PDF/XPS export.");
+    }
+
     private static string? TextFor(
         FreeXBackstageAccountPanePlan plan,
         FreeXBackstageAccountDetailId id) =>

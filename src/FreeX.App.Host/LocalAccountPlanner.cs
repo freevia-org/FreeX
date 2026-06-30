@@ -1,4 +1,5 @@
 using FreeX.App.Services;
+using FreeX.App.Presentation.Backstage;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -26,17 +27,17 @@ public static class LocalAccountPlanner
         machineNameProvider ??= () => Environment.MachineName;
         optionsPathProvider ??= () => FreeXOptions.StorePathForDisplay;
 
-        return LocalAccountWorkflowPlanner.Create(
+        var workflowPlan = LocalAccountWorkflowPlanner.Create(
             new LocalAccountPlannerInput(
                 UiText.Get("DeferredCommand_LocalAccount_Title"),
-                "FreeX user name",
-                "Local OS account",
-                "Device",
-                "App version",
-                "Options file",
-                "Current workbook",
-                "Sharing",
-                "Export",
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
                 options.UserName,
                 userNameProvider(),
                 userDomainProvider(),
@@ -48,10 +49,47 @@ public static class LocalAccountPlanner
             fileExists,
             workbook,
             hasSelection);
+
+        return ProjectBackstageAccountPlan(workflowPlan);
     }
 
     public static string FormatMessageBody(LocalAccountPlan plan)
     {
         return LocalAccountWorkflowPlanner.FormatMessageBody(plan, UiText.Get("DeferredCommand_LocalAccount_Body"));
     }
+
+    private static LocalAccountPlan ProjectBackstageAccountPlan(LocalAccountPlan workflowPlan)
+    {
+        var pane = FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
+            workflowPlan.UserName,
+            workflowPlan.DeviceName,
+            workflowPlan.AppVersionText,
+            OptionsAvailable: true,
+            CurrentWorkbookPath: null,
+            CurrentWorkbookName: workflowPlan.WorkbookStatus,
+            TrademarkNotice: AppHelpInfo.TrademarkNotice,
+            LicenseNotice: AppHelpInfo.ProjectLicenseNotice,
+            PrivacyNotice: AppHelpInfo.PrivacyNotice,
+            LocalOsAccount: workflowPlan.LocalAccount,
+            OptionsFile: workflowPlan.OptionsPath,
+            SharingStatus: workflowPlan.SharingStatus,
+            ExportStatus: workflowPlan.ExportStatus));
+
+        var details = pane.Details
+            .Select(detail => new LocalAccountDetail(
+                UiText.Get(detail.LabelKey),
+                ResolveBackstageTextValue(detail.Value)))
+            .ToArray();
+
+        return workflowPlan with
+        {
+            Title = UiText.Get(pane.TitleKey),
+            Details = details,
+        };
+    }
+
+    private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
+        value.TextKey is { } key
+            ? UiText.Get(key)
+            : value.Text ?? string.Empty;
 }

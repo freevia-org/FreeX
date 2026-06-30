@@ -227,7 +227,16 @@ public sealed partial class MainWindow
             hasSelection,
             WorkbookExportPrintSurface.MacOs);
         var exportPane = FreeXBackstageExportPanePlanner.Build(
-            CreateBackstageExportPaneRequest(scopePlan));
+            FreeXBackstageExportPanePlanner.CreateRequest(
+                scopePlan.Scopes
+                    .Select(scope => new FreeXBackstageExportScopeOptionSource<WorkbookExportPrintScope>(
+                        scope.Scope,
+                        scope.IsAvailable,
+                        scope.IsDefault))
+                    .ToArray(),
+                scopePlan.SupportedOutputKinds,
+                scopePlan.DefaultOutputKind,
+                scopePlan.CanExport));
 
         var dialog = new Window
         {
@@ -246,8 +255,8 @@ public sealed partial class MainWindow
         var content = AvaloniaBackstageChrome.CreatePane(
             BuildBackstageExportPaneSpec(
                 exportPane,
-                scope => selectedScope = ToWorkbookExportScope(scope),
-                outputKind => selectedFormat = ToWorkbookExportOutputKind(outputKind)),
+                scope => selectedScope = FreeXBackstageExportPanePlanner.ToExternalScope<WorkbookExportPrintScope>(scope),
+                outputKind => selectedFormat = FreeXBackstageExportPanePlanner.ToExternalOutputKind<WorkbookExportPrintOutputKind>(outputKind)),
             BackstageChromeStyle);
 
         var exportButton = new Button
@@ -293,33 +302,6 @@ public sealed partial class MainWindow
         };
         dialog.Opened += (_, _) => exportButton.Focus();
         await dialog.ShowDialog(this);
-    }
-
-    private static FreeXBackstageExportPaneRequest CreateBackstageExportPaneRequest(
-        WorkbookExportScopePlan scopePlan)
-    {
-        var scopeOptions = new List<FreeXBackstageExportScopeOptionRequest>(scopePlan.Scopes.Count);
-        foreach (var option in scopePlan.Scopes)
-        {
-            scopeOptions.Add(new FreeXBackstageExportScopeOptionRequest(
-                ToBackstageExportScopeId(option.Scope),
-                option.IsAvailable,
-                option.IsDefault));
-        }
-
-        var outputKindOptions = new List<FreeXBackstageExportOutputKindOptionRequest>(
-            scopePlan.SupportedOutputKinds.Count);
-        foreach (var outputKind in scopePlan.SupportedOutputKinds)
-        {
-            outputKindOptions.Add(new FreeXBackstageExportOutputKindOptionRequest(
-                ToBackstageExportOutputKindId(outputKind),
-                outputKind == scopePlan.DefaultOutputKind));
-        }
-
-        return new FreeXBackstageExportPaneRequest(
-            scopeOptions,
-            outputKindOptions,
-            scopePlan.CanExport);
     }
 
     private static AvaloniaBackstagePaneSpec BuildBackstageExportPaneSpec(
@@ -390,43 +372,6 @@ public sealed partial class MainWindow
     }
 
     // ── File ▸ Account ────────────────────────────────────────────────────────────
-    // Export dialog service-plan to Presentation-catalog adapters.
-    private static FreeXBackstageExportScopeId ToBackstageExportScopeId(WorkbookExportPrintScope scope) =>
-        scope switch
-        {
-            WorkbookExportPrintScope.SelectedRange => FreeXBackstageExportScopeId.SelectedRange,
-            WorkbookExportPrintScope.VisibleWorkbook => FreeXBackstageExportScopeId.VisibleWorkbook,
-            WorkbookExportPrintScope.ActiveSheet => FreeXBackstageExportScopeId.ActiveSheet,
-            _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
-        };
-
-    private static WorkbookExportPrintScope ToWorkbookExportScope(FreeXBackstageExportScopeId scope) =>
-        scope switch
-        {
-            FreeXBackstageExportScopeId.SelectedRange => WorkbookExportPrintScope.SelectedRange,
-            FreeXBackstageExportScopeId.VisibleWorkbook => WorkbookExportPrintScope.VisibleWorkbook,
-            FreeXBackstageExportScopeId.ActiveSheet => WorkbookExportPrintScope.ActiveSheet,
-            _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, null)
-        };
-
-    private static FreeXBackstageExportOutputKindId ToBackstageExportOutputKindId(
-        WorkbookExportPrintOutputKind outputKind) =>
-        outputKind switch
-        {
-            WorkbookExportPrintOutputKind.Xps => FreeXBackstageExportOutputKindId.Xps,
-            WorkbookExportPrintOutputKind.Pdf => FreeXBackstageExportOutputKindId.Pdf,
-            _ => throw new ArgumentOutOfRangeException(nameof(outputKind), outputKind, null)
-        };
-
-    private static WorkbookExportPrintOutputKind ToWorkbookExportOutputKind(
-        FreeXBackstageExportOutputKindId outputKind) =>
-        outputKind switch
-        {
-            FreeXBackstageExportOutputKindId.Xps => WorkbookExportPrintOutputKind.Xps,
-            FreeXBackstageExportOutputKindId.Pdf => WorkbookExportPrintOutputKind.Pdf,
-            _ => throw new ArgumentOutOfRangeException(nameof(outputKind), outputKind, null)
-        };
-
     private void ShowBackstageAccount() => _ = ShowBackstageAccountDialogAsync();
 
     private async Task ShowBackstageAccountDialogAsync()

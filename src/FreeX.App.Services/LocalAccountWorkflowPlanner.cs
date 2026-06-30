@@ -9,7 +9,14 @@ public sealed record LocalAccountPlan(
     IReadOnlyList<LocalAccountDetail> Details,
     string WorkbookStatus,
     string SharingStatus,
-    string ExportStatus);
+    string ExportStatus)
+{
+    public string UserName { get; init; } = string.Empty;
+    public string LocalAccount { get; init; } = string.Empty;
+    public string DeviceName { get; init; } = string.Empty;
+    public string AppVersionText { get; init; } = string.Empty;
+    public string OptionsPath { get; init; } = string.Empty;
+}
 
 public sealed record LocalAccountPlannerInput(
     string Title,
@@ -77,7 +84,14 @@ public static class LocalAccountWorkflowPlanner
             details,
             workbookStatus,
             sharingStatus,
-            exportStatus);
+            exportStatus)
+        {
+            UserName = userName,
+            LocalAccount = windowsAccount,
+            DeviceName = machineName,
+            AppVersionText = input.AppVersionText,
+            OptionsPath = optionsPath,
+        };
     }
 
     public static string FormatMessageBody(LocalAccountPlan plan, string bodyText)

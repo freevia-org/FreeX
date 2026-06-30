@@ -5,6 +5,48 @@ namespace FreeX.App.Presentation.Tests.Backstage;
 
 public sealed class FreeXBackstageExportPanePlannerTests
 {
+    private enum ExternalScope
+    {
+        SelectedRange,
+        ActiveSheet,
+        VisibleWorkbook
+    }
+
+    private enum ExternalOutputKind
+    {
+        Pdf,
+        Xps
+    }
+
+    [Fact]
+    public void CreateRequest_MapsExternalExportEnumsIntoBackstageRequest()
+    {
+        var request = FreeXBackstageExportPanePlanner.CreateRequest<ExternalScope, ExternalOutputKind>(
+            [
+                new(ExternalScope.SelectedRange, IsAvailable: false, IsDefault: false),
+                new(ExternalScope.ActiveSheet, IsAvailable: true, IsDefault: true),
+                new(ExternalScope.VisibleWorkbook, IsAvailable: true, IsDefault: false),
+            ],
+            [ExternalOutputKind.Pdf, ExternalOutputKind.Xps],
+            ExternalOutputKind.Xps,
+            canExport: true);
+
+        request.Scopes.Select(option => (option.Scope, option.IsAvailable, option.IsDefault))
+            .Should().Equal(
+                (FreeXBackstageExportScopeId.SelectedRange, false, false),
+                (FreeXBackstageExportScopeId.ActiveSheet, true, true),
+                (FreeXBackstageExportScopeId.VisibleWorkbook, true, false));
+        request.OutputKinds.Select(option => (option.OutputKind, option.IsDefault))
+            .Should().Equal(
+                (FreeXBackstageExportOutputKindId.Pdf, false),
+                (FreeXBackstageExportOutputKindId.Xps, true));
+
+        FreeXBackstageExportPanePlanner.ToExternalScope<ExternalScope>(FreeXBackstageExportScopeId.VisibleWorkbook)
+            .Should().Be(ExternalScope.VisibleWorkbook);
+        FreeXBackstageExportPanePlanner.ToExternalOutputKind<ExternalOutputKind>(FreeXBackstageExportOutputKindId.Pdf)
+            .Should().Be(ExternalOutputKind.Pdf);
+    }
+
     [Fact]
     public void Build_ProducesExportSectionsAndOptions()
     {

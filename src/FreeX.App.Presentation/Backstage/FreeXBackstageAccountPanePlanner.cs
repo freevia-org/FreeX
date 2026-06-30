@@ -16,7 +16,11 @@ public sealed record FreeXBackstageAccountPaneRequest(
     string? CurrentWorkbookName,
     string TrademarkNotice,
     string LicenseNotice,
-    string PrivacyNotice);
+    string PrivacyNotice,
+    string? LocalOsAccount = null,
+    string? OptionsFile = null,
+    string? SharingStatus = null,
+    string? ExportStatus = null);
 
 public sealed record FreeXBackstageAccountDetailPlan(
     FreeXBackstageAccountDetailId Id,
@@ -81,15 +85,30 @@ public static class FreeXBackstageAccountPanePlanner
         id switch
         {
             FreeXBackstageAccountDetailId.FreeXUserName => ResolveUserName(request.UserName),
-            FreeXBackstageAccountDetailId.LocalOsAccount => ResolveUserName(request.UserName),
+            FreeXBackstageAccountDetailId.LocalOsAccount => ResolveOptionalValue(
+                request.LocalOsAccount,
+                () => ResolveUserName(request.UserName)),
             FreeXBackstageAccountDetailId.Device => ResolveOptionalLiteral(request.DeviceName),
             FreeXBackstageAccountDetailId.AppVersion => FreeXBackstageTextValue.Literal(request.VersionText),
-            FreeXBackstageAccountDetailId.OptionsFile => FreeXBackstageTextValue.Key("Backstage_Account_OptionsFileLocalProfile"),
+            FreeXBackstageAccountDetailId.OptionsFile => ResolveOptionalValue(
+                request.OptionsFile,
+                () => FreeXBackstageTextValue.Key("Backstage_Account_OptionsFileLocalProfile")),
             FreeXBackstageAccountDetailId.CurrentWorkbook => ResolveCurrentWorkbook(request.CurrentWorkbookPath, request.CurrentWorkbookName),
-            FreeXBackstageAccountDetailId.Sharing => FreeXBackstageTextValue.Key("Backstage_Account_SharingSaveAsRequired"),
-            FreeXBackstageAccountDetailId.Export => FreeXBackstageTextValue.Key("Backstage_Account_ExportReadyLocal"),
+            FreeXBackstageAccountDetailId.Sharing => ResolveOptionalValue(
+                request.SharingStatus,
+                () => FreeXBackstageTextValue.Key("Backstage_Account_SharingSaveAsRequired")),
+            FreeXBackstageAccountDetailId.Export => ResolveOptionalValue(
+                request.ExportStatus,
+                () => FreeXBackstageTextValue.Key("Backstage_Account_ExportReadyLocal")),
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
+
+    private static FreeXBackstageTextValue ResolveOptionalValue(
+        string? value,
+        Func<FreeXBackstageTextValue> fallback) =>
+        string.IsNullOrWhiteSpace(value)
+            ? fallback()
+            : FreeXBackstageTextValue.Literal(value.Trim());
 
     private static FreeXBackstageTextValue ResolveUserName(string? userName) =>
         string.IsNullOrWhiteSpace(userName)

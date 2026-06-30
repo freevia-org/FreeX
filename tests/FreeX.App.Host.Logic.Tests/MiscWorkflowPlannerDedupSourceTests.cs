@@ -33,6 +33,15 @@ public sealed class MiscWorkflowPlannerDedupSourceTests
         DialogSourceTestSupport.ReadHostSources("LocalAccountPlanner.cs")
             .Should()
             .Contain("Host adapter");
+        DialogSourceTestSupport.ReadHostSources("LocalAccountPlanner.cs")
+            .Should()
+            .Contain("FreeXBackstageAccountPanePlanner.Build(")
+            .And
+            .NotContain("\"FreeX user name\"")
+            .And
+            .NotContain("\"Local OS account\"")
+            .And
+            .NotContain("\"Options file\"");
         DialogSourceTestSupport.ReadHostSources("CrashAnalyticsConsentPlanner.cs")
             .Should()
             .Contain("Host adapter");
