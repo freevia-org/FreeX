@@ -1,3 +1,5 @@
+using Free.Shared.Localization;
+
 namespace FreeP.App.Localization;
 
 /// <summary>
@@ -5,27 +7,29 @@ namespace FreeP.App.Localization;
 /// </summary>
 public static class LocalizedUiText
 {
-    public static string Ok => Get("Common_Ok");
+    private static readonly LocalizedUiTextFacade Facade = new(Loc.Resources);
 
-    public static string Cancel => Get("Common_Cancel");
+    public static string Ok => Facade.Ok;
 
-    public static string ErrorTitle => Get("Common_ErrorTitle");
+    public static string Cancel => Facade.Cancel;
 
-    public static string WarningTitle => Get("Common_WarningTitle");
+    public static string ErrorTitle => Facade.ErrorTitle;
 
-    public static string InformationTitle => Get("Common_InformationTitle");
+    public static string WarningTitle => Facade.WarningTitle;
 
-    public static string ConfirmTitle => Get("Common_ConfirmTitle");
+    public static string InformationTitle => Facade.InformationTitle;
 
-    public static string Get(string key) => Loc.Get(key);
+    public static string ConfirmTitle => Facade.ConfirmTitle;
 
-    public static string GetNeutral(string key) => Loc.GetNeutral(key);
+    public static string Get(string key) => Facade.Get(key);
 
-    public static string Format(string key, params object?[] args) => Loc.Format(key, args);
+    public static string GetNeutral(string key) => Facade.GetNeutral(key);
 
-    public static IReadOnlySet<string> GetNeutralResourceKeys() => Loc.GetNeutralResourceKeys();
+    public static string Format(string key, params object?[] args) => Facade.Format(key, args);
 
-    public static string CreateAutomationName(string textWithAccessKey) => Loc.CreateAutomationName(textWithAccessKey);
+    public static IReadOnlySet<string> GetNeutralResourceKeys() => Facade.GetNeutralResourceKeys();
 
-    public static string CreateMissingText(string key) => Loc.CreateMissingText(key);
+    public static string CreateAutomationName(string textWithAccessKey) => Facade.CreateAutomationName(textWithAccessKey);
+
+    public static string CreateMissingText(string key) => Facade.CreateMissingText(key);
 }
