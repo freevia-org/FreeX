@@ -106,7 +106,7 @@ internal static partial class ChartInteropCompare
         try
         {
             excel = CreateExcelApplication();
-            ownedExcelPids = GetExcelProcessIds().Except(baselineExcelPids).ToHashSet();
+            ownedExcelPids = GetNewExcelProcessIds(baselineExcelPids);
             dynamic app = excel;
 
             ExportFreeXWorkbookThroughExcel(app, chartCase, directories, result);
