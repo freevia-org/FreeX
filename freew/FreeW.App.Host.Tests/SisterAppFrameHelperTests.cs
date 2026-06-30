@@ -47,10 +47,15 @@ public sealed class SisterAppFrameHelperTests
         source.Should().Contain("WorkArea:");
         source.Should().Contain("StatusBar:");
         source.Should().Contain("SisterAppWindowFrameBuilder.Build(");
-        source.Should().Contain("SisterWpfWindowTitleBinder");
+        source.Should().Contain("_titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);");
+        source.Should().Contain("new SisterAppWindowFrameSpec(_titleBar, root, _backstage)");
+        source.Should().Contain("Content = frame.Root;");
         source.Should().Contain("SisterAppStatusBarChrome.Build(");
         source.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
         source.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(");
+        AssertBefore(source, "_titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);", "SisterAppClientFrameBuilder.Build(");
+        AssertBefore(source, "SisterAppClientFrameBuilder.Build(", "SisterAppWindowFrameBuilder.Build(");
+        AssertBefore(source, "SisterAppWindowFrameBuilder.Build(", "Content = frame.Root;");
         source.Should().NotContain("WindowTitlePlanner.Compose(");
         source.Should().NotContain("_titleText.Text = title;");
         source.Should().NotContain("RibbonTabControlFactory.Create(");
@@ -107,5 +112,12 @@ public sealed class SisterAppFrameHelperTests
         }
 
         throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+
+    private static void AssertBefore(string source, string first, string second)
+    {
+        source.IndexOf(first, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf(second, StringComparison.Ordinal), $"{first} should appear before {second}");
     }
 }

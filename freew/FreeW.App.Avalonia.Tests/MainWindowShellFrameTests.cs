@@ -58,6 +58,8 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("statusBar: statusBar,");
         mainWindow.Should().Contain("bottomPanelsAboveStatus: [findBar]");
         mainWindow.Should().Contain("RightItems: BuildStatusRightItems()");
+        mainWindow.Should().Contain("Content = frame.Root;");
+        AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "Content = frame.Root;");
         mainWindow.Should().NotContain("private readonly TextBlock _zoomLabel = new()");
     }
 
@@ -84,6 +86,42 @@ public sealed class MainWindowShellFrameTests
         spec.TopPanelsBelowChrome.Should().Equal(topPanel);
         spec.TopPanelsBelowRibbon.Should().Equal(topPanel);
         spec.BottomPanelsAboveStatus.Should().Equal(bottomPanel);
+    }
+
+    [Fact]
+    public void ClientFrameBuilder_ComposesTopWorkAreaBottomAndStatusFromSharedContract()
+    {
+        var chrome = new Border();
+        var topPanel1 = new Border();
+        var topPanel2 = new Border();
+        var workArea = new Grid();
+        var bottomPanel1 = new Border();
+        var bottomPanel2 = new Border();
+        var statusBar = new Border();
+
+        var result = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
+            chrome: chrome,
+            workArea: workArea,
+            statusBar: statusBar,
+            bottomPanelsAboveStatus: [bottomPanel1, bottomPanel2],
+            topPanelsBelowChrome: [topPanel1, topPanel2]));
+
+        result.Root.LastChildFill.Should().BeTrue();
+        result.Root.Children.Should().Equal(
+            chrome,
+            topPanel1,
+            topPanel2,
+            statusBar,
+            bottomPanel2,
+            bottomPanel1,
+            workArea);
+        result.Root.Children.Last().Should().BeSameAs(workArea);
+        DockPanel.GetDock(chrome).Should().Be(Dock.Top);
+        DockPanel.GetDock(topPanel1).Should().Be(Dock.Top);
+        DockPanel.GetDock(topPanel2).Should().Be(Dock.Top);
+        DockPanel.GetDock(statusBar).Should().Be(Dock.Bottom);
+        DockPanel.GetDock(bottomPanel2).Should().Be(Dock.Bottom);
+        DockPanel.GetDock(bottomPanel1).Should().Be(Dock.Bottom);
     }
 
     [Fact]
@@ -137,5 +175,12 @@ public sealed class MainWindowShellFrameTests
         }
 
         throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
+    }
+
+    private static void AssertBefore(string source, string first, string second)
+    {
+        source.IndexOf(first, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf(second, StringComparison.Ordinal), $"{first} should appear before {second}");
     }
 }

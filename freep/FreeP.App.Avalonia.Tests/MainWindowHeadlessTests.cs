@@ -135,6 +135,9 @@ public sealed class MainWindowHeadlessTests
         mainWindow.Should().Contain("chrome: ribbon,");
         mainWindow.Should().Contain("workArea: BuildBody(),");
         mainWindow.Should().Contain("statusBar: statusBar");
+        mainWindow.Should().Contain("Content = frame.Root;");
+        AssertBefore(mainWindow, "SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(", "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
+        AssertBefore(mainWindow, "SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(", "Content = frame.Root;");
         mainWindow.Should().NotContain("_statusText = new TextBlock");
     }
 
@@ -653,5 +656,12 @@ public sealed class MainWindowHeadlessTests
         }
 
         throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
+    }
+
+    private static void AssertBefore(string source, string first, string second)
+    {
+        source.IndexOf(first, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf(second, StringComparison.Ordinal), $"{first} should appear before {second}");
     }
 }
