@@ -9,6 +9,8 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -20,6 +22,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);
+
     // Page Layout ▸ Sheet Options ▸ Gridlines / Headings, and Review ▸ Show Notes.
     //
     // In Excel the Page Layout "Gridlines" and "Headings" Sheet Options expose two
@@ -111,9 +115,10 @@ public sealed partial class MainWindow
             Content = UiText.Get("Common_Cancel"),
             IsCancel = true,
             MinWidth = 84,
-            Margin = new Thickness(8, 0, 0, 0),
         };
         ApplySheetOptionButtonChrome(cancel, 84);
+
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0));
 
         var dialog = new Window
         {
@@ -131,13 +136,7 @@ public sealed partial class MainWindow
                     new TextBlock { Text = label, FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 8) },
                     viewCheck,
                     printCheck,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                        Margin = new Thickness(0, 14, 0, 0),
-                        Children = { ok, cancel },
-                    },
+                    buttonRow,
                 },
             },
         };
@@ -218,7 +217,6 @@ public sealed partial class MainWindow
             Content = UiText.Get("Common_Close"),
             IsCancel = true,
             MinWidth = 84,
-            Margin = new Thickness(8, 0, 0, 0),
         };
         ApplySheetOptionButtonChrome(closeButton, 84);
         AutomationProperties.SetAutomationId(closeButton, "ShowNotesCloseButton");
@@ -250,13 +248,7 @@ public sealed partial class MainWindow
         goToButton.Click += (_, _) => GoToSelected();
         closeButton.Click += (_, _) => dialog.Close();
 
-        var bottomRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { goToButton, closeButton },
-        };
+        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([goToButton, closeButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(bottomRow, Dock.Bottom);
         DockPanel.SetDock(emptyText, Dock.Top);
 
@@ -305,20 +297,7 @@ public sealed partial class MainWindow
     /// Applies standard SheetOption-dialog button chrome (Height=24, FontSize=12, white background, grey/blue border).
     /// </summary>
     private static void ApplySheetOptionButtonChrome(Button button, double minWidth, bool isDefault = false)
-    {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, SheetOptionsDialogChromeStyle, minWidth, isDefault);
 
     /// <summary>
     /// Applies standard SheetOption-dialog check-box chrome (MinHeight=20, MaxHeight=20, FontSize=12).
@@ -326,26 +305,14 @@ public sealed partial class MainWindow
     private static void ApplySheetOptionCheckBoxChrome(CheckBox checkBox)
     {
         StripContentMnemonic(checkBox);
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, SheetOptionsDialogChromeStyle);
     }
 
     /// <summary>
     /// Applies standard ShowNotes list-box row chrome (MinHeight=24 per row, FontSize=12).
     /// </summary>
     private static void ApplySheetOptionListBoxStyle(ListBox listBox)
-    {
-        listBox.FontSize = 12;
-        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
-        {
-            Setters =
-            {
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
-                new Setter(Layoutable.MinHeightProperty, 24.0),
-                new Setter(TemplatedControl.FontSizeProperty, 12.0),
-            },
-        });
-    }
+        => AvaloniaCompactDialogChrome.ApplyListBox(listBox, SheetOptionsDialogChromeStyle);
 }

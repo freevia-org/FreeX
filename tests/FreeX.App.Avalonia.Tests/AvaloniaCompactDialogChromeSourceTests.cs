@@ -156,6 +156,140 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         pageBreakSource.Should().NotContain("button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);");
     }
 
+    [Fact]
+    public void DataOpsDialogs_DelegateCompactControlChromeToSharedHelper()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Consolidate.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("private static AvaloniaCompactDialogChromeStyle DataOpsDialogChromeStyle => new(FormulaBarFontFamily);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, DataOpsDialogChromeStyle, button.MinWidth, isDefault);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, DataOpsDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, DataOpsDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DataOpsDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, DataOpsDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([applyButton, cancelButton], new Thickness(0, 10, 0, 0));");
+
+        AssertNoLocalButtonChrome(source);
+        AssertNoLocalTextBoxChrome(source, "textBox");
+        AssertNoLocalComboBoxChrome(source, "comboBox");
+    }
+
+    [Fact]
+    public void ConditionalFormatDialogs_DelegateCompactControlChromeToSharedHelper()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("private static AvaloniaCompactDialogChromeStyle ConditionalFormatDialogChromeStyle => new(FormulaBarFontFamily);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, ConditionalFormatDialogChromeStyle, width, isDefault);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(tb, ConditionalFormatDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(cb, ConditionalFormatDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(cb, ConditionalFormatDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(");
+        source.Should().Contain("ConditionalFormatDialogChromeStyle with { ListBoxItemPadding = new Thickness(2, 0) }");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
+
+        AssertNoLocalButtonChrome(source);
+        AssertNoLocalTextBoxChrome(source, "tb");
+        AssertNoLocalComboBoxChrome(source, "cb");
+        AssertNoLocalListBoxChrome(source);
+    }
+
+    [Fact]
+    public void OptionsProtectionAndSheetDialogs_DelegateCompactControlChromeToSharedHelper()
+    {
+        var optionsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var protectionSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Protection.cs"));
+        var moveCopySource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.MoveCopySheet.cs"));
+        var sheetOptionsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.SheetOptionsNotes.cs"));
+
+        optionsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily);");
+        optionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, OptionsDialogChromeStyle, minWidth, isDefault);");
+        optionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, OptionsDialogChromeStyle);");
+        optionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, OptionsDialogChromeStyle);");
+        optionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, OptionsDialogChromeStyle);");
+        optionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, OptionsDialogChromeStyle);");
+
+        protectionSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle ProtectionDialogChromeStyle => new(FormulaBarFontFamily);");
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, ProtectionDialogChromeStyle, minWidth, isDefault);");
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ProtectionDialogChromeStyle);");
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, ProtectionDialogChromeStyle);");
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
+
+        moveCopySource.Should().Contain("private static AvaloniaCompactDialogChromeStyle MoveCopySheetDialogChromeStyle => new(FormulaBarFontFamily);");
+        moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, MoveCopySheetDialogChromeStyle, minWidth, isDefault);");
+        moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, MoveCopySheetDialogChromeStyle);");
+        moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, MoveCopySheetDialogChromeStyle);");
+        moveCopySource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));");
+
+        sheetOptionsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);");
+        sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SheetOptionsDialogChromeStyle, minWidth, isDefault);");
+        sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, SheetOptionsDialogChromeStyle);");
+        sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, SheetOptionsDialogChromeStyle);");
+        sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 14, 0, 0));");
+        sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([goToButton, closeButton], new Thickness(0, 10, 0, 0));");
+
+        foreach (var source in new[] { optionsSource, protectionSource, moveCopySource, sheetOptionsSource })
+        {
+            source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+            AssertNoLocalButtonChrome(source);
+            AssertNoLocalTextBoxChrome(source, "textBox");
+            AssertNoLocalListBoxChrome(source);
+        }
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_DelegatesCompactControlChromeToSharedHelper()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("private static AvaloniaCompactDialogChromeStyle SelectionPaneDialogChromeStyle => new(FormulaBarFontFamily);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SelectionPaneDialogChromeStyle, width, isDefault);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SelectionPaneDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SelectionPaneDialogChromeStyle);");
+
+        AssertNoLocalButtonChrome(source);
+        AssertNoLocalTextBoxChrome(source, "textBox");
+        AssertNoLocalComboBoxChrome(source, "comboBox");
+    }
+
+    private static void AssertNoLocalButtonChrome(string source)
+    {
+        source.Should().NotContain("button.Height = 24;");
+        source.Should().NotContain("button.MinHeight = 24;");
+        source.Should().NotContain("button.MaxHeight = 24;");
+        source.Should().NotContain("button.Padding = new Thickness(4, 1);");
+        source.Should().NotContain("button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);");
+    }
+
+    private static void AssertNoLocalTextBoxChrome(string source, string variableName)
+    {
+        source.Should().NotContain($"{variableName}.Height = 24;");
+        source.Should().NotContain($"{variableName}.MinHeight = 24;");
+        source.Should().NotContain($"{variableName}.MaxHeight = 24;");
+        source.Should().NotContain($"{variableName}.Padding = new Thickness(4, 1);");
+        source.Should().NotContain($"{variableName}.BorderBrush = Brush(130, 130, 130);");
+    }
+
+    private static void AssertNoLocalComboBoxChrome(string source, string variableName)
+    {
+        source.Should().NotContain($"{variableName}.Height = 24;");
+        source.Should().NotContain($"{variableName}.MinHeight = 24;");
+        source.Should().NotContain($"{variableName}.MaxHeight = 24;");
+        source.Should().NotContain($"{variableName}.Padding = new Thickness(5, 0, 4, 0);");
+        source.Should().NotContain($"{variableName}.BorderBrush = Brush(130, 130, 130);");
+    }
+
+    private static void AssertNoLocalListBoxChrome(string source)
+    {
+        source.Should().NotContain("new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1))");
+        source.Should().NotContain("new Setter(Layoutable.MinHeightProperty, 24.0)");
+        source.Should().NotContain("new Setter(global::Avalonia.Controls.Control.MinHeightProperty, 24.0)");
+        source.Should().NotContain("new Setter(TemplatedControl.FontSizeProperty, 12.0)");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);

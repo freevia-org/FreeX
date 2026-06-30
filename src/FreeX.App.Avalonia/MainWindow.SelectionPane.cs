@@ -9,6 +9,8 @@ using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -30,6 +32,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle SelectionPaneDialogChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>A mutable working row for the Selection Pane dialog (visibility + name edited in place).</summary>
     private sealed class SelectionPaneRow(SelectionPaneItem item)
     {
@@ -428,46 +432,15 @@ public sealed partial class MainWindow
     }
 
     private static void ApplySelectionPaneTextBoxChrome(TextBox textBox)
-    {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SelectionPaneDialogChromeStyle);
 
     private static void ApplySelectionPaneComboBoxChrome(ComboBox comboBox)
-    {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SelectionPaneDialogChromeStyle);
 
     private static void ApplySelectionPaneButtonChrome(Button button, double width, bool isDefault = false)
     {
         button.Width = width;
-        button.MinWidth = width;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyButton(button, SelectionPaneDialogChromeStyle, width, isDefault);
     }
 
     private static Viewbox CreateSelectionPaneEyeIcon()
