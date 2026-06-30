@@ -9,6 +9,12 @@ public enum QuickAnalysisShellOpenDecision
     ShowNoSuggestionsIssue
 }
 
+public enum QuickAnalysisShellOpenIssueTextTarget
+{
+    Status,
+    Dialog
+}
+
 public sealed record QuickAnalysisShellOpenIssuePlan(
     string StatusResourceKey,
     string DialogResourceKey,
@@ -62,5 +68,32 @@ public static class QuickAnalysisShellOpenPlanner
             request.Selection,
             QuickAnalysisShellPlan.Empty,
             issue);
+    }
+
+    public static string FormatIssueText(
+        QuickAnalysisShellOpenPlan openPlan,
+        QuickAnalysisShellOpenIssueTextTarget target,
+        Func<string, string> getText,
+        Func<string, string, string> formatText,
+        Func<GridRange, string> formatSelectionReference)
+    {
+        ArgumentNullException.ThrowIfNull(openPlan);
+        ArgumentNullException.ThrowIfNull(getText);
+        ArgumentNullException.ThrowIfNull(formatText);
+        ArgumentNullException.ThrowIfNull(formatSelectionReference);
+
+        var issue = openPlan.Issue
+            ?? throw new InvalidOperationException("Quick Analysis open issue was not planned.");
+
+        var resourceKey = target switch
+        {
+            QuickAnalysisShellOpenIssueTextTarget.Status => issue.StatusResourceKey,
+            QuickAnalysisShellOpenIssueTextTarget.Dialog => issue.DialogResourceKey,
+            _ => throw new ArgumentOutOfRangeException(nameof(target), target, "Unknown Quick Analysis issue text target.")
+        };
+
+        return issue.RequiresSelectionReference && openPlan.Selection is { } range
+            ? formatText(resourceKey, formatSelectionReference(range))
+            : getText(resourceKey);
     }
 }

@@ -66,7 +66,7 @@ public partial class MainWindow
 
             menu.Items.Add(new MenuItem
             {
-                Header = group.TitleFallback,
+                Header = UiText.Get(group.TitleResourceKey),
                 IsEnabled = false
             });
 
@@ -105,20 +105,12 @@ public partial class MainWindow
         _suppressNextQuickAnalysisClosedStatusReset = true;
         CloseQuickAnalysisMenu();
         ClearQuickAnalysisPreview(resetStatus: false);
-        StatusReadyText.Text = QuickAnalysisUnavailableStatusText(openPlan);
-    }
-
-    private string QuickAnalysisUnavailableStatusText(QuickAnalysisShellOpenPlan openPlan)
-    {
-        var issue = openPlan.Issue
-            ?? throw new InvalidOperationException("Quick Analysis open issue was not planned.");
-
-        if (issue.RequiresSelectionReference && openPlan.Selection is { } range)
-        {
-            return UiText.Format(issue.StatusResourceKey, FormatRangeReference(range.Start, range.End));
-        }
-
-        return UiText.Get(issue.StatusResourceKey);
+        StatusReadyText.Text = QuickAnalysisShellOpenPlanner.FormatIssueText(
+            openPlan,
+            QuickAnalysisShellOpenIssueTextTarget.Status,
+            UiText.Get,
+            (resourceKey, rangeReference) => UiText.Format(resourceKey, rangeReference),
+            range => FormatRangeReference(range.Start, range.End));
     }
 
     private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)
