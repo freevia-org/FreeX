@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Free.Shared.Localization;
 using FreeX.Core.Commands;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -408,11 +409,6 @@ public sealed partial class MainWindow
         _ => AcText("AccessibilityChecker_SectionTips", "Tips"),
     };
 
-    // Routes through the localization catalog but falls back to the supplied English default when a
-    // key has not yet been added to the resx (the catalog renders missing keys as "[[Key]]").
-    private static string AcText(string key, string fallback)
-    {
-        var value = UiText.Get(key);
-        return value == "[[" + key + "]]" ? fallback : value;
-    }
+    private static string AcText(string key, string fallback) =>
+        LocalizedFallbackTextResolver.Resolve(key, fallback, UiText.Get);
 }

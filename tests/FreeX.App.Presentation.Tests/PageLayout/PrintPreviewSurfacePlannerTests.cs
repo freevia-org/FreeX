@@ -103,4 +103,21 @@ public sealed class PrintPreviewSurfacePlannerTests
         topToolbar.PrinterName.Should().Be("Windows print dialog");
         documentToolbar.PageSetupButtonText.Should().Be("Page Setup");
     }
+
+    [Fact]
+    public void CreateSurfacePlans_PreservePseudoLocalizedBracketTextThatIsNotMissingKey()
+    {
+        var resolver = new PrintSettingsTextResolver(
+            key => key switch
+            {
+                "PrintPreview_PrinterLabel" => "[[PPrriinntteerr:]]",
+                _ => "[[" + key + "]]"
+            },
+            (_, _) => "");
+
+        var plan = PrintPreviewSurfacePlanner.CreateTopToolbarPlan(1, "Office Printer", resolver);
+
+        plan.PrinterLabelText.Should().Be("[[PPrriinntteerr:]]");
+        plan.CopiesLabelText.Should().Be("Copies:");
+    }
 }

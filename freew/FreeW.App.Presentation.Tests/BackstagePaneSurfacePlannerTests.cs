@@ -1,6 +1,7 @@
 using System.Linq;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
+using Free.Shared.Localization;
 using Free.Shared.Shell;
 using FreeW.App.Presentation.Backstage;
 using FreeW.Core.IO;
@@ -266,6 +267,29 @@ public sealed class BackstagePaneSurfacePlannerTests
             saveAsExtension: static _ => { });
 
         pdfOnly.Groups[0].Actions.Select(action => action.Label).Should().Equal("Create PDF");
+    }
+
+    [Fact]
+    public void BackstageExportPaneSurfaceText_FallsBackForUnresolvedDescriptorResources()
+    {
+        var descriptor = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export;
+        var text = BackstageExportPaneSurfaceText.FromDescriptor(descriptor, Resolve);
+
+        text.Description.Should().Be(descriptor.Description.FallbackText);
+        text.PdfActionLabel.Should().Be(descriptor.PdfActionLabel.FallbackText);
+        text.PdfActionDescription.Should().Be(descriptor.PdfActionDescription.FallbackText);
+
+        string? Resolve(string key)
+        {
+            if (key == descriptor.Description.ResourceKey)
+                return LocalizedTextCatalog.CreateMissingText(key);
+            if (key == descriptor.PdfActionLabel.ResourceKey)
+                return key;
+            if (key == descriptor.PdfActionDescription.ResourceKey)
+                return string.Empty;
+
+            return null;
+        }
     }
 
     private static IEnumerable<FileFormatDescriptor> Formats() =>

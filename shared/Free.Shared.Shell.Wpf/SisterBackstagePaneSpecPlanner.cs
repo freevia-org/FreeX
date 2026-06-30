@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.Localization;
 using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Wpf;
@@ -45,20 +46,11 @@ public sealed record SisterBackstageExportPaneTextSpec(
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        if (getText is not null)
-        {
-            var resolved = getText(descriptor.ResourceKey);
-            if (IsResolvedText(descriptor, resolved))
-                return resolved!;
-        }
-
-        return descriptor.FallbackText;
+        return LocalizedFallbackTextResolver.Resolve(
+            descriptor.ResourceKey,
+            descriptor.FallbackText,
+            getText);
     }
-
-    private static bool IsResolvedText(ResourceTextDescriptor descriptor, string? value) =>
-        !string.IsNullOrEmpty(value) &&
-        !string.Equals(value, descriptor.ResourceKey, StringComparison.Ordinal) &&
-        !string.Equals(value, "[[" + descriptor.ResourceKey + "]]", StringComparison.Ordinal);
 }
 
 public sealed record SisterBackstagePaneTextSpec(
@@ -103,20 +95,11 @@ public sealed record SisterBackstagePaneTextSpec(
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        if (getText is not null)
-        {
-            var resolved = getText(descriptor.ResourceKey);
-            if (IsResolvedText(descriptor, resolved))
-                return resolved!;
-        }
-
-        return descriptor.FallbackText;
+        return LocalizedFallbackTextResolver.Resolve(
+            descriptor.ResourceKey,
+            descriptor.FallbackText,
+            getText);
     }
-
-    private static bool IsResolvedText(ResourceTextDescriptor descriptor, string? value) =>
-        !string.IsNullOrEmpty(value) &&
-        !string.Equals(value, descriptor.ResourceKey, StringComparison.Ordinal) &&
-        !string.Equals(value, "[[" + descriptor.ResourceKey + "]]", StringComparison.Ordinal);
 }
 
 /// <summary>

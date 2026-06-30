@@ -17,6 +17,7 @@ using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
+using Free.Shared.Localization;
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeX.App.Avalonia;
@@ -715,13 +716,14 @@ public sealed partial class MainWindow
 
     private static string PrintPreviewText(string key, string fallback)
     {
-        var text = UiText.Get(key);
-        var resolved = text.StartsWith("[[", StringComparison.Ordinal) && text.EndsWith("]]", StringComparison.Ordinal)
-            ? fallback
-            : text;
+        var resolved = LocalizedFallbackTextResolver.Resolve(
+            key,
+            fallback,
+            UiText.Get,
+            stripMnemonics: true);
         // Strip mnemonic markers ("_Print...", "C_ollated", "_All pages") so the print-preview
         // toolbar/labels never render a literal underscore — Windows doesn't show them here either.
-        return StripDisplayMnemonic(resolved);
+        return resolved;
     }
 
     private static Control BuildPreviewDocumentViewerSurface(PrintPreviewPaginationContext context, int pageIndex)
