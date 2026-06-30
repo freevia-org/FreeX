@@ -293,7 +293,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteGroupedSheetCommand(
-                "Print Area",
+                PageLayoutRibbonActionPlanner.PrintAreaCommandLabel,
                 sheetId => PageLayoutRibbonCommandPlanner.BuildSetPrintAreaCommand(sheetId, range)))
             return;
         RefreshStatusBar();
@@ -302,7 +302,7 @@ public partial class MainWindow
     private void PrintAreaClearMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (!TryExecuteGroupedSheetCommand(
-                "Print Area",
+                PageLayoutRibbonActionPlanner.PrintAreaCommandLabel,
                 sheetId => PageLayoutRibbonCommandPlanner.BuildClearPrintAreaCommand(sheetId)))
             return;
         RefreshStatusBar();
@@ -476,43 +476,43 @@ public partial class MainWindow
 
     private void InsertPageBreakMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-
-        if (SheetGrid.SelectedRange is not { } selectedRange) return;
-
-        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
-            PageBreakMenuAction.Insert,
-            selectedRange,
-            sheet.RowPageBreaks,
-            sheet.ColumnPageBreaks);
-        TryExecuteGroupedSheetCommand(
-            "Page Breaks",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
+        ApplyPageBreakAction(PageBreakMenuAction.Insert);
     }
 
     private void RemovePageBreakMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-
-        if (SheetGrid.SelectedRange is not { } selectedRange) return;
-
-        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
-            PageBreakMenuAction.Remove,
-            selectedRange,
-            sheet.RowPageBreaks,
-            sheet.ColumnPageBreaks);
-        TryExecuteGroupedSheetCommand(
-            "Page Breaks",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
+        ApplyPageBreakAction(PageBreakMenuAction.Remove);
     }
 
     private void ResetAllPageBreaksMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var plan = PageBreakActionPlanner.ResetAll();
+        ApplyPageBreakAction(PageBreakMenuAction.ResetAll);
+    }
+
+    private void ApplyPageBreakAction(PageBreakMenuAction action)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null && action != PageBreakMenuAction.ResetAll)
+            return;
+
+        if (SheetGrid.SelectedRange is not { } selectedRange)
+        {
+            if (action != PageBreakMenuAction.ResetAll)
+                return;
+
+            selectedRange = new GridRange(
+                new CellAddress(_currentSheetId, 1, 1),
+                new CellAddress(_currentSheetId, 1, 1));
+        }
+
+        var plan = PageLayoutRibbonCommandPlanner.PlanPageBreakAction(
+            action,
+            selectedRange,
+            sheet?.RowPageBreaks ?? [],
+            sheet?.ColumnPageBreaks ?? []);
+
         TryExecuteGroupedSheetCommand(
-            "Page Breaks",
+            PageLayoutRibbonActionPlanner.PageBreaksCommandLabel,
             sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
     }
 
@@ -537,7 +537,7 @@ public partial class MainWindow
             sheet?.ColumnPageBreaks ?? []);
 
         TryExecuteGroupedSheetCommand(
-            "Page Breaks",
+            PageLayoutRibbonActionPlanner.PageBreaksCommandLabel,
             sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
     }
 

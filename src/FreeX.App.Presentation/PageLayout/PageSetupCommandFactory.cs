@@ -89,24 +89,33 @@ public static class PageSetupCommandFactory
                 request.PrintQualityDpi,
                 request.PrintErrorValue,
                 request.PrintComments),
-            new SetHeaderFooterCommand(
-                targetSheetId,
-                headerFooter.Header,
-                headerFooter.Footer,
-                headerFooter.FirstPageHeader,
-                headerFooter.FirstPageFooter,
-                headerFooter.EvenPageHeader,
-                headerFooter.EvenPageFooter,
-                headerFooter.DifferentFirstPage,
-                headerFooter.DifferentOddEvenPages,
-                headerFooter.ScaleHeaderFooterWithDocument,
-                headerFooter.AlignHeaderFooterWithMargins,
-                headerFooter.HeaderPictures,
-                headerFooter.FooterPictures,
-                headerFooter.FirstPageHeaderPictures,
-                headerFooter.FirstPageFooterPictures,
-                headerFooter.EvenPageHeaderPictures,
-                headerFooter.EvenPageFooterPictures));
+            BuildHeaderFooterCommand(targetSheetId, headerFooter));
+    }
+
+    public static SetHeaderFooterCommand BuildHeaderFooterCommand(
+        SheetId targetSheetId,
+        PageSetupHeaderFooterRequest headerFooter)
+    {
+        ArgumentNullException.ThrowIfNull(headerFooter);
+
+        return new SetHeaderFooterCommand(
+            targetSheetId,
+            headerFooter.Header,
+            headerFooter.Footer,
+            headerFooter.FirstPageHeader,
+            headerFooter.FirstPageFooter,
+            headerFooter.EvenPageHeader,
+            headerFooter.EvenPageFooter,
+            headerFooter.DifferentFirstPage,
+            headerFooter.DifferentOddEvenPages,
+            headerFooter.ScaleHeaderFooterWithDocument,
+            headerFooter.AlignHeaderFooterWithMargins,
+            headerFooter.HeaderPictures,
+            headerFooter.FooterPictures,
+            headerFooter.FirstPageHeaderPictures,
+            headerFooter.FirstPageFooterPictures,
+            headerFooter.EvenPageHeaderPictures,
+            headerFooter.EvenPageFooterPictures);
     }
 
     public static IWorkbookCommand BuildPrintAreaCommand(SheetId targetSheetId, GridRange? printArea) =>

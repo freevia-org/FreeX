@@ -167,7 +167,8 @@ public partial class ExportPlannerTests
         source.Should().Contain("gridlinesBox.Unchecked +=");
         source.Should().Contain("headingsBox.Checked +=");
         source.Should().Contain("headingsBox.Unchecked +=");
-        source.Should().Contain("new SetPrintOptionsCommand(");
+        source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintOptionsCommand(");
+        source.Should().NotContain("new SetPrintOptionsCommand(");
         source.Should().Contain("refreshPreview();");
     }
 

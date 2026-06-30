@@ -79,7 +79,9 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("ToCoreHyperlinkTargetKind(dialog.Result.LinkType)");
         insertSource.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);");
         insertSource.Should().Contain("new HeaderFooterDialog(sheet)");
-        insertSource.Should().Contain("new SetHeaderFooterCommand(");
+        insertSource.Should().Contain("PageSetupCommandFactory.BuildHeaderFooterCommand(");
+        insertSource.Should().Contain("new PageSetupHeaderFooterRequest");
+        insertSource.Should().NotContain("new SetHeaderFooterCommand(");
         insertSource.Should().Contain("new SymbolPickerDialog");
         insertSource.Should().Contain("CreateSingleCellEditCommand(currentAddress, Cell.FromValue(new TextValue(currentText)))");
 

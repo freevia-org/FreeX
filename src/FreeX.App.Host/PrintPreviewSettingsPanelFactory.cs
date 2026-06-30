@@ -3,6 +3,7 @@ using System.Printing;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
@@ -250,7 +251,7 @@ internal static class PrintPreviewSettingsPanelFactory
                 return;
 
             var orient = panelPlan.OrientationOptions[orientBox.SelectedIndex].Value;
-            executeCommand(new SetPageOrientationCommand(sheetId, orient));
+            executeCommand(PageLayoutRibbonCommandPlanner.BuildOrientationCommand(sheetId, orient));
             refreshPreview();
         };
         panel.Children.Add(orientBox);
@@ -264,7 +265,7 @@ internal static class PrintPreviewSettingsPanelFactory
                 return;
 
             var size = panelPlan.PaperSizeOptions[paperBox.SelectedIndex].Value;
-            executeCommand(new SetPaperSizeCommand(sheetId, size));
+            executeCommand(PageLayoutRibbonCommandPlanner.BuildPaperSizeCommand(sheetId, size));
             refreshPreview();
         };
         panel.Children.Add(paperBox);
@@ -287,7 +288,7 @@ internal static class PrintPreviewSettingsPanelFactory
                 return;
             }
 
-            executeCommand(new SetPageMarginsCommand(sheetId, option.Value));
+            executeCommand(PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, option.Value));
             refreshPreview();
         };
         panel.Children.Add(marginsBox);
@@ -309,7 +310,7 @@ internal static class PrintPreviewSettingsPanelFactory
                 return;
             }
 
-            executeCommand(new SetScaleToFitCommand(sheetId, option.Value));
+            executeCommand(PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, option.Value));
             refreshPreview();
         };
         panel.Children.Add(scaleBox);
@@ -358,7 +359,7 @@ internal static class PrintPreviewSettingsPanelFactory
         {
             if (executeCommand is null)
                 return;
-            executeCommand(new SetPrintOptionsCommand(sheetId, printGridlines, printHeadings));
+            executeCommand(PageLayoutRibbonCommandPlanner.BuildPrintOptionsCommand(sheetId, printGridlines, printHeadings));
             refreshPreview();
         }
 
