@@ -55,9 +55,9 @@ public static partial class PrintRenderer
 
         var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
 
-        IReadOnlyList<IReadOnlyList<KeyValuePair<CellAddress, string>>> commentSummaryPages =
+        IReadOnlyList<PrintCommentSummaryPagePlan> commentSummaryPages =
             sheet.PrintComments == WorksheetPrintComments.AtEnd
-                ? BuildCommentSummaryPages(sheet.Comments, sheet.ThreadedComments, pageH, marginTop)
+                ? PrintCommentSummaryPlanner.BuildPages(sheet.Comments, sheet.ThreadedComments, pageH, marginTop)
                 : [];
         var totalPages = printPlan.GridPageCount + commentSummaryPages.Count;
         var printableHyperlinks = BuildPrintableHyperlinkLookup(workbook, sheet);
@@ -148,14 +148,14 @@ public static partial class PrintRenderer
             doc.Pages.Add(pageContent);
         }
 
-        void AddCommentSummaryPage(IReadOnlyList<KeyValuePair<CellAddress, string>> commentsForPage)
+        void AddCommentSummaryPage(PrintCommentSummaryPagePlan page)
         {
             var (visual, textOverlays) = RenderCommentSummaryPageVisual(
                 pageW,
                 pageH,
                 marginLeft,
                 marginTop,
-                commentsForPage);
+                page.Entries);
 
             var container = new VisualHost { Visual = visual, TextOverlays = textOverlays };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };

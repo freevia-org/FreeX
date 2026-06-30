@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FluentAssertions;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -296,7 +297,7 @@ public sealed partial class PrintRendererPageSetupTests
     }
 
     [Fact]
-    public void BuildCommentSummaryPages_IncludesOverflowComments()
+    public void PrintCommentSummaryPlanner_IncludesOverflowComments()
     {
         var sheetId = SheetId.New();
         var comments = Enumerable.Range(1, 90)
@@ -304,28 +305,31 @@ public sealed partial class PrintRendererPageSetupTests
                 row => new CellAddress(sheetId, (uint)row, 1),
                 row => $"Comment {row}");
 
-        var pages = PrintRenderer.BuildCommentSummaryPages(
+        var pages = PrintCommentSummaryPlanner.BuildPages(
             comments,
             new Dictionary<CellAddress, ThreadedComment>(),
-            pageH: 11 * 96,
+            pageHeight: 11 * 96,
             marginTop: 0.75 * 96);
 
-        pages.SelectMany(page => page)
-            .Select(pair => pair.Key.Row)
+        pages.SelectMany(page => page.Entries)
+            .Select(entry => entry.Address.Row)
             .Should()
             .Equal(Enumerable.Range(1, 90).Select(row => (uint)row));
         pages.Count.Should().BeGreaterThan(1);
     }
 
     [Fact]
-    public void BuildCommentSummaryPages_AvoidsLinqPagingAndSortingScaffolding()
+    public void PrintRenderer_DelegatesCommentSummaryPlanningToPresentation()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("PrintRenderer.Comments.cs");
+        var rendererSource = DialogSourceTestSupport.ReadHostSources("PrintRenderer.cs");
+        var commentsSource = DialogSourceTestSupport.ReadHostSources("PrintRenderer.Comments.cs");
 
-        source.Should().NotContain(".Chunk(");
-        source.Should().NotContain(".Concat(threadedComments");
-        source.Should().NotContain(".OrderBy(pair => pair.Key.Row)");
-        source.Should().Contain("result.Sort(static (left, right) =>");
+        rendererSource.Should().Contain("PrintCommentSummaryPlanner.BuildPages(");
+        commentsSource.Should().Contain("PrintCommentSummaryPlanner.WrapOverlayText(");
+        commentsSource.Should().NotContain(".Chunk(");
+        commentsSource.Should().NotContain(".Concat(threadedComments");
+        commentsSource.Should().NotContain(".OrderBy(pair => pair.Key.Row)");
+        commentsSource.Should().NotContain("result.Sort(static (left, right) =>");
     }
 
     private static int CountColorCommentChromePixels(FrameworkElement page)
