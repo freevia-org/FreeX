@@ -13,6 +13,7 @@ public sealed class PrintPreviewSurfacePlannerTests
             totalPages: 3,
             printerName: "Office Printer");
 
+        plan.PrintButtonText.Should().Be("Print...");
         plan.PrinterLabelText.Should().Be("Printer:");
         plan.PrinterName.Should().Be("Office Printer");
         plan.PrinterComboWidth.Should().Be(190);
@@ -26,6 +27,7 @@ public sealed class PrintPreviewSurfacePlannerTests
         plan.SidesSelectedIndex.Should().Be(0);
         plan.StatusText.Should().Be("Ready: Office Printer; 1 copy; 3 pages");
         plan.PageRangeText.Should().Be("All pages");
+        plan.CloseButtonText.Should().Be("Close");
     }
 
     [Fact]
@@ -34,10 +36,22 @@ public sealed class PrintPreviewSurfacePlannerTests
         var plan = PrintPreviewSurfacePlanner.CreateDocumentToolbarPlan(4);
 
         plan.NavigationButtons.Should().Equal(
-            new PrintPreviewNavigationGlyphPlan(PrintPreviewToolbarCommand.FirstPage, "|<"),
-            new PrintPreviewNavigationGlyphPlan(PrintPreviewToolbarCommand.PreviousPage, "<"),
-            new PrintPreviewNavigationGlyphPlan(PrintPreviewToolbarCommand.NextPage, ">"),
-            new PrintPreviewNavigationGlyphPlan(PrintPreviewToolbarCommand.LastPage, ">|"));
+            new PrintPreviewNavigationGlyphPlan(
+                PrintPreviewToolbarCommand.FirstPage,
+                "|<",
+                PrintPreviewDialogPlanner.FirstPageButtonAutomationId),
+            new PrintPreviewNavigationGlyphPlan(
+                PrintPreviewToolbarCommand.PreviousPage,
+                "<",
+                PrintPreviewDialogPlanner.PreviousPageButtonAutomationId),
+            new PrintPreviewNavigationGlyphPlan(
+                PrintPreviewToolbarCommand.NextPage,
+                ">",
+                PrintPreviewDialogPlanner.NextPageButtonAutomationId),
+            new PrintPreviewNavigationGlyphPlan(
+                PrintPreviewToolbarCommand.LastPage,
+                ">|",
+                PrintPreviewDialogPlanner.LastPageButtonAutomationId));
         plan.PageLabelText.Should().Be("Page:");
         plan.PageNumberText.Should().Be("1");
         plan.PageStatusText.Should().Be("Page 1 of 4");
@@ -80,6 +94,8 @@ public sealed class PrintPreviewSurfacePlannerTests
         plan.IgnorePrintAreaText.Should().Be("Ignore print area");
         plan.PrintOptionsSectionText.Should().Be("Print Options");
         plan.PrintGridlinesText.Should().Be("Print gridlines");
+        plan.PrintHeadingsText.Should().Be("Print headings");
+        plan.PageSetupLinkText.Should().Be("Page Setup");
         plan.Settings.OrientationSelectedIndex.Should().Be(1);
         plan.Settings.PrintGridlines.Should().BeTrue();
     }
@@ -102,6 +118,42 @@ public sealed class PrintPreviewSurfacePlannerTests
         topToolbar.PrinterLabelText.Should().Be("Printer:");
         topToolbar.PrinterName.Should().Be("Windows print dialog");
         documentToolbar.PageSetupButtonText.Should().Be("Page Setup");
+    }
+
+    [Fact]
+    public void CreateSettingsRailPlan_CanPreserveAccessKeyMarkersForWpfLabels()
+    {
+        var resolver = new PrintSettingsTextResolver(
+            key => key switch
+            {
+                "PrintPreview_CopiesSectionLabel" => "_Copies:",
+                "PrintPreview_ScalingLabel" => "Sc_aling:",
+                _ => key
+            },
+            (_, _) => "");
+
+        var avaloniaPlan = PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
+            sheet: null,
+            totalPages: 1,
+            printerName: "",
+            currentSettings: new PrintPreviewSettings(),
+            hasSelection: false,
+            canUpdatePrintPreviewSettings: false,
+            textResolver: resolver);
+        var wpfPlan = PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
+            sheet: null,
+            totalPages: 1,
+            printerName: "",
+            currentSettings: new PrintPreviewSettings(),
+            hasSelection: false,
+            canUpdatePrintPreviewSettings: false,
+            textResolver: resolver,
+            stripMnemonics: false);
+
+        avaloniaPlan.CopiesSectionText.Should().Be("Copies:");
+        avaloniaPlan.ScalingLabelText.Should().Be("Scaling:");
+        wpfPlan.CopiesSectionText.Should().Be("_Copies:");
+        wpfPlan.ScalingLabelText.Should().Be("Sc_aling:");
     }
 
     [Fact]

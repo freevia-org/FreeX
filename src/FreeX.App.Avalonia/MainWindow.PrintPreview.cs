@@ -17,7 +17,6 @@ using AvaloniaControlShapesLine = Avalonia.Controls.Shapes.Line;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
-using Free.Shared.Localization;
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeX.App.Avalonia;
@@ -141,6 +140,10 @@ public sealed partial class MainWindow
         var documentToolbarPlan = PrintPreviewSurfacePlanner.CreateDocumentToolbarPlan(
             context.PageCount,
             PrintPreviewSettingsTextResolver);
+        var topToolbarPlan = PrintPreviewSurfacePlanner.CreateTopToolbarPlan(
+            context.PageCount,
+            PrintPreviewDefaultPrinterName,
+            PrintPreviewSettingsTextResolver);
 
         var dialog = new Window
         {
@@ -190,16 +193,14 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(pageStatusText, PrintPreviewDialogPlanner.PageLabelAutomationId);
 
-        var firstButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[0].Text);
-        var prevButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[1].Text);
-        var nextButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[2].Text);
-        var lastButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[3].Text);
-        AutomationProperties.SetAutomationId(prevButton, PrintPreviewDialogPlanner.PreviousButtonAutomationId);
-        AutomationProperties.SetAutomationId(nextButton, PrintPreviewDialogPlanner.NextButtonAutomationId);
+        var firstButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[0]);
+        var prevButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[1]);
+        var nextButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[2]);
+        var lastButton = CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[3]);
 
         var exportButton = new Button
         {
-            Content = PrintPreviewText("PrintPreview_PrintButton", "Print..."),
+            Content = topToolbarPlan.PrintButtonText,
             MinWidth = 68,
             Height = 24,
             MinHeight = 24,
@@ -218,7 +219,7 @@ public sealed partial class MainWindow
 
         var closeButton = new Button
         {
-            Content = PrintPreviewText("PrintPreview_CloseButton", "Close"),
+            Content = topToolbarPlan.CloseButtonText,
             MinWidth = 68,
             Height = 24,
             MinHeight = 24,
@@ -329,10 +330,7 @@ public sealed partial class MainWindow
                 canUpdatePrintPreviewSettings: false,
                 PrintPreviewSettingsTextResolver));
         var topToolbar = CreatePrintPreviewTopToolbar(
-            PrintPreviewSurfacePlanner.CreateTopToolbarPlan(
-                context.PageCount,
-                PrintPreviewDefaultPrinterName,
-                PrintPreviewSettingsTextResolver),
+            topToolbarPlan,
             exportButton,
             closeButton);
 
@@ -487,6 +485,7 @@ public sealed partial class MainWindow
                 new CheckBox { Content = plan.IgnorePrintAreaText, IsChecked = plan.Settings.IgnorePrintAreaChecked, IsEnabled = plan.Settings.IgnorePrintAreaEnabled, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 CreateSettingsSection(plan.PrintOptionsSectionText),
                 new CheckBox { Content = plan.PrintGridlinesText, IsChecked = plan.Settings.PrintGridlines, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new CheckBox { Content = plan.PrintHeadingsText, IsChecked = plan.Settings.PrintHeadings, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
 
@@ -653,6 +652,13 @@ public sealed partial class MainWindow
     private static Button CreatePreviewToolbarButton(string text) =>
         ApplyPreviewToolbarButtonChrome(new Button { Content = text }, 26);
 
+    private static Button CreatePreviewToolbarButton(PrintPreviewNavigationGlyphPlan plan)
+    {
+        var button = CreatePreviewToolbarButton(plan.Text);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        return button;
+    }
+
     private static Button ApplyPreviewToolbarButtonChrome(Button button, double minWidth)
     {
         AvaloniaCompactDialogChrome.ApplyButton(button, PrintPreviewChromeStyle, minWidth);
@@ -713,18 +719,6 @@ public sealed partial class MainWindow
             ItemsSource = items,
             SelectedIndex = selectedIndex,
         };
-
-    private static string PrintPreviewText(string key, string fallback)
-    {
-        var resolved = LocalizedFallbackTextResolver.Resolve(
-            key,
-            fallback,
-            UiText.Get,
-            stripMnemonics: true);
-        // Strip mnemonic markers ("_Print...", "C_ollated", "_All pages") so the print-preview
-        // toolbar/labels never render a literal underscore — Windows doesn't show them here either.
-        return resolved;
-    }
 
     private static Control BuildPreviewDocumentViewerSurface(PrintPreviewPaginationContext context, int pageIndex)
     {

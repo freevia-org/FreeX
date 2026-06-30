@@ -31,12 +31,16 @@ internal static class PrintPreviewSettingsPanelFactory
 
         // Tracks the current backstage settings; rebuilt whenever a control changes.
         var currentSettings = new PrintPreviewSettings();
-        var panelPlan = PrintPreviewSettingsPanelPlanner.Build(
+        var railPlan = PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
             sheet,
+            totalPages: 1,
+            printerName: string.Empty,
             currentSettings,
             hasSelection,
             setPrintPreviewSettings is not null,
-            WpfPrintSettingsTextResolver.Instance);
+            WpfPrintSettingsTextResolver.Instance,
+            stripMnemonics: false);
+        var panelPlan = railPlan.Settings;
 
         void AddSectionLabel(string text) =>
             panel.Children.Add(new TextBlock
@@ -117,12 +121,12 @@ internal static class PrintPreviewSettingsPanelFactory
             Text = panelPlan.Copies.ToString(CultureInfo.InvariantCulture),
             Margin = new Thickness(0, 0, 0, 2),
             VerticalContentAlignment = VerticalAlignment.Center,
-            Width = 60,
+            Width = railPlan.CopiesBoxWidth,
             HorizontalAlignment = HorizontalAlignment.Left
         };
         AutomationProperties.SetName(copiesUpDown, UiText.Get("PrintPreview_CopiesSectionAutomationName"));
         AutomationProperties.SetHelpText(copiesUpDown, UiText.Get("PrintPreview_CopiesSectionHelpText"));
-        AddLabel(UiText.Get("PrintPreview_CopiesSectionLabel"), copiesUpDown);
+        AddLabel(railPlan.CopiesSectionText, copiesUpDown);
         copiesUpDown.TextChanged += (_, _) =>
         {
             ApplyAction(PrintPreviewSettingsPanelPlanner.CreateCopiesAction(
@@ -143,7 +147,7 @@ internal static class PrintPreviewSettingsPanelFactory
             printerBox,
             UiText.Get("PrintPreview_NoInstalledPrintersToolTip"),
             UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
-        AddLabel(UiText.Get("PrintPreview_PrinterSectionLabel"), printerBox);
+        AddLabel(railPlan.PrinterSectionText, printerBox);
         printerBox.SelectionChanged += (_, _) =>
         {
             var name = printerBox.SelectedItem is PrintQueue q ? q.FullName : null;
@@ -153,7 +157,7 @@ internal static class PrintPreviewSettingsPanelFactory
 
         var printerPropertiesBtn = new Button
         {
-            Content = UiText.Get("PrintPreview_PrinterPropertiesButton"),
+            Content = railPlan.PrinterPropertiesButtonText,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 2, 0, 4),
             Padding = new Thickness(4, 2, 4, 2)
@@ -171,7 +175,7 @@ internal static class PrintPreviewSettingsPanelFactory
             panelPlan.PrintWhatSelectedIndex);
         AutomationProperties.SetName(printWhatBox, UiText.Get("PrintPreview_PrintWhatAutomationName"));
         AutomationProperties.SetHelpText(printWhatBox, UiText.Get("PrintPreview_PrintWhatHelpText"));
-        AddLabel(UiText.Get("PrintPreview_PrintWhatLabel"), printWhatBox);
+        AddLabel(railPlan.PrintWhatLabelText, printWhatBox);
         printWhatBox.SelectionChanged += (_, _) =>
         {
             ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePrintWhatAction(
@@ -189,7 +193,8 @@ internal static class PrintPreviewSettingsPanelFactory
         };
         var fromBox = new TextBox
         {
-            Width = 44,
+            Text = railPlan.PageRange.FromPageText,
+            Width = railPlan.PageRange.PageBoxWidth,
             Margin = new Thickness(4, 0, 4, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
             ToolTip = UiText.Get("PrintPreview_PageRangeFromHelpText")
@@ -198,14 +203,15 @@ internal static class PrintPreviewSettingsPanelFactory
         AutomationProperties.SetHelpText(fromBox, UiText.Get("PrintPreview_PageRangeFromHelpText"));
         var toLabel = new Label
         {
-            Content = UiText.Get("PrintPreview_PageRangeToLabel"),
+            Content = railPlan.PageRange.ToSeparatorText,
             Target = null,
             Padding = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Center
         };
         var toBox = new TextBox
         {
-            Width = 44,
+            Text = railPlan.PageRange.ToPageText,
+            Width = railPlan.PageRange.PageBoxWidth,
             Margin = new Thickness(4, 0, 0, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
             ToolTip = UiText.Get("PrintPreview_PageRangeToHelpText")
@@ -227,7 +233,7 @@ internal static class PrintPreviewSettingsPanelFactory
         fromBox.TextChanged += (_, _) => ApplyPageRange();
         toBox.TextChanged += (_, _) => ApplyPageRange();
 
-        AddLabel(UiText.Get("PrintPreview_PageRangeFromLabel"), fromBox);
+        AddLabel(railPlan.PagesLabelText, fromBox);
         panel.Children.Add(pageRangePanel);
 
         // 5. Print sides
@@ -236,7 +242,7 @@ internal static class PrintPreviewSettingsPanelFactory
             panelPlan.SidesSelectedIndex);
         AutomationProperties.SetName(sidesBox, UiText.Get("PrintPreview_SidesAutomationName"));
         AutomationProperties.SetHelpText(sidesBox, UiText.Get("PrintPreview_SidesHelpText"));
-        AddLabel(UiText.Get("PrintPreview_SidesSectionLabel"), sidesBox);
+        AddLabel(railPlan.SidesSectionText, sidesBox);
         sidesBox.SelectionChanged += (_, _) =>
         {
             ApplyAction(PrintPreviewSettingsPanelPlanner.CreateSidesAction(
@@ -252,7 +258,7 @@ internal static class PrintPreviewSettingsPanelFactory
             panelPlan.CollationSelectedIndex);
         AutomationProperties.SetName(collatedBox, UiText.Get("PrintPreview_CollatedSectionAutomationName"));
         AutomationProperties.SetHelpText(collatedBox, UiText.Get("PrintPreview_CollatedSectionHelpText"));
-        AddLabel(UiText.Get("PrintPreview_CollatedSectionLabel"), collatedBox);
+        AddLabel(railPlan.CollationSectionText, collatedBox);
         collatedBox.SelectionChanged += (_, _) =>
         {
             ApplyAction(PrintPreviewSettingsPanelPlanner.CreateCollationAction(
@@ -264,7 +270,7 @@ internal static class PrintPreviewSettingsPanelFactory
 
         // 7. Orientation
         var orientBox = MakeComboBox(panelPlan.OrientationOptions, panelPlan.OrientationSelectedIndex);
-        AddLabel(UiText.Get("PrintPreview_OrientationLabel"), orientBox);
+        AddLabel(railPlan.OrientationLabelText, orientBox);
         orientBox.SelectionChanged += (_, _) =>
         {
             ApplyAction(PrintPreviewSettingsPanelPlanner.CreateOrientationAction(
@@ -276,7 +282,7 @@ internal static class PrintPreviewSettingsPanelFactory
 
         // 7b. Paper size
         var paperBox = MakeComboBox(panelPlan.PaperSizeOptions, panelPlan.PaperSizeSelectedIndex);
-        AddLabel(UiText.Get("PageSetup_PaperSize"), paperBox);
+        AddLabel(railPlan.PaperSizeLabelText, paperBox);
         paperBox.SelectionChanged += (_, _) =>
         {
             ApplyAction(PrintPreviewSettingsPanelPlanner.CreatePaperSizeAction(
@@ -288,7 +294,7 @@ internal static class PrintPreviewSettingsPanelFactory
 
         // 7c. Margins with Custom Margins option
         var marginsBox = MakeComboBox(panelPlan.MarginOptions, panelPlan.MarginsSelectedIndex);
-        AddLabel(UiText.Get("PageSetup_Margins"), marginsBox);
+        AddLabel(railPlan.MarginsLabelText, marginsBox);
         marginsBox.SelectionChanged += (_, _) =>
         {
             var action = PrintPreviewSettingsPanelPlanner.CreateMarginsAction(
@@ -303,7 +309,7 @@ internal static class PrintPreviewSettingsPanelFactory
 
         // 8. Scaling
         var scaleBox = MakeComboBox(panelPlan.ScalingOptions, panelPlan.ScalingSelectedIndex);
-        AddLabel(UiText.Get("PrintPreview_ScalingLabel"), scaleBox);
+        AddLabel(railPlan.ScalingLabelText, scaleBox);
         scaleBox.SelectionChanged += (_, _) =>
         {
             var action = PrintPreviewSettingsPanelPlanner.CreateScalingAction(
@@ -319,7 +325,7 @@ internal static class PrintPreviewSettingsPanelFactory
         // Ignore print area
         var ignorePrintAreaBox = new CheckBox
         {
-            Content = UiText.Get("PrintPreview_IgnorePrintArea"),
+            Content = railPlan.IgnorePrintAreaText,
             IsChecked = panelPlan.IgnorePrintAreaChecked,
             IsEnabled = panelPlan.IgnorePrintAreaEnabled,
             Margin = new Thickness(0, 6, 0, 4),
@@ -334,16 +340,16 @@ internal static class PrintPreviewSettingsPanelFactory
         panel.Children.Add(ignorePrintAreaBox);
 
         // Print options
-        AddSectionLabel(UiText.Get("PrintPreview_PrintOptionsSection"));
+        AddSectionLabel(railPlan.PrintOptionsSectionText);
         var gridlinesBox = new CheckBox
         {
-            Content = UiText.Get("PageSetup_PrintGridlines"),
+            Content = railPlan.PrintGridlinesText,
             IsChecked = panelPlan.PrintGridlines,
             Margin = new Thickness(0, 0, 0, 4)
         };
         var headingsBox = new CheckBox
         {
-            Content = UiText.Get("PageSetup_PrintRowAndColumnHeadings"),
+            Content = railPlan.PrintHeadingsText,
             IsChecked = panelPlan.PrintHeadings,
             Margin = new Thickness(0, 0, 0, 4)
         };
@@ -366,7 +372,7 @@ internal static class PrintPreviewSettingsPanelFactory
         // Page Setup link
         var pageSetupLink = new Button
         {
-            Content = UiText.Get("PrintPreview_PageSetupLink"),
+            Content = railPlan.PageSetupLinkText,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 10, 0, 4),
             Padding = new Thickness(4, 2, 4, 2)

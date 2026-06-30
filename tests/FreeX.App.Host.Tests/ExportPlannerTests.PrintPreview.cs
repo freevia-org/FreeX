@@ -161,8 +161,8 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PageSetup_PrintGridlines\")");
-        source.Should().Contain("Content = UiText.Get(\"PageSetup_PrintRowAndColumnHeadings\")");
+        source.Should().Contain("Content = railPlan.PrintGridlinesText");
+        source.Should().Contain("Content = railPlan.PrintHeadingsText");
         source.Should().Contain("gridlinesBox.Checked +=");
         source.Should().Contain("gridlinesBox.Unchecked +=");
         source.Should().Contain("headingsBox.Checked +=");
@@ -177,7 +177,7 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = UiText.Get(\"PrintPreview_IgnorePrintArea\")");
+        source.Should().Contain("Content = railPlan.IgnorePrintAreaText");
         source.Should().Contain("IgnorePrintArea");
         source.Should().Contain("ignorePrintAreaBox.Checked +=");
         source.Should().Contain("ignorePrintAreaBox.Unchecked +=");
@@ -194,11 +194,16 @@ public partial class ExportPlannerTests
         source.Should().Contain("void AddLabel(string text, Control target)");
         source.Should().Contain("Content = text");
         source.Should().Contain("Target = target");
-        source.Should().Contain("AddLabel(UiText.Get(\"PrintPreview_OrientationLabel\"), orientBox);");
-        source.Should().Contain("AddLabel(UiText.Get(\"PageSetup_PaperSize\"), paperBox);");
-        source.Should().Contain("AddLabel(UiText.Get(\"PageSetup_Margins\"), marginsBox);");
-        source.Should().Contain("AddLabel(UiText.Get(\"PrintPreview_ScalingLabel\"), scaleBox);");
+        source.Should().Contain("PrintPreviewSurfacePlanner.CreateSettingsRailPlan(");
+        source.Should().Contain("AddLabel(railPlan.OrientationLabelText, orientBox);");
+        source.Should().Contain("AddLabel(railPlan.PaperSizeLabelText, paperBox);");
+        source.Should().Contain("AddLabel(railPlan.MarginsLabelText, marginsBox);");
+        source.Should().Contain("AddLabel(railPlan.ScalingLabelText, scaleBox);");
         source.Should().Contain("PrintPreviewSettingsPanelPlanner.Build(");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PrintPreview_OrientationLabel\")");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PageSetup_PaperSize\")");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PageSetup_Margins\")");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PrintPreview_ScalingLabel\")");
         source.Should().NotContain("UiText.Get(\"PrintPreview_PrintWhatActiveSheets\")");
         source.Should().NotContain("UiText.Get(\"PrintPreview_ScaleFitColumns\")");
         source.Should().NotContain("PrintSettingsPlanner.ScaleIndexToScaleToFit(scaleBox.SelectedIndex)");
@@ -364,6 +369,8 @@ public partial class ExportPlannerTests
         + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewDialogPlanner.cs")
         + Environment.NewLine
         + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewToolbarStatePlanner.cs")
+        + Environment.NewLine
+        + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewSurfacePlanner.cs")
         + Environment.NewLine
         + DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintPreviewSettingsPanelPlanner.cs");
 

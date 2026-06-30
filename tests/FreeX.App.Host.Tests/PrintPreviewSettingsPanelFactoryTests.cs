@@ -34,6 +34,25 @@ public sealed class PrintPreviewSettingsPanelFactoryTests
     }
 
     [Fact]
+    public void Build_DelegatesVisibleRailTextToSharedSurfacePlanner()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("PrintPreviewSettingsPanelFactory.cs");
+
+        source.Should().Contain("PrintPreviewSurfacePlanner.CreateSettingsRailPlan(");
+        source.Should().Contain("AddLabel(railPlan.CopiesSectionText, copiesUpDown);");
+        source.Should().Contain("AddLabel(railPlan.PrintWhatLabelText, printWhatBox);");
+        source.Should().Contain("AddLabel(railPlan.OrientationLabelText, orientBox);");
+        source.Should().Contain("Content = railPlan.PrintGridlinesText");
+        source.Should().Contain("Content = railPlan.PrintHeadingsText");
+        source.Should().Contain("Content = railPlan.PageSetupLinkText");
+
+        source.Should().NotContain("AddLabel(UiText.Get(\"PrintPreview_CopiesSectionLabel\")");
+        source.Should().NotContain("AddLabel(UiText.Get(\"PrintPreview_PrintWhatLabel\")");
+        source.Should().NotContain("Content = UiText.Get(\"PageSetup_PrintGridlines\")");
+        source.Should().NotContain("Content = UiText.Get(\"PageSetup_PrintRowAndColumnHeadings\")");
+    }
+
+    [Fact]
     public void Build_InitializesOrientationPaperMarginScaleFromSheetPrintSettings()
     {
         StaTestRunner.Run(() =>
