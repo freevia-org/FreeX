@@ -205,15 +205,25 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("primitive.LineSegments");
             source.Should().Contain("primitive.Markers");
             source.Should().Contain("plan.DataLabels");
-            source.Should().Contain("ChartRenderPlanner.BuildBubblePrimitivePlan");
-            source.Should().Contain("ChartRenderPlanner.BuildRadarPrimitivePlan");
+            source.Should().Contain("ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot, seriesColors)");
+            source.Should().Contain("ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot, seriesColors)");
+            source.Should().Contain("plan.GridLineStroke");
+            source.Should().Contain("plan.SpokeStroke");
+            source.Should().Contain("ToGeometry(ring.Path)");
+            source.Should().Contain("ToGeometry(primitive.Path)");
             source.Should().NotContain("ComputeNiceScatterAxisRange(chart, useX: true)");
             source.Should().NotContain("ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot);");
+            source.Should().NotContain("ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot);");
+            source.Should().NotContain("ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot);");
             source.Should().NotContain("RenderScatterSeriesPrimitive");
             source.Should().NotContain("double maxBubble =");
             source.Should().NotContain("chart.ScatterStyle is");
             source.Should().NotContain("catCount = Math.Max(3");
             source.Should().NotContain("ringR =");
+            source.Should().NotContain("Color.FromArgb(180, color.R");
+            source.Should().NotContain("Color.FromArgb(80, color.R");
+            source.Should().NotContain("primitive.IsFilled");
+            source.Should().NotContain("markerBrush");
         }
     }
 

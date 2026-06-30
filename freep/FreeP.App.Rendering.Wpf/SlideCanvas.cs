@@ -1124,21 +1124,20 @@ public sealed class SlideCanvas : FrameworkElement
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot);
-        var gridPen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
-        if (gridPen.CanFreeze) gridPen.Freeze();
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot, seriesColors);
+        var gridPen = ToPen(plan.GridLineStroke);
 
         foreach (var gridLine in plan.GridLines)
             dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
 
         foreach (var primitive in plan.Bubbles)
         {
-            var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
-            var brush  = FreezeBrush(new SolidColorBrush(Color.FromArgb(180, color.R, color.G, color.B)));
-            var outlinePen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))), 0.8);
-            if (outlinePen.CanFreeze) outlinePen.Freeze();
-
-            dc.DrawEllipse(brush, outlinePen, ToPoint(primitive.Center), primitive.Radius, primitive.Radius);
+            dc.DrawEllipse(
+                ToBrush(primitive.Fill),
+                ToPen(primitive.Stroke),
+                ToPoint(primitive.Center),
+                primitive.Radius,
+                primitive.Radius);
         }
 
         foreach (var label in plan.XAxisLabels)
@@ -1155,30 +1154,12 @@ public sealed class SlideCanvas : FrameworkElement
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot);
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot, seriesColors);
 
-        var gridPen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
-        if (gridPen.CanFreeze) gridPen.Freeze();
         foreach (var ring in plan.Rings)
-        {
-            var ringGeo = new StreamGeometry();
-            using (var ctx = ringGeo.Open())
-            {
-                for (int pointIndex = 0; pointIndex < ring.Points.Count; pointIndex++)
-                {
-                    var point = ToPoint(ring.Points[pointIndex]);
-                    if (pointIndex == 0)
-                        ctx.BeginFigure(point, isFilled: false, isClosed: true);
-                    else
-                        ctx.LineTo(point, isStroked: true, isSmoothJoin: false);
-                }
-            }
-            if (ringGeo.CanFreeze) ringGeo.Freeze();
-            dc.DrawGeometry(null, gridPen, ringGeo);
-        }
+            dc.DrawGeometry(null, ToPen(ring.Stroke), ToGeometry(ring.Path));
 
-        var spokePen = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0))), 0.5);
-        if (spokePen.CanFreeze) spokePen.Freeze();
+        var spokePen = ToPen(plan.SpokeStroke);
         foreach (var spoke in plan.Spokes)
             dc.DrawLine(spokePen, ToPoint(spoke.Start), ToPoint(spoke.End));
 
@@ -1187,35 +1168,18 @@ public sealed class SlideCanvas : FrameworkElement
 
         foreach (var primitive in plan.Series)
         {
-            var color = GetSeriesColor(chart, primitive.SeriesIndex, 0, seriesColors);
-            var pen    = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))), 1.5);
-            if (pen.CanFreeze) pen.Freeze();
+            dc.DrawGeometry(
+                primitive.Path.Fill.HasValue ? ToBrush(primitive.Path.Fill.Value) : null,
+                ToPen(primitive.Stroke),
+                ToGeometry(primitive.Path));
 
-            var polyGeo2 = new StreamGeometry();
-            using (var ctx3 = polyGeo2.Open())
-            {
-                for (int pointIndex = 0; pointIndex < primitive.Points.Count; pointIndex++)
-                {
-                    var point = ToPoint(primitive.Points[pointIndex]);
-                    if (pointIndex == 0)
-                        ctx3.BeginFigure(point, isFilled: primitive.IsFilled, isClosed: true);
-                    else
-                        ctx3.LineTo(point, isStroked: true, isSmoothJoin: true);
-                }
-            }
-            if (polyGeo2.CanFreeze) polyGeo2.Freeze();
-
-            Brush? fillBrush = primitive.IsFilled
-                ? FreezeBrush(new SolidColorBrush(Color.FromArgb(80, color.R, color.G, color.B)))
-                : null;
-            dc.DrawGeometry(fillBrush, pen, polyGeo2);
-
-            if (primitive.WithMarkers)
-            {
-                var markerBrush = FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
-                foreach (var point in primitive.Points)
-                    dc.DrawEllipse(markerBrush, null, ToPoint(point), 3, 3);
-            }
+            foreach (var marker in primitive.Markers)
+                dc.DrawEllipse(
+                    marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null,
+                    marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null,
+                    ToPoint(marker.Center),
+                    marker.Radius,
+                    marker.Radius);
         }
     }
 
@@ -2300,6 +2264,25 @@ public sealed class SlideCanvas : FrameworkElement
             stroke.Thickness);
         if (pen.CanFreeze) pen.Freeze();
         return pen;
+    }
+
+    private static StreamGeometry ToGeometry(ChartPathPrimitive path)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            for (int pointIndex = 0; pointIndex < path.Points.Count; pointIndex++)
+            {
+                var point = ToPoint(path.Points[pointIndex]);
+                if (pointIndex == 0)
+                    ctx.BeginFigure(point, path.Fill.HasValue, path.IsClosed);
+                else
+                    ctx.LineTo(point, isStroked: true, isSmoothJoin: true);
+            }
+        }
+
+        if (geometry.CanFreeze) geometry.Freeze();
+        return geometry;
     }
 
     private static TextAlignment ToTextAlignment(ChartPlanTextAlignment alignment) =>
