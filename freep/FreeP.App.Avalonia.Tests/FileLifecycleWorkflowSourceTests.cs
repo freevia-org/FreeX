@@ -31,8 +31,10 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().Contain("_fileWorkflow.OpenAsync(");
         source.Should().Contain("_fileWorkflow.SaveAsync(");
         source.Should().Contain("_fileWorkflow.MarkSavedWithoutPath()");
-        source.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false)");
+        source.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles)");
         source.Should().Contain("_fileWorkflow.MarkDirty();");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
+        source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _presentation)");
         source.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         source.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");

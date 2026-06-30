@@ -11,7 +11,6 @@ using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
-using FreeP.Core.IO;
 using FreeP.Core.Model;
 using System.Linq;
 
@@ -527,10 +526,8 @@ public sealed class MainWindow : Window
     {
         try
         {
-            var presentation = PresentationFileDialogPlanner.IsLegacyPresentationPath(path)
-                ? FxpFormat.Read(path)
-                : PptxPackageReader.Read(path);
-            LoadPresentationAsSaved(presentation, path);
+            var result = PresentationFilePersistenceWorkflow.Open(path);
+            LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
             _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(path));
             return true;
         }
@@ -545,18 +542,9 @@ public sealed class MainWindow : Window
     {
         try
         {
-            if (PresentationFileDialogPlanner.IsLegacyPresentationPath(path))
-            {
-                FxpFormat.Write(_presentation, path);
-            }
-            else
-            {
-                using var stream = File.Create(path);
-                PptxPackageWriter.Write(_presentation, stream);
-            }
-
-            _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
-            _statusText.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(path));
+            var result = PresentationFilePersistenceWorkflow.Save(path, _presentation);
+            _fileWorkflow.MarkSavedWithPath(result.SavedPath, result.SuppressRecentFiles);
+            _statusText.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(result.SavedPath));
             return true;
         }
         catch (Exception ex)
@@ -566,26 +554,19 @@ public sealed class MainWindow : Window
         }
     }
 
-    private static bool IsSupportedPresentationPath(string path)
-    {
-        var extension = Path.GetExtension(path);
-        return string.Equals(
-                   extension,
-                   PresentationFileDialogPlanner.DefaultPresentationExtension,
-                   StringComparison.OrdinalIgnoreCase)
-               || PresentationFileDialogPlanner.IsLegacyPresentationPath(path);
-    }
+    private static bool IsSupportedPresentationPath(string path) =>
+        PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path);
 
     // ── Presentation load ──────────────────────────────────────────────────────
 
-    private void LoadPresentationAsSaved(Presentation presentation, string? path)
+    private void LoadPresentationAsSaved(Presentation presentation, string? path, bool suppressRecentFiles = false)
     {
         LoadPresentationContent(presentation);
 
         if (path is null)
             _fileWorkflow.MarkSavedWithoutPath();
         else
-            _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
+            _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles);
     }
 
     private void LoadPresentationContent(Presentation presentation)
