@@ -82,35 +82,11 @@ public sealed partial class MainWindow
 
     private WorkbookInfoPlan BuildWorkbookInfoPlan()
     {
-        long? sizeBytes = null;
-        System.DateTime? modifiedUtc = null;
-        System.DateTime? modifiedLocal = null;
-        var path = _session.CurrentFilePath;
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                sizeBytes = info.Length;
-                modifiedUtc = info.LastWriteTimeUtc;
-                modifiedLocal = info.LastWriteTime;
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-        }
-
-        return WorkbookInfoPlanner.Build(
+        return WorkbookInfoFileMetadataReader.BuildPlan(
             _session.Workbook,
-            path,
+            _session.CurrentFilePath,
             ResolveActiveSheetIndex(),
-            sizeBytes,
-            modifiedUtc,
-            modifiedLocal,
-            _session.IsDirty);
+            hasUnsavedChanges: _session.IsDirty);
     }
 
     private static WorkbookInfoDisplayStrings CreateWorkbookInfoDisplayStrings() =>
