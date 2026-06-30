@@ -33,7 +33,7 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
     private FootnoteEndnoteOptionsDialog(Window? owner, NoteNumberingOptions footnote, NoteNumberingOptions endnote)
     {
         Owner = owner;
-        Title = "Footnote and Endnote";
+        Title = FootnoteEndnoteOptionsDialogPlanner.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
@@ -62,12 +62,12 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
 
         var outerStack = new StackPanel { Margin = new Thickness(14) };
 
-        outerStack.Children.Add(SectionHeader("Footnotes"));
+        outerStack.Children.Add(SectionHeader(FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel));
         outerStack.Children.Add(OptionsGrid(_footnoteFormatBox, _footnoteStartBox, _footnoteRestartBox));
 
         outerStack.Children.Add(new Separator { Margin = new Thickness(0, 10, 0, 8) });
 
-        outerStack.Children.Add(SectionHeader("Endnotes"));
+        outerStack.Children.Add(SectionHeader(FootnoteEndnoteOptionsDialogPlanner.EndnotesSectionLabel));
         outerStack.Children.Add(OptionsGrid(_endnoteFormatBox, _endnoteStartBox, _endnoteRestartBox));
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 14, 0, 0));
@@ -89,9 +89,9 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Number format:", formatBox);
-        AddRow(grid, 1, "Start at:", startBox);
-        AddRow(grid, 2, "Numbering:", restartBox);
+        AddRow(grid, 0, FootnoteEndnoteOptionsDialogPlanner.NumberFormatLabel, formatBox);
+        AddRow(grid, 1, FootnoteEndnoteOptionsDialogPlanner.StartAtLabel, startBox);
+        AddRow(grid, 2, FootnoteEndnoteOptionsDialogPlanner.NumberingLabel, restartBox);
 
         return grid;
     }

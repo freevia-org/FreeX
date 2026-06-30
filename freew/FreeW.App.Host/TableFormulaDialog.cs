@@ -23,7 +23,7 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private TableFormulaDialog(Window? owner, TableFormulaDialogInitialState initialState)
     {
         Owner = owner;
-        Title = "Formula";
+        Title = TableFormulaDialogPlanner.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
@@ -32,18 +32,18 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var panel = new StackPanel { Margin = new Thickness(14) };
 
-        panel.Children.Add(new TextBlock { Text = "Formula:", Margin = new Thickness(0, 0, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.FormulaLabel, Margin = new Thickness(0, 0, 0, 4) });
         _formula = new TextBox { Text = initialState.FormulaText };
         panel.Children.Add(_formula);
 
-        panel.Children.Add(new TextBlock { Text = "Number format:", Margin = new Thickness(0, 10, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.NumberFormatLabel, Margin = new Thickness(0, 10, 0, 4) });
         _format = new ComboBox { IsEditable = true };
         foreach (var format in TableFormulaDialogPlanner.NumberFormats)
             _format.Items.Add(format);
         _format.SelectedIndex = Math.Clamp(initialState.NumberFormatIndex, 0, _format.Items.Count - 1);
         panel.Children.Add(_format);
 
-        panel.Children.Add(new TextBlock { Text = "Paste function:", Margin = new Thickness(0, 10, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.PasteFunctionLabel, Margin = new Thickness(0, 10, 0, 4) });
         var function = new ComboBox();
         foreach (var name in TableFormulaDialogPlanner.Functions)
             function.Items.Add(name);
@@ -75,7 +75,7 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 out var result,
                 out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? TableFormulaDialogPlanner.ValidationMessage, "Formula");
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? TableFormulaDialogPlanner.ValidationMessage, TableFormulaDialogPlanner.Title);
             DialogFocus.FocusAndSelect(_formula);
             return;
         }

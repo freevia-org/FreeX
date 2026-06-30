@@ -70,7 +70,7 @@ internal sealed class BackstageView : Window
     {
         _callbacks = callbacks;
 
-        Title = "FreeW — File";
+        Title = BackstageViewTextResources.WindowTitle;
         Width = 840;
         Height = 620;
         MinWidth = 640;
@@ -127,7 +127,7 @@ internal sealed class BackstageView : Window
         // Back button
         var backBtn = new Button
         {
-            Content = "← Back",
+            Content = BackstageViewTextResources.BackButton,
             Background = Brushes.Transparent,
             Foreground = RailForeground,
             BorderThickness = new Thickness(0),
@@ -149,14 +149,11 @@ internal sealed class BackstageView : Window
         });
 
         // Nav entries
-        AddNavEntry(panel, BackstagePane.Home, "Home");
-        AddNavEntry(panel, BackstagePane.Open, "Open");
-        AddNavEntry(panel, BackstagePane.SaveAs, "Save As");
-        AddNavEntry(panel, BackstagePane.Print, "Print");
-        AddNavEntry(panel, BackstagePane.Share, "Share");
-        AddNavEntry(panel, BackstagePane.Export, "Export");
-        AddNavEntry(panel, BackstagePane.Info, "Info");
-        AddNavEntry(panel, BackstagePane.Account, "Account");
+        foreach (var entry in BackstageViewTextResources.RailEntries)
+        {
+            if (Enum.TryParse<BackstagePane>(entry.PaneKey, out var pane))
+                AddNavEntry(panel, pane, entry.Label);
+        }
 
         // Spacer
         panel.Children.Add(new Border { Height = 16 });
@@ -164,7 +161,7 @@ internal sealed class BackstageView : Window
         // Options placeholder (no implementation yet)
         var optionsBtn = new Button
         {
-            Content = "Options",
+            Content = BackstageViewTextResources.OptionsButton,
             Background = Brushes.Transparent,
             Foreground = new SolidColorBrush(Color.FromArgb(0xAA, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(0),
@@ -235,7 +232,7 @@ internal sealed class BackstageView : Window
         BackstagePane.Export => BuildExportPane(),
         BackstagePane.Info => BuildInfoPane(),
         BackstagePane.Account => BuildAccountPane(),
-        _ => new TextBlock { Text = $"{pane} pane not yet implemented.", Foreground = SecondaryInk },
+        _ => new TextBlock { Text = $"{pane} {BackstageViewTextResources.NotImplementedSuffix}", Foreground = SecondaryInk },
     };
 
     // ── Home pane ─────────────────────────────────────────────────────────────
@@ -250,7 +247,7 @@ internal sealed class BackstageView : Window
             browse: () => { Close(); _callbacks.Browse(); },
             openMore: () => NavigateTo(BackstagePane.Open));
 
-        return BuildActionGroupContent("Home", groups, "Start with a new document or reopen a recent file.");
+        return BuildActionGroupContent(BackstageViewTextResources.Home.Title, groups, BackstageViewTextResources.Home.Description);
     }
 
     // ── Open pane ─────────────────────────────────────────────────────────────
@@ -264,7 +261,7 @@ internal sealed class BackstageView : Window
             browse: () => { Close(); _callbacks.Browse(); },
             recoverUnsaved: () => { Close(); _callbacks.RecoverUnsaved(); });
 
-        return BuildActionGroupContent("Open", groups, "Open a document from your recent files or browse your PC.");
+        return BuildActionGroupContent(BackstageViewTextResources.Open.Title, groups, BackstageViewTextResources.Open.Description);
     }
 
     // ── Save As pane ─────────────────────────────────────────────────────────
@@ -282,12 +279,12 @@ internal sealed class BackstageView : Window
             saveAsExtension: ext => { Close(); _callbacks.SaveAsExtension(ext); });
 
         var content = new StackPanel { Spacing = 20 };
-        content.Children.Add(BuildPaneHeader("Save As", "Save this document in a different format."));
+        content.Children.Add(BuildPaneHeader(BackstageViewTextResources.SaveAs.Title, BackstageViewTextResources.SaveAs.Description));
 
         // Inline plan info: current suggested filename + selected extension
         var infoGrid = CreateDetailGrid();
-        AddDetailRow(infoGrid, "File name", inlinePlan.SuggestedFileName, "SaveAsSuggestedFileName");
-        AddDetailRow(infoGrid, "Format", inlinePlan.SelectedExtension, "SaveAsSelectedExtension");
+        AddDetailRow(infoGrid, BackstageViewTextResources.FileNameLabel, inlinePlan.SuggestedFileName, "SaveAsSuggestedFileName");
+        AddDetailRow(infoGrid, BackstageViewTextResources.FormatLabel, inlinePlan.SelectedExtension, "SaveAsSelectedExtension");
         content.Children.Add(infoGrid);
 
         // Format groups
@@ -305,10 +302,10 @@ internal sealed class BackstageView : Window
         var plan = BackstagePrintPanePlanner.Build(_callbacks.DisplayName, page);
 
         var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(BuildPaneHeader("Print", plan.Description));
+        content.Children.Add(BuildPaneHeader(BackstageViewTextResources.Print.Title, plan.Description));
 
         // Document settings grid
-        content.Children.Add(BuildSectionHeader("Document Settings"));
+        content.Children.Add(BuildSectionHeader(BackstageViewTextResources.DocumentSettingsSection));
         var fieldGrid = CreateDetailGrid();
         foreach (var field in plan.Fields)
             AddDetailRow(fieldGrid, field.Label, field.Value, $"PrintField_{field.Label}");
@@ -333,7 +330,7 @@ internal sealed class BackstageView : Window
         }
 
         content.Children.Add(AvaloniaBackstageChrome.CreateNote(
-            "Note: Print is available in FreeW via Export to PDF (Ctrl+Shift+P). Direct printer output is planned for a future update.",
+            BackstageViewTextResources.DirectPrintDeferredNote,
             BackstageChromeStyle,
             fontStyle: FontStyle.Italic,
             margin: new Thickness(0, 8, 0, 0)));
@@ -353,7 +350,7 @@ internal sealed class BackstageView : Window
             saveCopy: () => { Close(); _callbacks.SaveAs(); },   // saveCopy → SaveAs (no separate copy-save yet)
             exportPdf: () => { Close(); _callbacks.ExportPdf(); });
 
-        return BuildActionGroupContent("Share", groups, "Share this document or send a copy.");
+        return BuildActionGroupContent(BackstageViewTextResources.Share.Title, groups, BackstageViewTextResources.Share.Description);
     }
 
     // ── Export pane ───────────────────────────────────────────────────────────
@@ -366,14 +363,14 @@ internal sealed class BackstageView : Window
             saveAsExtension: ext => { Close(); _callbacks.SaveAsExtension(ext); });
 
         var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(BuildPaneHeader("Export", "Export this document to a different file format."));
+        content.Children.Add(BuildPaneHeader(BackstageViewTextResources.Export.Title, BackstageViewTextResources.Export.Description));
 
         // PDF export action (real — wired to ExportPdf)
-        content.Children.Add(BuildSectionHeader("Create PDF/XPS Document"));
+        content.Children.Add(BuildSectionHeader(BackstageViewTextResources.CreatePdfSection));
         content.Children.Add(AvaloniaBackstageChrome.CreateDescribedActionRow(
             new AvaloniaBackstageDescribedActionRowSpec(
-                "Create PDF",
-                "Publish a fixed-layout PDF copy for sharing or printing.",
+                BackstageViewTextResources.CreatePdfLabel,
+                BackstageViewTextResources.CreatePdfDescription,
                 "ExportCreatePdfButton")
             {
                 Action = () => { Close(); _callbacks.ExportPdf(); },
@@ -393,21 +390,21 @@ internal sealed class BackstageView : Window
         var safetyGroups = BackstageInfoSafetyPanePlanner.Build();
 
         var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(BuildPaneHeader("Info", "Protect, inspect, and review document information."));
+        content.Children.Add(BuildPaneHeader(BackstageViewTextResources.Info.Title, BackstageViewTextResources.Info.Description));
 
         // Document properties
-        content.Children.Add(BuildSectionHeader("Document Properties"));
+        content.Children.Add(BuildSectionHeader(BackstageViewTextResources.DocumentPropertiesSection));
         var propsGrid = CreateDetailGrid();
-        var name = string.IsNullOrWhiteSpace(_callbacks.DisplayName) ? "Untitled" : _callbacks.DisplayName;
-        AddDetailRow(propsGrid, "Document", name, "InfoDocumentName");
-        AddDetailRow(propsGrid, "Path", _callbacks.CurrentPath ?? "(not saved)", "InfoDocumentPath");
+        var name = string.IsNullOrWhiteSpace(_callbacks.DisplayName) ? BackstageViewTextResources.UntitledValue : _callbacks.DisplayName;
+        AddDetailRow(propsGrid, BackstageViewTextResources.DocumentLabel, name, "InfoDocumentName");
+        AddDetailRow(propsGrid, BackstageViewTextResources.PathLabel, _callbacks.CurrentPath ?? BackstageViewTextResources.NotSavedValue, "InfoDocumentPath");
         if (_callbacks.CurrentPath is { } path && File.Exists(path))
         {
             try
             {
                 var info = new FileInfo(path);
-                AddDetailRow(propsGrid, "Size", FormatFileSize(info.Length), "InfoFileSize");
-                AddDetailRow(propsGrid, "Modified", info.LastWriteTime.ToString("g"), "InfoLastModified");
+                AddDetailRow(propsGrid, BackstageViewTextResources.SizeLabel, FormatFileSize(info.Length), "InfoFileSize");
+                AddDetailRow(propsGrid, BackstageViewTextResources.ModifiedLabel, info.LastWriteTime.ToString("g"), "InfoLastModified");
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
@@ -442,7 +439,7 @@ internal sealed class BackstageView : Window
         var version = typeof(BackstageView).Assembly.GetName().Version?.ToString() ?? "1.0.0";
         var plan = SisterBackstageAccountPanePlanner.Build(
             new SisterBackstageAccountPaneContext(
-                "FreeW",
+                BackstageViewTextResources.ProductName,
                 version,
                 SafeEnvironment(() => Environment.UserName),
                 SafeEnvironment(() => Environment.MachineName),
@@ -450,7 +447,7 @@ internal sealed class BackstageView : Window
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FreeW"))));
 
         var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(BuildPaneHeader("Account", plan.Description));
+        content.Children.Add(BuildPaneHeader(BackstageViewTextResources.Account.Title, plan.Description));
 
         foreach (var group in plan.Groups)
         {

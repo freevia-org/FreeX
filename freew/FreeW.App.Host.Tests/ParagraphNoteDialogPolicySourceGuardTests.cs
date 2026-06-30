@@ -51,6 +51,16 @@ public sealed class ParagraphNoteDialogPolicySourceGuardTests
         source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.FormatItems");
         source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.FootnoteRestartItems");
         source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems");
+        source.Should().Contain("Title = FootnoteEndnoteOptionsDialogPlanner.Title;");
+        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel");
+        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.EndnotesSectionLabel");
+        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.NumberFormatLabel");
+        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.StartAtLabel");
+        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.NumberingLabel");
+        source.Should().NotContain("Title = \"Footnote and Endnote\"");
+        source.Should().NotContain("SectionHeader(\"Footnotes\")");
+        source.Should().NotContain("SectionHeader(\"Endnotes\")");
+        source.Should().NotContain("AddRow(grid, 0, \"Number format:\"");
         source.Should().NotContain("NoteNumberFormat.Decimal");
         source.Should().NotContain("NoteNumberFormat.LowerRoman");
         source.Should().NotContain("NoteNumberRestart.EachPage");

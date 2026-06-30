@@ -67,4 +67,10 @@ public sealed class PresentationFileDialogPlannerTests
         plan.DefaultExtensionWithoutDot.Should().Be("pdf");
         plan.FilterIndex.Should().Be(1);
     }
+
+    [Fact]
+    public void FileTextResources_ExposeAvaloniaPicturePickerTypeName()
+    {
+        PresentationFileTextResources.PictureFileTypeName.Should().Be("Images");
+    }
 }

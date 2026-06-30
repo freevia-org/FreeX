@@ -43,6 +43,25 @@ public sealed record WatermarkOptionsDialogValidation(
 public static class WatermarkOptionsDialogPlanner
 {
     public const string Title = "Printed Watermark";
+    public const string TextModeLabel = "Text watermark";
+    public const string PictureModeLabel = "Picture watermark";
+    public const string TextLabel = "Text:";
+    public const string FontLabel = "Font:";
+    public const string ColorLabel = "Color (hex):";
+    public const string LayoutLabel = "Layout:";
+    public const string DiagonalLabel = "Diagonal";
+    public const string HorizontalLabel = "Horizontal";
+    public const string SemitransparentLabel = "Semitransparent";
+    public const string ImageFileLabel = "Image file:";
+    public const string ScaleLabel = "Scale (%, 0=Auto):";
+    public const string SelectPictureButton = "Select Picture\u2026";
+    public const string SelectWatermarkImageTitle = "Select a watermark image";
+    public const string WatermarkImageFilter =
+        "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|All files (*.*)|*.*";
+    public const string WashoutLabel = "Washout (semitransparent)";
+    public const string OkButton = "OK";
+    public const string RemoveWatermarkButton = "Remove Watermark";
+    public const string CancelButton = "Cancel";
     public const string DefaultText = "DRAFT";
     public const string DefaultFontFamily = "Calibri";
     public const string DefaultFontColorHex = "#808080";

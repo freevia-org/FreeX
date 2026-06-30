@@ -15,6 +15,7 @@ using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -22,7 +23,9 @@ namespace FreeW.App.Avalonia;
 
 public sealed class MainWindow : Window
 {
+    private const string DefaultTitle = "FreeW";
     private const string DefaultSaveExtension = ".docx";
+    private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Document;
 
     /// <summary>
     /// Number of entries kept in the recent-files store for this session.
@@ -31,7 +34,7 @@ public sealed class MainWindow : Window
     /// </summary>
     private const int DefaultRecentFilesCap = 10;
 
-    private static readonly FilePickerFileType PdfFileType = new("PDF document")
+    private static readonly FilePickerFileType PdfFileType = new(FreeWFileTextResources.PdfFileTypeName)
     {
         Patterns = ["*.pdf"],
         MimeTypes = ["application/pdf"],
@@ -69,7 +72,7 @@ public sealed class MainWindow : Window
 
     public MainWindow(IReadOnlyList<string> startupArguments)
     {
-        Title = "FreeW";
+        Title = DefaultTitle;
         Width = 1040;
         Height = 720;
         MinWidth = 720;
@@ -333,7 +336,7 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = $"New window failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("New window", ex.Message);
         }
     }
 
@@ -666,7 +669,7 @@ public sealed class MainWindow : Window
         AvaloniaSaveChangesDialog.ShowAsync(
                 this,
                 AvaloniaSaveChangesPromptText.ForDocumentAction(
-                    "FreeW",
+                    DefaultTitle,
                     _fileWorkflow.DisplayName,
                     action))
             .GetAwaiter().GetResult();
@@ -710,9 +713,9 @@ public sealed class MainWindow : Window
     private void NewDocument()
     {
         _fileWorkflow.New(
-            "replace the current document",
+            FileText.NewAction,
             () => LoadDocumentContent(TextDocument.CreateEmpty()),
-            () => Title = "FreeW");
+            () => Title = DefaultTitle);
     }
 
     private void ToggleFindBar(bool show)
@@ -787,7 +790,7 @@ public sealed class MainWindow : Window
     private async Task OpenAsync()
     {
         await _fileWorkflow.OpenAsync(
-            "opening another document",
+            FileText.OpenAction,
             PromptOpenPathAsync,
             OpenPathAsync);
     }
@@ -796,7 +799,7 @@ public sealed class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open document",
+            Title = FileText.OpenPickerTitle,
             AllowMultiple = false,
             FileTypeFilter = [.. DocumentFilePickerTypes.BuildOpenTypes(_adapters)],
         });
@@ -812,7 +815,9 @@ public sealed class MainWindow : Window
         var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, Path.GetExtension(path), out var format);
         if (adapter is null)
         {
-            _status.Text = $"Open failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                SisterAppFileTextPlanner.OpenCommand,
+                Path.GetExtension(path));
             return Task.FromResult(false);
         }
 
@@ -825,19 +830,19 @@ public sealed class MainWindow : Window
             {
                 // Templates seed a new untitled document: clearing the path makes the next Save a Save-As.
                 LoadDocumentAsSaved(document, path: null);
-                Title = "FreeW";
+                Title = DefaultTitle;
             }
             else
             {
                 LoadDocumentAsSaved(document, path);
-                Title = $"FreeW - {Path.GetFileName(path)}";
+                Title = $"{DefaultTitle} - {Path.GetFileName(path)}";
             }
 
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _status.Text = $"Open failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
             return Task.FromResult(false);
         }
     }
@@ -855,11 +860,11 @@ public sealed class MainWindow : Window
         var savePlan = DocumentFileDialogRequestPlanner.BuildSavePickerPlan(
             _adapters,
             _fileWorkflow.CurrentFileName,
-            "Document",
+            FileText.FallbackDisplayName,
             defaultExtension);
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save document",
+            Title = FileText.SavePickerTitle,
             DefaultExtension = savePlan.DefaultExtensionWithoutDot,
             SuggestedFileName = savePlan.SuggestedFileName,
             FileTypeChoices = [.. savePlan.FileTypes.Select(DocumentFilePickerTypes.ToFileType)],
@@ -874,7 +879,9 @@ public sealed class MainWindow : Window
         var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, Path.GetExtension(path), out _);
         if (adapter is null)
         {
-            _status.Text = $"Save failed: unsupported file type \"{Path.GetExtension(path)}\".";
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                SisterAppFileTextPlanner.SaveCommand,
+                Path.GetExtension(path));
             return Task.FromResult(false);
         }
 
@@ -883,13 +890,13 @@ public sealed class MainWindow : Window
             using (var stream = File.Create(path))
                 adapter.Save(_editor.Document, stream);
             MarkDocumentSavedWithPath(path);
-            Title = $"FreeW - {Path.GetFileName(path)}";
-            _status.Text = $"Saved {Path.GetFileName(path)}";
+            Title = $"{DefaultTitle} - {Path.GetFileName(path)}";
+            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(path));
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _status.Text = $"Save failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
             return Task.FromResult(false);
         }
     }
@@ -904,9 +911,9 @@ public sealed class MainWindow : Window
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Export to PDF",
+            Title = FreeWFileTextResources.ExportPdfPickerTitle,
             DefaultExtension = "pdf",
-            SuggestedFileName = _fileWorkflow.CurrentFileNameWithoutExtensionOr("Document") + ".pdf",
+            SuggestedFileName = _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + ".pdf",
             FileTypeChoices = [PdfFileType],
         });
         var path = file?.TryGetLocalPath();
@@ -916,15 +923,15 @@ public sealed class MainWindow : Window
         try
         {
             var result = FreeWAvaloniaPdfExport.Save(_editor, path);
-            _status.Text = $"Exported PDF ({result.PageCount} page{(result.PageCount == 1 ? "" : "s")}, {result.Backend}): {Path.GetFileName(path)}";
+            _status.Text = FreeWFileTextResources.FormatPdfExported(result.PageCount, result.Backend, Path.GetFileName(path));
         }
         catch (Exception ex)
         {
-            _status.Text = $"PDF export failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FreeWFileTextResources.PdfExportCommand, ex.Message);
         }
     }
 
-    private static readonly FilePickerFileType ImageFileType = new("Pictures")
+    private static readonly FilePickerFileType ImageFileType = new(FreeWFileTextResources.PictureFileTypeName)
     {
         Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
         MimeTypes = ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"],
@@ -939,7 +946,7 @@ public sealed class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Insert Picture",
+            Title = SisterAppFileTextPlanner.InsertPicturePickerTitle,
             AllowMultiple = false,
             FileTypeFilter = [ImageFileType],
         });
@@ -958,7 +965,7 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = $"Insert picture failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
         }
     }
 
@@ -1054,7 +1061,7 @@ public sealed class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Insert Text from File",
+            Title = InsertDialogTextResources.TextFromFilePickerTitle,
             AllowMultiple = false,
             FileTypeFilter = [TextFromFileType],
         });
@@ -1077,7 +1084,7 @@ public sealed class MainWindow : Window
                 var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, ext, out _);
                 if (adapter is null)
                 {
-                    _status.Text = $"Insert text failed: unsupported file type \"{ext}\".";
+                    _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType("Insert text", ext);
                     return;
                 }
                 using var stream = File.OpenRead(path);
@@ -1090,11 +1097,11 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = $"Insert text failed: {ex.Message}";
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Insert text", ex.Message);
         }
     }
 
-    private static readonly FilePickerFileType TextFromFileType = new("Documents")
+    private static readonly FilePickerFileType TextFromFileType = new(FreeWFileTextResources.TextFromFileTypeName)
     {
         Patterns = ["*.docx", "*.txt"],
         MimeTypes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"],
@@ -1182,7 +1189,7 @@ public sealed class MainWindow : Window
             {
                 // Run the dirty-gate synchronously (ConfirmDiscardOrSave calls PromptSaveChangesSync
                 // which is safe because we block the UI thread only briefly for the dialog).
-                if (_fileWorkflow.Open("opening another document", () => path, p =>
+                if (_fileWorkflow.Open(FileText.OpenAction, () => path, p =>
                     {
                         _ = OpenPathAsync(p);
                         return true;
@@ -1225,15 +1232,15 @@ public sealed class MainWindow : Window
         var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, normalizedExt, out var format);
         if (adapter is null)
         {
-            _status.Text = $"Save failed: unsupported extension \"{extension}\".";
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(extension);
             return;
         }
 
-        var suggestedName = _fileWorkflow.CurrentFileNameWithoutExtensionOr("Document") + normalizedExt;
+        var suggestedName = _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + normalizedExt;
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = $"Save as {format?.FormatName ?? extension}",
+            Title = SisterAppFileTextPlanner.FormatSaveAsTitle(format?.FormatName ?? extension),
             DefaultExtension = normalizedExt.TrimStart('.'),
             SuggestedFileName = suggestedName,
             FileTypeChoices = [DocumentFilePickerTypes.ToFileType(

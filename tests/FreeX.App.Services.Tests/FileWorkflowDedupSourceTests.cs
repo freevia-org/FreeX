@@ -168,7 +168,8 @@ public sealed class FileWorkflowDedupSourceTests
         workflowSource.Should().Contain("CurrentFileNameWithoutExtensionOr");
         freewWpfSource.Should().Contain("_workflow.CurrentFileName");
         freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileName");
-        freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileNameWithoutExtensionOr(\"Document\")");
+        freewAvaloniaSource.Should().Contain("SisterAppFileTextPlanner.Document");
+        freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName)");
         freepWpfSource.Should().Contain("_workflow.CurrentFileName");
         freepAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileName");
 

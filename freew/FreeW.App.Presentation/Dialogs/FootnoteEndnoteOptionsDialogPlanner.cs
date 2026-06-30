@@ -41,6 +41,12 @@ public sealed record FootnoteEndnoteOptionsDialogResult(
 
 public static class FootnoteEndnoteOptionsDialogPlanner
 {
+    public const string Title = "Footnote and Endnote";
+    public const string FootnotesSectionLabel = "Footnotes";
+    public const string EndnotesSectionLabel = "Endnotes";
+    public const string NumberFormatLabel = "Number format:";
+    public const string StartAtLabel = "Start at:";
+    public const string NumberingLabel = "Numbering:";
     public const string PositiveStartAtMessage = "Enter a positive integer for the start-at values.";
 
     public static readonly IReadOnlyList<FootnoteEndnoteOptionsChoice<NoteNumberFormat>> FormatItems =

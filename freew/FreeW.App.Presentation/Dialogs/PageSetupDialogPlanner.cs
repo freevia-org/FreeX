@@ -82,6 +82,18 @@ public sealed record PageSetupDialogResult(
 
 public static class PageSetupDialogPlanner
 {
+    public const string Title = "Page Setup";
+    public const string MarginsSectionLabel = "Margins (points)";
+    public const string TopMarginLabel = "Top:";
+    public const string BottomMarginLabel = "Bottom:";
+    public const string LeftMarginLabel = "Left:";
+    public const string RightMarginLabel = "Right:";
+    public const string OrientationSectionLabel = "Orientation";
+    public const string PaperSizeSectionLabel = "Paper Size";
+    public const string CustomWidthLabel = "Width (pt):";
+    public const string CustomHeightLabel = "  Height (pt):";
+    public const string OkButton = "OK";
+    public const string CancelButton = "Cancel";
     public const string UnifiedValidationMessage =
         "Enter non-negative margins/distances and a positive page width and height (in points).";
 

@@ -49,8 +49,9 @@ public sealed class MainWindow : Window
 {
     private const string DefaultTitle = "FreeP";
     private const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
+    private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
 
-    private static readonly FilePickerFileType PictureFileType = new("Images")
+    private static readonly FilePickerFileType PictureFileType = new(PresentationFileTextResources.PictureFileTypeName)
     {
         Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg"],
         MimeTypes = ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml"],
@@ -392,13 +393,13 @@ public sealed class MainWindow : Window
     {
         if (!StorageProvider.CanOpen)
         {
-            _statusText.Text = "Insert picture unavailable.";
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.InsertPictureCommand);
             return;
         }
 
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Insert Picture",
+            Title = SisterAppFileTextPlanner.InsertPicturePickerTitle,
             AllowMultiple = false,
             FileTypeFilter = [PictureFileType],
         });
@@ -420,11 +421,11 @@ public sealed class MainWindow : Window
                 payload);
 
             if (added is not null)
-                _statusText.Text = $"Inserted {file.Name}";
+                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(file.Name);
         }
         catch (Exception ex)
         {
-            _statusText.Text = $"Insert picture failed: {ex.Message}";
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
         }
     }
 
@@ -457,13 +458,13 @@ public sealed class MainWindow : Window
     private void FileNew()
     {
         _fileWorkflow.New(
-            "creating a new presentation",
+            FileText.NewAction,
             () => LoadPresentationContent(Presentation.CreateEmpty()));
     }
 
     private Task<bool> FileOpenAsync() =>
         _fileWorkflow.OpenAsync(
-            "opening another presentation",
+            FileText.OpenAction,
             PromptOpenPathAsync,
             path => Task.FromResult(TryLoadPresentationFile(path)));
 
@@ -471,14 +472,14 @@ public sealed class MainWindow : Window
     {
         if (!StorageProvider.CanOpen)
         {
-            _statusText.Text = "Open unavailable.";
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.OpenCommand);
             return null;
         }
 
         var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title         = "Open Presentation",
+            Title         = FileText.OpenPickerTitle,
             AllowMultiple = false,
             FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes),
         });
@@ -488,7 +489,7 @@ public sealed class MainWindow : Window
 
         var path = files[0].TryGetLocalPath();
         if (path is null)
-            _statusText.Text = "Open failed: selected file is not available as a local path.";
+            _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.OpenCommand);
 
         return path;
     }
@@ -502,7 +503,7 @@ public sealed class MainWindow : Window
     {
         if (!StorageProvider.CanSave)
         {
-            _statusText.Text = "Save unavailable.";
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.SaveCommand);
             return false;
         }
 
@@ -510,7 +511,7 @@ public sealed class MainWindow : Window
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title             = "Save Presentation",
+            Title             = FileText.SavePickerTitle,
             DefaultExtension  = plan.DefaultExtensionWithoutDot,
             SuggestedFileName = plan.SuggestedFileName,
             FileTypeChoices   = AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes),
@@ -520,7 +521,7 @@ public sealed class MainWindow : Window
         if (path is null)
         {
             if (file is not null)
-                _statusText.Text = "Save failed: selected file is not available as a local path.";
+                _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.SaveCommand);
 
             return false;
         }
@@ -536,12 +537,12 @@ public sealed class MainWindow : Window
                 ? FxpFormat.Read(path)
                 : PptxPackageReader.Read(path);
             LoadPresentationAsSaved(presentation, path);
-            _statusText.Text = $"Opened {Path.GetFileName(path)}";
+            _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(path));
             return true;
         }
         catch (Exception ex)
         {
-            _statusText.Text = $"Open failed: {ex.Message}";
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
             return false;
         }
     }
@@ -561,12 +562,12 @@ public sealed class MainWindow : Window
             }
 
             _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
-            _statusText.Text = $"Saved {Path.GetFileName(path)}";
+            _statusText.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(path));
             return true;
         }
         catch (Exception ex)
         {
-            _statusText.Text = $"Save failed: {ex.Message}";
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
             return false;
         }
     }
