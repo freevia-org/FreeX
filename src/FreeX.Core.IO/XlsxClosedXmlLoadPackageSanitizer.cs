@@ -370,36 +370,9 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static bool HasDocumentPropertiesPackageGraphIssues(ZipArchive archive)
     {
-        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        var relationshipsEntry = archive.GetEntry("_rels/.rels");
-        if (relationshipsEntry is null)
-            return false;
-
         try
         {
-            var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipsEntry);
-            var root = relationshipsXml.Root;
-            if (root is null || root.Name != relationshipNs + "Relationships")
-                return false;
-
-            return HasDocumentPropertyRelationshipIssue(
-                    archive,
-                    root,
-                    relationshipNs,
-                    "docProps/core.xml",
-                    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties") ||
-                HasDocumentPropertyRelationshipIssue(
-                    archive,
-                    root,
-                    relationshipNs,
-                    "docProps/app.xml",
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties") ||
-                HasDocumentPropertyRelationshipIssue(
-                    archive,
-                    root,
-                    relationshipNs,
-                    "docProps/custom.xml",
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties");
+            return XlsxDocumentPropertiesPreserver.NeedsPackageGraphNormalization(archive);
         }
         catch
         {
@@ -508,65 +481,6 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     private static bool IsCustomRibbonPart(string partName) =>
         partName.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) &&
         partName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
-
-    private static bool HasDocumentPropertyRelationshipIssue(
-        ZipArchive archive,
-        XElement relationshipsRoot,
-        XNamespace relationshipNs,
-        string partName,
-        string relationshipType)
-    {
-        if (archive.GetEntry(partName) is null)
-            return false;
-
-        var relationships = relationshipsRoot
-            .Elements(relationshipNs + "Relationship")
-            .Where(relationship =>
-                string.Equals(
-                    relationship.Attribute("Type")?.Value?.Trim(),
-                    relationshipType,
-                    StringComparison.OrdinalIgnoreCase) ||
-                RelationshipTargetsPart(relationship, partName))
-            .ToArray();
-        if (relationships.Length == 0)
-            return false;
-        if (relationships.Length > 1)
-            return true;
-
-        var relationship = relationships[0];
-        if (!string.Equals(
-                relationship.Attribute("Type")?.Value?.Trim(),
-                relationshipType,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return !string.Equals(
-                relationship.Attribute("Target")?.Value?.Trim(),
-                partName,
-                StringComparison.Ordinal) ||
-            !string.IsNullOrWhiteSpace(relationship.Attribute("TargetMode")?.Value);
-    }
-
-    private static bool RelationshipTargetsPart(XElement relationship, string partName)
-    {
-        var target = relationship.Attribute("Target")?.Value?.Trim();
-        if (string.IsNullOrWhiteSpace(target))
-            return false;
-
-        var targetMode = relationship.Attribute("TargetMode")?.Value?.Trim();
-        if (!string.IsNullOrWhiteSpace(targetMode) &&
-            !string.Equals(targetMode, "Internal", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return string.Equals(
-            XlsxPackagePath.ResolveRelationshipTarget("", target),
-            partName,
-            StringComparison.OrdinalIgnoreCase);
-    }
 
     private static bool HasRangeHyperlinkRefs(MemoryStream sourcePackage)
     {

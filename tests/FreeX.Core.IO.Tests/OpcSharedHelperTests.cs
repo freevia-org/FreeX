@@ -51,6 +51,25 @@ public sealed class OpcSharedHelperTests
         contentType.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("ppt/media/image1.svg", "image/svg+xml")]
+    [InlineData("ppt/media/photo.tiff", "image/tiff")]
+    [InlineData("ppt/media/fallback.unknown", "image/png")]
+    public void GetDrawingMediaContentType_MatchesPresentationImageDefaults(string path, string expected)
+    {
+        OpcMediaTypes.GetDrawingMediaContentType(path).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("ppt/media/movie.m4v", "video/mp4")]
+    [InlineData("ppt/media/clip.mov", "video/quicktime")]
+    [InlineData("ppt/media/sound.wma", "audio/x-ms-wma")]
+    [InlineData("ppt/media/unknown.bin", "video/mp4")]
+    public void GetAudioVideoContentType_MatchesPresentationMediaDefaults(string path, string expected)
+    {
+        OpcMediaTypes.GetAudioVideoContentType(path).Should().Be(expected);
+    }
+
     [Fact]
     public void RelationshipDocument_AddUnique_PreservesRelationshipAndAvoidsIdCollisions()
     {
@@ -214,15 +233,29 @@ public sealed class OpcSharedHelperTests
     public void OpcRelationshipDedupSourceGuard_UsesSharedHelpersAtFreeWAndFreeXCallSites()
     {
         var xlsxPropertiesSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDocumentPropertiesPreserver.cs");
+        var xlsxLoadSanitizerSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxClosedXmlLoadPackageSanitizer.cs");
         var docxReaderSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxReader.cs");
         var docxWriterSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxWriter.cs");
+        var pptxReaderSource = TestWorkspaceFiles.ReadRepoText("freep", "FreeP.Core.IO", "PptxPackageReader.cs");
+        var pptxWriterSource = TestWorkspaceFiles.ReadRepoText("freep", "FreeP.Core.IO", "PptxPackageWriter.cs");
 
         xlsxPropertiesSource.Should().Contain("OpcRelationships.NormalizeCanonicalPackageRelationship");
         xlsxPropertiesSource.Should().Contain("OpcRelationships.NeedsCanonicalPackageRelationshipNormalization");
         xlsxPropertiesSource.Should().NotContain("private static bool RelationshipTargetsPart(");
+        xlsxLoadSanitizerSource.Should().Contain("XlsxDocumentPropertiesPreserver.NeedsPackageGraphNormalization(archive)");
+        xlsxLoadSanitizerSource.Should().NotContain("private static bool HasDocumentPropertyRelationshipIssue(");
         docxReaderSource.Should().Contain("OpcRelationships.LoadById");
         docxReaderSource.Should().Contain("OpcRelationships.LoadTargetMap");
         docxWriterSource.Should().Contain("OpcRelationships.CreateRelationship(id, type, target, external)");
+        pptxReaderSource.Should().Contain("using static Free.Shared.Opc.OpcPathHelper;");
+        pptxReaderSource.Should().Contain("OpcMediaTypes.GetDrawingMediaContentType");
+        pptxReaderSource.Should().Contain("OpcMediaTypes.GetAudioVideoContentType");
+        pptxReaderSource.Should().NotContain("private static string GetRelsPath(");
+        pptxReaderSource.Should().NotContain("private static string GuessContentType(");
+        pptxWriterSource.Should().Contain("using static Free.Shared.Opc.OpcPathHelper;");
+        pptxWriterSource.Should().Contain("OpcMediaTypes.GetDrawingMediaExtension");
+        pptxWriterSource.Should().Contain("OpcMediaTypes.GetAudioVideoExtension");
+        pptxWriterSource.Should().NotContain("private static string ContentTypeToExtension(");
     }
 
     [Fact]

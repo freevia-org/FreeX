@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeP.Core.Model;
+using static Free.Shared.Opc.OpcPathHelper;
 
 namespace FreeP.Core.IO;
 
@@ -199,7 +200,7 @@ public static class PptxPackageWriter
             if (slide.Transition?.Sound?.AudioBytes is { Length: > 0 })
             {
                 var sndCt  = slide.Transition.Sound.ContentType ?? "audio/mpeg";
-                var sndExt = MediaContentTypeToExtension(sndCt);
+                var sndExt = OpcMediaTypes.GetAudioVideoExtension(sndCt);
                 mediaExtensions.Add(sndExt);
             }
 
@@ -209,20 +210,20 @@ public static class PptxPackageWriter
                     && shape.Picture?.Bytes is { Length: > 0 })
                 {
                     var ct = shape.Picture.ContentType ?? "image/png";
-                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                    mediaExtensions.Add(OpcMediaTypes.GetDrawingMediaExtension(ct));
                 }
 
                 // HH1: also register picture-fill images so their extension gets a Default
                 if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
                 {
                     var ct = picFill.ContentType ?? "image/png";
-                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                    mediaExtensions.Add(OpcMediaTypes.GetDrawingMediaExtension(ct));
                 }
 
                 // II1: register audio/video file extensions for Media shapes
                 if (shape.Kind == SlideShapeKind.Media && shape.Media?.Bytes is { Length: > 0 } && shape.Media.ContentType is not null)
                 {
-                    var mediaExt = MediaContentTypeToExtension(shape.Media.ContentType);
+                    var mediaExt = OpcMediaTypes.GetAudioVideoExtension(shape.Media.ContentType);
                     mediaExtensions.Add(mediaExt);
                 }
 
@@ -230,7 +231,7 @@ public static class PptxPackageWriter
                 // Without this, the .png/.jpg etc. part has no content-type → PowerPoint repair.
                 if (shape.PreservedObject is not null && shape.Picture is { Bytes.Length: > 0 } prvPic)
                 {
-                    var prvExt = ContentTypeToExtension(prvPic.ContentType ?? "image/png");
+                    var prvExt = OpcMediaTypes.GetDrawingMediaExtension(prvPic.ContentType ?? "image/png");
                     mediaExtensions.Add(prvExt);
                 }
             }
@@ -3140,7 +3141,7 @@ public static class PptxPackageWriter
                 && shape.Picture?.Bytes is { Length: > 0 } picBytes)
             {
                 var ct = shape.Picture.ContentType ?? "image/png";
-                var ext = ContentTypeToExtension(ct);
+                var ext = OpcMediaTypes.GetDrawingMediaExtension(ct);
                 var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
 
                 var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
@@ -3157,7 +3158,7 @@ public static class PptxPackageWriter
             if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
             {
                 var ct = picFill.ContentType ?? "image/png";
-                var ext = ContentTypeToExtension(ct);
+                var ext = OpcMediaTypes.GetDrawingMediaExtension(ct);
                 var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
 
                 var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
@@ -3304,7 +3305,7 @@ public static class PptxPackageWriter
                 // Write this part's rels file if we have it
                 if (smart.PartRels.TryGetValue(part.PartPath, out var relsBytes) && relsBytes.Length > 0)
                 {
-                    var partDir  = GetDirectory(part.PartPath);
+                    var partDir  = GetDirectoryName(part.PartPath);
                     var partFile = part.PartPath[(part.PartPath.LastIndexOf('/') + 1)..];
                     var relsPath = string.IsNullOrEmpty(partDir)
                         ? $"_rels/{partFile}.rels"
@@ -3415,8 +3416,8 @@ public static class PptxPackageWriter
         slidePath  = slidePath.TrimStart('/');
         targetPath = targetPath.TrimStart('/');
 
-        var slideDir  = GetDirectory(slidePath);
-        var targetDir = GetDirectory(targetPath);
+        var slideDir  = GetDirectoryName(slidePath);
+        var targetDir = GetDirectoryName(targetPath);
         var fileName  = targetPath[(targetPath.LastIndexOf('/') + 1)..];
 
         // Count how many levels up we need to go from slideDir
@@ -3531,7 +3532,7 @@ public static class PptxPackageWriter
             // Write the fallback image (shape.Picture) if present
             if (shape.Picture is { Bytes.Length: > 0 } pic)
             {
-                var imgExt    = ContentTypeToExtension(pic.ContentType ?? "image/png");
+                var imgExt    = OpcMediaTypes.GetDrawingMediaExtension(pic.ContentType ?? "image/png");
                 var imgPath   = $"ppt/media/preservedImg{slideIdx}_{shape.Id}.{imgExt}";
                 if (!writtenPaths.Contains(imgPath))
                 {
@@ -3660,7 +3661,7 @@ public static class PptxPackageWriter
             // ── Write fallback image ───────────────────────────────────────────
             if (shape.Picture is { Bytes.Length: > 0 } pic)
             {
-                var imgExt = ContentTypeToExtension(pic.ContentType ?? "image/png");
+                var imgExt = OpcMediaTypes.GetDrawingMediaExtension(pic.ContentType ?? "image/png");
                 var imgPath = $"ppt/media/oleImg{slideIdx}_{shape.Id}.{imgExt}";
                 var imgEntry = archive.CreateEntry(imgPath, CompressionLevel.Optimal);
                 using (var s = imgEntry.Open())
@@ -3930,7 +3931,7 @@ public static class PptxPackageWriter
 
         foreach (var (path, bytes) in packageSnapshot.Entries)
         {
-            var normalizedPath = NormalizePackagePath(path);
+            var normalizedPath = ToZipEntryPath(path);
             if (copied.Contains(normalizedPath) || IsWriterOwnedPath(normalizedPath))
                 continue;
 
@@ -3946,12 +3947,6 @@ public static class PptxPackageWriter
 
     private static bool IsWriterOwnedPath(string path) =>
         WriterOwnedPackageClassifier.IsRegeneratedPart(path);
-
-    private static string NormalizePackagePath(string path) =>
-        OpcPathHelper.ToZipEntryPath(path);
-
-    private static string GetDirectory(string path)
-        => OpcPathHelper.GetDirectoryName(path);
 
     // ── Small utilities ───────────────────────────────────────────────────────────
 
@@ -4034,14 +4029,6 @@ public static class PptxPackageWriter
     private static string FmtColor(SrgbColor c) => $"{c.R:X2}{c.G:X2}{c.B:X2}";
 
     private static string GetShapeId(SlideShape s) => s.Id.ToString(CultureInfo.InvariantCulture);
-
-    private static string ContentTypeToExtension(string ct) =>
-        OpcMediaTypes.GetDrawingMediaExtension(ct);
-
-    // II1: maps audio/video content types to their file extensions (mirrors WriteSlideMediaFiles switch)
-    // EB4: ogg/aac live in the shared default content-type map so package defaults stay consistent.
-    private static string MediaContentTypeToExtension(string ct) =>
-        OpcMediaTypes.GetAudioVideoExtension(ct);
 
     private static string ToLayoutTypeStr(SlideLayoutType type) =>
         type switch
