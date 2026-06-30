@@ -118,6 +118,86 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void Compose_ShapeTextInsets_UseSharedFrameInsetPolicy()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        var body = BodyWithText("Shape text");
+        body.InsetLeftPt = 1.5;
+        body.InsetTopPt = 2.0;
+        body.InsetRightPt = 3.0;
+        body.InsetBottomPt = 4.0;
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 457200,
+            TextBody = body
+        });
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var text = ops.OfType<DrawOp.Shape>().Single().Text;
+        var expected = TextFrameLayoutPlanner.FromOptionalInsets(
+            PointsToDip(1.5),
+            PointsToDip(2.0),
+            PointsToDip(3.0),
+            PointsToDip(4.0),
+            defaultHorizontal: 9.14,
+            defaultVertical: 4.57);
+
+        text.Should().NotBeNull();
+        text!.InsetLeftDip.Should().BeApproximately(expected.Left, 1e-9);
+        text.InsetTopDip.Should().BeApproximately(expected.Top, 1e-9);
+        text.InsetRightDip.Should().BeApproximately(expected.Right, 1e-9);
+        text.InsetBottomDip.Should().BeApproximately(expected.Bottom, 1e-9);
+    }
+
+    [Fact]
+    public void Compose_TableCellTextInsets_UseSharedFrameInsetPolicy()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400);
+        var row = new TableRow { HeightEmu = 457200 };
+        row.Cells.Add(new TableCell
+        {
+            TextBody = BodyWithText("Cell text"),
+            InsetTopPt = 3.0,
+            InsetRightPt = 4.0
+        });
+        table.Rows.Add(row);
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 457200,
+            Table = table
+        });
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var text = ops.OfType<DrawOp.Table>().Single().Cells.Single().Text;
+        var expected = TextFrameLayoutPlanner.FromOptionalInsets(
+            left: null,
+            top: PointsToDip(3.0),
+            right: PointsToDip(4.0),
+            bottom: null,
+            defaultHorizontal: PointsToDip(7.0),
+            defaultVertical: PointsToDip(3.6));
+
+        text.Should().NotBeNull();
+        text!.InsetLeftDip.Should().BeApproximately(expected.Left, 1e-9);
+        text.InsetTopDip.Should().BeApproximately(expected.Top, 1e-9);
+        text.InsetRightDip.Should().BeApproximately(expected.Right, 1e-9);
+        text.InsetBottomDip.Should().BeApproximately(expected.Bottom, 1e-9);
+    }
+
+    [Fact]
     public void Compose_SlideBoundsMatchPresentationSize()
     {
         var p = MakePresentation();
@@ -130,6 +210,17 @@ public sealed class SlideCompositorTests
         bg.BoundsDip.Width.Should().BeApproximately(p.SlideSizeCxEmu / 9525.0, 0.1);
         bg.BoundsDip.Height.Should().BeApproximately(p.SlideSizeCyEmu / 9525.0, 0.1);
     }
+
+    private static TextBody BodyWithText(string text)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
+    private static double PointsToDip(double points) => points * (96.0 / 72.0);
 
     // â”€â”€â”€ Placeholder inheritance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
