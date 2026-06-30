@@ -289,29 +289,6 @@ public sealed partial class MainWindow
             UiText.Get("InsertLoc_ShapeOutlineTitle"));
     }
 
-    private async System.Threading.Tasks.Task SetSelectedShapeGradientAsync()
-    {
-        if (_isOpening || _isSaving)
-            return;
-        if (ResolveSelectedShape() is not { } shape)
-            return;
-
-        var startInitial = shape.FillColor ?? DrawingShapeModel.DefaultFillColor;
-        var start = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_GradientStartColor"), startInitial);
-        if (start is not { } startColor)
-            return;
-        var end = await ShowMoreColorsDialogAsync(UiText.Get("InsertLoc_GradientEndColor"), new CellColor(0xFF, 0xFF, 0xFF));
-        if (end is not { } endColor)
-            return;
-        if (ResolveSelectedShape() is not { } current)
-            return;
-
-        RunDrawingObjectCommand(
-            new SetDrawingShapeGradientCommand(_session.ActiveSheet.Id, current.Id, startColor, endColor),
-            UiText.Format("InsertLoc_ShapeGradientSet", FormatHex(startColor), FormatHex(endColor)),
-            UiText.Get("InsertLoc_ShapeGradientTitle"));
-    }
-
     private void ApplySelectedShapeEffect(DrawingShapeEffectPreset preset)
     {
         if (ResolveSelectedShape() is not { } shape)
