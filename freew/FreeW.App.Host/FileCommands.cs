@@ -4,6 +4,7 @@ using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -32,9 +33,7 @@ internal sealed class FileCommands
 {
     private readonly Window _window;
     private readonly DocumentView _editor;
-    private readonly Action _onChanged;
-    private readonly IUserMessageService _messageService;
-    private readonly FileCommandWorkflow _workflow;
+    private readonly SisterWpfFileCommandWorkflow _workflow;
 
     // FreeW's persisted settings (shared JsonSettingsStore under %APPDATA%\FreeW). The recent-files cap
     // is read from here when registering a saved/opened file — a real read site that proves the options
@@ -59,16 +58,15 @@ internal sealed class FileCommands
     {
         _window = window;
         _editor = editor;
-        _onChanged = onChanged;
-        _messageService = messageService ?? new WpfUserMessageService();
         _options = options ?? new FreeWOptions();
         _adapters = adapters ?? DocumentFileAdapterCatalog.CreateDefaultAdapters();
-        _workflow = new FileCommandWorkflow(
+        _workflow = new SisterWpfFileCommandWorkflow(
+            "FreeW",
             () => _options.RecentFilesCap,
-            _onChanged,
-            PromptSaveChanges,
+            onChanged,
             Save,
-            loadRecentFilesStore: loadRecentFilesStore);
+            loadRecentFilesStore,
+            messageService);
     }
 
     public bool IsDirty => _workflow.IsDirty;
@@ -352,9 +350,6 @@ internal sealed class FileCommands
     // The planner decides; these execute the I/O effects on the WPF host. Any other platform would
     // supply its own implementations (e.g. Avalonia pickers / message dialogs).
 
-    private SaveChangesPrompt PromptSaveChanges(string action) =>
-        _messageService.PromptSaveChanges(DisplayName, action, "FreeW");
-
     private void ShowError(string summary, Exception ex) =>
-        _messageService.ShowFileCommandError(summary, ex, "FreeW");
+        _workflow.ShowError(summary, ex);
 }

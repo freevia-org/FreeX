@@ -3,6 +3,7 @@ using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -33,9 +34,7 @@ internal sealed class FileCommands
     private readonly Window _window;
     private readonly Func<Presentation> _getModel;
     private readonly Action<Presentation> _loadModel;
-    private readonly Action _onChanged;
-    private readonly IUserMessageService _messageService;
-    private readonly FileCommandWorkflow _workflow;
+    private readonly SisterWpfFileCommandWorkflow _workflow;
     private readonly FreePOptions _options;
 
     private static readonly FileOpenDialogPlan OpenDialogPlan =
@@ -53,15 +52,14 @@ internal sealed class FileCommands
         _window = window;
         _getModel = getModel;
         _loadModel = loadModel;
-        _onChanged = onChanged;
-        _messageService = messageService ?? new WpfUserMessageService();
         _options = options ?? new FreePOptions();
-        _workflow = new FileCommandWorkflow(
+        _workflow = new SisterWpfFileCommandWorkflow(
+            "FreeP",
             () => _options.RecentFilesCap,
-            _onChanged,
-            PromptSaveChanges,
+            onChanged,
             Save,
-            loadRecentFilesStore: loadRecentFilesStore);
+            loadRecentFilesStore,
+            messageService);
     }
 
     public bool IsDirty => _workflow.IsDirty;
@@ -190,9 +188,6 @@ internal sealed class FileCommands
     }
 
     // ── Host seams (WPF) ─────────────────────────────────────────────────────
-    private SaveChangesPrompt PromptSaveChanges(string action) =>
-        _messageService.PromptSaveChanges(DisplayName, action, "FreeP");
-
     private void ShowError(string summary, Exception ex) =>
-        _messageService.ShowFileCommandError(summary, ex, "FreeP");
+        _workflow.ShowError(summary, ex);
 }
