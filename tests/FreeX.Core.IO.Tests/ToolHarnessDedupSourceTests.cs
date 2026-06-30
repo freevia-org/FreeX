@@ -26,18 +26,25 @@ public sealed class ToolHarnessDedupSourceTests
     public void ExcelExamplesCharts_UsesSharedWpfAndExcelAutomationHelpers()
     {
         var chartExamples = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelExamplesCharts", "Program.cs");
+        var fidelityCompare = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.FidelityCompare", "ExcelInspector.cs");
+        var foregroundCapture = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ForegroundCapture", "Program.cs");
         var wpfSideBySide = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ToolsShared.Wpf", "WpfSideBySidePng.cs");
         var excelAutomation = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ToolsShared.Wpf", "ExcelComAutomation.cs");
 
         chartExamples.Should().Contain("ExcelComAutomation.CreateExcelApplicationWithRetry");
         chartExamples.Should().Contain("ExcelComAutomation.GetNewExcelProcessIds");
         chartExamples.Should().Contain("ExcelComAutomation.KillExcelProcesses");
+        fidelityCompare.Should().Contain("GetNewExcelProcessIds(baseline)");
+        fidelityCompare.Should().Contain("KillExcelProcesses(_ownedPids");
+        foregroundCapture.Should().Contain("ExcelComAutomation.CreateExcelApplication(");
         chartExamples.Should().Contain("WpfImageDiff.ComputeMeanPixelDiff(row.ExcelPng, row.FreeXPng!, 600, 400)");
         chartExamples.Should().Contain("WpfSideBySidePng.WriteHeaderOnly");
         wpfSideBySide.Should().Contain("public sealed record WpfHeaderSideBySidePngOptions");
         excelAutomation.Should().Contain("public static HashSet<int> GetNewExcelProcessIds");
         excelAutomation.Should().Contain("public static void KillExcelProcesses");
         chartExamples.Should().NotContain("private static object CreateExcel");
+        foregroundCapture.Should().NotContain("Type.GetTypeFromProgID(\"Excel.Application\")");
+        foregroundCapture.Should().NotContain("Activator.CreateInstance(excelType)");
         chartExamples.Should().NotContain("private static BitmapSource LoadBitmap");
         chartExamples.Should().NotContain("private static BitmapSource ResizeTo");
         chartExamples.Should().NotContain("private static double ComputeMeanPixelDiff");

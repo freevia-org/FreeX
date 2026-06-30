@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows.Forms;
 using System.Windows.Automation;
+using FreeX.ToolsShared.Wpf;
 
 namespace FreeX.ForegroundCapture;
 
@@ -4861,10 +4862,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static (dynamic Excel, dynamic Workbook) CreateExcel()
     {
-        var excelType = Type.GetTypeFromProgID("Excel.Application")
-            ?? throw new InvalidOperationException("Excel.Application COM ProgID is not available.");
-        dynamic excel = Activator.CreateInstance(excelType)
-            ?? throw new InvalidOperationException("Failed to create Excel.Application.");
+        dynamic excel = ExcelComAutomation.CreateExcelApplication(
+            "Excel.Application COM ProgID is not available.",
+            "Failed to create Excel.Application.");
         excel.Visible = true;
         excel.DisplayAlerts = false;
         dynamic workbook = excel.Workbooks.Add();
@@ -5498,10 +5498,9 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
     private static (dynamic Excel, dynamic Workbook) OpenExcelWorkbook(string path)
     {
-        var excelType = Type.GetTypeFromProgID("Excel.Application")
-            ?? throw new InvalidOperationException("Excel.Application COM ProgID is not available.");
-        dynamic excel = Activator.CreateInstance(excelType)
-            ?? throw new InvalidOperationException("Failed to create Excel.Application.");
+        dynamic excel = ExcelComAutomation.CreateExcelApplication(
+            "Excel.Application COM ProgID is not available.",
+            "Failed to create Excel.Application.");
         excel.Visible = true;
         excel.DisplayAlerts = false;
         dynamic workbook = excel.Workbooks.Open(path);
