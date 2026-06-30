@@ -96,6 +96,37 @@ public static class TextLayoutPlanner
         return new TextBlockLayoutPlan(area, placements);
     }
 
+    public static TextBlockLayoutPlan PlanBodyText(
+        ResolvedTextLayout text,
+        LayoutRect bounds,
+        IReadOnlyList<TextParagraphMeasure> paragraphs)
+    {
+        var area = GetTextArea(text, bounds);
+        double totalHeight = paragraphs.Sum(p => p.TotalHeightDip);
+        double currentY = ComputeStartY(area, totalHeight, text.Anchor);
+        double lineSpacingScale = GetLineSpacingScale(text);
+
+        var placements = new List<TextParagraphPlacement>(paragraphs.Count);
+        foreach (var paragraph in paragraphs)
+        {
+            if ((uint)paragraph.ParagraphIndex >= (uint)text.Paragraphs.Count)
+                continue;
+
+            var resolvedParagraph = text.Paragraphs[paragraph.ParagraphIndex];
+            currentY += paragraph.SpaceBeforeDip * lineSpacingScale;
+            double paragraphX = area.X + resolvedParagraph.IndentDip;
+            placements.Add(new TextParagraphPlacement(
+                paragraph.ParagraphIndex,
+                0,
+                paragraphX,
+                currentY,
+                Math.Max(1, area.Width - resolvedParagraph.IndentDip)));
+            currentY += (paragraph.HeightDip + paragraph.SpaceAfterDip) * lineSpacingScale;
+        }
+
+        return new TextBlockLayoutPlan(area, placements);
+    }
+
     public static TextColumnLayout GetColumnLayout(ResolvedTextLayout text, LayoutRect bounds)
     {
         var area = GetTextArea(text, bounds);
@@ -162,6 +193,17 @@ public static class TextLayoutPlanner
         {
             TableCellAnchor.Middle => area.Y + Math.Max(0, (area.Height - totalHeight) / 2),
             TableCellAnchor.Bottom => area.Y + Math.Max(0, area.Height - totalHeight),
+            _ => area.Y
+        };
+
+    private static double ComputeStartY(
+        TextLayoutArea area,
+        double totalHeight,
+        VerticalAnchor anchor) =>
+        anchor switch
+        {
+            VerticalAnchor.Middle => area.Y + Math.Max(0, (area.Height - totalHeight) / 2),
+            VerticalAnchor.Bottom => area.Y + Math.Max(0, area.Height - totalHeight),
             _ => area.Y
         };
 }
