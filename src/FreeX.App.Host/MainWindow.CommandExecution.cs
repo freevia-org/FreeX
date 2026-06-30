@@ -19,14 +19,17 @@ public partial class MainWindow
             UiText.Get("MainWindowMessage_CommandErrorTitle"));
     }
 
-    private static string LocalizeCommandErrorMessage(string? message) =>
-        message switch
+    internal static string LocalizeCommandErrorMessage(string? message)
+    {
+        var normalizedMessage = CommandFailureMessages.NormalizeForPresentation(message);
+        return normalizedMessage switch
         {
             null => UiText.Get("MainWindowMessage_CommandCouldNotBeCompleted"),
             "Picture was not found." => UiText.Get("MainWindowMessage_PictureWasNotFound"),
             "Sheet not found." => UiText.Get("MainWindowMessage_SheetNotFound"),
-            _ => message
+            _ => normalizedMessage
         };
+    }
 
     private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
     {
