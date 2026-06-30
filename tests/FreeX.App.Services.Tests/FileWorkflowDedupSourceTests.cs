@@ -106,6 +106,9 @@ public sealed class FileWorkflowDedupSourceTests
 
         wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
         wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(");
+        wpfLifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
+        avaloniaSource.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
+        avaloniaSource.Should().NotContain("SaveCurrentWorkbookThenConfirmCleanAsync");
     }
 
     [Fact]

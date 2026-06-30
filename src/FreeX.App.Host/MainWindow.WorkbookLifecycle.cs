@@ -43,10 +43,11 @@ public partial class MainWindow
     }
 
     private Task<bool> CanProceedAfterSaveBeforeDestructiveActionAsync(string message) =>
-        WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateAsync(
+        WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
             _workbookDirty,
             () => Task.FromResult(PromptSaveChangesBeforeDestructiveAction(message)),
-            SaveResolvedAsync);
+            SaveResolvedAsync,
+            () => _workbookDirty);
 
     /// <summary>
     /// Runs a Save, resolving Save-vs-Save-As through the shared <see cref="FileLifecyclePlanner.PlanSave"/>

@@ -52,6 +52,21 @@ public static class WorkbookFileLifecycleCoordinator
         return confirmation != SaveChangesConfirmation.Cancel;
     }
 
+    public static async Task<bool> CanProceedAfterDirtyGateWithCleanSaveAsync(
+        bool isDirty,
+        Func<Task<SaveChangesPrompt>> promptSaveChangesAsync,
+        Func<Task<bool>> saveCurrentAsync,
+        Func<bool> isDirtyNow)
+    {
+        ArgumentNullException.ThrowIfNull(isDirtyNow);
+
+        var confirmation = await ConfirmBeforeDestructiveActionAsync(
+            isDirty,
+            promptSaveChangesAsync,
+            async () => await saveCurrentAsync() && !isDirtyNow());
+        return confirmation != SaveChangesConfirmation.Cancel;
+    }
+
     public static async Task<bool> RunAfterDirtyGateAsync(
         bool isDirty,
         Func<Task<SaveChangesPrompt>> promptSaveChangesAsync,
