@@ -388,7 +388,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 3  Spreadsheet grid
              ═══════════════════════════════════════════════════════════════ -->
-        <Grid Grid.Row="4" ClipToBounds="True">
+        <Grid x:Name="WorkbookWorkAreaRoot" Grid.Row="4" ClipToBounds="True">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -748,7 +748,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 4  Sheet tabs
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="5" Panel.ZIndex="5" Background="{DynamicResource FreeXSheetSurfaceBrush}" BorderBrush="{DynamicResource FreeXBorderBrush}"
+        <Border x:Name="SheetTabsPanelRoot" Grid.Row="5" Panel.ZIndex="5" Background="{DynamicResource FreeXSheetSurfaceBrush}" BorderBrush="{DynamicResource FreeXBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
                   MinHeight="28"
