@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.Core.Model;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -14,6 +15,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle SpellingDialogChromeStyle => new(FormulaBarFontFamily);
+
     // Review ▸ Spelling (parity gap: the ribbon button was a no-op). Scans the text content of the
     // active sheet — the current selection when it spans more than one cell, otherwise the used range —
     // tokenizes each text-bearing cell into words and flags any not present in the built-in word list
@@ -272,6 +275,7 @@ public sealed partial class MainWindow
         {
             Height = 110,
         };
+        AvaloniaCompactDialogChrome.ApplyListBox(suggestionList, SpellingDialogChromeStyle);
         foreach (var suggestion in suggestions)
             suggestionList.Items.Add(suggestion);
         if (suggestions.Count == 0)
@@ -283,6 +287,7 @@ public sealed partial class MainWindow
         {
             Text = suggestions.Count > 0 ? suggestions[0] : word,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(replacementBox, SpellingDialogChromeStyle);
         layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_SpellingChangeTo") });
         layout.Children.Add(replacementBox);
 
@@ -297,11 +302,11 @@ public sealed partial class MainWindow
         var changeButton = new Button { Content = UiText.Get("ShellLoc_SpellingChange"), IsDefault = true };
         var changeAllButton = new Button { Content = UiText.Get("ShellLoc_SpellingChangeAll") };
         var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true };
-        ApplyDialogButtonChrome(ignoreButton, 96);
-        ApplyDialogButtonChrome(ignoreAllButton, 96);
-        ApplyDialogButtonChrome(changeButton, 96, isDefault: true);
-        ApplyDialogButtonChrome(changeAllButton, 96);
-        ApplyDialogButtonChrome(closeButton, 96);
+        AvaloniaCompactDialogChrome.ApplyButton(ignoreButton, SpellingDialogChromeStyle, 96);
+        AvaloniaCompactDialogChrome.ApplyButton(ignoreAllButton, SpellingDialogChromeStyle, 96);
+        AvaloniaCompactDialogChrome.ApplyButton(changeButton, SpellingDialogChromeStyle, 96, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(changeAllButton, SpellingDialogChromeStyle, 96);
+        AvaloniaCompactDialogChrome.ApplyButton(closeButton, SpellingDialogChromeStyle, 96);
 
         ignoreButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Ignore, null); dialog.Close(); };
         ignoreAllButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.IgnoreAll, null); dialog.Close(); };
@@ -309,26 +314,12 @@ public sealed partial class MainWindow
         changeAllButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.ChangeAll, replacementBox.Text); dialog.Close(); };
         closeButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Close, null); dialog.Close(); };
 
-        var buttonRowTop = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-        };
-        buttonRowTop.Children.Add(ignoreButton);
-        buttonRowTop.Children.Add(ignoreAllButton);
-        buttonRowTop.Children.Add(changeButton);
-
-        var buttonRowBottom = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 6, 0, 0),
-        };
-        buttonRowBottom.Children.Add(changeAllButton);
-        buttonRowBottom.Children.Add(closeButton);
+        var buttonRowTop = AvaloniaCompactDialogChrome.CreateActionRow(
+            [ignoreButton, ignoreAllButton, changeButton],
+            new Thickness(0, 10, 0, 0));
+        var buttonRowBottom = AvaloniaCompactDialogChrome.CreateActionRow(
+            [changeAllButton, closeButton],
+            new Thickness(0, 6, 0, 0));
 
         layout.Children.Add(buttonRowTop);
         layout.Children.Add(buttonRowBottom);
@@ -370,10 +361,10 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("Common_Ok"),
             Width = 90,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, SpellingDialogChromeStyle, 90, isDefault: true);
         okButton.Click += (_, _) => dialog.Close();
-        layout.Children.Add(okButton);
+        layout.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([okButton]));
 
         dialog.Content = layout;
         await dialog.ShowDialog(this);
