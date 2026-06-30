@@ -2,49 +2,75 @@ namespace FreeX.App.Presentation.Filtering;
 
 public static class AutoFilterMenuCatalog
 {
-    private static readonly string[] TextFilterCriteria =
+    private static readonly AutoFilterCriteriaDescriptor[] TextFilterCriteria =
     [
-        "equals:",
-        "text<>",
-        "contains:",
-        "notcontains:",
-        "begins:",
-        "ends:",
-        "blank",
-        "nonblank"
+        new("AutoFilter_Criteria_Equals", "text=", SuggestionPrefix: "equals:"),
+        new("AutoFilter_Criteria_DoesNotEqual", "text<>"),
+        new("AutoFilter_Criteria_Contains", "contains:"),
+        new("AutoFilter_Criteria_DoesNotContain", "notcontains:"),
+        new("AutoFilter_Criteria_BeginsWith", "begins:"),
+        new("AutoFilter_Criteria_EndsWith", "ends:"),
+        new("AutoFilter_Criteria_Blanks", "blank", RequiresValue: false),
+        new("AutoFilter_Criteria_NonBlanks", "nonblank", RequiresValue: false)
     ];
 
-    private static readonly string[] NumberFilterCriteria =
+    private static readonly AutoFilterCriteriaDescriptor[] NumberFilterCriteria =
     [
-        "=",
-        "<>",
-        ">",
-        ">=",
-        "<",
-        "<=",
-        "between:",
-        "top:",
-        "bottom:",
-        "toppercent:",
-        "bottompercent:",
-        "above average",
-        "below average",
-        "blank",
-        "nonblank"
+        new("AutoFilter_Criteria_Equals", "="),
+        new("AutoFilter_Criteria_DoesNotEqual", "<>"),
+        new("AutoFilter_Criteria_GreaterThan", ">"),
+        new("AutoFilter_Criteria_GreaterThanOrEqualTo", ">="),
+        new("AutoFilter_Criteria_LessThan", "<"),
+        new("AutoFilter_Criteria_LessThanOrEqualTo", "<="),
+        new("AutoFilter_Criteria_Between", "between:", SpecialKind: AutoFilterCriteriaSpecialKind.Between),
+        new("AutoFilter_Criteria_Top10", "top:", SpecialKind: AutoFilterCriteriaSpecialKind.TopBottom),
+        new("AutoFilter_Criteria_Bottom10", "bottom:", SpecialKind: AutoFilterCriteriaSpecialKind.TopBottom),
+        new("AutoFilter_Criteria_Top10Percent", "toppercent:", SpecialKind: AutoFilterCriteriaSpecialKind.TopBottom),
+        new("AutoFilter_Criteria_Bottom10Percent", "bottompercent:", SpecialKind: AutoFilterCriteriaSpecialKind.TopBottom),
+        new("AutoFilter_Criteria_AboveAverage", "above average", RequiresValue: false),
+        new("AutoFilter_Criteria_BelowAverage", "below average", RequiresValue: false),
+        new("AutoFilter_Criteria_Blanks", "blank", RequiresValue: false),
+        new("AutoFilter_Criteria_NonBlanks", "nonblank", RequiresValue: false)
     ];
 
-    private static readonly string[] DateFilterCriteria =
+    private static readonly AutoFilterCriteriaDescriptor[] DateFilterCriteria =
     [
-        "date=",
-        "date<>",
-        "date>",
-        "date>=",
-        "date<",
-        "date<=",
-        "datebetween:",
-        "blank",
-        "nonblank"
+        new("AutoFilter_Criteria_Equals", "date="),
+        new("AutoFilter_Criteria_DoesNotEqual", "date<>"),
+        new("AutoFilter_Criteria_After", "date>"),
+        new("AutoFilter_Criteria_OnOrAfter", "date>="),
+        new("AutoFilter_Criteria_Before", "date<"),
+        new("AutoFilter_Criteria_OnOrBefore", "date<="),
+        new("AutoFilter_Criteria_Between", "datebetween:", SpecialKind: AutoFilterCriteriaSpecialKind.Between),
+        new("AutoFilter_Criteria_Blanks", "blank", RequiresValue: false),
+        new("AutoFilter_Criteria_NonBlanks", "nonblank", RequiresValue: false)
     ];
+
+    private static readonly AutoFilterFilterFamilyDescriptor TextFilterFamily =
+        new(AutoFilterMenuFilterKind.Text, "AutoFilter_FilterFamily_Text", TextFilterCriteria);
+
+    private static readonly AutoFilterFilterFamilyDescriptor NumberFilterFamily =
+        new(AutoFilterMenuFilterKind.Number, "AutoFilter_FilterFamily_Number", NumberFilterCriteria);
+
+    private static readonly AutoFilterFilterFamilyDescriptor DateFilterFamily =
+        new(AutoFilterMenuFilterKind.Date, "AutoFilter_FilterFamily_Date", DateFilterCriteria);
+
+    public static AutoFilterFilterFamilyDescriptor GetFilterFamilyDescriptor(AutoFilterMenuFilterKind filterKind) =>
+        filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number => NumberFilterFamily,
+            AutoFilterMenuFilterKind.Date => DateFilterFamily,
+            _ => TextFilterFamily
+        };
+
+    public static IReadOnlyList<AutoFilterCriteriaDescriptor> GetCriteriaDescriptors(AutoFilterMenuFilterKind filterKind) =>
+        GetFilterFamilyDescriptor(filterKind).Criteria;
+
+    public static bool IsBetweenCriteriaPrefix(string criteriaPrefix) =>
+        HasSpecialKind(criteriaPrefix, AutoFilterCriteriaSpecialKind.Between);
+
+    public static bool IsTopBottomCriteriaPrefix(string criteriaPrefix) =>
+        HasSpecialKind(criteriaPrefix, AutoFilterCriteriaSpecialKind.TopBottom);
 
     public static AutoFilterMenuEntry CreateFilterFamilyEntry(
         AutoFilterMenuFilterKind filterKind,
@@ -52,27 +78,14 @@ public static class AutoFilterMenuCatalog
     {
         ArgumentNullException.ThrowIfNull(textProvider);
 
-        return filterKind switch
-        {
-            AutoFilterMenuFilterKind.Number => new AutoFilterMenuEntry(
-                textProvider.Get("AutoFilter_FilterFamily_Number"),
-                AutoFilterMenuEntryKind.FilterFamily,
-                NumberFilterCriteria,
-                textProvider.Get("AutoFilter_FilterFamily_Number"),
-                CreateFilterFamilyChildren(AutoFilterMenuFilterKind.Number, textProvider)),
-            AutoFilterMenuFilterKind.Date => new AutoFilterMenuEntry(
-                textProvider.Get("AutoFilter_FilterFamily_Date"),
-                AutoFilterMenuEntryKind.FilterFamily,
-                DateFilterCriteria,
-                textProvider.Get("AutoFilter_FilterFamily_Date"),
-                CreateFilterFamilyChildren(AutoFilterMenuFilterKind.Date, textProvider)),
-            _ => new AutoFilterMenuEntry(
-                textProvider.Get("AutoFilter_FilterFamily_Text"),
-                AutoFilterMenuEntryKind.FilterFamily,
-                TextFilterCriteria,
-                textProvider.Get("AutoFilter_FilterFamily_Text"),
-                CreateFilterFamilyChildren(AutoFilterMenuFilterKind.Text, textProvider))
-        };
+        var descriptor = GetFilterFamilyDescriptor(filterKind);
+        var label = textProvider.Get(descriptor.ResourceKey);
+        return new AutoFilterMenuEntry(
+            label,
+            AutoFilterMenuEntryKind.FilterFamily,
+            CreateCriteriaSuggestions(descriptor.Criteria),
+            label,
+            CreateFilterFamilyChildren(descriptor.FilterKind, textProvider));
     }
 
     public static IReadOnlyList<AutoFilterMenuSection> CreateSections(
@@ -123,57 +136,64 @@ public static class AutoFilterMenuCatalog
         AutoFilterMenuFilterKind filterKind,
         IAutoFilterMenuTextProvider textProvider)
     {
-        IReadOnlyList<(string Label, string Prefix)> options = filterKind switch
+        var descriptors = GetCriteriaDescriptors(filterKind);
+        var entries = new List<AutoFilterMenuEntry>(descriptors.Count);
+        foreach (var descriptor in descriptors)
         {
-            AutoFilterMenuFilterKind.Number =>
-            [
-                (textProvider.Get("AutoFilter_Criteria_Equals"), "="),
-                (textProvider.Get("AutoFilter_Criteria_DoesNotEqual"), "<>"),
-                (textProvider.Get("AutoFilter_Criteria_GreaterThan"), ">"),
-                (textProvider.Get("AutoFilter_Criteria_GreaterThanOrEqualTo"), ">="),
-                (textProvider.Get("AutoFilter_Criteria_LessThan"), "<"),
-                (textProvider.Get("AutoFilter_Criteria_LessThanOrEqualTo"), "<="),
-                (textProvider.Get("AutoFilter_Criteria_Between"), "between:"),
-                (textProvider.Get("AutoFilter_Criteria_Top10"), "top:"),
-                (textProvider.Get("AutoFilter_Criteria_Bottom10"), "bottom:"),
-                (textProvider.Get("AutoFilter_Criteria_Top10Percent"), "toppercent:"),
-                (textProvider.Get("AutoFilter_Criteria_Bottom10Percent"), "bottompercent:"),
-                (textProvider.Get("AutoFilter_Criteria_AboveAverage"), "above average"),
-                (textProvider.Get("AutoFilter_Criteria_BelowAverage"), "below average"),
-                (textProvider.Get("AutoFilter_Criteria_Blanks"), "blank"),
-                (textProvider.Get("AutoFilter_Criteria_NonBlanks"), "nonblank")
-            ],
-            AutoFilterMenuFilterKind.Date =>
-            [
-                (textProvider.Get("AutoFilter_Criteria_Equals"), "date="),
-                (textProvider.Get("AutoFilter_Criteria_DoesNotEqual"), "date<>"),
-                (textProvider.Get("AutoFilter_Criteria_After"), "date>"),
-                (textProvider.Get("AutoFilter_Criteria_OnOrAfter"), "date>="),
-                (textProvider.Get("AutoFilter_Criteria_Before"), "date<"),
-                (textProvider.Get("AutoFilter_Criteria_OnOrBefore"), "date<="),
-                (textProvider.Get("AutoFilter_Criteria_Between"), "datebetween:"),
-                (textProvider.Get("AutoFilter_Criteria_Blanks"), "blank"),
-                (textProvider.Get("AutoFilter_Criteria_NonBlanks"), "nonblank")
-            ],
-            _ =>
-            [
-                (textProvider.Get("AutoFilter_Criteria_Equals"), "text="),
-                (textProvider.Get("AutoFilter_Criteria_DoesNotEqual"), "text<>"),
-                (textProvider.Get("AutoFilter_Criteria_Contains"), "contains:"),
-                (textProvider.Get("AutoFilter_Criteria_DoesNotContain"), "notcontains:"),
-                (textProvider.Get("AutoFilter_Criteria_BeginsWith"), "begins:"),
-                (textProvider.Get("AutoFilter_Criteria_EndsWith"), "ends:"),
-                (textProvider.Get("AutoFilter_Criteria_Blanks"), "blank"),
-                (textProvider.Get("AutoFilter_Criteria_NonBlanks"), "nonblank")
-            ]
-        };
-
-        return options
-            .Select(option => new AutoFilterMenuEntry(
-                option.Label,
+            entries.Add(new AutoFilterMenuEntry(
+                textProvider.Get(descriptor.ResourceKey),
                 AutoFilterMenuEntryKind.FilterFamilyCommand,
-                [option.Prefix],
-                option.Prefix))
-            .ToList();
+                [descriptor.CriteriaPrefix],
+                descriptor.CriteriaPrefix));
+        }
+
+        return entries;
     }
+
+    private static IReadOnlyList<string> CreateCriteriaSuggestions(IReadOnlyList<AutoFilterCriteriaDescriptor> descriptors)
+    {
+        var suggestions = new List<string>(descriptors.Count);
+        foreach (var descriptor in descriptors)
+            suggestions.Add(descriptor.SuggestionPrefix ?? descriptor.CriteriaPrefix);
+
+        return suggestions;
+    }
+
+    private static bool HasSpecialKind(string criteriaPrefix, AutoFilterCriteriaSpecialKind specialKind) =>
+        HasSpecialKind(TextFilterCriteria, criteriaPrefix, specialKind) ||
+        HasSpecialKind(NumberFilterCriteria, criteriaPrefix, specialKind) ||
+        HasSpecialKind(DateFilterCriteria, criteriaPrefix, specialKind);
+
+    private static bool HasSpecialKind(
+        IReadOnlyList<AutoFilterCriteriaDescriptor> descriptors,
+        string criteriaPrefix,
+        AutoFilterCriteriaSpecialKind specialKind)
+    {
+        foreach (var descriptor in descriptors)
+        {
+            if (string.Equals(descriptor.CriteriaPrefix, criteriaPrefix, StringComparison.OrdinalIgnoreCase))
+                return descriptor.SpecialKind == specialKind;
+        }
+
+        return false;
+    }
+}
+
+public sealed record AutoFilterFilterFamilyDescriptor(
+    AutoFilterMenuFilterKind FilterKind,
+    string ResourceKey,
+    IReadOnlyList<AutoFilterCriteriaDescriptor> Criteria);
+
+public sealed record AutoFilterCriteriaDescriptor(
+    string ResourceKey,
+    string CriteriaPrefix,
+    bool RequiresValue = true,
+    string? SuggestionPrefix = null,
+    AutoFilterCriteriaSpecialKind SpecialKind = AutoFilterCriteriaSpecialKind.None);
+
+public enum AutoFilterCriteriaSpecialKind
+{
+    None,
+    Between,
+    TopBottom
 }
