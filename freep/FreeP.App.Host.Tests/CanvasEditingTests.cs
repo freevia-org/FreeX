@@ -501,7 +501,7 @@ public sealed class CanvasEditingTests
     [StaFact]
     public void MainWindow_HasSlideCanvas_AndEditorAfterConstruction()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.SlideCanvas.Should().NotBeNull();

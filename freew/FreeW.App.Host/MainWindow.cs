@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
@@ -242,14 +243,19 @@ public sealed class MainWindow : Window
     // so settings read live by FileCommands (e.g. the recent-files cap) take effect without a restart.
     private readonly FreeWOptions _options;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
+    private readonly IUserMessageService? _messageService;
 
     public MainWindow() : this(new FreeWOptions())
     {
     }
 
-    public MainWindow(FreeWOptions options, ApplicationOptionsStore<FreeWOptions>? optionsStore = null)
+    public MainWindow(
+        FreeWOptions options,
+        ApplicationOptionsStore<FreeWOptions>? optionsStore = null,
+        IUserMessageService? messageService = null)
     {
         _options = options ?? new FreeWOptions();
+        _messageService = messageService;
         // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
         // still round-trips through the dialog and applies live, just without touching the real profile.
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreeWOptions>.ForPath(
@@ -328,7 +334,7 @@ public sealed class MainWindow : Window
             onArrangeAll: ArrangeAllWindows,
             onToggleThesaurus: ToggleThesaurusPane,
             onToggleBalloons: ToggleBalloons);
-        _file = new FileCommands(this, editor, UpdateTitle, _options);
+        _file = new FileCommands(this, editor, UpdateTitle, _options, messageService: _messageService);
         editor.TextChanged += (_, _) =>
         {
             _file.MarkDirty();
@@ -2024,7 +2030,7 @@ public sealed class MainWindow : Window
     // If the document is new/unsaved, just open a new blank window. The note in the title makes it clear.
     private void OpenNewWindow()
     {
-        var newWindow = new MainWindow(_options);
+        var newWindow = new MainWindow(_options, messageService: _messageService);
         var path = _file.CurrentPath;
         if (path is not null && System.IO.File.Exists(path))
         {

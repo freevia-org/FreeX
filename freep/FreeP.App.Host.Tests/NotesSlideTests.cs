@@ -277,7 +277,7 @@ public sealed class NotesSlideTests : IDisposable
         pres.Slides.Add(slide);
 
         // Use the internal overload that accepts a presentation.
-        var window = new MainWindow(new FreePOptions());
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.Should().NotBeNull();

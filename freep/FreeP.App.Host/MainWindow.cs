@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
@@ -59,6 +60,7 @@ public sealed class MainWindow : Window
 
     private readonly FreePOptions _options;
     private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
+    private readonly IUserMessageService? _messageService;
 
     // ── Wave 10B: OS-clipboard service ────────────────────────────────────────────
     // Created once; the renderer is injected so tests can replace it without real Clipboard.
@@ -133,9 +135,13 @@ public sealed class MainWindow : Window
 
     public MainWindow() : this(new FreePOptions()) { }
 
-    public MainWindow(FreePOptions options, ApplicationOptionsStore<FreePOptions>? optionsStore = null)
+    public MainWindow(
+        FreePOptions options,
+        ApplicationOptionsStore<FreePOptions>? optionsStore = null,
+        IUserMessageService? messageService = null)
     {
         _options = options ?? new FreePOptions();
+        _messageService = messageService;
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.ForPath(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeP", "settings.transient.json"));
 
@@ -153,7 +159,7 @@ public sealed class MainWindow : Window
         RebuildEditor();
 
         // File commands.
-        _file = new FileCommands(this, () => _presentation, LoadModel, UpdateTitle, _options);
+        _file = new FileCommands(this, () => _presentation, LoadModel, UpdateTitle, _options, messageService: _messageService);
 
         // Title bar.
         var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);

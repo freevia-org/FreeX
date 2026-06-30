@@ -360,7 +360,7 @@ public sealed class SectionsCommentsTests : IDisposable
     public void MainWindow_WithComments_ConstructsWithoutException()
     {
         // MainWindow should construct cleanly even with a default (no-comment) presentation.
-        var window = new MainWindow(new FreePOptions());
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.Should().NotBeNull();

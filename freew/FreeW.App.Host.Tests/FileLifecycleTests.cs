@@ -222,6 +222,31 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.Equal("Original", file.DisplayName);
     }
 
+    [StaFact]
+    public void MainWindowClose_UsesInjectedMessageServiceForSavePrompt()
+    {
+        var messages = new RecordingUserMessageService { NextResult = UserMessageResult.No };
+        var window = new MainWindow(new FreeWOptions(), messageService: messages);
+
+        GetFileCommands(window).MarkDirty();
+        window.Close();
+
+        Assert.Single(messages.Messages);
+        var prompt = messages.Messages[0];
+        Assert.Equal("Do you want to save changes to Untitled before closing?", prompt.Message);
+        Assert.Equal("FreeW", prompt.Title);
+        Assert.Equal(UserMessageButtons.YesNoCancel, prompt.Buttons);
+        Assert.Equal(UserMessageIcon.Warning, prompt.Icon);
+    }
+
+    private static FileCommands GetFileCommands(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField(
+            "_file",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return (FileCommands)field!.GetValue(window)!;
+    }
+
     private string WriteDocx(string name, string text)
     {
         var doc = TextDocument.CreateEmpty();

@@ -223,6 +223,31 @@ public sealed class FileLifecycleTests : IDisposable
         error.Icon.Should().Be(UserMessageIcon.Error);
     }
 
+    [StaFact]
+    public void MainWindowClose_UsesInjectedMessageServiceForSavePrompt()
+    {
+        var messages = new RecordingUserMessageService { NextResult = UserMessageResult.No };
+        var window = new MainWindow(new FreePOptions(), messageService: messages);
+
+        GetFileCommands(window).MarkDirty();
+        window.Close();
+
+        messages.Messages.Should().ContainSingle();
+        var prompt = messages.Messages[0];
+        prompt.Message.Should().Be("Do you want to save changes to Untitled before closing?");
+        prompt.Title.Should().Be("FreeP");
+        prompt.Buttons.Should().Be(UserMessageButtons.YesNoCancel);
+        prompt.Icon.Should().Be(UserMessageIcon.Warning);
+    }
+
+    private static FileCommands GetFileCommands(MainWindow window)
+    {
+        var field = typeof(MainWindow).GetField(
+            "_file",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return (FileCommands)field!.GetValue(window)!;
+    }
+
     private string WritePptx(string name, string title)
     {
         var path = Path.Combine(_tempDir, name);

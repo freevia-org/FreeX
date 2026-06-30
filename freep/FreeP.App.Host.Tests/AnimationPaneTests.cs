@@ -229,7 +229,7 @@ public sealed class AnimationPaneTests
     [StaFact]
     public void MainWindow_ToggleAnimationPane_ShowsAndHidesPaneHost()
     {
-        var window = new MainWindow(new FreePOptions());
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             // Initially collapsed.
@@ -257,7 +257,7 @@ public sealed class AnimationPaneTests
     [StaFact]
     public void MainWindow_ToggleAnimationPane_CreatesPaneChild()
     {
-        var window = new MainWindow(new FreePOptions());
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
         {
             window.ToggleAnimationPane();
