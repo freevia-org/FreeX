@@ -15,6 +15,7 @@ using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using TextSearch = FreeW.Core.Model.TextSearch;
 
@@ -735,37 +736,48 @@ public sealed class MainWindow : Window
     // (TextChanged), on selection change, and on document load.
     private void UpdateCounts()
     {
-        UpdatePageStatus();
-
         var selectionText = _editor.Selection.Text;
         if (!string.IsNullOrEmpty(selectionText))
         {
-            var words = WordCount.Words(selectionText);
-            var characters = WordCount.Characters(selectionText, includeSpaces: true);
-            _countsText.Text = SisterAppStatusBarTextPlanner.FormatDocumentSelectionStatus(words, characters);
+            ApplyStatusPlan(BuildStatusPlan(selectionText, words: 0, charactersWithSpaces: 0, paragraphs: 0));
             return;
         }
 
         _editor.CommitToModel();
         var stats = WordCount.Of(_editor.Model);
-        _countsText.Text = SisterAppStatusBarTextPlanner.FormatDocumentCountsStatus(
+        ApplyStatusPlan(BuildStatusPlan(
+            selectionText: null,
             stats.Words,
             stats.CharactersWithSpaces,
-            stats.Paragraphs);
+            stats.Paragraphs));
     }
 
-    // Refresh the Word-style "Page X of Y" status: an approximate page position derived from the editor's
-    // single continuous flow against the page's printable height (see DocumentView.PageInfo). It tracks the
-    // on-screen page-break markers, which can differ by a page from the fully paginated Print Preview.
-    private void UpdatePageStatus()
+    private FreeWEditorStatusPlan BuildStatusPlan(
+        string? selectionText,
+        int words,
+        int charactersWithSpaces,
+        int paragraphs)
     {
         var (current, total) = _editor.PageInfo();
-        _pageText.Text = SisterAppStatusBarTextPlanner.FormatDocumentPageStatus(current, total);
-
-        // Word-style current-section indicator next to the page count. Best-effort: which section the
-        // caret's block falls in, out of TextDocument.Sections (see DocumentView.SectionInfo).
         var (section, sections) = _editor.SectionInfo();
-        _sectionText.Text = SisterAppStatusBarTextPlanner.FormatDocumentSectionStatus(section, sections);
+        return FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+            words,
+            charactersWithSpaces,
+            paragraphs,
+            current,
+            total,
+            section,
+            sections,
+            selectionText));
+    }
+
+    // Refresh the Word-style "Page X of Y", section, and count status. Page position is an approximate
+    // continuous-flow location from DocumentView.PageInfo; section is best-effort from SectionInfo.
+    private void ApplyStatusPlan(FreeWEditorStatusPlan plan)
+    {
+        _pageText.Text = plan.PageStatus;
+        _sectionText.Text = plan.SectionStatus;
+        _countsText.Text = plan.CountsStatus;
     }
 
     // Build the footer (status bar) as a single full-width row that sits BELOW the ruler + document region

@@ -16,6 +16,7 @@ using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -1131,18 +1132,18 @@ public sealed class MainWindow : Window
 
     private void UpdateStatus()
     {
-        var text = _editor.PlainText;
-        var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-        var chars = text.Length;
-        var pageInfo = _editor.ViewMode == DocumentViewMode.PrintLayout
-            ? SisterAppStatusBarTextPlanner.FormatDocumentPageStatus(_editor.CaretPageIndex + 1, _editor.PageCount)
-            : string.Empty; // Web/Draft: no discrete pages — hide page indicator.
-        _status.Text = SisterAppStatusBarTextPlanner.FormatDocumentSummaryStatus(
-            words,
-            chars,
-            _editor.ParagraphCount,
-            pageInfo,
-            _editor.CanUndo);
+        var stats = _editor.ComputeStatistics();
+        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
+            stats.Words,
+            stats.CharactersWithSpaces,
+            stats.Paragraphs,
+            CurrentPage: _editor.CaretPageIndex + 1,
+            TotalPages: _editor.PageCount,
+            SelectionText: _editor.SelectedText,
+            IncludePageStatus: _editor.ViewMode == DocumentViewMode.PrintLayout,
+            IncludeSectionStatus: false,
+            IsEdited: _editor.CanUndo));
+        _status.Text = plan.SummaryStatus;
     }
 
     // ── Backstage (File screen) ───────────────────────────────────────────────
