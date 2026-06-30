@@ -14,6 +14,11 @@ public sealed class WatermarkOptionsDialogPolicySourceGuardTests
         source.Should().Contain("WatermarkOptionsDialogPlanner.TryBuildTextResult(");
         source.Should().Contain("WatermarkOptionsDialogPlanner.TryBuildPictureResult(");
         source.Should().Contain("WatermarkOptionsDialogPlanner.FormatPickedImageLabel(");
+        source.Should().Contain("WatermarkOptionsDialogPlanner.TextModeLabel");
+        source.Should().Contain("WatermarkOptionsDialogPlanner.PictureModeLabel");
+        source.Should().Contain("WatermarkOptionsDialogPlanner.SelectPictureButton");
+        source.Should().Contain("WatermarkOptionsDialogPlanner.RemoveWatermarkButton");
+        source.Should().Contain("WatermarkOptionsDialogPlanner.WatermarkImageFilter");
     }
 
     [Fact]
@@ -30,6 +35,10 @@ public sealed class WatermarkOptionsDialogPolicySourceGuardTests
         source.Should().NotContain("Scale must be 0");
         source.Should().NotContain("FontFamily   =");
         source.Should().NotContain("ScalePct     =");
+        source.Should().NotContain("Content = \"Text watermark\"");
+        source.Should().NotContain("Content = \"Picture watermark\"");
+        source.Should().NotContain("Content = \"Remove Watermark\"");
+        source.Should().NotContain("Title = \"Select a watermark image\"");
     }
 
     private static string ReadHostSource(string fileName)

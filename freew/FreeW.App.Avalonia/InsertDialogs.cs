@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
@@ -19,14 +20,14 @@ public sealed class HyperlinkDialog : Window
     private readonly TextBox _displayBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = "Text to display",
+        PlaceholderText = InsertDialogTextResources.Hyperlink.DisplayPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly TextBox _addressBox = new()
     {
         MinWidth = 280,
-        PlaceholderText = "https://…  or  #BookmarkName for an internal link",
+        PlaceholderText = InsertDialogTextResources.Hyperlink.AddressPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -41,7 +42,7 @@ public sealed class HyperlinkDialog : Window
 
     public HyperlinkDialog(string? initialDisplay = null, string? initialAddress = null)
     {
-        Title = "Insert Hyperlink";
+        Title = InsertDialogTextResources.Hyperlink.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -54,8 +55,8 @@ public sealed class HyperlinkDialog : Window
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Display:", _displayBox);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Address:", _addressBox);
+        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.Hyperlink.DisplayLabel, _displayBox);
+        InsertDialogLayout.AddLabeledRow(grid, 1, InsertDialogTextResources.Hyperlink.AddressLabel, _addressBox);
 
         var buttons = InsertDialogLayout.OkCancelRow(
             ok: () =>
@@ -89,7 +90,7 @@ public sealed class BookmarkDialog : Window
     private readonly TextBox _nameBox = new()
     {
         MinWidth = 240,
-        PlaceholderText = "Bookmark name",
+        PlaceholderText = InsertDialogTextResources.Bookmark.NamePlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -109,7 +110,7 @@ public sealed class BookmarkDialog : Window
     {
         ArgumentNullException.ThrowIfNull(existingNames);
 
-        Title = "Bookmark";
+        Title = InsertDialogTextResources.Bookmark.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -124,8 +125,8 @@ public sealed class BookmarkDialog : Window
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Name:", _nameBox);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Go to:", _existing);
+        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.Bookmark.NameLabel, _nameBox);
+        InsertDialogLayout.AddLabeledRow(grid, 1, InsertDialogTextResources.Bookmark.GoToLabel, _existing);
 
         // Add (creates the bookmark), Go To (navigates), Close.
         var btnRow = new StackPanel
@@ -134,7 +135,7 @@ public sealed class BookmarkDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(14, 12, 14, 12),
         };
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("Add", (_, _) =>
+        btnRow.Children.Add(InsertDialogLayout.MakeButton(InsertDialogTextResources.Bookmark.AddButton, (_, _) =>
         {
             var name = _nameBox.Text?.Trim();
             if (string.IsNullOrEmpty(name))
@@ -142,7 +143,7 @@ public sealed class BookmarkDialog : Window
             BookmarkName = name;
             Close();
         }));
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("Go To", (_, _) =>
+        btnRow.Children.Add(InsertDialogLayout.MakeButton(InsertDialogTextResources.Bookmark.GoToButton, (_, _) =>
         {
             if (_existing.SelectedItem is string s && !string.IsNullOrEmpty(s))
             {
@@ -150,7 +151,7 @@ public sealed class BookmarkDialog : Window
                 Close();
             }
         }));
-        btnRow.Children.Add(InsertDialogLayout.MakeButton("Close", (_, _) => Close()));
+        btnRow.Children.Add(InsertDialogLayout.MakeButton(InsertDialogTextResources.Bookmark.CloseButton, (_, _) => Close()));
 
         var outer = new StackPanel();
         outer.Children.Add(grid);
@@ -177,7 +178,7 @@ public sealed class QuickPartDialog : Window
         MinHeight = 90,
         AcceptsReturn = true,
         TextWrapping = TextWrapping.Wrap,
-        PlaceholderText = "Snippet text (one paragraph per line)",
+        PlaceholderText = InsertDialogTextResources.QuickPart.SnippetPlaceholder,
         Margin = new Thickness(0, 6, 0, 0),
     };
 
@@ -186,7 +187,7 @@ public sealed class QuickPartDialog : Window
 
     public QuickPartDialog(string? initialText = null)
     {
-        Title = "Insert Quick Part";
+        Title = InsertDialogTextResources.QuickPart.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -197,7 +198,7 @@ public sealed class QuickPartDialog : Window
 
         var label = new TextBlock
         {
-            Text = "Text:",
+            Text = InsertDialogTextResources.QuickPart.TextLabel,
             Margin = new Thickness(14, 12, 14, 0),
         };
 
@@ -265,8 +266,8 @@ internal static class InsertDialogLayout
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(14, 12, 14, 12),
         };
-        row.Children.Add(MakeButton("OK", (_, _) => ok()));
-        row.Children.Add(MakeButton("Cancel", (_, _) => cancel()));
+        row.Children.Add(MakeButton(InsertDialogTextResources.OkButton, (_, _) => ok()));
+        row.Children.Add(MakeButton(InsertDialogTextResources.CancelButton, (_, _) => cancel()));
         return row;
     }
 

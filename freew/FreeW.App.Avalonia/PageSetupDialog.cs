@@ -22,8 +22,8 @@ public sealed class PageSetupDialog : Window
     private readonly TextBox _bottomBox = MakeNumericBox();
     private readonly TextBox _leftBox = MakeNumericBox();
     private readonly TextBox _rightBox = MakeNumericBox();
-    private readonly RadioButton _portraitRadio = new() { Content = "Portrait", IsChecked = true, Margin = new Thickness(0, 4, 12, 0), GroupName = "Orientation" };
-    private readonly RadioButton _landscapeRadio = new() { Content = "Landscape", IsChecked = false, Margin = new Thickness(0, 4, 12, 0), GroupName = "Orientation" };
+    private readonly RadioButton _portraitRadio = new() { Content = PageSetupDialogPlanner.OrientationNames[0], IsChecked = true, Margin = new Thickness(0, 4, 12, 0), GroupName = "Orientation" };
+    private readonly RadioButton _landscapeRadio = new() { Content = PageSetupDialogPlanner.OrientationNames[1], IsChecked = false, Margin = new Thickness(0, 4, 12, 0), GroupName = "Orientation" };
     private readonly ComboBox _paperSizeBox;
     private readonly TextBox _paperWidthBox = MakeNumericBox();
     private readonly TextBox _paperHeightBox = MakeNumericBox();
@@ -41,7 +41,7 @@ public sealed class PageSetupDialog : Window
     {
         ArgumentNullException.ThrowIfNull(current);
 
-        Title = "Page Setup";
+        Title = PageSetupDialogPlanner.Title;
         Width = 400;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -74,9 +74,9 @@ public sealed class PageSetupDialog : Window
 
         var customIndex = PageSetupDialogPlanner.CustomIndex(PageSetupDialogPlanner.AvaloniaPaperOptions);
         _customSizePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        _customSizePanel.Children.Add(new TextBlock { Text = "Width (pt):", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        _customSizePanel.Children.Add(new TextBlock { Text = PageSetupDialogPlanner.CustomWidthLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         _customSizePanel.Children.Add(_paperWidthBox);
-        _customSizePanel.Children.Add(new TextBlock { Text = "  Height (pt):", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 0) });
+        _customSizePanel.Children.Add(new TextBlock { Text = PageSetupDialogPlanner.CustomHeightLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 0) });
         _customSizePanel.Children.Add(_paperHeightBox);
         _customSizePanel.IsVisible = state.PaperSizeIndex == customIndex;
 
@@ -87,32 +87,32 @@ public sealed class PageSetupDialog : Window
 
         var content = new StackPanel { Margin = new Thickness(16, 14, 16, 16) };
 
-        content.Children.Add(SectionLabel("Margins (points)"));
+        content.Children.Add(SectionLabel(PageSetupDialogPlanner.MarginsSectionLabel));
         var marginGrid = new Grid();
         marginGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         marginGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         marginGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         marginGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         marginGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddLabeledCell(marginGrid, "Top:", _topBox, 0, 0);
-        AddLabeledCell(marginGrid, "Bottom:", _bottomBox, 0, 2);
-        AddLabeledCell(marginGrid, "Left:", _leftBox, 1, 0);
-        AddLabeledCell(marginGrid, "Right:", _rightBox, 1, 2);
+        AddLabeledCell(marginGrid, PageSetupDialogPlanner.TopMarginLabel, _topBox, 0, 0);
+        AddLabeledCell(marginGrid, PageSetupDialogPlanner.BottomMarginLabel, _bottomBox, 0, 2);
+        AddLabeledCell(marginGrid, PageSetupDialogPlanner.LeftMarginLabel, _leftBox, 1, 0);
+        AddLabeledCell(marginGrid, PageSetupDialogPlanner.RightMarginLabel, _rightBox, 1, 2);
         content.Children.Add(marginGrid);
 
-        content.Children.Add(SectionLabel("Orientation"));
+        content.Children.Add(SectionLabel(PageSetupDialogPlanner.OrientationSectionLabel));
         var orientRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
         orientRow.Children.Add(_portraitRadio);
         orientRow.Children.Add(_landscapeRadio);
         content.Children.Add(orientRow);
 
-        content.Children.Add(SectionLabel("Paper Size"));
+        content.Children.Add(SectionLabel(PageSetupDialogPlanner.PaperSizeSectionLabel));
         content.Children.Add(_paperSizeBox);
         content.Children.Add(_customSizePanel);
 
         content.Children.Add(_status);
-        var ok = new Button { Content = "OK", MinWidth = 84, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Cancel", MinWidth = 84, IsCancel = true };
+        var ok = new Button { Content = PageSetupDialogPlanner.OkButton, MinWidth = 84, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        var cancel = new Button { Content = PageSetupDialogPlanner.CancelButton, MinWidth = 84, IsCancel = true };
         ok.Click += (_, _) => OnOk();
         cancel.Click += (_, _) => Close(null);
         content.Children.Add(new StackPanel

@@ -16,6 +16,10 @@ public sealed record TableFormulaPasteResult(
 
 public static class TableFormulaDialogPlanner
 {
+    public const string Title = "Formula";
+    public const string FormulaLabel = "Formula:";
+    public const string NumberFormatLabel = "Number format:";
+    public const string PasteFunctionLabel = "Paste function:";
     public const string ValidationMessage = "Please enter a formula.";
     public const string SumAboveFormula = "=SUM(ABOVE)";
     public const string SumLeftFormula = "=SUM(LEFT)";

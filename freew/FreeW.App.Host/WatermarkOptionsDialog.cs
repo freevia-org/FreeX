@@ -68,24 +68,24 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         var state = WatermarkOptionsDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
 
         // Mode radios.
-        _textRadio    = new RadioButton { Content = "Text watermark",    GroupName = "WmMode", IsChecked = !state.IsPicture };
-        _pictureRadio = new RadioButton { Content = "Picture watermark", GroupName = "WmMode", IsChecked = state.IsPicture };
+        _textRadio    = new RadioButton { Content = WatermarkOptionsDialogPlanner.TextModeLabel,    GroupName = "WmMode", IsChecked = !state.IsPicture };
+        _pictureRadio = new RadioButton { Content = WatermarkOptionsDialogPlanner.PictureModeLabel, GroupName = "WmMode", IsChecked = state.IsPicture };
 
         // Text controls.
         _textBox            = new TextBox { Text = state.Text, MinWidth = 200 };
         _fontBox            = new TextBox { Text = state.FontFamily, MinWidth = 150 };
         _colorBox           = new TextBox { Text = state.FontColorHex, MinWidth = 80 };
-        _diagonalRadio      = new RadioButton { Content = "Diagonal",   IsChecked = !state.TextIsHorizontal, GroupName = "WmLayout" };
-        _horizontalRadio    = new RadioButton { Content = "Horizontal", IsChecked = state.TextIsHorizontal, GroupName = "WmLayout" };
-        _semitransparentCheck = new CheckBox { Content = "Semitransparent", IsChecked = state.TextIsSemitransparent };
+        _diagonalRadio      = new RadioButton { Content = WatermarkOptionsDialogPlanner.DiagonalLabel,   IsChecked = !state.TextIsHorizontal, GroupName = "WmLayout" };
+        _horizontalRadio    = new RadioButton { Content = WatermarkOptionsDialogPlanner.HorizontalLabel, IsChecked = state.TextIsHorizontal, GroupName = "WmLayout" };
+        _semitransparentCheck = new CheckBox { Content = WatermarkOptionsDialogPlanner.SemitransparentLabel, IsChecked = state.TextIsSemitransparent };
 
         // Picture controls.
         _pendingImageBytes   = current?.ImageBytes;
         _pathBox             = new TextBox { Text = state.PicturePathText, MinWidth = 200, IsReadOnly = true };
         _scaleBox            = new TextBox { Text = state.ScaleText, MinWidth = 80 };
-        _washoutCheck        = new CheckBox { Content = "Washout (semitransparent)", IsChecked = state.PictureWashout };
-        _picDiagonalRadio    = new RadioButton { Content = "Diagonal",   IsChecked = !state.PictureIsHorizontal, GroupName = "PicLayout" };
-        _picHorizontalRadio  = new RadioButton { Content = "Horizontal", IsChecked = state.PictureIsHorizontal, GroupName = "PicLayout" };
+        _washoutCheck        = new CheckBox { Content = WatermarkOptionsDialogPlanner.WashoutLabel, IsChecked = state.PictureWashout };
+        _picDiagonalRadio    = new RadioButton { Content = WatermarkOptionsDialogPlanner.DiagonalLabel,   IsChecked = !state.PictureIsHorizontal, GroupName = "PicLayout" };
+        _picHorizontalRadio  = new RadioButton { Content = WatermarkOptionsDialogPlanner.HorizontalLabel, IsChecked = state.PictureIsHorizontal, GroupName = "PicLayout" };
 
         Content = BuildContent();
         SyncPanelVisibility();
@@ -112,7 +112,7 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _textPanel = new StackPanel();
         _textPanel.Children.Add(new TextBlock
         {
-            Text = "Text watermark",
+            Text = WatermarkOptionsDialogPlanner.TextModeLabel,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         });
@@ -122,10 +122,10 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         layoutPanel.Children.Add(_diagonalRadio);
         layoutPanel.Children.Add(_horizontalRadio);
 
-        _textPanel.Children.Add(LabeledRow("Text:",         _textBox));
-        _textPanel.Children.Add(LabeledRow("Font:",         _fontBox));
-        _textPanel.Children.Add(LabeledRow("Color (hex):",  _colorBox));
-        _textPanel.Children.Add(LabeledRow("Layout:",       layoutPanel));
+        _textPanel.Children.Add(LabeledRow(WatermarkOptionsDialogPlanner.TextLabel,         _textBox));
+        _textPanel.Children.Add(LabeledRow(WatermarkOptionsDialogPlanner.FontLabel,         _fontBox));
+        _textPanel.Children.Add(LabeledRow(WatermarkOptionsDialogPlanner.ColorLabel,  _colorBox));
+        _textPanel.Children.Add(LabeledRow(WatermarkOptionsDialogPlanner.LayoutLabel,       layoutPanel));
         _textPanel.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 4) });
         _semitransparentCheck.Margin = new Thickness(0, 4, 0, 0);
         _textPanel.Children.Add(_semitransparentCheck);
@@ -135,7 +135,7 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _picturePanel = new StackPanel();
         _picturePanel.Children.Add(new TextBlock
         {
-            Text = "Picture watermark",
+            Text = WatermarkOptionsDialogPlanner.PictureModeLabel,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         });
@@ -143,7 +143,7 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         // File picker row.
         var fileRow = new StackPanel { Orientation = Orientation.Horizontal };
         _pathBox.MinWidth = 240;
-        var browseBtn = new Button { Content = "Select Picture…", MinWidth = 100, Margin = new Thickness(8, 0, 0, 0) };
+        var browseBtn = new Button { Content = WatermarkOptionsDialogPlanner.SelectPictureButton, MinWidth = 100, Margin = new Thickness(8, 0, 0, 0) };
         browseBtn.Click += (_, _) => BrowseForImage();
         fileRow.Children.Add(_pathBox);
         fileRow.Children.Add(browseBtn);
@@ -153,20 +153,20 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         picLayoutPanel.Children.Add(_picDiagonalRadio);
         picLayoutPanel.Children.Add(_picHorizontalRadio);
 
-        _picturePanel.Children.Add(LabeledRow("Image file:", fileRow));
-        _picturePanel.Children.Add(LabeledRow("Scale (%, 0=Auto):", _scaleBox));
-        _picturePanel.Children.Add(LabeledRow("Layout:", picLayoutPanel));
+        _picturePanel.Children.Add(LabeledRow(WatermarkOptionsDialogPlanner.ImageFileLabel, fileRow));
+        _picturePanel.Children.Add(LabeledRow(WatermarkOptionsDialogPlanner.ScaleLabel, _scaleBox));
+        _picturePanel.Children.Add(LabeledRow(WatermarkOptionsDialogPlanner.LayoutLabel, picLayoutPanel));
         _washoutCheck.Margin = new Thickness(0, 6, 0, 0);
         _picturePanel.Children.Add(_washoutCheck);
         root.Children.Add(_picturePanel);
 
         // ── Buttons ───────────────────────────────────────────────────────────────────────────────
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-        var ok = new Button { Content = "OK", MinWidth = 72, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = WatermarkOptionsDialogPlanner.OkButton, MinWidth = 72, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Accept();
-        var remove = new Button { Content = "Remove Watermark", MinWidth = 130, Margin = new Thickness(0, 0, 8, 0) };
+        var remove = new Button { Content = WatermarkOptionsDialogPlanner.RemoveWatermarkButton, MinWidth = 130, Margin = new Thickness(0, 0, 8, 0) };
         remove.Click += (_, _) => { _removeClicked = true; Close(); };
-        var cancel = new Button { Content = "Cancel", MinWidth = 72, IsCancel = true };
+        var cancel = new Button { Content = WatermarkOptionsDialogPlanner.CancelButton, MinWidth = 72, IsCancel = true };
         buttonRow.Children.Add(ok);
         buttonRow.Children.Add(remove);
         buttonRow.Children.Add(cancel);
@@ -201,8 +201,8 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     {
         var dlg = new OpenFileDialog
         {
-            Title = "Select a watermark image",
-            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff|All files (*.*)|*.*"
+            Title = WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle,
+            Filter = WatermarkOptionsDialogPlanner.WatermarkImageFilter
         };
         if (dlg.ShowDialog(this) != true)
             return;
