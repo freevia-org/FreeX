@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.Core.IO;
@@ -229,7 +230,7 @@ internal static class PptxColorReader
         var wAttr = lnElement.Attribute("w")?.Value;
         double widthPt = 0.75;
         if (long.TryParse(wAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var wEmu) && wEmu > 0)
-            widthPt = wEmu / 12700.0;
+            widthPt = DrawingMlUnits.EmuToPoints(wEmu);
 
         // a:prstDash
         var dashVal = lnElement.Element(A + "prstDash")?.Attribute("val")?.Value;
@@ -254,53 +255,10 @@ internal static class PptxColorReader
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
     internal static bool TryMapSchemeColor(string? value, out ThemeColorSlot slot)
-    {
-        slot = default;
-        if (string.IsNullOrWhiteSpace(value)) return false;
-
-        slot = value.Trim().ToLowerInvariant() switch
-        {
-            "dk1" or "tx1" => ThemeColorSlot.Dk1,
-            "lt1" or "bg1" => ThemeColorSlot.Lt1,
-            "dk2" or "tx2" => ThemeColorSlot.Dk2,
-            "lt2" or "bg2" => ThemeColorSlot.Lt2,
-            "accent1" => ThemeColorSlot.Accent1,
-            "accent2" => ThemeColorSlot.Accent2,
-            "accent3" => ThemeColorSlot.Accent3,
-            "accent4" => ThemeColorSlot.Accent4,
-            "accent5" => ThemeColorSlot.Accent5,
-            "accent6" => ThemeColorSlot.Accent6,
-            "hlink" => ThemeColorSlot.HLink,
-            "folhlink" => ThemeColorSlot.FolHLink,
-            _ => default
-        };
-
-        return value.Trim().ToLowerInvariant() is
-            "dk1" or "tx1" or
-            "lt1" or "bg1" or
-            "dk2" or "tx2" or
-            "lt2" or "bg2" or
-            "accent1" or "accent2" or "accent3" or "accent4" or "accent5" or "accent6" or
-            "hlink" or "folhlink";
-    }
+        => ThemeColorSlotMapper.TryMapRole(value, out slot);
 
     internal static string ToSchemeColorString(ThemeColorSlot slot) =>
-        slot switch
-        {
-            ThemeColorSlot.Dk1 => "dk1",
-            ThemeColorSlot.Lt1 => "lt1",
-            ThemeColorSlot.Dk2 => "dk2",
-            ThemeColorSlot.Lt2 => "lt2",
-            ThemeColorSlot.Accent1 => "accent1",
-            ThemeColorSlot.Accent2 => "accent2",
-            ThemeColorSlot.Accent3 => "accent3",
-            ThemeColorSlot.Accent4 => "accent4",
-            ThemeColorSlot.Accent5 => "accent5",
-            ThemeColorSlot.Accent6 => "accent6",
-            ThemeColorSlot.HLink => "hlink",
-            ThemeColorSlot.FolHLink => "folHlink",
-            _ => "dk1"
-        };
+        ThemeColorSlotMapper.ToSchemeColorString(slot);
 
     private static SrgbColor? ParseHexColor(string hex)
     {

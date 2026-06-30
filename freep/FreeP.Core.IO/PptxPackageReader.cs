@@ -1981,10 +1981,10 @@ public static class PptxPackageReader
         if (tcPr is not null)
         {
             // Insets (EMU -> points)
-            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = ml / (double)DrawingMlUnits.EmuPerPoint;
-            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = mr / (double)DrawingMlUnits.EmuPerPoint;
-            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = mt / (double)DrawingMlUnits.EmuPerPoint;
-            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = mb / (double)DrawingMlUnits.EmuPerPoint;
+            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = DrawingMlUnits.EmuToPoints(ml);
+            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = DrawingMlUnits.EmuToPoints(mr);
+            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = DrawingMlUnits.EmuToPoints(mt);
+            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = DrawingMlUnits.EmuToPoints(mb);
 
             // Vertical anchor
             cell.Anchor = tcPr.Attribute("anchor")?.Value switch
@@ -2628,10 +2628,10 @@ public static class PptxPackageReader
                 _ => (VerticalAnchor?)null
             };
 
-            if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = li / (double)DrawingMlUnits.EmuPerPoint;
-            if (ParseLongNullable(bodyPr.Attribute("rIns")?.Value) is { } ri) body.InsetRightPt = ri / (double)DrawingMlUnits.EmuPerPoint;
-            if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = ti / (double)DrawingMlUnits.EmuPerPoint;
-            if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = bi / (double)DrawingMlUnits.EmuPerPoint;
+            if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = DrawingMlUnits.EmuToPoints(li);
+            if (ParseLongNullable(bodyPr.Attribute("rIns")?.Value) is { } ri) body.InsetRightPt = DrawingMlUnits.EmuToPoints(ri);
+            if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = DrawingMlUnits.EmuToPoints(ti);
+            if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = DrawingMlUnits.EmuToPoints(bi);
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             var normAf = bodyPr.Element(A + "normAutofit");
             var spAf   = bodyPr.Element(A + "spAutoFit");
@@ -2954,8 +2954,8 @@ public static class PptxPackageReader
                         alpha = (byte)Math.Clamp((int)Math.Round(av / 100000.0 * 255), 0, 255);
                 }
                 double blurPt = 2.0, distPt = 2.0, dirDeg = 45.0;
-                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = blurEmu / (double)DrawingMlUnits.EmuPerPoint;
-                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = distEmu / (double)DrawingMlUnits.EmuPerPoint;
+                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = DrawingMlUnits.EmuToPoints(distEmu);
                 if (long.TryParse(outerShdw.Attribute("dir")?.Value,     out var dirRaw))  dirDeg = dirRaw  / 60000.0;
                 run.TextShadow = new RunTextShadow
                 {
