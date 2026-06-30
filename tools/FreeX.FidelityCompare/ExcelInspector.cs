@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using FreeX.ToolsShared.Wpf;
@@ -8,7 +7,6 @@ using static FreeX.ToolsShared.Wpf.ExcelComAutomation;
 // instance is reused for the whole batch and torn down by Shutdown(); orphan EXCEL PIDs are killed.
 internal static class ExcelInspector
 {
-    private const string ExcelProcessName = "EXCEL";
     private const int MaxCellsPerSheet = 250_000; // guard against pathological used ranges
 
     private static object? _excel;
@@ -248,7 +246,7 @@ internal static class ExcelInspector
         TrySetProperty(app, "AskToUpdateLinks", false);
         TrySetProperty(app, "ScreenUpdating", false);
         _excel = excel;
-        _ownedPids.UnionWith(GetExcelProcessIds().Except(baseline)); // accumulate across recreations for cleanup
+        _ownedPids.UnionWith(GetNewExcelProcessIds(baseline)); // accumulate across recreations for cleanup
 
         // Warm up: poll a cheap member until the COM server stops reporting "busy". The very first
         // Workbooks.Open on a cold process can still fail ("Unable to get the Open property"); Program
@@ -271,10 +269,7 @@ internal static class ExcelInspector
             try { ((dynamic)dead).Quit(); } catch { }
             ReleaseComObject(dead);
         }
-        foreach (var p in Process.GetProcessesByName(ExcelProcessName).Where(p => _ownedPids.Contains(p.Id)))
-        {
-            try { p.Kill(entireProcessTree: true); p.WaitForExit(3000); } catch { }
-        }
+        KillExcelProcesses(_ownedPids, logKilled: false, logFailures: false);
     }
 
     public static void Shutdown()
@@ -287,12 +282,9 @@ internal static class ExcelInspector
         }
 
         var deadline = Environment.TickCount64 + 3000;
-        while (Environment.TickCount64 < deadline && Process.GetProcessesByName(ExcelProcessName).Any(p => _ownedPids.Contains(p.Id)))
+        while (Environment.TickCount64 < deadline && GetExcelProcessIds().Overlaps(_ownedPids))
             System.Threading.Thread.Sleep(200);
-        foreach (var p in Process.GetProcessesByName(ExcelProcessName).Where(p => _ownedPids.Contains(p.Id)))
-        {
-            try { p.Kill(entireProcessTree: true); p.WaitForExit(5000); } catch { }
-        }
+        KillExcelProcesses(_ownedPids, logKilled: false, logFailures: false);
     }
 
 }
