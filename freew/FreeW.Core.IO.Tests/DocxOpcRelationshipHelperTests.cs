@@ -90,6 +90,36 @@ public sealed class DocxOpcRelationshipHelperTests
             .And.NotContain("new XElement(Rel + \"Relationship\"");
     }
 
+    [Fact]
+    public void DocxDocumentPropertyPackageParts_UseSharedOpcPackagePropertyConstants()
+    {
+        var readerSource = ReadRepoText("freew", "FreeW.Core.IO", "DocxReader.cs");
+        var writerSource = ReadRepoText("freew", "FreeW.Core.IO", "DocxWriter.cs");
+
+        readerSource.Should()
+            .Contain("OpcPackageProperties.ExtendedPropertiesZipEntry")
+            .And.Contain("OpcPackageProperties.ExtendedPropertiesPartName")
+            .And.Contain("OpcPackageProperties.CustomPropertiesZipEntry")
+            .And.NotContain("\"docProps/app.xml\"")
+            .And.NotContain("\"docProps/custom.xml\"");
+
+        writerSource.Should()
+            .Contain("OpcPackageProperties.CorePropertiesZipEntry")
+            .And.Contain("OpcPackageProperties.CorePropertiesPartName")
+            .And.Contain("OpcPackageProperties.CorePropertiesContentType")
+            .And.Contain("OpcPackageProperties.CorePropertiesRelationshipType")
+            .And.Contain("OpcPackageProperties.CustomPropertiesZipEntry")
+            .And.Contain("OpcPackageProperties.CustomPropertiesPartName")
+            .And.Contain("OpcPackageProperties.CustomPropertiesContentType")
+            .And.Contain("OpcPackageProperties.CustomPropertiesRelationshipType")
+            .And.Contain("OpcPackageProperties.ExtendedPropertiesPartName")
+            .And.Contain("OpcPackageProperties.ExtendedPropertiesRelationshipType")
+            .And.Contain("OpcPackageProperties.ExtendedPropertiesZipEntry")
+            .And.NotContain("\"docProps/core.xml\"")
+            .And.NotContain("\"docProps/app.xml\"")
+            .And.NotContain("\"docProps/custom.xml\"");
+    }
+
     private static MemoryStream BuildDocxWithNonCanonicalHeaderFooterTargets()
     {
         var stream = new MemoryStream();

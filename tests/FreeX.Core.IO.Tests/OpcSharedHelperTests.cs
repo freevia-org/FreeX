@@ -633,6 +633,75 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void ExtendedDocumentProperties_ReadWriteOverZipArchive_UsesSharedOpcPartConstants()
+    {
+        var properties = new ExtendedDocumentProperties(
+            Application: "FreeX",
+            Company: "Free Suite",
+            Manager: "Document Fidelity",
+            PresentationFormat: "Workbook",
+            Template: "RoundTrip.xltx");
+
+        using var stream = new MemoryStream();
+        using (new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+        }
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            OpcDocumentProperties.WriteExtendedProperties(
+                archive,
+                properties,
+                includeEmptyStrings: true,
+                includeXmlDeclaration: true);
+        }
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+        readArchive.GetEntry(OpcPackageProperties.ExtendedPropertiesZipEntry).Should().NotBeNull();
+        OpcDocumentProperties.ReadExtendedProperties(readArchive).Should().Be(properties);
+    }
+
+    [Fact]
+    public void ExtendedDocumentPropertiesDedupSourceGuard_StaysPreservationOnlyInFreeWAndFreeP()
+    {
+        var documentPropertiesModelSource = TestWorkspaceFiles.ReadRepoText(
+            "shared",
+            "Free.Shared.Opc",
+            "DocumentProperties.cs");
+        var textDocumentSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.Model", "TextDocument.cs");
+        var presentationSource = TestWorkspaceFiles.ReadRepoText("freep", "FreeP.Core.Model", "Presentation.cs");
+        var docxReaderSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxReader.cs");
+        var docxWriterSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxWriter.cs");
+        var pptxReaderSource = TestWorkspaceFiles.ReadRepoText("freep", "FreeP.Core.IO", "PptxPackageReader.cs");
+        var pptxWriterSource = TestWorkspaceFiles.ReadRepoText("freep", "FreeP.Core.IO", "PptxPackageWriter.cs");
+        var xlsxPropertiesSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDocumentPropertiesPreserver.cs");
+
+        documentPropertiesModelSource.Should().NotContain("ExtendedDocumentProperties");
+        textDocumentSource.Should().NotContain("ExtendedDocumentProperties");
+        presentationSource.Should().NotContain("ExtendedDocumentProperties");
+
+        docxReaderSource.Should()
+            .Contain("OpcPackageProperties.ExtendedPropertiesZipEntry")
+            .And.Contain("OpcPackageProperties.ExtendedPropertiesPartName")
+            .And.NotContain("OpcDocumentProperties.ReadExtendedProperties(");
+        docxWriterSource.Should()
+            .Contain("OpcPackageProperties.ExtendedPropertiesPartName")
+            .And.Contain("OpcPackageProperties.ExtendedPropertiesRelationshipType")
+            .And.Contain("OpcPackageProperties.ExtendedPropertiesZipEntry")
+            .And.NotContain("OpcDocumentProperties.BuildExtendedPropertiesDocument(")
+            .And.NotContain("OpcDocumentProperties.WriteExtendedProperties(");
+        pptxReaderSource.Should().NotContain("OpcDocumentProperties.ReadExtendedProperties(");
+        pptxWriterSource.Should().NotContain("OpcDocumentProperties.BuildExtendedPropertiesDocument(");
+
+        xlsxPropertiesSource.Should()
+            .Contain("OpcPackageProperties.ExtendedPropertiesZipEntry")
+            .And.Contain("OpcPackageProperties.ExtendedPropertiesRelationshipType")
+            .And.Contain("OpcDocumentProperties.StableExtendedPropertyElementNames");
+    }
+
+    [Fact]
     public void CustomDocumentProperties_OverlayByNamePreservesRawPropertiesAndAllocatesDeterministicPids()
     {
         var cp = OpcCustomDocumentProperties.CustomPropertiesNamespace;
@@ -728,9 +797,12 @@ public sealed class OpcSharedHelperTests
         docxWriterSource.Should().Contain("OpcDocumentProperties.BuildCorePropertiesDocument(");
         docxWriterSource.Should().NotContain("properties.ToCoreProperties()");
         pptxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(");
+        pptxReaderSource.Should().Contain("OpcPackageProperties.CorePropertiesRelationshipType");
         pptxReaderSource.Should().Contain("presentation.Properties,");
         pptxReaderSource.Should().NotContain("props.ApplyCoreProperties(");
         pptxWriterSource.Should().Contain("OpcDocumentProperties.BuildCorePropertiesDocument(");
+        pptxWriterSource.Should().Contain("OpcPackageProperties.CorePropertiesRelationshipType");
+        pptxWriterSource.Should().Contain("OpcPackageProperties.CorePropertiesZipEntry");
         pptxWriterSource.Should().NotContain("presentation.Properties.ToCoreProperties()");
         xlsxPropertiesSource.Should().Contain("OpcDocumentProperties.PreservePropertyElements(");
     }

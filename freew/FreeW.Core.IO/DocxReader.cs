@@ -290,8 +290,8 @@ public static class DocxReader
 
         // Package-level extended properties (docProps/app.xml) are not modelled by FreeW, but Word-authored
         // documents commonly use them for application/company/template metadata.
-        if (archive.GetEntry("docProps/app.xml") is not null)
-            Capture(ExtendedPropertiesPartName, relationshipType: null);
+        if (archive.GetEntry(OpcPackageProperties.ExtendedPropertiesZipEntry) is not null)
+            Capture(OpcPackageProperties.ExtendedPropertiesPartName, relationshipType: null);
 
         // VBA macro project (.docm/.dotm): word/vbaProject.bin, its optional word/vbaData.xml, and the
         // part-local word/_rels/vbaProject.bin.rels. Preserved verbatim and NEVER executed/deserialized. The
@@ -4326,7 +4326,7 @@ public static class DocxReader
     /// </summary>
     private static void ReadCustomProperties(ZipArchive archive, TextDocument document)
     {
-        var customXml = LoadPart(archive, "docProps/custom.xml");
+        var customXml = LoadPart(archive, OpcPackageProperties.CustomPropertiesZipEntry);
         var root = customXml?.Root;
         if (root is null)
             return;
