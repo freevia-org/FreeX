@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Styling;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -13,6 +15,8 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public Thickness ButtonPadding { get; init; } = new(4, 1);
     public Thickness TextBoxPadding { get; init; } = new(4, 1);
     public Thickness ComboBoxPadding { get; init; } = new(5, 0, 4, 0);
+    public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
+    public double ListBoxItemMinHeight { get; init; } = 24;
 }
 
 /// <summary>
@@ -47,14 +51,17 @@ public static class AvaloniaCompactDialogChrome
         button.VerticalContentAlignment = VerticalAlignment.Center;
     }
 
-    public static void ApplyTextBox(TextBox textBox, AvaloniaCompactDialogChromeStyle style)
+    public static void ApplyTextBox(TextBox textBox, AvaloniaCompactDialogChromeStyle style, bool fixedHeight = true)
     {
         ArgumentNullException.ThrowIfNull(textBox);
         ArgumentNullException.ThrowIfNull(style);
 
-        textBox.Height = style.ControlHeight;
-        textBox.MinHeight = style.ControlHeight;
-        textBox.MaxHeight = style.ControlHeight;
+        if (fixedHeight)
+        {
+            textBox.Height = style.ControlHeight;
+            textBox.MinHeight = style.ControlHeight;
+            textBox.MaxHeight = style.ControlHeight;
+        }
         textBox.Padding = style.TextBoxPadding;
         textBox.FontSize = style.FontSize;
         textBox.FontFamily = style.FontFamily;
@@ -95,6 +102,23 @@ public static class AvaloniaCompactDialogChrome
 
         radioButton.FontSize = style.FontSize;
         radioButton.FontFamily = style.FontFamily;
+    }
+
+    public static void ApplyListBox(ListBox listBox, AvaloniaCompactDialogChromeStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(listBox);
+        ArgumentNullException.ThrowIfNull(style);
+
+        listBox.FontSize = style.FontSize;
+        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.PaddingProperty, style.ListBoxItemPadding),
+                new Setter(Layoutable.MinHeightProperty, style.ListBoxItemMinHeight),
+                new Setter(TemplatedControl.FontSizeProperty, style.FontSize),
+            },
+        });
     }
 
     public static StackPanel CreateActionRow(IReadOnlyList<Control> controls, Thickness margin = default)

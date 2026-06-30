@@ -1,11 +1,10 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Styling;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Services;
@@ -27,6 +26,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle NamesDialogChromeStyle => new(FormulaBarFontFamily);
+
     // ── Formulas ▸ Defined Names menu entry points ────────────────────────────
     private void NameManager() => _ = ShowNameManagerDialogAsync();
 
@@ -662,71 +663,24 @@ public sealed partial class MainWindow
     /// default/OK button.
     /// </summary>
     private static void ApplyNamesButtonChrome(Button button, double minWidth = 84, bool isDefault = false)
-    {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, NamesDialogChromeStyle, minWidth, isDefault);
 
     /// <summary>
     /// Applies standard Names-dialog text-box chrome (Height=24, Padding=(4,1), FontSize=12, grey border).
     /// Pass <paramref name="fixedHeight"/>=false for multi-line boxes (e.g. Comment) that must grow.
     /// </summary>
     private static void ApplyNamesTextBoxChrome(TextBox textBox, bool fixedHeight = true)
-    {
-        if (fixedHeight)
-        {
-            textBox.Height = 24;
-            textBox.MinHeight = 24;
-            textBox.MaxHeight = 24;
-        }
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, NamesDialogChromeStyle, fixedHeight);
 
     /// <summary>
     /// Applies standard Names-dialog combo-box chrome (Height=24, Padding=(5,0,4,0), FontSize=12, grey border).
     /// </summary>
     private static void ApplyNamesComboBoxChrome(ComboBox comboBox)
-    {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, NamesDialogChromeStyle);
 
     /// <summary>
     /// Applies standard Names-dialog list-box row chrome (MinHeight=24 per row, FontSize=12).
     /// </summary>
     private static void ApplyNamesListBoxStyle(ListBox listBox)
-    {
-        listBox.FontSize = 12;
-        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
-        {
-            Setters =
-            {
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
-                new Setter(Layoutable.MinHeightProperty, 24.0),
-                new Setter(TemplatedControl.FontSizeProperty, 12.0),
-            },
-        });
-    }
+        => AvaloniaCompactDialogChrome.ApplyListBox(listBox, NamesDialogChromeStyle);
 }
