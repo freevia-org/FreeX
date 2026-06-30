@@ -63,6 +63,32 @@ public sealed class PptxPackageReaderSourceTests
     }
 
     [Fact]
+    public void DrawingMlSrgbParsing_UsesSharedRgbHelper()
+    {
+        var root = FindRepositoryRoot();
+        var packageReaderSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageReader.cs"));
+        var colorReaderSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.Core.IO",
+            "PptxColorReader.cs"));
+
+        ExtractMethod(packageReaderSource, "private static bool TryParseHex6(")
+            .Should()
+            .Contain("DrawingMlRgbColor.TryParseHexRgb")
+            .And.NotContain("byte.TryParse");
+
+        ExtractMethod(colorReaderSource, "private static SrgbColor? ParseHexColor(")
+            .Should()
+            .Contain("DrawingMlRgbColor.TryParseHexRgb")
+            .And.NotContain("byte.TryParse");
+    }
+
+    [Fact]
     public void Read_PresentationXmlWithDtd_DoesNotApplyParsedPayload()
     {
         using var stream = new MemoryStream();

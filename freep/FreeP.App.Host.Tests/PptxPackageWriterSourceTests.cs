@@ -79,6 +79,22 @@ public sealed class PptxPackageWriterSourceTests
             .And.NotContain("\"docProps/custom.xml\"");
     }
 
+    [Fact]
+    public void DrawingMlSrgbFormatting_UsesSharedRgbHelper()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageWriter.cs"));
+
+        ExtractMethod(source, "private static string FmtColor(")
+            .Should()
+            .Contain("DrawingMlRgbColor")
+            .And.Contain(".ToHexRgb()")
+            .And.NotContain("$\"{c.R:X2}");
+    }
+
     private static string ExtractMethod(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);

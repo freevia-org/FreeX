@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -38,7 +39,7 @@ internal static class XlsxDrawingColorWriter
         new(drawingNs + "srgbClr", new XAttribute("val", FormatRgb(color)));
 
     public static string FormatRgb(CellColor color) =>
-        $"{color.R:X2}{color.G:X2}{color.B:X2}";
+        new DrawingMlRgbColor(color.R, color.G, color.B).ToHexRgb();
 
     private static string ToSchemeColorValue(WorkbookThemeColorSlot slot) =>
         XlsxDrawingThemeColorSlots.ToSchemeColorValue(slot);

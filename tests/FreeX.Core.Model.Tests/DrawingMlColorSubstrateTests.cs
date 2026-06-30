@@ -6,6 +6,41 @@ namespace FreeX.Core.Model.Tests;
 public sealed class DrawingMlColorSubstrateTests
 {
     [Theory]
+    [InlineData("0a141e", 0x0A, 0x14, 0x1E)]
+    [InlineData("#0A141E", 0x0A, 0x14, 0x1E)]
+    [InlineData(" FFFFFF ", 0xFF, 0xFF, 0xFF)]
+    public void RgbColor_TryParseHexRgb_ReadsSixDigitDrawingMlValues(
+        string text,
+        int expectedR,
+        int expectedG,
+        int expectedB)
+    {
+        DrawingMlRgbColor.TryParseHexRgb(text, out var color).Should().BeTrue();
+        color.Should().Be(new DrawingMlRgbColor((byte)expectedR, (byte)expectedG, (byte)expectedB));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("12345")]
+    [InlineData("FF001122")]
+    [InlineData("GG0011")]
+    public void RgbColor_TryParseHexRgb_RejectsUnsupportedDrawingMlValues(string? text)
+    {
+        DrawingMlRgbColor.TryParseHexRgb(text, out var color).Should().BeFalse();
+        color.Should().Be(new DrawingMlRgbColor(0, 0, 0));
+    }
+
+    [Fact]
+    public void RgbColor_ToHexRgb_WritesUppercaseBareDrawingMlValue()
+    {
+        var color = new DrawingMlRgbColor(0x0A, 0x14, 0x1E);
+
+        color.ToHexRgb().Should().Be("0A141E");
+        color.ToString().Should().Be("#0A141E");
+    }
+
+    [Theory]
     [InlineData("dk1", DrawingMlThemeColorSlot.Dark1)]
     [InlineData("tx1", DrawingMlThemeColorSlot.Dark1)]
     [InlineData("lt1", DrawingMlThemeColorSlot.Light1)]

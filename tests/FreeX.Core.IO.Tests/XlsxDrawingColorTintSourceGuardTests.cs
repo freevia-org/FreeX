@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Text.RegularExpressions;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -55,6 +56,31 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
     }
 
     [Fact]
+    public void DrawingColorReaderAndWriter_UseSharedDrawingMlRgbHelper()
+    {
+        var colorReaderSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxColorReader.cs");
+        ExtractMethod(colorReaderSource, "public static bool TryParseHexColor(")
+            .Should()
+            .Contain("DrawingMlRgbColor.TryParseHexRgb")
+            .And.NotContain("byte.TryParse");
+
+        var colorWriterSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxDrawingColorWriter.cs");
+        ExtractMethod(colorWriterSource, "public static string FormatRgb(")
+            .Should()
+            .Contain("DrawingMlRgbColor")
+            .And.Contain(".ToHexRgb()")
+            .And.NotContain("$\"{color.R:X2}");
+
+        TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorkbookThemeReader.cs")
+            .Should()
+            .Contain("XlsxColorReader.TryParseHexColor(srgb, out var color)");
+        TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorkbookThemeWriter.cs")
+            .Should()
+            .Contain("XlsxDrawingColorWriter.FormatRgb(theme.GetColor(color.Slot))")
+            .And.Contain("XlsxDrawingColorWriter.FormatRgb(scheme.Colors[color.Slot])");
+    }
+
+    [Fact]
     public void SpreadsheetThemeColorResolution_UsesWorkbookThemeTintMath()
     {
         TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxColorReader.cs")
@@ -69,5 +95,19 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
             .Should()
             .Contain("DrawingMlColorTransform.ApplyTint")
             .And.Contain("DrawingMlColorTransform.ApplyShade");
+    }
+
+    private static string ExtractMethod(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"method '{signature}' should exist");
+
+        var nextMethod = Regex.Match(
+            source[(start + signature.Length)..],
+            @"\r?\n    (private|internal|public) static ");
+
+        return nextMethod.Success
+            ? source[start..(start + signature.Length + nextMethod.Index)]
+            : source[start..];
     }
 }

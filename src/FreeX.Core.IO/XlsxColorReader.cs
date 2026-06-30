@@ -1,3 +1,4 @@
+using Free.Shared.Drawing;
 using FreeX.Core.Model;
 using System.Globalization;
 using System.Xml.Linq;
@@ -9,19 +10,10 @@ public static class XlsxColorReader
     public static bool TryParseHexColor(string? text, out CellColor color)
     {
         color = default;
-        if (string.IsNullOrWhiteSpace(text))
+        if (!DrawingMlRgbColor.TryParseHexRgb(text, out var rgb))
             return false;
 
-        var normalized = text.Trim().TrimStart('#');
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized[..2], NumberStyles.HexNumber, null, out var r) ||
-            !byte.TryParse(normalized[2..4], NumberStyles.HexNumber, null, out var g) ||
-            !byte.TryParse(normalized[4..6], NumberStyles.HexNumber, null, out var b))
-        {
-            return false;
-        }
-
-        color = new CellColor(r, g, b);
+        color = new CellColor(rgb.R, rgb.G, rgb.B);
         return true;
     }
 
