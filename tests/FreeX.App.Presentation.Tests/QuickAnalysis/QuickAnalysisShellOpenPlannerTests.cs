@@ -89,8 +89,49 @@ public sealed class QuickAnalysisShellOpenPlannerTests
             RequiresSelectionReference: true));
     }
 
+    [Fact]
+    public void FormatIssueText_StatusTargetUsesSharedStatusResourceAndSelectionReference()
+    {
+        var sheet = CreateSheet();
+        var selection = Range(sheet, 1, 1, 3, 2);
+        var plan = QuickAnalysisShellOpenPlanner.Plan(new QuickAnalysisShellRequestPlan(
+            QuickAnalysisShellRequestStatus.NoSuggestions,
+            selection,
+            null,
+            QuickAnalysisDisplayModel.Empty,
+            QuickAnalysisShellPlan.Empty));
+
+        var text = QuickAnalysisShellOpenPlanner.FormatIssueText(
+            plan,
+            QuickAnalysisShellOpenIssueTextTarget.Status,
+            resourceKey => $"get:{resourceKey}",
+            (resourceKey, reference) => $"format:{resourceKey}:{reference}",
+            FormatRangeForTest);
+
+        text.Should().Be("format:TableLoc_QaNoSuggestions:R1C1:R3C2");
+    }
+
+    [Fact]
+    public void FormatIssueText_DialogTargetUsesSharedDialogResourceWithoutReferenceWhenNotRequired()
+    {
+        var plan = QuickAnalysisShellOpenPlanner.Plan(
+            QuickAnalysisShellRequestPlan.Empty(QuickAnalysisShellRequestStatus.MissingSelection));
+
+        var text = QuickAnalysisShellOpenPlanner.FormatIssueText(
+            plan,
+            QuickAnalysisShellOpenIssueTextTarget.Dialog,
+            resourceKey => $"get:{resourceKey}",
+            (resourceKey, reference) => $"format:{resourceKey}:{reference}",
+            FormatRangeForTest);
+
+        text.Should().Be("get:TableLoc_QaSelectMoreThanOne");
+    }
+
     private static Sheet CreateSheet() => new Workbook("Book").AddSheet("Sheet1");
 
     private static GridRange Range(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol) =>
         new(new CellAddress(sheet.Id, startRow, startCol), new CellAddress(sheet.Id, endRow, endCol));
+
+    private static string FormatRangeForTest(GridRange range) =>
+        $"R{range.Start.Row}C{range.Start.Col}:R{range.End.Row}C{range.End.Col}";
 }

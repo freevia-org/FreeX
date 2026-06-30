@@ -1047,13 +1047,16 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("QuickAnalysisShellRequestPlanner.Build(");
         source.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
         source.Should().NotContain("if (!request.CanOpen");
-        source.Should().Contain("var issue = openPlan.Issue");
+        source.Should().Contain("QuickAnalysisShellOpenPlanner.FormatIssueText(");
+        source.Should().Contain("QuickAnalysisShellOpenIssueTextTarget.Status");
+        source.Should().NotContain("var issue = openPlan.Issue");
         source.Should().NotContain("openPlan.Decision == QuickAnalysisShellOpenDecision");
         source.Should().Contain("ToolTip = item.ToolTip");
         source.Should().NotContain("QuickAnalysisSelectionReader.Describe(sheet, range)");
         source.Should().NotContain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         source.Should().NotContain("QuickAnalysisPlanner.BuildDisplayModel(range)");
-        source.Should().Contain("Header = group.TitleFallback");
+        source.Should().Contain("Header = UiText.Get(group.TitleResourceKey)");
+        source.Should().NotContain("Header = group.TitleFallback");
         source.Should().Contain("foreach (var group in shellPlan.Groups)");
         source.Should().NotContain("foreach (var group in displayModel.Groups)");
         requestPlanner.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
