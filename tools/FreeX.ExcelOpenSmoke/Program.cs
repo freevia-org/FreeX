@@ -12,7 +12,8 @@ using DocumentFormat.OpenXml.Validation;
 using Free.Shared.Opc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
-using static ExcelSmokeCom;
+using FreeX.ToolsShared;
+using static FreeX.ToolsShared.Wpf.ExcelComAutomation;
 using static ExcelSmokeFixtures;
 using static SmokeUsage;
 
@@ -536,12 +537,10 @@ internal static class ExcelOpenSmoke
 
         try
         {
-            var excelType = Type.GetTypeFromProgID("Excel.Application")
-                ?? throw new InvalidOperationException("Excel.Application COM registration was not found. Install Microsoft Excel desktop before running this smoke check.");
-
             using var messageFilter = RegisterExcelBusyMessageFilter();
-            excel = Activator.CreateInstance(excelType)
-                ?? throw new InvalidOperationException("Excel.Application COM activation returned null.");
+            excel = CreateExcelApplication(
+                "Excel.Application COM registration was not found. Install Microsoft Excel desktop before running this smoke check.",
+                "Excel.Application COM activation returned null.");
 
             excelPid = TryGetExcelProcessId(excel);
             dynamic excelApp = excel;
@@ -17264,20 +17263,14 @@ internal static class ExcelOpenSmoke
     private static string CreateDerivedOutputPath(string outputDirectory, string sourcePath, string suffix)
     {
         Directory.CreateDirectory(outputDirectory);
-        var name = SanitizeFileName(Path.GetFileNameWithoutExtension(sourcePath));
+        var name = ToolFileNameSanitizer.ReplaceInvalidFileNameChars(
+            Path.GetFileNameWithoutExtension(sourcePath),
+            "workbook");
         var candidate = Path.Combine(outputDirectory, $"{name}-{suffix}.xlsx");
         if (!File.Exists(candidate))
             return candidate;
 
         return Path.Combine(outputDirectory, $"{name}-{suffix}-{Guid.NewGuid():N}.xlsx");
-    }
-
-    private static string SanitizeFileName(string value)
-    {
-        foreach (var invalidChar in Path.GetInvalidFileNameChars())
-            value = value.Replace(invalidChar, '_');
-
-        return string.IsNullOrWhiteSpace(value) ? "workbook" : value;
     }
 
     private static IReadOnlyList<string> ResolveInputFiles(IReadOnlyList<string> inputs, string pattern)

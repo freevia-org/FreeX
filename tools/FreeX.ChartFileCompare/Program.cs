@@ -10,6 +10,7 @@ using System.Windows.Media.Imaging;
 using FreeX.App.UI;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.ToolsShared.Wpf;
 using static FreeX.ToolsShared.Wpf.WpfImageDiff;
 
 /// <summary>
@@ -297,7 +298,21 @@ internal static class Program
             var compositePath = Path.Combine(OutputDir, $"worst_{row.NN:D2}.png");
             try
             {
-                WriteSideBySide(row.ExcelPngPath!, row.FreeXPngPath, compositePath, row);
+                var freexLabel = row.Rendered
+                    ? $"FreeX renderer (diff={row.DiffPercent:F1}%)"
+                    : $"FreeX: NOT RENDERED — {row.Error}";
+                WpfSideBySidePng.Write(
+                    row.ExcelPngPath!,
+                    row.FreeXPngPath,
+                    compositePath,
+                    new WpfSideBySidePngOptions(
+                        600,
+                        400,
+                        10,
+                        28,
+                        $"NN={row.NN:D2}  {row.SheetName} / {row.ChartName}  [{row.ChartType}]  diff={row.DiffPercent:F1}%",
+                        "Excel (ground truth)",
+                        freexLabel));
                 Console.WriteLine($"  worst_{row.NN:D2}.png  diff={row.DiffPercent:F1}%  {row.SheetName}/{row.ChartName}");
             }
             catch (Exception ex)
@@ -370,62 +385,6 @@ internal static class Program
         using var stream = File.Create(path);
         encoder.Save(stream);
     }
-
-    // -----------------------------------------------------------------------
-    // Side-by-side composite
-    // -----------------------------------------------------------------------
-    private static void WriteSideBySide(string excelPath, string? freexPath, string outPath, ReportRow row)
-    {
-        const int ThumbW = 600, ThumbH = 400;
-        const int Padding = 10;
-        const int LabelH = 28;
-        int totalW = ThumbW * 2 + Padding * 3;
-        int totalH = ThumbH + Padding * 2 + LabelH * 2;
-
-        var excelBmp = File.Exists(excelPath) ? ResizeTo(LoadBitmap(excelPath), ThumbW, ThumbH) : CreateWhite(ThumbW, ThumbH);
-        var freexBmp = freexPath is not null && File.Exists(freexPath) ? ResizeTo(LoadBitmap(freexPath), ThumbW, ThumbH) : CreateWhite(ThumbW, ThumbH);
-
-        var visual = new DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-        {
-            ctx.DrawRectangle(new SolidColorBrush(Color.FromRgb(240, 240, 240)), null, new Rect(0, 0, totalW, totalH));
-
-            // Header
-            var headerText = $"NN={row.NN:D2}  {row.SheetName} / {row.ChartName}  [{row.ChartType}]  diff={row.DiffPercent:F1}%";
-            ctx.DrawText(MakeText(headerText, 13, Brushes.Black, FontWeights.SemiBold), new Point(Padding, 4));
-
-            int yImg = LabelH;
-            int xLeft = Padding;
-            int xRight = Padding * 2 + ThumbW;
-
-            // Labels
-            ctx.DrawText(MakeText("Excel (ground truth)", 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xLeft, yImg + ThumbH + 4));
-            var freexLabel = row.Rendered
-                ? $"FreeX renderer (diff={row.DiffPercent:F1}%)"
-                : $"FreeX: NOT RENDERED — {row.Error}";
-            ctx.DrawText(MakeText(freexLabel, 11, Brushes.DarkSlateGray, FontWeights.Normal), new Point(xRight, yImg + ThumbH + 4));
-
-            ctx.DrawImage(excelBmp, new Rect(xLeft, yImg, ThumbW, ThumbH));
-            ctx.DrawImage(freexBmp, new Rect(xRight, yImg, ThumbW, ThumbH));
-        }
-
-        var rtb = new RenderTargetBitmap(totalW, totalH, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(rtb));
-        using var stream = File.Create(outPath);
-        encoder.Save(stream);
-    }
-
-    private static FormattedText MakeText(string text, double size, Brush brush, FontWeight weight) =>
-        new FormattedText(
-            text,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal),
-            size,
-            brush,
-            1.0);
 
     // -----------------------------------------------------------------------
     // Report writer

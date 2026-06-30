@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.ToolsShared;
 
 internal static partial class ChartInteropCompare
 {
@@ -299,7 +300,7 @@ internal static partial class ChartInteropCompare
         foreach (var group in results.GroupBy(result => result.Family, StringComparer.OrdinalIgnoreCase))
         {
             WriteVisualContactSheet(
-                Path.Combine(runDirectory, $"visual_contact_sheet_{SanitizeFileName(group.Key)}.png"),
+                Path.Combine(runDirectory, $"visual_contact_sheet_{ToolFileNameSanitizer.ReplaceInvalidFileNameChars(group.Key, lowerInvariant: true)}.png"),
                 group.ToList(),
                 group.Key);
         }
@@ -401,12 +402,4 @@ internal static partial class ChartInteropCompare
         _ => Brushes.DimGray
     };
 
-    private static string SanitizeFileName(string value)
-    {
-        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
-        var builder = new StringBuilder(value.Length);
-        foreach (var character in value)
-            builder.Append(invalid.Contains(character) ? '_' : char.ToLowerInvariant(character));
-        return builder.ToString();
-    }
 }

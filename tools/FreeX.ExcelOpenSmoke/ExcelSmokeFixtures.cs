@@ -4,7 +4,7 @@ using System.Reflection;
 using System.Xml.Linq;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
-using static ExcelSmokeCom;
+using static FreeX.ToolsShared.Wpf.ExcelComAutomation;
 
 internal static class ExcelSmokeFixtures
 {
