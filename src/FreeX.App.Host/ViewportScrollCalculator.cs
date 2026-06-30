@@ -52,6 +52,19 @@ public static class ViewportScrollCalculator
             absoluteLimit,
             frozenCount);
 
+    public static WorkbookViewportCellRevealPlan PlanCellReveal(
+        ViewportModel viewport,
+        Sheet? sheet,
+        CellAddress target,
+        double currentVerticalMaximum,
+        double currentHorizontalMaximum) =>
+        WorkbookViewportScrollPlanner.PlanCellReveal(
+            viewport,
+            sheet,
+            target,
+            currentVerticalMaximum,
+            currentHorizontalMaximum);
+
     public static uint CalculateScrollValueToRevealCell(
         uint targetIndex,
         uint firstVisibleIndex,

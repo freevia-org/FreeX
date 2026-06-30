@@ -111,4 +111,72 @@ public sealed class WorkbookViewportScrollPlannerTests
         state.Horizontal.Value.Should().Be(1);
         state.Horizontal.IsEnabled.Should().BeFalse();
     }
+
+    [Fact]
+    public void PlanCellReveal_PlansScrollbarValuesAcrossFrozenPanes()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1") { FrozenRows = 2, FrozenCols = 1 };
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(1, 20, 0),
+                new RowMetric(2, 20, 20),
+                new RowMetric(10, 20, 40),
+                new RowMetric(11, 20, 60),
+                new RowMetric(12, 20, 80),
+            ],
+            [
+                new ColMetric(1, 64, 0),
+                new ColMetric(4, 64, 64),
+                new ColMetric(5, 64, 128),
+                new ColMetric(6, 64, 192),
+            ]);
+
+        var plan = WorkbookViewportScrollPlanner.PlanCellReveal(
+            viewport,
+            sheet,
+            new CellAddress(sheet.Id, 18, 9),
+            currentVerticalMaximum: 12,
+            currentHorizontalMaximum: 5);
+
+        plan.Vertical.ShouldScroll.Should().BeTrue();
+        plan.Vertical.Value.Should().Be(14);
+        plan.Vertical.Maximum.Should().Be(14);
+        plan.Horizontal.ShouldScroll.Should().BeTrue();
+        plan.Horizontal.Value.Should().Be(6);
+        plan.Horizontal.Maximum.Should().Be(6);
+    }
+
+    [Fact]
+    public void PlanCellReveal_LeavesFrozenOrVisibleTargetsUnchanged()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1") { FrozenRows = 2, FrozenCols = 1 };
+        var viewport = new ViewportModel(
+            [],
+            [
+                new RowMetric(1, 20, 0),
+                new RowMetric(2, 20, 20),
+                new RowMetric(10, 20, 40),
+                new RowMetric(11, 20, 60),
+                new RowMetric(12, 20, 80),
+            ],
+            [
+                new ColMetric(1, 64, 0),
+                new ColMetric(4, 64, 64),
+                new ColMetric(5, 64, 128),
+                new ColMetric(6, 64, 192),
+            ]);
+
+        var plan = WorkbookViewportScrollPlanner.PlanCellReveal(
+            viewport,
+            sheet,
+            new CellAddress(sheet.Id, 2, 5),
+            currentVerticalMaximum: 12,
+            currentHorizontalMaximum: 5);
+
+        plan.Vertical.ShouldScroll.Should().BeFalse();
+        plan.Vertical.Maximum.Should().Be(12);
+        plan.Horizontal.ShouldScroll.Should().BeFalse();
+        plan.Horizontal.Maximum.Should().Be(5);
+    }
 }

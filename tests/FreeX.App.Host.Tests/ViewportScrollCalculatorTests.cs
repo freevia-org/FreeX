@@ -113,15 +113,19 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void MainWindowEnsureCellVisible_ScansVisibleMetricsWithoutAllocatingFilteredLists()
+    public void MainWindowEnsureCellVisible_DelegatesCellRevealPlanningToSharedCalculator()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Viewport.cs");
         var ensureCellVisible = source[
             source.IndexOf("private void EnsureCellVisible", StringComparison.Ordinal)..
             source.IndexOf("// \u2500\u2500 Navigation helpers", StringComparison.Ordinal)];
 
-        ensureCellVisible.Should().Contain("GetScrollableRowWindow(vp, frozenRows, addr.Row)");
-        ensureCellVisible.Should().Contain("GetScrollableColumnWindow(vp, frozenCols, addr.Col)");
+        ensureCellVisible.Should().Contain("ViewportScrollCalculator.PlanCellReveal(");
+        ensureCellVisible.Should().Contain("VerticalScroll.Maximum = plan.Vertical.Maximum;");
+        ensureCellVisible.Should().Contain("HorizontalScroll.Maximum = plan.Horizontal.Maximum;");
+        ensureCellVisible.Should().NotContain("GetScrollableRowWindow");
+        ensureCellVisible.Should().NotContain("GetScrollableColumnWindow");
+        ensureCellVisible.Should().NotContain("CalculateScrollValueToRevealCell(");
         ensureCellVisible.Should().NotContain(".Where(");
         ensureCellVisible.Should().NotContain(".ToList()");
         ensureCellVisible.Should().NotContain(".Any(");
