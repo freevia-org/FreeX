@@ -410,7 +410,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr")),
                 ToShapePropertiesForDrawingObject(
-                    ToDrawingPreset(shape.Kind),
+                    DrawingMlPresetGeometryMap.GetPreset(shape.Kind),
                     shape.RotationDegrees,
                     shape.FlipHorizontal,
                     shape.FlipVertical,
@@ -790,56 +790,6 @@ internal static class XlsxWorksheetDrawingObjectWriter
         CellColor? color,
         XNamespace drawingNs) =>
         XlsxDrawingColorWriter.ToSolidFill(themeColor, color, drawingNs);
-
-    private static string ToDrawingPreset(DrawingShapeKind kind) =>
-        kind switch
-        {
-            DrawingShapeKind.RoundedRectangle => "roundRect",
-            DrawingShapeKind.Ellipse => "ellipse",
-            DrawingShapeKind.Line => "line",
-            DrawingShapeKind.ElbowConnector => "bentConnector2",
-            DrawingShapeKind.CurvedConnector => "curvedConnector2",
-            DrawingShapeKind.Triangle => "triangle",
-            DrawingShapeKind.RightTriangle => "rtTriangle",
-            DrawingShapeKind.Diamond => "diamond",
-            DrawingShapeKind.Parallelogram => "parallelogram",
-            DrawingShapeKind.Trapezoid => "trapezoid",
-            DrawingShapeKind.Pentagon => "pentagon",
-            DrawingShapeKind.Hexagon => "hexagon",
-            DrawingShapeKind.Octagon => "octagon",
-            DrawingShapeKind.Cross => "cross",
-            DrawingShapeKind.RightArrow => "rightArrow",
-            DrawingShapeKind.LeftArrow => "leftArrow",
-            DrawingShapeKind.UpArrow => "upArrow",
-            DrawingShapeKind.DownArrow => "downArrow",
-            DrawingShapeKind.LeftRightArrow => "leftRightArrow",
-            DrawingShapeKind.UpDownArrow => "upDownArrow",
-            DrawingShapeKind.PlusSign => "mathPlus",
-            DrawingShapeKind.MinusSign => "mathMinus",
-            DrawingShapeKind.MultiplySign => "mathMultiply",
-            DrawingShapeKind.DivideSign => "mathDivide",
-            DrawingShapeKind.EqualSign => "mathEqual",
-            DrawingShapeKind.NotEqualSign => "mathNotEqual",
-            DrawingShapeKind.FlowchartProcess => "flowChartProcess",
-            DrawingShapeKind.FlowchartDecision => "flowChartDecision",
-            DrawingShapeKind.FlowchartData => "flowChartInputOutput",
-            DrawingShapeKind.FlowchartPredefinedProcess => "flowChartPredefinedProcess",
-            DrawingShapeKind.FlowchartDocument => "flowChartDocument",
-            DrawingShapeKind.FlowchartTerminator => "flowChartTerminator",
-            DrawingShapeKind.Star5 => "star5",
-            DrawingShapeKind.Star8 => "star8",
-            DrawingShapeKind.Explosion => "irregularSeal1",
-            DrawingShapeKind.Ribbon => "ribbon",
-            DrawingShapeKind.Wave => "wave",
-            DrawingShapeKind.RectangularCallout => "wedgeRectCallout",
-            DrawingShapeKind.RoundedRectangularCallout => "wedgeRoundRectCallout",
-            DrawingShapeKind.OvalCallout => "wedgeEllipseCallout",
-            DrawingShapeKind.LineCallout => "lineCallout1",
-            DrawingShapeKind.Chevron => "chevron",
-            DrawingShapeKind.HomePlate => "homePlate",
-            DrawingShapeKind.Cylinder => "can",
-            _ => "rect"
-        };
 
     private static double NormalizeRotation(double rotationDegrees)
     {
