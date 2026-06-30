@@ -36,6 +36,13 @@ public sealed class CommandBusUndoSafetyTests
         public void Revert(ICommandContext ctx) => throw new InvalidOperationException("simulated revert failure");
     }
 
+    private sealed class ThrowingApplyCommand(string message) : IWorkbookCommand
+    {
+        public string Label => "ThrowingApply";
+        public CommandOutcome Apply(ICommandContext ctx) => throw new InvalidOperationException(message);
+        public void Revert(ICommandContext ctx) { }
+    }
+
     private sealed class ObservingCommand(Action onApply, Action onRevert) : IWorkbookCommand
     {
         public string Label => "Observing";
@@ -162,6 +169,28 @@ public sealed class CommandBusUndoSafetyTests
     }
 
     // ── failure-path: Revert throws ───────────────────────────────────────────
+
+    [Fact]
+    public void Execute_WhenApplyThrowsMissingSheetId_NormalizesInternalSheetId()
+    {
+        var bus = MakeBus(out _);
+
+        var outcome = bus.Execute(WbId, new ThrowingApplyCommand("Sheet 00000000 not found"));
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Sheet not found.");
+    }
+
+    [Fact]
+    public void Execute_WhenApplyThrowsOtherError_PreservesCommandFailureContext()
+    {
+        var bus = MakeBus(out _);
+
+        var outcome = bus.Execute(WbId, new ThrowingApplyCommand("simulated apply failure"));
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Command failed: simulated apply failure");
+    }
 
     [Fact]
     public void Undo_WhenRevertThrows_ReturnsFailureOutcome()

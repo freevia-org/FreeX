@@ -45,7 +45,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             // workbook is not left half-edited, and report failure rather than
             // propagating with a dirty model and nothing on the undo stack.
             TryRevert(command, ctx);
-            return new CommandOutcome(false, $"Command failed: {ex.Message}");
+            return new CommandOutcome(false, FormatFailure("Command failed", ex));
         }
 
         if (outcome.Success && !outcome.IsNoOp)
@@ -85,7 +85,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
         catch (Exception ex)
         {
             stack.RollbackPopUndo(entry); // restore the command so the undo chain is intact
-            return new CommandOutcome(false, $"Undo failed: {ex.Message}");
+            return new CommandOutcome(false, FormatFailure("Undo failed", ex));
         }
 
         NotifyStackChanged(workbookId);
@@ -113,7 +113,7 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             // the entry so the user can retry.
             TryRevert(command, ctx);
             stack.PushRedo(entry); // restore so the user can retry
-            return new CommandOutcome(false, $"Redo failed: {ex.Message}");
+            return new CommandOutcome(false, FormatFailure("Redo failed", ex));
         }
 
         var affectedCells = outcome.Success
@@ -175,6 +175,19 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             // Best-effort rollback only; the original failure is already being
             // reported, and a secondary revert failure must not mask it.
         }
+    }
+
+    private static string FormatFailure(string prefix, Exception ex) =>
+        IsMissingSheetFailure(ex)
+            ? "Sheet not found."
+            : $"{prefix}: {ex.Message}";
+
+    private static bool IsMissingSheetFailure(Exception ex)
+    {
+        var message = ex.Message;
+        return ex is InvalidOperationException &&
+               message.StartsWith("Sheet ", StringComparison.Ordinal) &&
+               message.EndsWith(" not found", StringComparison.Ordinal);
     }
 
     private void NotifyStackChanged(WorkbookId workbookId)
