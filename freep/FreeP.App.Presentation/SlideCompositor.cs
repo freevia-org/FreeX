@@ -629,22 +629,16 @@ public static class SlideCompositor
                 ResolvedTextLayout? textLayout = null;
                 if (cell.TextBody is not null && cell.TextBody.Paragraphs.Count > 0)
                 {
-                    // Cell insets.
-                    double insetL = cell.InsetLeftPt.HasValue
-                        ? PointsToDip(cell.InsetLeftPt.Value)
-                        : PointsToDip(DefaultCellInsetHorzPt);
-                    double insetR = cell.InsetRightPt.HasValue
-                        ? PointsToDip(cell.InsetRightPt.Value)
-                        : PointsToDip(DefaultCellInsetHorzPt);
-                    double insetT = cell.InsetTopPt.HasValue
-                        ? PointsToDip(cell.InsetTopPt.Value)
-                        : PointsToDip(DefaultCellInsetVertPt);
-                    double insetB = cell.InsetBottomPt.HasValue
-                        ? PointsToDip(cell.InsetBottomPt.Value)
-                        : PointsToDip(DefaultCellInsetVertPt);
+                    var insets = TextFrameLayoutPlanner.FromOptionalInsets(
+                        PointsToDip(cell.InsetLeftPt),
+                        PointsToDip(cell.InsetTopPt),
+                        PointsToDip(cell.InsetRightPt),
+                        PointsToDip(cell.InsetBottomPt),
+                        PointsToDip(DefaultCellInsetHorzPt),
+                        PointsToDip(DefaultCellInsetVertPt));
 
                     textLayout = ResolveTableCellTextLayout(
-                        cell.TextBody, insetL, insetR, insetT, insetB,
+                        cell.TextBody, insets,
                         resolvedTextColor, theme, effectiveClrMap);
                 }
 
@@ -804,7 +798,7 @@ public static class SlideCompositor
 
     private static ResolvedTextLayout ResolveTableCellTextLayout(
         TextBody body,
-        double insetL, double insetR, double insetT, double insetB,
+        TextFrameInsets insets,
         SrgbColor? styleTextColor,
         PresentationTheme theme,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
@@ -852,10 +846,10 @@ public static class SlideCompositor
         {
             Paragraphs    = resolvedParas,
             Anchor        = VerticalAnchor.Top, // cell anchor handled by TableCellOp.Anchor
-            InsetLeftDip  = insetL,
-            InsetRightDip = insetR,
-            InsetTopDip   = insetT,
-            InsetBottomDip = insetB,
+            InsetLeftDip  = insets.Left,
+            InsetRightDip = insets.Right,
+            InsetTopDip   = insets.Top,
+            InsetBottomDip = insets.Bottom,
             Wrap          = body.Wrap
         };
     }
@@ -1283,15 +1277,23 @@ public static class SlideCompositor
             });
         }
 
+        var insets = TextFrameLayoutPlanner.FromOptionalInsets(
+            PointsToDip(body.InsetLeftPt),
+            PointsToDip(body.InsetTopPt),
+            PointsToDip(body.InsetRightPt),
+            PointsToDip(body.InsetBottomPt),
+            DefaultInsetHorzDip,
+            DefaultInsetVertDip);
+
         return new ResolvedTextLayout
         {
             Paragraphs = resolvedParas,
             // P0: use the resolved effective anchor (from shape -> layout -> master chain).
             Anchor = effectiveAnchor,
-            InsetLeftDip = body.InsetLeftPt.HasValue ? PointsToDip(body.InsetLeftPt.Value) : DefaultInsetHorzDip,
-            InsetRightDip = body.InsetRightPt.HasValue ? PointsToDip(body.InsetRightPt.Value) : DefaultInsetHorzDip,
-            InsetTopDip = body.InsetTopPt.HasValue ? PointsToDip(body.InsetTopPt.Value) : DefaultInsetVertDip,
-            InsetBottomDip = body.InsetBottomPt.HasValue ? PointsToDip(body.InsetBottomPt.Value) : DefaultInsetVertDip,
+            InsetLeftDip = insets.Left,
+            InsetRightDip = insets.Right,
+            InsetTopDip = insets.Top,
+            InsetBottomDip = insets.Bottom,
             Wrap = body.Wrap,
             WarpPreset = body.WarpPreset,   // Wave 16A
             VerticalType = body.VerticalType,  // Wave 18B
@@ -1367,4 +1369,6 @@ public static class SlideCompositor
 
     /// <summary>Converts typographic points to DIP (96/72 = 4/3 scaling).</summary>
     private static double PointsToDip(double pt) => pt * (96.0 / 72.0);
+
+    private static double? PointsToDip(double? pt) => pt.HasValue ? PointsToDip(pt.Value) : null;
 }
