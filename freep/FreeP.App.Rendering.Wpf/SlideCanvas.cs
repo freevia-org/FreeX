@@ -685,43 +685,28 @@ public sealed class SlideCanvas : FrameworkElement
         DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds,
         FreeP.Core.Model.TableCellAnchor anchor)
     {
-        double insetLeft   = text.InsetLeftDip;
-        double insetTop    = text.InsetTopDip;
-        double insetRight  = text.InsetRightDip;
-        double insetBottom = text.InsetBottomDip;
+        var area = TextLayoutPlanner.GetTextArea(text, bounds);
+        var formatted = new Dictionary<int, FormattedText>();
+        var measures = new List<TextParagraphMeasure>();
 
-        double textAreaW = Math.Max(0, bounds.Width  - insetLeft - insetRight);
-        double textAreaH = Math.Max(0, bounds.Height - insetTop  - insetBottom);
-
-        var formatted = new List<(FormattedText ft, double spaceAfter)>();
-        double totalH = 0;
-
-        foreach (var para in text.Paragraphs)
+        for (int i = 0; i < text.Paragraphs.Count; i++)
         {
+            var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, textAreaW, text.Wrap);
-            formatted.Add((ft, para.SpaceAfterPt * (96.0 / 72.0)));
-            totalH += ft.Height + para.SpaceBeforePt * (96.0 / 72.0) + para.SpaceAfterPt * (96.0 / 72.0);
+            var ft = BuildFormattedText(para, area.Width, text.Wrap);
+            formatted[i] = ft;
+            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                i,
+                ft.Height,
+                para.SpaceBeforePt,
+                para.SpaceAfterPt));
         }
 
-        double startY = anchor switch
+        var plan = TextLayoutPlanner.PlanTableCellText(text, bounds, anchor, measures);
+        foreach (var placement in plan.Paragraphs)
         {
-            FreeP.Core.Model.TableCellAnchor.Middle => bounds.Y + insetTop + Math.Max(0, (textAreaH - totalH) / 2),
-            FreeP.Core.Model.TableCellAnchor.Bottom => bounds.Y + insetTop + Math.Max(0, textAreaH - totalH),
-            _ => bounds.Y + insetTop
-        };
-
-        double curY = startY;
-        int paraIdx = 0;
-        foreach (var para in text.Paragraphs)
-        {
-            if (para.Runs.Count == 0) { paraIdx++; continue; }
-            var (ft, spaceAfterDip) = formatted[paraIdx];
-            double spaceBefore = para.SpaceBeforePt * (96.0 / 72.0);
-            curY += spaceBefore;
-            dc.DrawText(ft, new Point(bounds.X + insetLeft, curY));
-            curY += ft.Height + spaceAfterDip;
-            paraIdx++;
+            var ft = formatted[placement.ParagraphIndex];
+            dc.DrawText(ft, new Point(placement.X, placement.Y));
         }
     }
 
@@ -2373,71 +2358,49 @@ public sealed class SlideCanvas : FrameworkElement
 
     // Wave 22B: multi-column text layout helper.
     // Greedy paragraph-level assignment: fill column 1 top-to-bottom, then column 2, etc.
-    // Column width = (textAreaW - (N-1)*spacing) / N. Default spacing = 457200 EMU ≈ 48.5 DIP.
     private static void RenderTextCoreColumns(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
-        int n = Math.Max(1, text.ColumnCount);
-        double insetLeft   = text.InsetLeftDip;
-        double insetTop    = text.InsetTopDip;
-        double insetRight  = text.InsetRightDip;
-        double insetBottom = text.InsetBottomDip;
-        double textAreaW   = Math.Max(0, bounds.Width  - insetLeft - insetRight);
-        double textAreaH   = Math.Max(0, bounds.Height - insetTop  - insetBottom);
-        const double DefaultSpacingDip = 48.5;  // 457200 EMU / 9525
-        double spacingDip = text.ColumnSpacingDip > 0 ? text.ColumnSpacingDip : DefaultSpacingDip;
-        double colWidth   = Math.Max(1, (textAreaW - (n - 1) * spacingDip) / n);
+        var columnLayout = TextLayoutPlanner.GetColumnLayout(text, bounds);
+        var formatted = new Dictionary<int, FormattedText>();
+        var measured = new List<TextParagraphMeasure>();
 
-        // Measure all paragraphs
-        double lnSpcScale = 1.0 - text.LnSpcReduction;
-        var measured = new List<(ResolvedParagraph para, FormattedText ft, double spaceBefore, double spaceAfter)>();
-        foreach (var para in text.Paragraphs)
+        for (int i = 0; i < text.Paragraphs.Count; i++)
         {
+            var para = text.Paragraphs[i];
             if (para.Runs.Count == 0)
             {
-                measured.Add((para, null!, 0, 0));
                 continue;
             }
-            var ft = BuildFormattedText(para, colWidth, text.Wrap);
-            double sb = para.SpaceBeforePt * (96.0 / 72.0) * lnSpcScale;
-            double sa = para.SpaceAfterPt  * (96.0 / 72.0) * lnSpcScale;
-            measured.Add((para, ft, sb, sa));
+            var ft = BuildFormattedText(para, columnLayout.ColumnWidthDip, text.Wrap);
+            formatted[i] = ft;
+            measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                i,
+                ft.Height,
+                para.SpaceBeforePt,
+                para.SpaceAfterPt,
+                columnLayout.LineSpacingScale));
         }
 
-        // Distribute paragraphs across columns (greedy: fill column until height exceeded, then next)
-        double colHeight = textAreaH;
-        int col = 0;
-        double curY = bounds.Y + insetTop;
-        double colX = bounds.X + insetLeft;
-
-        foreach (var (para, ft, sb, sa) in measured)
+        var plan = TextLayoutPlanner.PlanColumns(text, columnLayout, measured);
+        foreach (var placement in plan.Paragraphs)
         {
-            if (para.Runs.Count == 0) continue;
-            double paraH = sb + ft.Height * lnSpcScale + sa;
-            // If this paragraph doesn't fit and we can advance to the next column
-            if (curY + paraH > bounds.Y + insetTop + colHeight && col < n - 1)
-            {
-                col++;
-                colX = bounds.X + insetLeft + col * (colWidth + spacingDip);
-                curY = bounds.Y + insetTop;
-            }
-            curY += sb;
-            double paraTextX = colX + para.IndentDip;
+            var para = text.Paragraphs[placement.ParagraphIndex];
+            var ft = formatted[placement.ParagraphIndex];
             if (!string.IsNullOrEmpty(para.BulletText))
                 DrawBulletWpf(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, paraTextX - para.HangingDip, curY);
+                    para.BulletColor, placement.X - para.HangingDip, placement.Y);
             bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
             bool hasTabs    = para.Runs.Any(r => r.Text.Contains('\t'));
             if (hasEffects)
-                RenderParaWithEffects(dc, para, paraTextX, curY, colWidth - para.IndentDip, text.Wrap, text.WarpPreset, bounds);
+                RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, text.Wrap, text.WarpPreset, bounds);
             else if (hasTabs)
-                RenderParaWithTabs(dc, para, paraTextX, curY, para.TabStops);
+                RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
             else
             {
                 if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                    ft.MaxTextWidth = Math.Max(1, colWidth - para.IndentDip);
-                dc.DrawText(ft, new Point(paraTextX, curY));
+                    ft.MaxTextWidth = placement.MaxWidthDip;
+                dc.DrawText(ft, new Point(placement.X, placement.Y));
             }
-            curY += ft.Height * lnSpcScale + sa;
         }
     }
 
