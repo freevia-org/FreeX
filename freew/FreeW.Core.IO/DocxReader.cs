@@ -4397,32 +4397,24 @@ public static class DocxReader
             return;
         document.Preserved.OriginalCustomProperties = new XElement(root);
 
-        var properties = root.Elements(CustomProps + "property").ToList();
+        var customProperties = OpcCustomDocumentProperties.FromRoot(root);
 
-        static string? PropStr(List<System.Xml.Linq.XElement> props, string name)
-        {
-            var el = props.FirstOrDefault(p => p.Attribute("name")?.Value == name);
-            return el?.Element(VtVariant + "lpwstr")?.Value;
-        }
-
-        var text = PropStr(properties, WatermarkPropertyName);
+        var text = customProperties.GetString(WatermarkPropertyName);
         // Accept empty text for picture watermarks: check for any WatermarkOptions property presence.
-        var imageBase64Check = PropStr(properties, WatermarkImagePropertyName);
+        var imageBase64Check = customProperties.GetString(WatermarkImagePropertyName);
         if (!string.IsNullOrEmpty(text) || !string.IsNullOrEmpty(imageBase64Check))
         {
             // Check if full WatermarkOptions properties are present (written by the new writer).
-            var font = PropStr(properties, WatermarkFontFamilyPropertyName);
-            var color = PropStr(properties, WatermarkColorPropertyName);
-            var layoutStr = PropStr(properties, WatermarkLayoutPropertyName);
-            var opacityStr = properties.FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkOpacityPropertyName)
-                ?.Element(VtVariant + "r8")?.Value;
+            var font = customProperties.GetString(WatermarkFontFamilyPropertyName);
+            var color = customProperties.GetString(WatermarkColorPropertyName);
+            var layoutStr = customProperties.GetString(WatermarkLayoutPropertyName);
+            var opacity = customProperties.GetDouble(WatermarkOpacityPropertyName) ?? 0.3;
 
-            if (font is not null || color is not null || layoutStr is not null || opacityStr is not null
+            if (font is not null || color is not null || layoutStr is not null
+                || customProperties.Contains(WatermarkOpacityPropertyName)
                 || !string.IsNullOrEmpty(imageBase64Check))
             {
                 var layout = layoutStr is "Horizontal" ? WatermarkLayout.Horizontal : WatermarkLayout.Diagonal;
-                var opacity = double.TryParse(opacityStr, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var op) ? op : 0.3;
 
                 // Picture watermark: image bytes encoded as base-64 (pre-read above).
                 byte[]? imageBytes = null;
@@ -4431,7 +4423,7 @@ public static class DocxReader
                     try { imageBytes = Convert.FromBase64String(imageBase64Check); }
                     catch { /* corrupt base-64 → treat as no image */ }
                 }
-                var scaleStr = PropStr(properties, WatermarkScalePropertyName);
+                var scaleStr = customProperties.GetString(WatermarkScalePropertyName);
                 int.TryParse(scaleStr, System.Globalization.NumberStyles.Integer,
                     System.Globalization.CultureInfo.InvariantCulture, out var scalePct);
 
@@ -4452,9 +4444,7 @@ public static class DocxReader
             }
         }
 
-        var markAsFinal = properties.FirstOrDefault(p => p.Attribute("name")?.Value == MarkAsFinalPropertyName);
-        var flag = markAsFinal?.Element(VtVariant + "bool")?.Value;
-        if (flag is not null && (flag.Equals("true", StringComparison.OrdinalIgnoreCase) || flag == "1"))
+        if (customProperties.GetBoolean(MarkAsFinalPropertyName) == true)
             document.MarkedAsFinal = true;
     }
 

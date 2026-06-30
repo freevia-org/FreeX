@@ -141,8 +141,8 @@ internal static class Ooxml
     public const string CorePropertiesPartName = OpcPackageProperties.CorePropertiesPartName;
 
     // OPC custom properties (docProps/custom.xml): used best-effort to persist the page watermark text.
-    public static readonly XNamespace CustomProps = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
-    public static readonly XNamespace VtVariant = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+    public static readonly XNamespace CustomProps = OpcCustomDocumentProperties.CustomPropertiesNamespace;
+    public static readonly XNamespace VtVariant = OpcCustomDocumentProperties.VariantTypesNamespace;
     public const string CustomPropertiesContentType = OpcPackageProperties.CustomPropertiesContentType;
     public const string CustomPropertiesRelType = OpcPackageProperties.CustomPropertiesRelationshipType;
     public const string CustomPropertiesPartName = OpcPackageProperties.CustomPropertiesPartName;

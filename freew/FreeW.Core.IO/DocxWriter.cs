@@ -842,81 +842,76 @@ public static class DocxWriter
                 : null));
 
     /// <summary>
-    /// Builds docProps/custom.xml carrying the page watermark text (<see cref="WatermarkPropertyName"/>,
-    /// vt:lpwstr) and/or Word's "Mark as Final" flag (<see cref="MarkAsFinalPropertyName"/>, vt:bool) as
-    /// named custom properties. This is a standards-compliant OPC custom-properties part. Properties get
-    /// sequential pids starting at 2 (pid 0/1 are reserved); only set properties are emitted.
+    /// Builds docProps/custom.xml carrying the FreeW watermark properties and/or Word's "Mark as Final"
+    /// flag over any source-package custom properties.
     /// </summary>
     private static XDocument BuildCustomProperties(XElement? originalProperties, WatermarkOptions? watermarkOptions, string? legacyWatermark, bool markedAsFinal)
     {
-        var properties = originalProperties is null
-            ? new XElement(CustomProps + "Properties",
-                new XAttribute(XNamespace.Xmlns + "vt", VtVariant.NamespaceName))
-            : new XElement(originalProperties);
+        string[] freeWPropertyNames =
+        [
+            WatermarkPropertyName,
+            WatermarkFontFamilyPropertyName,
+            WatermarkColorPropertyName,
+            WatermarkLayoutPropertyName,
+            WatermarkOpacityPropertyName,
+            WatermarkImagePropertyName,
+            WatermarkScalePropertyName,
+            MarkAsFinalPropertyName
+        ];
 
-        properties.SetAttributeValue(XNamespace.Xmlns + "vt", VtVariant.NamespaceName);
-        // Remove all FreeW watermark properties (both legacy and new) and MarkAsFinal so we can re-add cleanly.
-        properties.Elements(CustomProps + "property")
-            .Where(p =>
-            {
-                var name = p.Attribute("name")?.Value;
-                return name == WatermarkPropertyName
-                    || name == WatermarkFontFamilyPropertyName
-                    || name == WatermarkColorPropertyName
-                    || name == WatermarkLayoutPropertyName
-                    || name == WatermarkOpacityPropertyName
-                    || name == WatermarkImagePropertyName
-                    || name == WatermarkScalePropertyName
-                    || name == MarkAsFinalPropertyName;
-            })
-            .Remove();
-
-        static XElement StringProp(string name, int pid, string value) =>
-            new(CustomProps + "property",
-                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
-                new XAttribute("pid", pid.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new XAttribute("name", name),
-                new XElement(VtVariant + "lpwstr", value));
-
-        var pid = Math.Max(2, properties.Elements(CustomProps + "property")
-            .Select(p => int.TryParse(p.Attribute("pid")?.Value, out var parsed) ? parsed + 1 : 2)
-            .DefaultIfEmpty(2)
-            .Max());
+        var properties = OpcCustomDocumentProperties.FromRoot(originalProperties);
+        var activePropertyNames = new HashSet<string>(StringComparer.Ordinal);
 
         // Write full WatermarkOptions if present; otherwise fall back to legacy plain text.
         if (watermarkOptions is not null)
         {
-            // Always emit the text (the primary property that the legacy reader also picks up).
-            properties.Add(StringProp(WatermarkPropertyName, pid++, watermarkOptions.Text));
-            properties.Add(StringProp(WatermarkFontFamilyPropertyName, pid++, watermarkOptions.FontFamily));
-            properties.Add(StringProp(WatermarkColorPropertyName, pid++, watermarkOptions.FontColorHex));
-            properties.Add(StringProp(WatermarkLayoutPropertyName, pid++, watermarkOptions.Layout.ToString()));
-            properties.Add(new XElement(CustomProps + "property",
-                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
-                new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new XAttribute("name", WatermarkOpacityPropertyName),
-                new XElement(VtVariant + "r8", watermarkOptions.Opacity.ToString("G", System.Globalization.CultureInfo.InvariantCulture))));
-            // Picture watermark: persist image bytes as base-64 and scale.
+            activePropertyNames.Add(WatermarkPropertyName);
+            activePropertyNames.Add(WatermarkFontFamilyPropertyName);
+            activePropertyNames.Add(WatermarkColorPropertyName);
+            activePropertyNames.Add(WatermarkLayoutPropertyName);
+            activePropertyNames.Add(WatermarkOpacityPropertyName);
+
             if (watermarkOptions.IsPicture)
             {
-                properties.Add(StringProp(WatermarkImagePropertyName, pid++,
-                    Convert.ToBase64String(watermarkOptions.ImageBytes!)));
-                properties.Add(StringProp(WatermarkScalePropertyName, pid++,
-                    watermarkOptions.ScalePct.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                activePropertyNames.Add(WatermarkImagePropertyName);
+                activePropertyNames.Add(WatermarkScalePropertyName);
             }
         }
         else if (!string.IsNullOrEmpty(legacyWatermark))
         {
-            properties.Add(StringProp(WatermarkPropertyName, pid++, legacyWatermark));
+            activePropertyNames.Add(WatermarkPropertyName);
         }
 
         if (markedAsFinal)
-            properties.Add(new XElement(CustomProps + "property",
-                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
-                new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new XAttribute("name", MarkAsFinalPropertyName),
-                new XElement(VtVariant + "bool", "true")));
-        return new XDocument(properties);
+            activePropertyNames.Add(MarkAsFinalPropertyName);
+
+        properties.RemoveRange(freeWPropertyNames.Where(name => !activePropertyNames.Contains(name)));
+
+        if (watermarkOptions is not null)
+        {
+            // Always emit the text (the primary property that the legacy reader also picks up).
+            properties.SetString(WatermarkPropertyName, watermarkOptions.Text);
+            properties.SetString(WatermarkFontFamilyPropertyName, watermarkOptions.FontFamily);
+            properties.SetString(WatermarkColorPropertyName, watermarkOptions.FontColorHex);
+            properties.SetString(WatermarkLayoutPropertyName, watermarkOptions.Layout.ToString());
+            properties.SetDouble(WatermarkOpacityPropertyName, watermarkOptions.Opacity);
+            // Picture watermark: persist image bytes as base-64 and scale.
+            if (watermarkOptions.IsPicture)
+            {
+                properties.SetString(WatermarkImagePropertyName, Convert.ToBase64String(watermarkOptions.ImageBytes!));
+                properties.SetString(
+                    WatermarkScalePropertyName,
+                    watermarkOptions.ScalePct.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        else if (!string.IsNullOrEmpty(legacyWatermark))
+        {
+            properties.SetString(WatermarkPropertyName, legacyWatermark);
+        }
+
+        if (markedAsFinal)
+            properties.SetBoolean(MarkAsFinalPropertyName, true);
+        return properties.ToXDocument();
     }
 
     /// <summary>Builds docProps/core.xml from <see cref="DocumentProperties"/>, emitting only set values.</summary>

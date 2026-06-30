@@ -412,6 +412,73 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void CustomDocumentProperties_OverlayByNamePreservesRawPropertiesAndAllocatesDeterministicPids()
+    {
+        var cp = OpcCustomDocumentProperties.CustomPropertiesNamespace;
+        var vt = OpcCustomDocumentProperties.VariantTypesNamespace;
+        var source = new XElement(
+            cp + "Properties",
+            new XAttribute(XNamespace.Xmlns + "vt", vt.NamespaceName),
+            CustomProperty(cp, vt, "2", "Project", new XElement(vt + "lpwstr", "Apollo")),
+            CustomProperty(cp, vt, "5", "RawDate", new XElement(vt + "filetime", "2026-06-30T09:30:00Z")),
+            CustomProperty(cp, vt, "7", "Reviewed", new XElement(vt + "bool", "1")));
+
+        var properties = OpcCustomDocumentProperties.FromRoot(source);
+
+        properties.GetString("Project").Should().Be("Apollo");
+        properties.GetBoolean("Reviewed").Should().BeTrue();
+
+        properties.SetString("Project", "Gemini");
+        properties.SetBoolean("Approved", true);
+
+        var byName = properties.ToXDocument().Root!
+            .Elements(cp + "property")
+            .ToDictionary(property => property.Attribute("name")!.Value);
+
+        byName["Project"].Attribute("pid")!.Value.Should().Be("2");
+        byName["Project"].Element(vt + "lpwstr")!.Value.Should().Be("Gemini");
+        byName["Approved"].Attribute("pid")!.Value.Should().Be("3");
+        byName["Approved"].Element(vt + "bool")!.Value.Should().Be("true");
+        byName["RawDate"].Attribute("pid")!.Value.Should().Be("5");
+        byName["RawDate"].Element(vt + "filetime")!.Value.Should().Be("2026-06-30T09:30:00Z");
+        byName.Values.Select(property => property.Attribute("pid")!.Value).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void CustomDocumentProperties_ReadsAndRemovesTypedOpcValues()
+    {
+        var properties = OpcCustomDocumentProperties.Create();
+
+        properties.SetString("Title", "Shared custom title");
+        properties.SetBoolean("Published", false);
+        properties.SetDouble("Opacity", 0.625);
+
+        properties.Contains("Title").Should().BeTrue();
+        properties.GetString("Title").Should().Be("Shared custom title");
+        properties.GetBoolean("Published").Should().BeFalse();
+        properties.GetDouble("Opacity").Should().BeApproximately(0.625, 0.0001);
+
+        properties.Remove("Title");
+
+        properties.Contains("Title").Should().BeFalse();
+        properties.PropertyElements.Select(property => property.Attribute("name")!.Value)
+            .Should()
+            .BeEquivalentTo(["Published", "Opacity"]);
+    }
+
+    [Fact]
+    public void CustomDocumentPropertiesDedupSourceGuard_FreeWUsesSharedOpcHelper()
+    {
+        var docxReaderSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxReader.cs");
+        var docxWriterSource = TestWorkspaceFiles.ReadRepoText("freew", "FreeW.Core.IO", "DocxWriter.cs");
+
+        docxReaderSource.Should().Contain("OpcCustomDocumentProperties.FromRoot");
+        docxWriterSource.Should().Contain("OpcCustomDocumentProperties.FromRoot");
+        docxWriterSource.Should().NotContain("new XElement(CustomProps + \"property\"");
+        docxWriterSource.Should().NotContain("new XElement(VtVariant + \"bool\"");
+    }
+
+    [Fact]
     public void PreservePropertyElements_CopiesOnlyRequestedOpcPropertyElements()
     {
         var source = new XElement(
@@ -439,6 +506,14 @@ public sealed class OpcSharedHelperTests
 
     private static string ResolveRootTarget(string target) =>
         OpcPathHelper.ResolveRelativeZipPath("", target);
+
+    private static XElement CustomProperty(XNamespace cp, XNamespace vt, string pid, string name, XElement value) =>
+        new(
+            cp + "property",
+            new XAttribute("fmtid", OpcCustomDocumentProperties.DefaultFormatId),
+            new XAttribute("pid", pid),
+            new XAttribute("name", name),
+            value);
 
     private static void WriteText(ZipArchive archive, string path, string text)
     {
