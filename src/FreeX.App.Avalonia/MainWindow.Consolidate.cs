@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -16,6 +17,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle DataOpsDialogChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>Opens the Consolidate dialog (invoked from the Data menu and the Data-tab ribbon button).</summary>
     private void Consolidate() => _ = ShowConsolidateDialogAsync();
 
@@ -242,14 +245,7 @@ public sealed partial class MainWindow
         };
 
         // WPF button order: [OK][Cancel] — primary on left; the Apply button maps to WPF OK
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { applyButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([applyButton, cancelButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         dialog.Content = new DockPanel
@@ -365,53 +361,21 @@ public sealed partial class MainWindow
     /// FontFamily=FormulaBarFontFamily.
     /// </summary>
     private static void ApplyDataOpsButtonChrome(Button button, bool isDefault = false)
-    {
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, DataOpsDialogChromeStyle, button.MinWidth, isDefault);
 
     /// <summary>
     /// Applies standard text box chrome: Height=24, Padding=(4,1), FontSize=12,
     /// Brush(130,130,130) border, BorderThickness=1.
     /// </summary>
     private static void ApplyDataOpsTextBoxChrome(TextBox textBox)
-    {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, DataOpsDialogChromeStyle);
 
     /// <summary>
     /// Applies standard combo box chrome: Height=24, Padding=(5,0,4,0), FontSize=12,
     /// Brush(130,130,130) border, BorderThickness=1.
     /// </summary>
     private static void ApplyDataOpsComboBoxChrome(ComboBox comboBox)
-    {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, DataOpsDialogChromeStyle);
 
     /// <summary>
     /// Applies standard check box chrome: MinHeight=20, MaxHeight=20, FontSize=12,
@@ -422,8 +386,7 @@ public sealed partial class MainWindow
         StripContentMnemonic(checkBox);
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, DataOpsDialogChromeStyle);
     }
 
     /// <summary>
@@ -435,7 +398,6 @@ public sealed partial class MainWindow
         StripContentMnemonic(radioButton);
         radioButton.MinHeight = 20;
         radioButton.MaxHeight = 20;
-        radioButton.FontSize = 12;
-        radioButton.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, DataOpsDialogChromeStyle);
     }
 }

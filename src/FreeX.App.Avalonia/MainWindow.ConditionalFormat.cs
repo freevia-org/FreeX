@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
@@ -21,6 +22,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle ConditionalFormatDialogChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>The rule types the Avalonia conditional-format editor exposes, in dropdown order.</summary>
     private static readonly IReadOnlyList<(CfRuleType Type, string Label)> ConditionalFormatRuleTypeChoices =
     [
@@ -616,14 +619,7 @@ public sealed partial class MainWindow
         cancelButton.Click += (_, _) => dialog.Close();
 
         // WPF button order: [OK][Cancel] — primary on left
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { okButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         // Left column: "Select a Rule Type:" header + the Excel rule-type list.
@@ -853,53 +849,21 @@ public sealed partial class MainWindow
     private static void ApplyCfButtonChrome(Button button, double width, bool isDefault = false)
     {
         button.Width = width;
-        button.MinWidth = width;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyButton(button, ConditionalFormatDialogChromeStyle, width, isDefault);
     }
 
     private static void ApplyCfTextBoxChrome(TextBox tb)
-    {
-        tb.Height = 24;
-        tb.MinHeight = 24;
-        tb.MaxHeight = 24;
-        tb.Padding = new Thickness(4, 1);
-        tb.FontSize = 12;
-        tb.FontFamily = FormulaBarFontFamily;
-        tb.BorderBrush = Brush(130, 130, 130);
-        tb.BorderThickness = new Thickness(1);
-        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(tb, ConditionalFormatDialogChromeStyle);
 
     private static void ApplyCfComboBoxChrome(ComboBox cb)
-    {
-        cb.Height = 24;
-        cb.MinHeight = 24;
-        cb.MaxHeight = 24;
-        cb.Padding = new Thickness(5, 0, 4, 0);
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
-        cb.BorderBrush = Brush(130, 130, 130);
-        cb.BorderThickness = new Thickness(1);
-        cb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(cb, ConditionalFormatDialogChromeStyle);
 
     private static void ApplyCfCheckBoxChrome(CheckBox cb)
     {
         StripContentMnemonic(cb);
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
         cb.MinHeight = 20;
         cb.MaxHeight = 20;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(cb, ConditionalFormatDialogChromeStyle);
     }
 
     /// <summary>A tiny single-value prompt used by the Highlight &gt; Greater Than preset.</summary>
@@ -932,14 +896,7 @@ public sealed partial class MainWindow
         cancelButton.Click += (_, _) => dialog.Close();
 
         // WPF button order: [OK][Cancel] — primary on left
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { okButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         dialog.Content = new DockPanel
@@ -998,15 +955,9 @@ public sealed partial class MainWindow
             Background = Brushes.White,
             BorderThickness = new Thickness(0),
         };
-        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
-        {
-            Setters =
-            {
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(2, 0)),
-                new Setter(global::Avalonia.Controls.Control.MinHeightProperty, 24.0),
-                new Setter(TemplatedControl.FontSizeProperty, 12.0),
-            },
-        });
+        AvaloniaCompactDialogChrome.ApplyListBox(
+            listBox,
+            ConditionalFormatDialogChromeStyle with { ListBoxItemPadding = new Thickness(2, 0) });
         AutomationProperties.SetAutomationId(listBox, "ManageConditionalFormatsListBox");
         AutomationProperties.SetName(listBox, UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
         // Render each rule as a #/Rule-type/Format-swatch/Applies-to/Stop-if row matching the header

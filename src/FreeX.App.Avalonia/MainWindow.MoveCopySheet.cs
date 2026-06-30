@@ -10,6 +10,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.SheetUI;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -19,6 +20,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle MoveCopySheetDialogChromeStyle => new(FormulaBarFontFamily);
+
     // Sheet-tab context menu ▸ Move or Copy (parity with Excel's Move or Copy dialog and the WPF
     // host's MoveOrCopySheetDialog). Pick a "Before sheet" position (or "move to end") and optionally
     // tick "Create a copy". The position/list/clamp logic lives in the portable MoveCopySheetPlanner;
@@ -66,7 +69,6 @@ public sealed partial class MainWindow
             Content = UiText.Get("MoveCopySheet_Cancel"),
             IsCancel = true,
             MinWidth = 84,
-            Margin = new Thickness(8, 0, 0, 0),
         };
         ApplySheetButtonChrome(cancelButton, 84);
         AutomationProperties.SetAutomationId(cancelButton, "MoveCopySheetCancelButton");
@@ -90,13 +92,7 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { okButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0));
 
         dialog.Content = new StackPanel
         {
@@ -185,20 +181,7 @@ public sealed partial class MainWindow
     /// default/OK button.
     /// </summary>
     private static void ApplySheetButtonChrome(Button button, double minWidth, bool isDefault = false)
-    {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, MoveCopySheetDialogChromeStyle, minWidth, isDefault);
 
     /// <summary>
     /// Applies standard Sheet-dialog check-box chrome (MinHeight=20, MaxHeight=20, FontSize=12).
@@ -206,26 +189,14 @@ public sealed partial class MainWindow
     private static void ApplySheetCheckBoxChrome(CheckBox checkBox)
     {
         StripContentMnemonic(checkBox);
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, MoveCopySheetDialogChromeStyle);
     }
 
     /// <summary>
     /// Applies standard Sheet-dialog list-box row chrome (MinHeight=24 per row, FontSize=12).
     /// </summary>
     private static void ApplySheetListBoxStyle(ListBox listBox)
-    {
-        listBox.FontSize = 12;
-        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
-        {
-            Setters =
-            {
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
-                new Setter(Layoutable.MinHeightProperty, 24.0),
-                new Setter(TemplatedControl.FontSizeProperty, 12.0),
-            },
-        });
-    }
+        => AvaloniaCompactDialogChrome.ApplyListBox(listBox, MoveCopySheetDialogChromeStyle);
 }

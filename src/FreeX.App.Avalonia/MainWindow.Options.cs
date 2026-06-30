@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -30,6 +31,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily);
+
     // ── File ▸ Options entry point ──────────────────────────────────────────────
     private void ShowOptions() => _ = ShowOptionsDialogAsync();
 
@@ -484,62 +487,27 @@ public sealed partial class MainWindow
     }
 
     private static void ApplyOptionsButtonChrome(Button button, double minWidth, bool isDefault = false)
-    {
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.MinWidth = minWidth;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, OptionsDialogChromeStyle, minWidth, isDefault);
 
     private static void ApplyOptionsTextBoxChrome(TextBox textBox)
-    {
-        textBox.Height = 24;
-        textBox.MinHeight = 24;
-        textBox.MaxHeight = 24;
-        textBox.Padding = new Thickness(4, 1);
-        textBox.FontSize = 12;
-        textBox.FontFamily = FormulaBarFontFamily;
-        textBox.BorderBrush = Brush(130, 130, 130);
-        textBox.BorderThickness = new Thickness(1);
-        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, OptionsDialogChromeStyle);
 
     private static void ApplyOptionsComboBoxChrome(ComboBox comboBox)
-    {
-        comboBox.Height = 24;
-        comboBox.MinHeight = 24;
-        comboBox.MaxHeight = 24;
-        comboBox.Padding = new Thickness(5, 0, 4, 0);
-        comboBox.FontSize = 12;
-        comboBox.FontFamily = FormulaBarFontFamily;
-        comboBox.BorderBrush = Brush(130, 130, 130);
-        comboBox.BorderThickness = new Thickness(1);
-        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, OptionsDialogChromeStyle);
 
     private static void ApplyOptionsCheckBoxChrome(CheckBox checkBox)
     {
         StripContentMnemonic(checkBox);
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
-        checkBox.FontSize = 12;
-        checkBox.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, OptionsDialogChromeStyle);
     }
 
     private static void ApplyOptionsRadioButtonChrome(RadioButton radioButton)
     {
         StripContentMnemonic(radioButton);
         radioButton.MinHeight = 20;
-        radioButton.FontSize = 12;
-        radioButton.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, OptionsDialogChromeStyle);
     }
 
     private static CheckBox OptionsCheckBox(string text, bool isChecked = false, bool isEnabled = true)
