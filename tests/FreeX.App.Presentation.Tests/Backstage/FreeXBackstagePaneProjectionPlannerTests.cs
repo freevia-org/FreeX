@@ -6,6 +6,71 @@ namespace FreeX.App.Presentation.Tests.Backstage;
 public sealed class FreeXBackstagePaneProjectionPlannerTests
 {
     [Fact]
+    public void BuildInfoPane_ProjectsPaneTitleActionsAndProperties()
+    {
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.ParityCapture,
+            new FreeXBackstageInfoPaneRequest(
+                "Budget.xlsx",
+                @"C:\Work\Budget.xlsx",
+                "3",
+                ".xlsx",
+                "12 KB",
+                "6/30/2026 10:00 AM",
+                SharingStatus: "Local only",
+                ExportStatus: "Ready",
+                WorkbookProtectionSummary: "Workbook protected",
+                ActiveSheetProtectionSummary: "Sheet unprotected",
+                StatisticsSummary: "3 sheets",
+                AccessibilitySummary: "No issues",
+                FormulaErrorSummary: "No errors"));
+
+        var projection = FreeXBackstagePaneProjectionPlanner.BuildInfoPane(pane);
+
+        projection.Elements.Select(element => element.GetType()).Should().Equal(
+            typeof(FreeXBackstageHeadingProjectionElement),
+            typeof(FreeXBackstageSectionHeaderProjectionElement),
+            typeof(FreeXBackstageInfoActionRowProjectionElement),
+            typeof(FreeXBackstageSectionHeaderProjectionElement),
+            typeof(FreeXBackstageDetailRowsProjectionElement));
+
+        projection.Elements.OfType<FreeXBackstageHeadingProjectionElement>()
+            .Single()
+            .TextKey.Should().Be("MainWindow_Text_Info");
+
+        projection.Elements.OfType<FreeXBackstageSectionHeaderProjectionElement>()
+            .Select(header => header.TextKey)
+            .Should()
+            .Equal("MainWindow_Text_WorkbookActions", "MainWindow_Text_Properties");
+
+        projection.Elements.OfType<FreeXBackstageInfoActionRowProjectionElement>()
+            .Single()
+            .Actions.Select(action => action.Id)
+            .Should()
+            .Equal(
+                FreeXBackstageInfoActionId.ProtectWorkbook,
+                FreeXBackstageInfoActionId.CheckAccessibility,
+                FreeXBackstageInfoActionId.WorkbookStatistics,
+                FreeXBackstageInfoActionId.ErrorChecking);
+
+        projection.Elements.OfType<FreeXBackstageDetailRowsProjectionElement>()
+            .Single()
+            .Rows.Select(row => row.ValueAutomationId)
+            .Should()
+            .Equal(
+                "BackstageInfoWorkbookName",
+                "BackstageInfoFilePath",
+                "BackstageInfoSheetCount",
+                "BackstageInfoFormat",
+                "BackstageInfoFileSize",
+                "BackstageInfoLastModified",
+                "BackstageInfoShareStatus",
+                "BackstageInfoExportStatus",
+                "BackstageInfoWorkbookProtection",
+                "BackstageInfoActiveSheetProtection");
+    }
+
+    [Fact]
     public void BuildInfoDialog_ProjectsDialogSectionsRowsActionsAndNotes()
     {
         var pane = FreeXBackstageInfoPanePlanner.Build(

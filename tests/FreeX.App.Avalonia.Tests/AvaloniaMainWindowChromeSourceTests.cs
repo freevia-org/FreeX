@@ -322,15 +322,18 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
         captureSource.Should().Contain("FreeXBackstageInfoSurface.ParityCapture");
         captureSource.Should().Contain("BuildParityCapturedBackstageInfoPanePlan()");
+        captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildInfoPane(");
         captureSource.Should().Contain("FreeXBackstageHomePanePlanner.Build()");
         // The parity-captured Account pane mirrors the WPF host page ("Local account information"
         // with the local app/OS identity rows) rather than the 4-row product-info catalog, so the
         // Linux capture no longer mislabels Account as "Product information".
         captureSource.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
-        captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows(pane)");
+        captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
+        captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows(detailRows.Rows)");
         captureSource.Should().Contain("Backstage_Account_LocalInfoHeading");
         captureSource.Should().NotContain("Backstage_Account_CurrentWorkbookNotSaved");
         hostCaptureSource.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
+        hostCaptureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
         hostCaptureSource.Should().Contain("ResolveBackstageAccountValue(detail.Value)");
         hostCaptureSource.Should().NotContain("(\"FreeX user name\", \"quinn\")");
         captureSource.Should().Contain("CreateParityCapturedBackstageContentScroll(content)");
