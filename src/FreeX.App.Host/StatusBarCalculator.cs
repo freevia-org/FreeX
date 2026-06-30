@@ -13,7 +13,7 @@ namespace FreeX.App.Host;
 /// </summary>
 public static class StatusBarCalculator
 {
-    private static readonly IStatusBarTextProvider TextProvider =
+    internal static readonly IStatusBarTextProvider TextProvider =
         new ResourceKeyStatusBarTextProvider(UiText.Get);
 
     public readonly record struct Stats(double Sum, int Count, int NumericalCount, double? Average, double? Min, double? Max);
