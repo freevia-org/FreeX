@@ -89,6 +89,22 @@ public sealed class RendererNeutralDedupPlannerTests
         avalonia.Should().NotContain("BuildShapeMatrix");
     }
 
+    [Fact]
+    public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackPlanner()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition");
+            source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep");
+            source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation");
+            source.Should().NotContain("SlideShowTransitionPlanner.Plan(t)");
+            source.Should().NotContain("switch (anim.Preset)");
+        }
+    }
+
     private static string ReadWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
