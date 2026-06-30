@@ -22,6 +22,23 @@ public sealed class PptxPackageWriterSourceTests
     }
 
     [Fact]
+    public void PreservedContentTypeMerge_UsesSharedOpcContentTypeMerger()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageWriter.cs"));
+
+        ExtractMethod(source, "private static void MergePreservedContentTypes(")
+            .Should()
+            .Contain("OpcXml.TryLoadXml(bytes)")
+            .And.Contain("OpcMediaTypes.MergePreservedContentTypes")
+            .And.NotContain(".Elements(contentTypes.Root.Name.Namespace + \"Default\")")
+            .And.NotContain(".Elements(sourceTypes.Root.Name.Namespace + \"Override\")");
+    }
+
+    [Fact]
     public void PackageRetentionClassification_DelegatesToSharedOpcClassifier()
     {
         var source = File.ReadAllText(Path.Combine(

@@ -37,9 +37,12 @@ public sealed class PptxPackageReaderSourceTests
             "FreeP.Core.IO",
             "PptxPackageReader.cs"));
 
-        ExtractMethod(source, "private static XDocument? LoadXml(")
-            .Should()
-            .Contain("OpcXml.TryLoadXml(archive, path)")
+        source.Should()
+            .Contain("OpcXml.TryLoadXml(archive,")
+            .And.Contain("OpcRelationships.LoadTargets")
+            .And.Contain("OpcRelationships.FirstTargetByType")
+            .And.NotContain("private static XDocument? LoadXml(")
+            .And.NotContain("private static List<(string id, string type, string target)> LoadRels(")
             .And.NotContain("XDocument.Load(");
     }
 

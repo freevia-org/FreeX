@@ -13,6 +13,11 @@ public readonly record struct OpcCanonicalRelationship(
     string PartName,
     string RelationshipType);
 
+public readonly record struct OpcRelationshipTarget(
+    string Id,
+    string Type,
+    string Target);
+
 public static class OpcRelationships
 {
     public static readonly XNamespace Namespace =
@@ -73,6 +78,25 @@ public static class OpcRelationships
     public static IReadOnlyList<OpcRelationship> Load(XDocument relationshipsXml) =>
         Load(relationshipsXml, Namespace);
 
+    public static List<OpcRelationshipTarget> LoadTargets(
+        ZipArchive archive,
+        string relsPath,
+        bool ignoreMalformed = false) =>
+        Load(archive, relsPath, ignoreMalformed)
+            .Select(relationship => new OpcRelationshipTarget(
+                relationship.Id,
+                relationship.Type,
+                relationship.Target))
+            .ToList();
+
+    public static string? FirstTargetByType(
+        IEnumerable<OpcRelationshipTarget> relationships,
+        string relationshipType) =>
+        relationships.FirstOrDefault(relationship =>
+            string.Equals(relationship.Type, relationshipType, StringComparison.Ordinal)).Target is { Length: > 0 } target
+                ? target
+                : null;
+
     public static Dictionary<string, OpcRelationship> LoadById(
         ZipArchive archive,
         string relsPath,
@@ -114,6 +138,25 @@ public static class OpcRelationships
             var target = resolveTarget(relationship);
             if (!string.IsNullOrEmpty(target))
                 map[relationship.Id] = target;
+        }
+
+        return map;
+    }
+
+    public static Dictionary<string, string> LoadTypeByTargetMap(
+        ZipArchive archive,
+        string relsPath,
+        bool ignoreMalformed = false,
+        IEqualityComparer<string>? targetComparer = null)
+    {
+        var map = new Dictionary<string, string>(targetComparer ?? StringComparer.Ordinal);
+        foreach (var relationship in Load(archive, relsPath, ignoreMalformed))
+        {
+            if (!string.IsNullOrEmpty(relationship.Target) &&
+                !string.IsNullOrEmpty(relationship.Type))
+            {
+                map[relationship.Target] = relationship.Type;
+            }
         }
 
         return map;

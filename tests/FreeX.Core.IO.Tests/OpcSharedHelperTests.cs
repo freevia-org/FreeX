@@ -234,6 +234,75 @@ public sealed class OpcSharedHelperTests
     }
 
     [Fact]
+    public void RelationshipTargetHelpers_ReadCompactTargetsAndTypeMaps()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteText(archive, "ppt/_rels/presentation.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="type/slide" Target="slides/slide1.xml"/>
+                  <Relationship Id="rId2" Type="type/theme" Target="theme/theme1.xml"/>
+                </Relationships>
+                """);
+        }
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+
+        var targets = OpcRelationships.LoadTargets(readArchive, "ppt/_rels/presentation.xml.rels");
+        var byTarget = OpcRelationships.LoadTypeByTargetMap(readArchive, "ppt/_rels/presentation.xml.rels");
+
+        targets.Should().ContainSingle(target => target.Id == "rId1" && target.Type == "type/slide");
+        OpcRelationships.FirstTargetByType(targets, "type/theme").Should().Be("theme/theme1.xml");
+        byTarget.Should().Contain("slides/slide1.xml", "type/slide");
+    }
+
+    [Fact]
+    public void ContentTypeMapHelpers_ReadAndMergePackageContentTypes()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteText(archive, OpcMediaTypes.ContentTypesPath, """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="xml" ContentType="application/xml" />
+                  <Default Extension="emf" ContentType="image/x-emf" />
+                  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml" />
+                </Types>
+                """);
+        }
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+
+        OpcMediaTypes.ReadDefaultContentTypes(readArchive).Should().Contain("emf", "image/x-emf");
+        OpcMediaTypes.ReadOverrideContentTypes(readArchive)
+            .Should()
+            .Contain("/ppt/slides/slide1.xml", "application/vnd.openxmlformats-officedocument.presentationml.slide+xml");
+
+        var target = new XDocument(new XElement(
+            OpcMediaTypes.ContentTypesNamespace + "Types",
+            new XElement(
+                OpcMediaTypes.ContentTypesNamespace + "Default",
+                new XAttribute("Extension", "xml"),
+                new XAttribute("ContentType", "application/xml"))));
+        var source = OpcXml.LoadXml(readArchive.GetEntry(OpcMediaTypes.ContentTypesPath)!);
+
+        OpcMediaTypes.MergePreservedContentTypes(
+            target,
+            source,
+            partName => partName.StartsWith("/ppt/slides/", StringComparison.OrdinalIgnoreCase));
+
+        target.Root!.Elements(OpcMediaTypes.ContentTypesNamespace + "Default")
+            .Should()
+            .Contain(element => (string?)element.Attribute("Extension") == "emf");
+        target.Root!.Elements(OpcMediaTypes.ContentTypesNamespace + "Override")
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
     public void CanonicalPackageRelationshipNormalizer_RepairsDuplicateDocumentPropertyRelationships()
     {
         const string corePropertiesType =
@@ -320,13 +389,23 @@ public sealed class OpcSharedHelperTests
         xlsxLoadSanitizerSource.Should().NotContain("private static bool HasDocumentPropertyRelationshipIssue(");
         docxReaderSource.Should().Contain("OpcRelationships.LoadById");
         docxReaderSource.Should().Contain("OpcRelationships.LoadTargetMap");
+        docxReaderSource.Should().Contain("OpcRelationships.LoadTypeByTargetMap");
+        docxReaderSource.Should().Contain("OpcMediaTypes.ReadOverrideContentTypes");
+        docxReaderSource.Should().Contain("OpcMediaTypes.ReadDefaultContentTypes");
+        docxReaderSource.Should().NotContain("private static string? ResolveRelativePartName");
         docxWriterSource.Should().Contain("OpcRelationships.CreateRelationship(id, type, target, external)");
         pptxReaderSource.Should().Contain("using static Free.Shared.Opc.OpcPathHelper;");
+        pptxReaderSource.Should().Contain("OpcRelationships.LoadTargets");
+        pptxReaderSource.Should().Contain("OpcRelationships.FirstTargetByType");
+        pptxReaderSource.Should().Contain("OpcXml.TryLoadXml(archive,");
+        pptxReaderSource.Should().NotContain("private static XDocument? LoadXml");
         pptxReaderSource.Should().Contain("OpcMediaTypes.GetDrawingMediaContentType");
         pptxReaderSource.Should().Contain("OpcMediaTypes.GetAudioVideoContentType");
         pptxReaderSource.Should().NotContain("private static string GetRelsPath(");
         pptxReaderSource.Should().NotContain("private static string GuessContentType(");
         pptxWriterSource.Should().Contain("using static Free.Shared.Opc.OpcPathHelper;");
+        pptxWriterSource.Should().Contain("OpcMediaTypes.MergePreservedContentTypes");
+        pptxWriterSource.Should().Contain("OpcXml.TryLoadXml(bytes)");
         pptxWriterSource.Should().Contain("OpcMediaTypes.GetDrawingMediaExtension");
         pptxWriterSource.Should().Contain("OpcMediaTypes.GetAudioVideoExtension");
         pptxWriterSource.Should().NotContain("private static string ContentTypeToExtension(");

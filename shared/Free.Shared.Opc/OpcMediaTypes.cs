@@ -43,6 +43,95 @@ public static class OpcMediaTypes
     public static bool TryGetDefaultContentType(string extension, out string contentType) =>
         DefaultContentTypes.TryGetValue(extension.TrimStart('.'), out contentType!);
 
+    public static Dictionary<string, string> ReadDefaultContentTypes(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var contentTypesXml = OpcXml.LoadXmlOrNull(archive, ContentTypesPath);
+        foreach (var element in contentTypesXml?.Root?.Elements(ContentTypesNamespace + "Default") ?? [])
+        {
+            var extension = element.Attribute("Extension")?.Value;
+            var contentType = element.Attribute("ContentType")?.Value;
+            if (!string.IsNullOrEmpty(extension) && !string.IsNullOrEmpty(contentType))
+                map[extension] = contentType;
+        }
+
+        return map;
+    }
+
+    public static Dictionary<string, string> ReadOverrideContentTypes(ZipArchive archive)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var contentTypesXml = OpcXml.LoadXmlOrNull(archive, ContentTypesPath);
+        foreach (var element in contentTypesXml?.Root?.Elements(ContentTypesNamespace + "Override") ?? [])
+        {
+            var partName = element.Attribute("PartName")?.Value;
+            var contentType = element.Attribute("ContentType")?.Value;
+            if (!string.IsNullOrEmpty(partName) && !string.IsNullOrEmpty(contentType))
+                map[partName] = contentType;
+        }
+
+        return map;
+    }
+
+    public static void MergePreservedContentTypes(
+        XDocument targetContentTypes,
+        XDocument sourceContentTypes,
+        Func<string, bool>? skipOverridePartName = null)
+    {
+        if (targetContentTypes.Root is null || sourceContentTypes.Root is null)
+            return;
+
+        var targetNamespace = targetContentTypes.Root.Name.Namespace;
+        var sourceNamespace = sourceContentTypes.Root.Name.Namespace;
+        var existingDefaults = new HashSet<string>(
+            targetContentTypes.Root.Elements(targetNamespace + "Default")
+                .Select(element => element.Attribute("Extension")?.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!),
+            StringComparer.OrdinalIgnoreCase);
+        var existingOverrides = new HashSet<string>(
+            targetContentTypes.Root.Elements(targetNamespace + "Override")
+                .Select(element => element.Attribute("PartName")?.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceDefault in sourceContentTypes.Root.Elements(sourceNamespace + "Default"))
+        {
+            var extension = sourceDefault.Attribute("Extension")?.Value;
+            var contentType = sourceDefault.Attribute("ContentType")?.Value;
+            if (string.IsNullOrWhiteSpace(extension) ||
+                string.IsNullOrWhiteSpace(contentType) ||
+                !existingDefaults.Add(extension))
+            {
+                continue;
+            }
+
+            targetContentTypes.Root.Add(new XElement(
+                targetNamespace + "Default",
+                new XAttribute("Extension", extension),
+                new XAttribute("ContentType", contentType)));
+        }
+
+        foreach (var sourceOverride in sourceContentTypes.Root.Elements(sourceNamespace + "Override"))
+        {
+            var partName = sourceOverride.Attribute("PartName")?.Value;
+            var contentType = sourceOverride.Attribute("ContentType")?.Value;
+            if (string.IsNullOrWhiteSpace(partName) ||
+                string.IsNullOrWhiteSpace(contentType) ||
+                skipOverridePartName?.Invoke(partName) == true ||
+                !existingOverrides.Add(partName))
+            {
+                continue;
+            }
+
+            targetContentTypes.Root.Add(new XElement(
+                targetNamespace + "Override",
+                new XAttribute("PartName", partName),
+                new XAttribute("ContentType", contentType)));
+        }
+    }
+
     public static bool EnsureDefaultContentType(
         ZipArchive archive,
         string extension,

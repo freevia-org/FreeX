@@ -64,6 +64,21 @@ public static class OpcXml
         }
     }
 
+    public static XDocument? TryLoadXml(
+        byte[] bytes,
+        long maxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument)
+    {
+        try
+        {
+            using var stream = new MemoryStream(bytes, writable: false);
+            return LoadXml(stream, maxCharactersInDocument);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static void ReplaceXmlEntry(
         ZipArchive archive,
         string entryName,
