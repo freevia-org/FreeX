@@ -29,6 +29,8 @@ public sealed class FormulaBarPlannerSourceGuardTests
 
         hostEditing.Should().Contain("FormulaBarWpfInputAdapter.ToFormulaEditorKey");
         hostEditing.Should().Contain("FormulaBarWpfInputAdapter.ToFormulaEditorModifiers");
+        hostEditing.Should().Contain("FormulaEditInteractionPlanner.EditModeStatusBarResourceKey");
+        hostEditing.Should().Contain("FormulaEditInteractionPlanner.EnterModeStatusBarResourceKey");
         avaloniaMain.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey");
         avaloniaMain.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers");
     }

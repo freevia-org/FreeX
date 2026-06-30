@@ -21,6 +21,12 @@ public static class ExcelSelectionModePlanner
             mode,
             ExcelWorksheetNavigationPlanner.MapModifiers(modifiers));
 
+    public static string StatusBarModeResourceKey(ExcelSelectionMode mode) =>
+        FreeX.App.Presentation.ExcelSelectionModePlanner.StatusBarModeResourceKey(mode);
+
+    public static string EndModeStatusBarResourceKey(bool enabled) =>
+        FreeX.App.Presentation.ExcelSelectionModePlanner.EndModeStatusBarResourceKey(enabled);
+
     private static ExcelSelectionKey MapKey(Key key) =>
         key == Key.F8 ? ExcelSelectionKey.F8 : ExcelSelectionKey.Other;
 }

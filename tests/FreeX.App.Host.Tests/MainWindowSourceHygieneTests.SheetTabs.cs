@@ -587,9 +587,11 @@ public sealed partial class MainWindowSourceHygieneTests
         gridStatusSource.Should().Contain("if (IsFileOperationProgressVisible())");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed)");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed)");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusCountText, plan.CountText");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusNumericalCountText, plan.NumericalCountText");
-        gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusSumText, plan.SumText");
+        gridStatusSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(plan)");
+        gridStatusSource.Should().Contain("GetStatusBarReadoutTextBlock(readout.Kind)");
+        gridStatusSource.Should().Contain("StatusBarReadoutKind.Count => StatusCountText");
+        gridStatusSource.Should().Contain("StatusBarReadoutKind.NumericalCount => StatusNumericalCountText");
+        gridStatusSource.Should().Contain("StatusBarReadoutKind.Sum => StatusSumText");
         WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarViewModelCache.cs")
             .Should()
             .Contain("_textProvider.GetReadyText()");
@@ -605,7 +607,10 @@ public sealed partial class MainWindowSourceHygieneTests
             .Should()
             .Contain("ReadoutValue(model, StatusBarReadoutKind.Count)")
             .And.Contain("ReadoutValue(model, StatusBarReadoutKind.NumericalCount)")
-            .And.Contain("ReadoutValue(model, StatusBarReadoutKind.Sum)");
+            .And.Contain("ReadoutValue(model, StatusBarReadoutKind.Sum)")
+            .And.Contain("ReadoutElement(StatusBarReadoutKind.Count")
+            .And.Contain("ReadoutElement(StatusBarReadoutKind.NumericalCount")
+            .And.Contain("ReadoutElement(StatusBarReadoutKind.Sum");
         WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarTextResourceKeys.cs")
             .Should()
             .Contain("StatusBar_CountFormat")

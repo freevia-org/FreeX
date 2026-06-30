@@ -60,7 +60,7 @@ public partial class MainWindow
         Keyboard.Focus(_textBoxInlineEditor);
         _textBoxInlineEditor.CaretIndex = _textBoxInlineEditor.Text.Length;
         _textBoxInlineEditor.SelectionLength = 0;
-        SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
+        SetFormulaEditStatusBarMode(pointMode: false);
         SheetGrid.InvalidateVisual();
     }
 

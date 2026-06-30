@@ -1,3 +1,5 @@
+using Free.Shared.AppServices;
+
 namespace FreeX.App.Presentation.FormulaBar;
 
 public static class FormulaEditInteractionPlanner
@@ -16,4 +18,10 @@ public static class FormulaEditInteractionPlanner
 
     public static bool TogglePointMode(string? text, bool pointMode) =>
         IsFormulaText(text) ? !pointMode : pointMode;
+
+    public static string EditModeStatusBarResourceKey(bool pointMode) =>
+        pointMode ? StatusBarTextResourceKeys.PointMode : StatusBarTextResourceKeys.EditMode;
+
+    public static string EnterModeStatusBarResourceKey { get; } =
+        StatusBarTextResourceKeys.EnterMode;
 }

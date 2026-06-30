@@ -51,7 +51,7 @@ public partial class MainWindow
     {
         FocusFormulaBar();
         FormulaBar.CaretIndex = FormulaBar.Text.Length;
-        SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
+        SetFormulaEditStatusBarMode(pointMode: false);
     }
 
     private void FocusFormulaBar()
@@ -166,7 +166,7 @@ public partial class MainWindow
         _inlineEditor.Focus();
         _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
         _inlineEditor.SelectionLength = 0;
-        SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
+        SetFormulaEditStatusBarMode(pointMode: false);
 
         static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
         {
@@ -553,12 +553,7 @@ public partial class MainWindow
         _selectionMode = mode;
         if (mode != ExcelSelectionMode.Normal)
             _endMode = false;
-        SetStatusBarModeText(mode switch
-        {
-            ExcelSelectionMode.Extend => UiText.Get("StatusBar_ExtendSelectionMode"),
-            ExcelSelectionMode.Add => UiText.Get("StatusBar_AddToSelectionMode"),
-            _ => UiText.Get("MainWindow_Text_Ready")
-        });
+        SetStatusBarModeText(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(mode)));
     }
 
     private void SetEndMode(bool enabled)
@@ -566,7 +561,7 @@ public partial class MainWindow
         _endMode = enabled;
         if (enabled)
             _selectionMode = ExcelSelectionMode.Normal;
-        SetStatusBarModeText(enabled ? UiText.Get("StatusBar_EndMode") : UiText.Get("MainWindow_Text_Ready"));
+        SetStatusBarModeText(UiText.Get(ExcelSelectionModePlanner.EndModeStatusBarResourceKey(enabled)));
     }
 
     private void SetStatusBarModeText(string text)
@@ -582,14 +577,12 @@ public partial class MainWindow
 
     private void SetFormulaEditStatusBarMode(bool pointMode)
     {
-        SetStatusBarModeText(UiText.Get(pointMode
-            ? "StatusBar_PointMode"
-            : "StatusBar_EditMode"));
+        SetStatusBarModeText(UiText.Get(FormulaEditInteractionPlanner.EditModeStatusBarResourceKey(pointMode)));
     }
 
     private void SetFormulaEnterStatusBarMode()
     {
-        SetStatusBarModeText(UiText.Get("StatusBar_EnterMode"));
+        SetStatusBarModeText(UiText.Get(FormulaEditInteractionPlanner.EnterModeStatusBarResourceKey));
     }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)

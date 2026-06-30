@@ -76,25 +76,8 @@ public partial class MainWindow
             return;
 
         var plan = BuildStatusBarPresentationPlan(state);
-        var visibility = plan.Visibility;
-        SetVisibilityIfChanged(StatusReadyText, ToVisibility(visibility.ReadyTextVisible));
-        SetVisibilityIfChanged(StatusPageNumberText, ToVisibility(visibility.PageNumberVisible));
-        SetVisibilityIfChanged(StatusStatsPanel, ToVisibility(visibility.StatsPanelVisible));
-        SetVisibilityIfChanged(StatusAvgText, ToVisibility(visibility.AverageVisible));
-        SetVisibilityIfChanged(StatusCountText, ToVisibility(visibility.CountVisible));
-        SetVisibilityIfChanged(StatusNumericalCountText, ToVisibility(visibility.NumericalCountVisible));
-        SetVisibilityIfChanged(StatusSumText, ToVisibility(visibility.SumVisible));
-        SetVisibilityIfChanged(StatusMinText, ToVisibility(visibility.MinimumVisible));
-        SetVisibilityIfChanged(StatusMaxText, ToVisibility(visibility.MaximumVisible));
-        SetTextIfChanged(StatusReadyText, plan.ReadyText);
-        SetStatusStatisticTextIfChanged(StatusAvgText, plan.AverageText, UiText.Get("StatusBar_Average"));
-        SetStatusStatisticTextIfChanged(StatusCountText, plan.CountText, UiText.Get("StatusBar_Count"));
-        SetStatusStatisticTextIfChanged(StatusNumericalCountText, plan.NumericalCountText, UiText.Get("StatusBar_NumericalCount"));
-        SetStatusStatisticTextIfChanged(StatusSumText, plan.SumText, UiText.Get("StatusBar_Sum"));
-        SetStatusStatisticTextIfChanged(StatusMinText, plan.MinimumText, UiText.Get("StatusBar_Minimum"));
-        SetStatusStatisticTextIfChanged(StatusMaxText, plan.MaximumText, UiText.Get("StatusBar_Maximum"));
-        UpdateStatusStatsPanelAutomation(state, plan.AutomationText);
-        ApplyStatusBarInteractiveDisplayState(visibility);
+        var rendererPlan = StatusBarPresentationPlanner.BuildRendererPlan(plan);
+        ApplyStatusBarRendererPlan(state, rendererPlan);
         _lastStatusBarDisplayState = state;
     }
 
@@ -103,29 +86,8 @@ public partial class MainWindow
     private bool IsStatusBarDisplayStateApplied(Free.Shared.AppServices.StatusBarViewModel state)
     {
         var plan = BuildStatusBarPresentationPlan(state);
-        var visibility = plan.Visibility;
-        return
-            StatusReadyText.Visibility == ToVisibility(visibility.ReadyTextVisible) &&
-            StatusPageNumberText.Visibility == ToVisibility(visibility.PageNumberVisible) &&
-            StatusStatsPanel.Visibility == ToVisibility(visibility.StatsPanelVisible) &&
-            StatusAvgText.Visibility == ToVisibility(visibility.AverageVisible) &&
-            StatusCountText.Visibility == ToVisibility(visibility.CountVisible) &&
-            StatusNumericalCountText.Visibility == ToVisibility(visibility.NumericalCountVisible) &&
-            StatusSumText.Visibility == ToVisibility(visibility.SumVisible) &&
-            StatusMinText.Visibility == ToVisibility(visibility.MinimumVisible) &&
-            StatusMaxText.Visibility == ToVisibility(visibility.MaximumVisible) &&
-            StatusViewShortcutControls.Visibility == ToVisibility(visibility.ViewShortcutsVisible) &&
-            StatusZoomText.Visibility == ToVisibility(visibility.ZoomVisible) &&
-            StatusZoomSliderControls.Visibility == ToVisibility(visibility.ZoomSliderVisible) &&
-            StatusZoomControls.Visibility == ToVisibility(visibility.ZoomControlsVisible) &&
-            StatusInteractiveControls.Visibility == ToVisibility(visibility.InteractiveControlsVisible) &&
-            StatusReadyText.Text == plan.ReadyText &&
-            StatusAvgText.Text == plan.AverageText &&
-            StatusCountText.Text == plan.CountText &&
-            StatusNumericalCountText.Text == plan.NumericalCountText &&
-            StatusSumText.Text == plan.SumText &&
-            StatusMinText.Text == plan.MinimumText &&
-            StatusMaxText.Text == plan.MaximumText;
+        var rendererPlan = StatusBarPresentationPlanner.BuildRendererPlan(plan);
+        return IsStatusBarRendererPlanApplied(rendererPlan);
     }
 
     private StatusBarPresentationPlan BuildStatusBarPresentationPlan(Free.Shared.AppServices.StatusBarViewModel state) =>
@@ -152,6 +114,77 @@ public partial class MainWindow
         SetVisibilityIfChanged(StatusZoomControls, ToVisibility(visibility.ZoomControlsVisible));
         SetVisibilityIfChanged(StatusInteractiveControls, ToVisibility(visibility.InteractiveControlsVisible));
     }
+
+    private void ApplyStatusBarRendererPlan(
+        Free.Shared.AppServices.StatusBarViewModel state,
+        StatusBarRendererPlan rendererPlan)
+    {
+        foreach (var entry in rendererPlan.VisibilityElements)
+            SetVisibilityIfChanged(GetStatusBarElement(entry.Element), ToVisibility(entry.IsVisible));
+
+        SetTextIfChanged(StatusReadyText, rendererPlan.ReadyText);
+        foreach (var readout in rendererPlan.ReadoutElements)
+        {
+            SetStatusStatisticTextIfChanged(
+                GetStatusBarReadoutTextBlock(readout.Kind),
+                readout.Text,
+                UiText.Get(readout.AutomationFallbackResourceKey));
+        }
+
+        UpdateStatusStatsPanelAutomation(state, rendererPlan.StatsPanelAutomationText);
+    }
+
+    private bool IsStatusBarRendererPlanApplied(StatusBarRendererPlan rendererPlan)
+    {
+        foreach (var entry in rendererPlan.VisibilityElements)
+        {
+            if (GetStatusBarElement(entry.Element).Visibility != ToVisibility(entry.IsVisible))
+                return false;
+        }
+
+        if (StatusReadyText.Text != rendererPlan.ReadyText)
+            return false;
+
+        foreach (var readout in rendererPlan.ReadoutElements)
+        {
+            if (GetStatusBarReadoutTextBlock(readout.Kind).Text != readout.Text)
+                return false;
+        }
+
+        return true;
+    }
+
+    private UIElement GetStatusBarElement(StatusBarPresentationElement element) =>
+        element switch
+        {
+            StatusBarPresentationElement.ReadyText => StatusReadyText,
+            StatusBarPresentationElement.PageNumberText => StatusPageNumberText,
+            StatusBarPresentationElement.StatsPanel => StatusStatsPanel,
+            StatusBarPresentationElement.Average => StatusAvgText,
+            StatusBarPresentationElement.Count => StatusCountText,
+            StatusBarPresentationElement.NumericalCount => StatusNumericalCountText,
+            StatusBarPresentationElement.Sum => StatusSumText,
+            StatusBarPresentationElement.Minimum => StatusMinText,
+            StatusBarPresentationElement.Maximum => StatusMaxText,
+            StatusBarPresentationElement.ViewShortcuts => StatusViewShortcutControls,
+            StatusBarPresentationElement.ZoomText => StatusZoomText,
+            StatusBarPresentationElement.ZoomSlider => StatusZoomSliderControls,
+            StatusBarPresentationElement.ZoomControls => StatusZoomControls,
+            StatusBarPresentationElement.InteractiveControls => StatusInteractiveControls,
+            _ => StatusReadyText
+        };
+
+    private TextBlock GetStatusBarReadoutTextBlock(StatusBarReadoutKind kind) =>
+        kind switch
+        {
+            StatusBarReadoutKind.Average => StatusAvgText,
+            StatusBarReadoutKind.Count => StatusCountText,
+            StatusBarReadoutKind.NumericalCount => StatusNumericalCountText,
+            StatusBarReadoutKind.Sum => StatusSumText,
+            StatusBarReadoutKind.Minimum => StatusMinText,
+            StatusBarReadoutKind.Maximum => StatusMaxText,
+            _ => StatusCountText
+        };
 
     private StatusBarOptionVisibility GetStatusBarOptionVisibility() =>
         StatusBarOptionVisibilityStore.ToVisibility(_options);

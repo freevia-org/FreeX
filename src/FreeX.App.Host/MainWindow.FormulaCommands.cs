@@ -640,7 +640,7 @@ public partial class MainWindow
         {
             FocusFormulaBar();
             FormulaBar.CaretIndex = Math.Clamp(requestedCaretIndex, 0, FormulaBar.Text.Length);
-            SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
+            SetFormulaEditStatusBarMode(pointMode: false);
         }
         else
         {
