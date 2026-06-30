@@ -1,17 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.UI;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.ToolsShared;
 using FreeX.ToolsShared.Wpf;
 
 /// <summary>
@@ -24,9 +22,6 @@ using FreeX.ToolsShared.Wpf;
 /// </summary>
 internal static class Program
 {
-    private const string ExcelProcessName = "EXCEL";
-    private const int XlOpenXmlWorkbook = 51;
-
     [STAThread]
     public static int Main(string[] args)
     {
@@ -103,7 +98,9 @@ internal static class Program
                 var img = ChartRenderer.Render(row.ChartRef!, vp, workbook.Theme, renderScale: 1.5);
                 if (img is BitmapSource bmp)
                 {
-                    var path = Path.Combine(freexPngDir, $"{Sanitize(row.Sheet)}_{row.SheetIndexInSheet:D2}.png");
+                    var path = Path.Combine(
+                        freexPngDir,
+                        $"{ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(row.Sheet)}_{row.SheetIndexInSheet:D2}.png");
                     SaveImage(bmp, path);
                     row.FreeXPng = path;
                     row.Rendered = true;
@@ -142,7 +139,7 @@ internal static class Program
         {
             if (row.Rendered && row.ExcelPng is not null && File.Exists(row.ExcelPng))
             {
-                try { row.DiffPercent = ComputeMeanPixelDiff(row.ExcelPng, row.FreeXPng!); }
+                try { row.DiffPercent = WpfImageDiff.ComputeMeanPixelDiff(row.ExcelPng, row.FreeXPng!, 600, 400); }
                 catch (Exception ex) { row.DiffNote = $"diff failed: {ex.Message}"; }
             }
         }
@@ -179,13 +176,19 @@ internal static class Program
     // ---------------- Excel ground truth ----------------
     private static void ExportExcelGroundTruth(string workbookPath, List<ChartRow> entries, string excelPngDir)
     {
-        var baseline = GetExcelPids();
+        var baseline = ExcelComAutomation.GetExcelProcessIds();
         object? excel = null;
         var owned = new HashSet<int>();
         try
         {
-            excel = CreateExcel();
-            owned = GetExcelPids().Except(baseline).ToHashSet();
+            excel = ExcelComAutomation.CreateExcelApplicationWithRetry(
+                "Excel.Application not registered.",
+                "Excel.Application activation returned null.",
+                maxAttempts: 3,
+                retryDelayMilliseconds: 2000,
+                failureMessagePrefix: "Excel activation failed",
+                configure: ConfigureExcelForChartExport);
+            owned = ExcelComAutomation.GetNewExcelProcessIds(baseline);
             dynamic app = excel;
             dynamic wb = app.Workbooks.Open(workbookPath, 0, true); // ReadOnly positional
             Console.WriteLine("\n[B] Opened workbook in Excel; exporting chart PNGs...");
@@ -201,7 +204,9 @@ internal static class Program
                 for (int ci = 1; ci <= n; ci++)
                 {
                     dynamic chart = chartObjs.Item(ci).Chart;
-                    var path = Path.Combine(excelPngDir, $"{Sanitize(sheetName)}_{ci:D2}.png");
+                    var path = Path.Combine(
+                        excelPngDir,
+                        $"{ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(sheetName)}_{ci:D2}.png");
                     if (TryExportChart(chart, path))
                     {
                         exported++;
@@ -219,22 +224,28 @@ internal static class Program
             if (excel is not null)
             {
                 try { ((dynamic)excel).Quit(); } catch { }
-                try { if (Marshal.IsComObject(excel)) Marshal.FinalReleaseComObject(excel); } catch { }
+                ExcelComAutomation.ReleaseComObject(excel);
             }
-            KillExcel(owned);
+            ExcelComAutomation.KillExcelProcesses(owned, logKilled: false, logFailures: false);
         }
     }
 
     private static Dictionary<string, int> CountChartsPerSheetInExcel(string workbookPath)
     {
         var counts = new Dictionary<string, int>();
-        var baseline = GetExcelPids();
+        var baseline = ExcelComAutomation.GetExcelProcessIds();
         object? excel = null;
         var owned = new HashSet<int>();
         try
         {
-            excel = CreateExcel();
-            owned = GetExcelPids().Except(baseline).ToHashSet();
+            excel = ExcelComAutomation.CreateExcelApplicationWithRetry(
+                "Excel.Application not registered.",
+                "Excel.Application activation returned null.",
+                maxAttempts: 3,
+                retryDelayMilliseconds: 2000,
+                failureMessagePrefix: "Excel activation failed",
+                configure: ConfigureExcelForChartExport);
+            owned = ExcelComAutomation.GetNewExcelProcessIds(baseline);
             dynamic app = excel;
             dynamic wb = app.Workbooks.Open(workbookPath, 0, true);
             int sheetCount = (int)wb.Worksheets.Count;
@@ -256,34 +267,19 @@ internal static class Program
             if (excel is not null)
             {
                 try { ((dynamic)excel).Quit(); } catch { }
-                try { if (Marshal.IsComObject(excel)) Marshal.FinalReleaseComObject(excel); } catch { }
+                ExcelComAutomation.ReleaseComObject(excel);
             }
-            KillExcel(owned);
+            ExcelComAutomation.KillExcelProcesses(owned, logKilled: false, logFailures: false);
         }
         return counts;
     }
 
-    private static object CreateExcel()
+    private static void ConfigureExcelForChartExport(dynamic app)
     {
-        var t = Type.GetTypeFromProgID("Excel.Application")
-            ?? throw new InvalidOperationException("Excel.Application not registered.");
-        Exception? last = null;
-        for (int attempt = 1; attempt <= 3; attempt++)
-        {
-            try
-            {
-                var excel = Activator.CreateInstance(t)!;
-                dynamic app = excel;
-                app.Visible = false;
-                app.DisplayAlerts = false;
-                try { app.EnableEvents = false; } catch { }
-                try { app.AutomationSecurity = 3; } catch { }
-                return excel;
-            }
-            catch (Exception ex) when (attempt < 3) { last = ex; Thread.Sleep(2000); }
-            catch (Exception ex) { last = ex; }
-        }
-        throw new InvalidOperationException($"Excel activation failed: {last?.Message}", last);
+        app.Visible = false;
+        app.DisplayAlerts = false;
+        ExcelComAutomation.TrySetProperty(app, "EnableEvents", false);
+        ExcelComAutomation.TrySetAutomationSecurity(app);
     }
 
     private static bool TryExportChart(dynamic chart, string path)
@@ -295,19 +291,6 @@ internal static class Program
             return ok && File.Exists(path);
         }
         catch { return false; }
-    }
-
-    private static HashSet<int> GetExcelPids() =>
-        Process.GetProcessesByName(ExcelProcessName).Select(p => p.Id).ToHashSet();
-
-    private static void KillExcel(HashSet<int> owned)
-    {
-        if (owned.Count == 0) return;
-        foreach (var p in Process.GetProcessesByName(ExcelProcessName))
-        {
-            if (!owned.Contains(p.Id)) continue;
-            try { p.Kill(true); p.WaitForExit(5000); } catch { }
-        }
     }
 
     // ---------------- chart data ----------------
@@ -349,20 +332,11 @@ internal static class Program
         enc.Save(s);
     }
 
-    private static BitmapSource LoadBitmap(string path)
-    {
-        using var s = File.OpenRead(path);
-        var dec = BitmapDecoder.Create(s, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-        var f = dec.Frames[0];
-        return f.Format == PixelFormats.Bgra32 ? f : new FormatConvertedBitmap(f, PixelFormats.Bgra32, null, 0);
-    }
-
     private static bool IsVisiblyBlank(string path)
     {
         const int W = 64, H = 64;
-        var bmp = ResizeTo(LoadBitmap(path), W, H);
-        var px = new byte[W * H * 4];
-        bmp.CopyPixels(px, W * 4, 0);
+        var bmp = WpfImageDiff.ResizeTo(WpfImageDiff.LoadBitmap(path), W, H);
+        var px = WpfImageDiff.GetBgra32Pixels(bmp, W, H);
         int nonWhite = 0;
         for (int i = 0; i < W * H; i++)
         {
@@ -374,27 +348,6 @@ internal static class Program
             if (b < 245 || g < 245 || r < 245) nonWhite++;
         }
         return nonWhite < (W * H) * 0.01;
-    }
-
-    private static double ComputeMeanPixelDiff(string excelPath, string freexPath)
-    {
-        const int W = 600, H = 400;
-        return WpfImageDiff.ComputeMeanPixelDiff(excelPath, freexPath, W, H);
-    }
-
-    private static BitmapSource ResizeTo(BitmapSource src, int w, int h)
-    {
-        var visual = new DrawingVisual();
-        using (var ctx = visual.RenderOpen())
-        {
-            ctx.DrawRectangle(Brushes.White, null, new System.Windows.Rect(0, 0, w, h));
-            double scale = Math.Min((double)w / src.PixelWidth, (double)h / src.PixelHeight);
-            double dw = src.PixelWidth * scale, dh = src.PixelHeight * scale;
-            ctx.DrawImage(src, new System.Windows.Rect((w - dw) / 2, (h - dh) / 2, dw, dh));
-        }
-        var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        return new FormatConvertedBitmap(rtb, PixelFormats.Bgra32, null, 0);
     }
 
     // ---------------- report ----------------
@@ -448,33 +401,21 @@ internal static class Program
             try
             {
                 const int TW = 600, TH = 400, Pad = 10, Lab = 24;
-                int totalW = TW * 2 + Pad * 3, totalH = TH + Pad * 2 + Lab;
-                var ex = ResizeTo(LoadBitmap(r.ExcelPng!), TW, TH);
-                var fx = ResizeTo(LoadBitmap(r.FreeXPng!), TW, TH);
-                var visual = new DrawingVisual();
-                using (var ctx = visual.RenderOpen())
-                {
-                    ctx.DrawRectangle(new SolidColorBrush(Color.FromRgb(240, 240, 240)), null, new System.Windows.Rect(0, 0, totalW, totalH));
-                    var ft = new FormattedText($"{r.Sheet}/{r.Name} [{r.Type}] diff={r.DiffPercent:F1}%  (left=Excel, right=FreeX)",
-                        CultureInfo.CurrentCulture, System.Windows.FlowDirection.LeftToRight,
-                        new Typeface("Segoe UI"), 13, Brushes.Black, 1.0);
-                    ctx.DrawText(ft, new System.Windows.Point(Pad, 4));
-                    ctx.DrawImage(ex, new System.Windows.Rect(Pad, Lab, TW, TH));
-                    ctx.DrawImage(fx, new System.Windows.Rect(Pad * 2 + TW, Lab, TW, TH));
-                }
-                var rtb = new RenderTargetBitmap(totalW, totalH, 96, 96, PixelFormats.Pbgra32);
-                rtb.Render(visual);
-                SaveImage(rtb, Path.Combine(dir, $"worst_{r.DiffPercent:000.0}_{Sanitize(r.Sheet)}_{r.SheetIndexInSheet:D2}.png"));
+                WpfSideBySidePng.WriteHeaderOnly(
+                    r.ExcelPng!,
+                    r.FreeXPng!,
+                    Path.Combine(
+                        dir,
+                        $"worst_{r.DiffPercent:000.0}_{ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(r.Sheet)}_{r.SheetIndexInSheet:D2}.png"),
+                    new WpfHeaderSideBySidePngOptions(
+                        TW,
+                        TH,
+                        Pad,
+                        Lab,
+                        $"{r.Sheet}/{r.Name} [{r.Type}] diff={r.DiffPercent:F1}%  (left=Excel, right=FreeX)"));
             }
             catch { }
         }
-    }
-
-    private static string Sanitize(string s)
-    {
-        var sb = new StringBuilder(s.Length);
-        foreach (var ch in s) sb.Append(char.IsLetterOrDigit(ch) ? ch : '_');
-        return sb.ToString();
     }
 }
 

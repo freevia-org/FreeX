@@ -5,6 +5,7 @@ using System.Linq;
 using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.ToolsShared;
 
 namespace FreeX.FormatFidelity;
 
@@ -69,8 +70,9 @@ internal sealed class ChainRunner
                         : FileFormatResolver.FindOpenAdapter(_adapters, hop.Extension, out _))
                     ?? throw new InvalidOperationException($"no open adapter for {hop.Extension}");
 
-                var tempFile = Path.Combine(_scratchDir,
-                    $"{Sanitize(chain.Name)}.hop{hopIndex}{hop.Extension}");
+                var tempFile = Path.Combine(
+                    _scratchDir,
+                    $"{ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(chain.Name)}.hop{hopIndex}{hop.Extension}");
 
                 if (saveAdapter is XlsxFileAdapter && string.Equals(hop.ProfileKey, "xlsx-rebuilt", StringComparison.OrdinalIgnoreCase))
                     XlsxFileAdapter.DetachSourcePackage(current);
@@ -91,9 +93,6 @@ internal sealed class ChainRunner
         var results = DimensionComparer.Compare(reference, got, chain.HopProfiles);
         return new ChainOutcome { Chain = chain, Results = results };
     }
-
-    private static string Sanitize(string name) =>
-        new string(name.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
 
     private static string Describe(Exception ex)
     {

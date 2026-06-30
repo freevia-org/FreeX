@@ -207,6 +207,11 @@ public static class ExcelComAutomation
             })
             .ToHashSet();
 
+    public static HashSet<int> GetNewExcelProcessIds(HashSet<int> baselineExcelPids) =>
+        GetExcelProcessIds()
+            .Except(baselineExcelPids)
+            .ToHashSet();
+
     public static int? TryGetExcelProcessId(object excel)
     {
         try
@@ -239,6 +244,18 @@ public static class ExcelComAutomation
             }
         }
 
+        KillExcelProcesses(candidatePids);
+    }
+
+    public static void KillExcelProcesses(
+        IEnumerable<int> processIds,
+        bool logKilled = true,
+        bool logFailures = true)
+    {
+        var candidatePids = processIds.ToHashSet();
+        if (candidatePids.Count == 0)
+            return;
+
         foreach (var pid in candidatePids)
         {
             try
@@ -246,7 +263,8 @@ public static class ExcelComAutomation
                 using var process = Process.GetProcessById(pid);
                 process.Kill(entireProcessTree: true);
                 process.WaitForExit(5000);
-                Console.WriteLine($"Killed orphan EXCEL PID {pid}.");
+                if (logKilled)
+                    Console.WriteLine($"Killed orphan EXCEL PID {pid}.");
             }
             catch (ArgumentException)
             {
@@ -258,7 +276,8 @@ public static class ExcelComAutomation
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Failed to kill orphan EXCEL PID {pid}: {ex.Message}");
+                if (logFailures)
+                    Console.Error.WriteLine($"Failed to kill orphan EXCEL PID {pid}: {ex.Message}");
             }
         }
     }
