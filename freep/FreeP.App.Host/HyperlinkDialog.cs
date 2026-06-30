@@ -110,12 +110,7 @@ public sealed class HyperlinkDialog : Window
         Grid.SetRow(_tooltipBox, 3); Grid.SetColumn(_tooltipBox, 1);
         grid.Children.Add(_tooltipBox);
 
-        // Buttons
-        var okBtn     = new Button { Content = "OK",     Width = 75, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancelBtn = new Button { Content = "Cancel", Width = 75, Margin = new Thickness(0, 0, 0, 0), IsCancel = true  };
-        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        buttonRow.Children.Add(okBtn);
-        buttonRow.Children.Add(cancelBtn);
+        var buttonRow = DialogButtonRowFactory.Create(OnOk, buttonWidth: 75);
         Grid.SetRow(buttonRow, 4); Grid.SetColumnSpan(buttonRow, 2);
         grid.Children.Add(buttonRow);
 
@@ -125,9 +120,6 @@ public sealed class HyperlinkDialog : Window
 
         _urlRadio.Checked   += (_, _) => UpdateEnabled();
         _slideRadio.Checked += (_, _) => UpdateEnabled();
-
-        okBtn.Click     += OnOk;
-        cancelBtn.Click += (_, _) => DialogResult = false;
 
         // ── Pre-fill from current hyperlink ─────────────────────────────────────
 
@@ -151,7 +143,7 @@ public sealed class HyperlinkDialog : Window
 
     // ── OK handler ────────────────────────────────────────────────────────────────
 
-    private void OnOk(object sender, RoutedEventArgs e)
+    private void OnOk()
     {
         var targetKind = _urlRadio.IsChecked == true
             ? HyperlinkDialogTargetKind.Url
@@ -166,12 +158,7 @@ public sealed class HyperlinkDialog : Window
         if (!plan.ShouldApply)
         {
             var validation = plan.Validation!;
-            MessageBox.Show(
-                this,
-                validation.Message,
-                validation.Caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
             FocusField(validation.FocusField);
             return;
         }
@@ -183,7 +170,7 @@ public sealed class HyperlinkDialog : Window
     private void FocusField(HyperlinkDialogField field)
     {
         if (field == HyperlinkDialogField.Url)
-            _urlBox.Focus();
+            DialogFocus.FocusAndSelect(_urlBox);
         else if (field == HyperlinkDialogField.Slide)
             _slideCombo.Focus();
     }

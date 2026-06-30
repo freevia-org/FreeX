@@ -65,30 +65,10 @@ public sealed class SlideSizeDialog : Window
 
         LoadCurrentSize();
 
-        var okBtn = new Button
-        {
-            Content = "OK",
-            Width = 80,
-            IsDefault = true,
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        okBtn.Click += (_, _) => OnOk();
-
-        var cancelBtn = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-        cancelBtn.Click += (_, _) =>
-        {
-            DialogResult = false;
-            Close();
-        };
-
-        var btnRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(4, 8, 8, 8)
-        };
-        btnRow.Children.Add(okBtn);
-        btnRow.Children.Add(cancelBtn);
+        var btnRow = DialogButtonRowFactory.Create(
+            OnOk,
+            buttonWidth: 80,
+            rowMargin: new Thickness(4, 8, 8, 8));
 
         var grid = new Grid { Margin = new Thickness(12) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -218,11 +198,7 @@ public sealed class SlideSizeDialog : Window
         if (!result.ShouldApply)
         {
             var validation = result.Validation!;
-            MessageBox.Show(
-                validation.Message,
-                validation.Caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, validation.Message, validation.Caption);
             FocusField(validation.FocusField);
             return;
         }
@@ -249,8 +225,8 @@ public sealed class SlideSizeDialog : Window
             _ => null
         };
 
-        box?.Focus();
-        box?.SelectAll();
+        if (box is not null)
+            DialogFocus.FocusAndSelect(box);
     }
 
     private static int ToPresetIndex(SlideSizeDialogPreset preset)
