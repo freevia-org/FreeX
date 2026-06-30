@@ -177,8 +177,8 @@ public sealed partial class MainWindow
                 break;
 
             case QuickAnalysisHostOperationKind.InsertSparkline
-                when operation.SparklineKind is { } sparklineKind:
-                InsertQuickAnalysisSparklines(sparklineKind);
+                when operation.SparklineKind is not null:
+                InsertQuickAnalysisSparklines(operation);
                 break;
 
             case QuickAnalysisHostOperationKind.InsertChart when operation.ChartType is { } chartType:
@@ -199,13 +199,14 @@ public sealed partial class MainWindow
     /// Inserts one sparkline per data row beside the selection through the shared session command path,
     /// reusing the Core <see cref="AddSparklineCommand"/> the sparkline renderer already paints.
     /// </summary>
-    private void InsertQuickAnalysisSparklines(SparklineKind kind)
+    private void InsertQuickAnalysisSparklines(QuickAnalysisHostOperation operation)
     {
         var range = _session.SelectedRange;
-        var description = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range);
-        var commands = QuickAnalysisSparklinePlanner.BuildCommands(
-            _session.ActiveSheet.Id, range, description.HasHeaderRow, kind);
-        if (commands.Count == 0)
+        if (!QuickAnalysisHostOperationPlanner.TryBuildSparklineCommands(
+            operation,
+            _session.ActiveSheet,
+            range,
+            out var commands))
         {
             ShowEditIssue(UiText.Get("TableLoc_QaSparklinesNeedTwoColumns"));
             return;

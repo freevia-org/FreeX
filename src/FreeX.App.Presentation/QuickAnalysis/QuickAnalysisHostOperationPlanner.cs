@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.QuickAnalysis;
@@ -140,5 +141,33 @@ public static class QuickAnalysisHostOperationPlanner
         };
 
         return edits.Count > 0;
+    }
+
+    public static bool TryBuildSparklineCommands(
+        QuickAnalysisHostOperation operation,
+        Sheet sheet,
+        GridRange range,
+        out IReadOnlyList<AddSparklineCommand> commands)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        if (operation is not
+            {
+                Kind: QuickAnalysisHostOperationKind.InsertSparkline,
+                SparklineKind: { } sparklineKind
+            })
+        {
+            commands = [];
+            return false;
+        }
+
+        var description = QuickAnalysisSelectionReader.Describe(sheet, range);
+        commands = QuickAnalysisSparklinePlanner.BuildCommands(
+            sheet.Id,
+            range,
+            description.HasHeaderRow,
+            sparklineKind);
+        return commands.Count > 0;
     }
 }
