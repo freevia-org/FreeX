@@ -4,7 +4,7 @@ using System.Linq;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Free.Shared.AppServices;
-using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell.Wpf;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;

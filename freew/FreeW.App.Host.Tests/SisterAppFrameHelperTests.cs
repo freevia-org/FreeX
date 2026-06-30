@@ -41,6 +41,7 @@ public sealed class SisterAppFrameHelperTests
             "MainWindow.cs"));
 
         source.Should().Contain("RibbonShellBuilder.Build(");
+        source.Should().Contain("using Free.Shared.Shell.Wpf;");
         source.Should().Contain("SisterAppClientFrameBuilder.Build(");
         source.Should().Contain("WorkArea:");
         source.Should().Contain("StatusBar:");
@@ -59,6 +60,29 @@ public sealed class SisterAppFrameHelperTests
         source.Should().NotContain("$\"%LOCALAPPDATA%\\\\{AppProduct.Current.ProductDirectoryName}\"");
         source.Should().NotContain("belowTitle.Children.Add(root)");
         source.Should().NotContain("Content = outer;");
+    }
+
+    [Fact]
+    public void SisterAppFrameHelpers_LiveInSharedShellWpfInsteadOfRibbonWpf()
+    {
+        var root = FindRepositoryRoot();
+        var shellProject = Path.Combine(root, "shared", "Free.Shared.Shell.Wpf");
+        var ribbonProject = Path.Combine(root, "shared", "Free.Shared.Ribbon.Wpf");
+
+        foreach (var fileName in new[]
+        {
+            "SisterAppClientFrameBuilder.cs",
+            "SisterAppWindowFrameBuilder.cs",
+            "SisterAppStatusBarChrome.cs"
+        })
+        {
+            var source = File.ReadAllText(Path.Combine(shellProject, fileName));
+            source.Should().Contain("namespace Free.Shared.Shell.Wpf;");
+            File.Exists(Path.Combine(ribbonProject, fileName)).Should().BeFalse();
+        }
+
+        File.ReadAllText(Path.Combine(ribbonProject, "Free.Shared.Ribbon.Wpf.csproj"))
+            .Should().NotContain("Free.Shared.AppServices");
     }
 
     private static string FindRepositoryRoot()
