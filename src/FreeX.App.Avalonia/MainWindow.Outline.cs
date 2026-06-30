@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Commands;
 
@@ -19,29 +20,15 @@ public sealed partial class MainWindow
     // Outline dialog chrome helpers
     // -------------------------------------------------------------------------------------------------------
 
+    private static AvaloniaCompactDialogChromeStyle OutlineDialogChromeStyle => new(FormulaBarFontFamily);
+
     private static void ApplyOutlineButtonChrome(Button button, double minWidth = 84, bool isDefault = false)
-    {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = VerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, OutlineDialogChromeStyle, minWidth, isDefault);
 
     private static void ApplyOutlineCheckBoxChrome(CheckBox cb)
     {
         StripContentMnemonic(cb);
-        cb.MinHeight = 20;
-        cb.MaxHeight = 20;
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(cb, OutlineDialogChromeStyle);
     }
 
     // Data ▸ Outline ▸ Group / Ungroup (parity gap: the ribbon buttons were no-ops). Groups the
@@ -160,13 +147,7 @@ public sealed partial class MainWindow
                 summaryBelowBox,
                 summaryRightBox,
                 autoStylesBox,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Margin = new Thickness(0, 12, 0, 0),
-                    Children = { okButton, cancelButton },
-                },
+                AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0)),
             },
         };
 

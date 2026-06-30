@@ -26,63 +26,27 @@ public sealed partial class MainWindow
     // GetData dialog chrome helpers
     // -------------------------------------------------------------------------------------------------------
 
+    private static AvaloniaCompactDialogChromeStyle GetDataDialogChromeStyle => new(FormulaBarFontFamily);
+
     private static void ApplyGetDataButtonChrome(Button button, double minWidth = 80, bool isDefault = false)
-    {
-        button.MinWidth = minWidth;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = HorizontalAlignment.Center;
-        button.VerticalContentAlignment = VerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyButton(button, GetDataDialogChromeStyle, minWidth, isDefault);
 
     private static void ApplyGetDataTextBoxChrome(TextBox tb)
-    {
-        tb.Height = 24;
-        tb.MinHeight = 24;
-        tb.MaxHeight = 24;
-        tb.Padding = new Thickness(4, 1);
-        tb.FontSize = 12;
-        tb.FontFamily = FormulaBarFontFamily;
-        tb.BorderBrush = Brush(130, 130, 130);
-        tb.BorderThickness = new Thickness(1);
-        tb.VerticalContentAlignment = VerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(tb, GetDataDialogChromeStyle);
 
     private static void ApplyGetDataComboBoxChrome(ComboBox cb)
-    {
-        cb.Height = 24;
-        cb.MinHeight = 24;
-        cb.MaxHeight = 24;
-        cb.Padding = new Thickness(5, 0, 4, 0);
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
-        cb.BorderBrush = Brush(130, 130, 130);
-        cb.BorderThickness = new Thickness(1);
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(cb, GetDataDialogChromeStyle);
 
     private static void ApplyGetDataCheckBoxChrome(CheckBox cb)
     {
         StripContentMnemonic(cb);
-        cb.MinHeight = 20;
-        cb.MaxHeight = 20;
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(cb, GetDataDialogChromeStyle);
     }
 
     private static void ApplyGetDataRadioButtonChrome(RadioButton rb)
     {
         StripContentMnemonic(rb);
-        rb.MinHeight = 20;
-        rb.MaxHeight = 20;
-        rb.FontSize = 12;
-        rb.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyRadioButton(rb, GetDataDialogChromeStyle);
     }
 
     // The most recent file-backed import, remembered so Data ▸ Refresh All can re-run it without prompting.
@@ -424,15 +388,7 @@ public sealed partial class MainWindow
         AddOptionRow(2, "GetData_DestinationHeader", destinationPanel);
         AddOptionRow(3, "GetData_PreviewHeader", treatConsecutiveBox);
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-        };
-        buttonRow.Children.Add(loadButton);
-        buttonRow.Children.Add(cancelButton);
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([loadButton, cancelButton], new Thickness(0, 8, 0, 0));
 
         var root = new DockPanel { Margin = new Thickness(16), LastChildFill = true };
         DockPanel.SetDock(fileRow, Dock.Top);

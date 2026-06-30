@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.TableUI;
@@ -19,6 +20,20 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle InsertObjectDialogChromeStyle => new(FormulaBarFontFamily);
+
+    private static void ApplyInsertObjectFixedButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        AvaloniaCompactDialogChrome.ApplyButton(button, InsertObjectDialogChromeStyle, width, isDefault);
+    }
+
+    private static void ApplyInsertObjectTextBoxChrome(TextBox textBox)
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, InsertObjectDialogChromeStyle);
+
+    private static void ApplyInsertObjectCheckBoxChrome(CheckBox checkBox)
+        => AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, InsertObjectDialogChromeStyle);
+
     /// <summary>Builds the native Insert ▸ Shape submenu from the common-shapes catalog.</summary>
     private NativeMenu CreateNativeShapeMenu()
     {
@@ -242,15 +257,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, CreateTableDialogPlanner.DialogAutomationId);
 
         var rangeBox = new TextBox { Text = defaultRangeText, MinWidth = 248 };
-        rangeBox.Height = 24;
-        rangeBox.MinHeight = 24;
-        rangeBox.MaxHeight = 24;
-        rangeBox.Padding = new Thickness(4, 1);
-        rangeBox.FontSize = 12;
-        rangeBox.FontFamily = FormulaBarFontFamily;
-        rangeBox.BorderBrush = Brush(130, 130, 130);
-        rangeBox.BorderThickness = new Thickness(1);
-        rangeBox.VerticalContentAlignment = VerticalAlignment.Center;
+        ApplyInsertObjectTextBoxChrome(rangeBox);
         // Lighter selection highlight so the (auto-selected) range text stays readable in black —
         // Avalonia's default accent selection is too dark for black text (matches Windows' lighter selection).
         rangeBox.SelectionBrush = Brush(173, 214, 255);
@@ -261,18 +268,9 @@ public sealed partial class MainWindow
         var rangePicker = new Button
         {
             Content = "...",
-            Width = 28,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(4, 0, 0, 0),
         };
+        ApplyInsertObjectFixedButtonChrome(rangePicker, 28);
         AutomationProperties.SetName(rangePicker, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey));
         rangePicker.Click += (_, _) =>
         {
@@ -286,11 +284,8 @@ public sealed partial class MainWindow
             Content = StripDisplayMnemonic(UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey)),
             IsChecked = true,
             Margin = new Thickness(0, 0, 0, 16),
-            MinHeight = 20,
-            MaxHeight = 20,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyInsertObjectCheckBoxChrome(headersBox);
         AutomationProperties.SetName(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));
         AutomationProperties.SetAutomationId(headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId);
         AutomationProperties.SetHelpText(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationHelpTextKey));
@@ -298,38 +293,15 @@ public sealed partial class MainWindow
         var okButton = new Button
         {
             Content = UiText.Get("Common_Ok"),
-            Width = CreateTableDialogPlanner.ButtonWidth,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             IsDefault = true,
-            Margin = new Thickness(0, 0, 8, 0),
         };
+        ApplyInsertObjectFixedButtonChrome(okButton, CreateTableDialogPlanner.ButtonWidth, isDefault: true);
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_Cancel"),
-            Width = CreateTableDialogPlanner.ButtonWidth,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             IsCancel = true,
         };
+        ApplyInsertObjectFixedButtonChrome(cancelButton, CreateTableDialogPlanner.ButtonWidth);
         okButton.Click += (_, _) =>
         {
             if (!CreateTableDialogPlanner.TryParse(
@@ -351,12 +323,7 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Children = { okButton, cancelButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
         dialog.Content = new StackPanel
         {

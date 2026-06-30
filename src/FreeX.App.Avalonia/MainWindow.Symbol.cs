@@ -4,12 +4,26 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle SymbolDialogChromeStyle => new(FormulaBarFontFamily);
+
+    private static void ApplySymbolButtonChrome(Button button, double minWidth, bool isDefault = false)
+        => AvaloniaCompactDialogChrome.ApplyButton(button, SymbolDialogChromeStyle, minWidth, isDefault);
+
+    private static void ApplySymbolTextBoxChrome(TextBox textBox)
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SymbolDialogChromeStyle);
+
+    private static void ApplySymbolComboBoxChrome(ComboBox comboBox)
+        => AvaloniaCompactDialogChrome.ApplyComboBox(
+            comboBox,
+            SymbolDialogChromeStyle with { ComboBoxPadding = new Thickness(6, 1) });
+
     private async Task ShowSymbolPickerAsync()
     {
         var selectedSymbol = SymbolPickerCatalogPlanner.CreateDefaultSelection().Symbol;
@@ -26,16 +40,8 @@ public sealed partial class MainWindow
         var selectedCode = new TextBox
         {
             Width = 120,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = VerticalAlignment.Center,
         };
+        ApplySymbolTextBoxChrome(selectedCode);
         var preview = new TextBlock
         {
             FontSize = 44,
@@ -110,41 +116,26 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 150,
             Width = 150,
-            FontSize = 12,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(6, 1),
-            VerticalContentAlignment = VerticalAlignment.Center,
         };
+        ApplySymbolComboBoxChrome(fontBox);
         var subsetBox = new ComboBox
         {
             ItemsSource = SymbolPickerCatalogPlanner.GetSubsetNames(),
             SelectedIndex = 0,
             MinWidth = 150,
             Width = 150,
-            FontSize = 12,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(6, 1),
-            VerticalContentAlignment = VerticalAlignment.Center,
         };
+        ApplySymbolComboBoxChrome(subsetBox);
         var searchBox = new TextBox
         {
             MinWidth = 150,
             MaxWidth = 200,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            FontSize = 12,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
             // Right margin keeps the field inside the tab pane (it sits in the trailing
             // star column and would otherwise stretch flush to / past the dialog edge).
             Margin = new Thickness(0, 0, 8, 0),
-            Padding = new Thickness(4, 1),
-            VerticalContentAlignment = VerticalAlignment.Center,
         };
+        ApplySymbolTextBoxChrome(searchBox);
         var resultCount = new TextBlock
         {
             FontSize = 12,
@@ -271,44 +262,17 @@ public sealed partial class MainWindow
         {
             Content = "Insert",
             MinWidth = 84,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             IsDefault = true,
         };
+        ApplySymbolButtonChrome(insert, 84, isDefault: true);
         var cancel = new Button
         {
             Content = "Cancel",
             MinWidth = 84,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             IsCancel = true,
-            Margin = new Thickness(8, 0, 0, 0),
         };
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { insert, cancel },
-        };
+        ApplySymbolButtonChrome(cancel, 84);
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([insert, cancel], new Thickness(0, 12, 0, 0));
 
         insert.Click += (_, _) =>
         {
@@ -420,19 +384,9 @@ public sealed partial class MainWindow
         {
             Content = "Go",
             MinWidth = 64,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 6, 0, 0),
         };
+        ApplySymbolButtonChrome(goButton, 64);
         goButton.Click += (_, _) =>
         {
             if (SymbolPickerCatalogPlanner.TryParseCharacterCode(selectedCode.Text, out var symbol))
