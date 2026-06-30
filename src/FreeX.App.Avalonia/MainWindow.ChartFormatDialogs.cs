@@ -4,16 +4,13 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
-using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -1360,48 +1357,25 @@ public sealed partial class MainWindow
 
     // ---- Shared dialog plumbing -----------------------------------------------------------------------
 
+    private static AvaloniaCompactDialogChromeStyle ChartDialogChromeStyle => new(FormulaBarFontFamily);
+
     private static void ApplyChartButtonChrome(Button button, double width, bool isDefault = false)
     {
         button.Width = width;
-        button.MinWidth = width;
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        AvaloniaCompactDialogChrome.ApplyButton(button, ChartDialogChromeStyle, width, isDefault);
     }
 
-    private static void ApplyChartTextBoxChrome(TextBox tb)
-    {
-        tb.Height = 24;
-        tb.MinHeight = 24;
-        tb.MaxHeight = 24;
-        tb.Padding = new Thickness(4, 1);
-        tb.FontSize = 12;
-        tb.FontFamily = FormulaBarFontFamily;
-        tb.BorderBrush = Brush(130, 130, 130);
-        tb.BorderThickness = new Thickness(1);
-        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+    private static void ApplyChartTextBoxChrome(TextBox textBox) =>
+        AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ChartDialogChromeStyle);
 
-    private static void ApplyChartComboBoxChrome(ComboBox cb)
-    {
-        cb.Height = 24;
-        cb.MinHeight = 24;
-        cb.MaxHeight = 24;
-        cb.Padding = new Thickness(5, 0, 4, 0);
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
-        cb.BorderBrush = Brush(130, 130, 130);
-        cb.BorderThickness = new Thickness(1);
-        cb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+    private static void ApplyChartComboBoxChrome(ComboBox comboBox) =>
+        AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, ChartDialogChromeStyle);
+
+    private static void ApplyChartCheckBoxChrome(CheckBox checkBox) =>
+        AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, ChartDialogChromeStyle);
+
+    private static void ApplyChartRadioButtonChrome(RadioButton radioButton) =>
+        AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, ChartDialogChromeStyle);
 
     private static Window NewChartDialog(string title, string automationId)
     {
@@ -1426,16 +1400,12 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, $"{idPrefix}CancelButton");
         ApplyChartButtonChrome(cancelButton, 80);
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { okButton, cancelButton },
-        };
+        var row = CreateChartDialogActionRow([okButton, cancelButton], new Thickness(0, 8, 0, 0));
         return (okButton, cancelButton, row);
     }
+
+    private static StackPanel CreateChartDialogActionRow(IReadOnlyList<Control> controls, Thickness margin = default) =>
+        AvaloniaCompactDialogChrome.CreateActionRow(controls, margin);
 
     private static string FormatNullableDouble(double? value) =>
         value is { } v ? v.ToString(CultureInfo.CurrentCulture) : string.Empty;
@@ -1448,11 +1418,4 @@ public sealed partial class MainWindow
     private static string FormatOptionalColorText(CellColor? color) =>
         color is { } c ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : "none";
 
-    private static bool TryParseIntInRange(string? text, int min, int max, out int value)
-    {
-        value = min;
-        return int.TryParse((text ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
-            && value >= min
-            && value <= max;
-    }
 }

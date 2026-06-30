@@ -5,6 +5,38 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class AvaloniaChartFormatDialogSourceTests
 {
     [Fact]
+    public void ChartDialogFamily_UsesSharedAvaloniaCompactChrome()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var chartRemainingDialogsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));
+        var chartFormatDialogsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs"));
+        var chartTypeFormatDialogsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTypeFormatDialogs.cs"));
+        var combined = string.Join(
+            Environment.NewLine,
+            chartTabsSource,
+            chartRemainingDialogsSource,
+            chartFormatDialogsSource,
+            chartTypeFormatDialogsSource);
+
+        chartFormatDialogsSource.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        chartFormatDialogsSource.Should().Contain("AvaloniaCompactDialogChromeStyle ChartDialogChromeStyle");
+        chartFormatDialogsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, ChartDialogChromeStyle, width, isDefault);");
+        chartFormatDialogsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, ChartDialogChromeStyle);");
+        chartFormatDialogsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, ChartDialogChromeStyle);");
+        chartFormatDialogsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, ChartDialogChromeStyle);");
+        chartFormatDialogsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, ChartDialogChromeStyle);");
+        chartFormatDialogsSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(controls, margin);");
+
+        chartFormatDialogsSource.Should().NotContain("button.Height = 24;");
+        chartFormatDialogsSource.Should().NotContain("button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);");
+        chartFormatDialogsSource.Should().NotContain("tb.BorderBrush = Brush(130, 130, 130);");
+        chartFormatDialogsSource.Should().NotContain("cb.BorderBrush = Brush(130, 130, 130);");
+        chartRemainingDialogsSource.Should().NotContain("BorderBrush = Brush(130, 130, 130)");
+        chartRemainingDialogsSource.Should().NotContain("Height = 24,");
+        combined.Should().NotContain("Children = { okButton, cancelButton },");
+    }
+
+    [Fact]
     public void ChartContextualTabs_UseSharedWorkflowCommandDescriptorsForCoreDialogs()
     {
         var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));

@@ -76,9 +76,8 @@ public sealed partial class MainWindow
                 IsEnabled = !isBase,
                 MinHeight = 20,
                 MaxHeight = 20,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
             };
+            ApplyChartCheckBoxChrome(lineCheck);
             AutomationProperties.SetAutomationId(lineCheck, $"ChartComboLineCheck{series.SeriesIndex}");
             lineChecks.Add(lineCheck);
 
@@ -89,9 +88,8 @@ public sealed partial class MainWindow
                 IsEnabled = !isBase,
                 MinHeight = 20,
                 MaxHeight = 20,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
             };
+            ApplyChartCheckBoxChrome(secondaryCheck);
             AutomationProperties.SetAutomationId(secondaryCheck, $"ChartComboSecondaryCheck{series.SeriesIndex}");
             secondaryChecks.Add(secondaryCheck);
 
@@ -224,9 +222,8 @@ public sealed partial class MainWindow
             IsChecked = current.TargetKind == ChartMoveTargetKind.ObjectInSheet,
             MinHeight = 20,
             MaxHeight = 20,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyChartRadioButtonChrome(objectRadio);
         AutomationProperties.SetAutomationId(objectRadio, objectTarget.AutomationId);
 
         var newSheetRadio = new RadioButton
@@ -236,25 +233,16 @@ public sealed partial class MainWindow
             IsChecked = current.TargetKind == ChartMoveTargetKind.NewSheet,
             MinHeight = 20,
             MaxHeight = 20,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
         };
+        ApplyChartRadioButtonChrome(newSheetRadio);
         AutomationProperties.SetAutomationId(newSheetRadio, newSheetTarget.AutomationId);
 
         var targetBox = new TextBox
         {
             Text = current.TargetName,
             Width = 260,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyChartTextBoxChrome(targetBox);
         AutomationProperties.SetName(targetBox, StripDisplayMnemonic(UiText.Get(targetField.AutomationNameResourceKey!)));
         AutomationProperties.SetAutomationId(targetBox, targetField.AutomationId);
         AutomationProperties.SetHelpText(targetBox, UiText.Get(targetField.HelpResourceKey!));
@@ -570,9 +558,8 @@ public sealed partial class MainWindow
             {
                 Content = AreaFieldLabel(fieldId),
                 IsChecked = isChecked,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
             };
+            ApplyChartCheckBoxChrome(checkBox);
             ApplyAreaDescriptorAutomation(checkBox, fieldId);
             return checkBox;
         }
@@ -605,16 +592,8 @@ public sealed partial class MainWindow
             {
                 Text = text,
                 Width = width,
-                Height = 24,
-                MinHeight = 24,
-                MaxHeight = 24,
-                Padding = new Thickness(4, 1),
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
-                BorderBrush = Brush(130, 130, 130),
-                BorderThickness = new Thickness(1),
-                VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             };
+            ApplyChartTextBoxChrome(box);
             ApplyAreaDescriptorAutomation(box, fieldId);
             return box;
         }
