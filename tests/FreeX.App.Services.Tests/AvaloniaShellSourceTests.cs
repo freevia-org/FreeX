@@ -910,9 +910,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfirmBeforeDestructiveWorkbookActionAsync(\"Quit FreeX\", \"Discard and Quit\")");
         source.Should().Contain("_allowCloseWithoutDirtyPrompt = true;");
         source.Should().Contain("private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText)");
-        source.Should().Contain("WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(");
+        source.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
         source.Should().Contain("ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText))");
-        source.Should().Contain("SaveCurrentWorkbookThenConfirmCleanAsync");
+        source.Should().Contain("SaveCurrentWorkbookAsync");
+        source.Should().Contain("() => _session.IsDirty");
+        source.Should().NotContain("SaveCurrentWorkbookThenConfirmCleanAsync");
         source.Should().Contain("private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice)");
         source.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
         source.Should().Contain("() => _session.CanSaveCurrentSource(out var target) ? target : null");

@@ -216,10 +216,11 @@ public sealed partial class MainWindowSourceHygieneTests
         confirmMethod.Should().Contain("SaveResolvedAsync");
 
         var canProceedMethod = ExtractMethodSource(lifecycleSource, "private Task<bool> CanProceedAfterSaveBeforeDestructiveActionAsync(");
-        canProceedMethod.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateAsync(");
+        canProceedMethod.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
         canProceedMethod.Should().Contain("_workbookDirty");
         canProceedMethod.Should().Contain("PromptSaveChangesBeforeDestructiveAction(message)");
         canProceedMethod.Should().Contain("SaveResolvedAsync");
+        canProceedMethod.Should().Contain("() => _workbookDirty");
 
         var promptMethod = ExtractMethodSource(lifecycleSource, "private SaveChangesPrompt PromptSaveChangesBeforeDestructiveAction(");
         promptMethod.Should().Contain("ShowOwnedMessage(");

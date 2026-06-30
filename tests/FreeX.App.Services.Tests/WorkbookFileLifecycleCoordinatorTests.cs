@@ -76,6 +76,37 @@ public sealed class WorkbookFileLifecycleCoordinatorTests
     }
 
     [Fact]
+    public async Task CanProceedAfterDirtyGateWithCleanSave_SaveThatLeavesWorkbookDirty_ReturnsFalse()
+    {
+        var canProceed = await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.Save),
+            saveCurrentAsync: () => Task.FromResult(true),
+            isDirtyNow: () => true);
+
+        canProceed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CanProceedAfterDirtyGateWithCleanSave_DiscardingChanges_ProceedsWithoutCleanRecheck()
+    {
+        var recheckedDirty = false;
+
+        var canProceed = await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+            isDirty: true,
+            promptSaveChangesAsync: () => Task.FromResult(SaveChangesPrompt.DontSave),
+            saveCurrentAsync: () => throw new InvalidOperationException("Discard should not save."),
+            isDirtyNow: () =>
+            {
+                recheckedDirty = true;
+                return true;
+            });
+
+        canProceed.Should().BeTrue();
+        recheckedDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task RunAfterDirtyGate_DirtySaveAnswer_RunsActionAfterSave()
     {
         var saved = false;

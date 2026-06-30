@@ -21443,16 +21443,11 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText)
     {
-        var confirmation = await WorkbookFileLifecycleCoordinator.ConfirmBeforeDestructiveActionAsync(
+        return await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
             _session.IsDirty,
             async () => ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText)),
-            SaveCurrentWorkbookThenConfirmCleanAsync);
-        return confirmation != SaveChangesConfirmation.Cancel;
-    }
-
-    private async Task<bool> SaveCurrentWorkbookThenConfirmCleanAsync()
-    {
-        return await SaveCurrentWorkbookAsync() && !_session.IsDirty;
+            SaveCurrentWorkbookAsync,
+            () => _session.IsDirty);
     }
 
     private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice) => choice switch
