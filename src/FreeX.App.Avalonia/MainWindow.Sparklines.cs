@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -29,6 +30,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle SparklineDialogChromeStyle => new(FormulaBarFontFamily);
+
     /// <summary>
     /// Insert ▸ Sparklines entry point. Edits the sparkline anchored at the active cell if one exists,
     /// otherwise opens the insert dialog with <paramref name="kind"/> preselected.
@@ -66,14 +69,14 @@ public sealed partial class MainWindow
             MinWidth = 220,
             Text = selection.CellCount > 1 ? FormatRangeReference(selection) : string.Empty,
         };
-        ApplyDataToolsTextBoxChrome(dataRangeBox);
+        ApplySparklineTextBoxChrome(dataRangeBox);
         AutomationProperties.SetAutomationId(dataRangeBox, "SparklineDataRangeBox");
         AutomationProperties.SetName(dataRangeBox, UiText.Get("Sparkline_DataRange"));
 
         // Windows shows a range-picker button to the right of each range field; clicking it fills the
         // field from the current sheet selection.
         var selectDataRangeButton = new Button { Content = UiText.Get("Sparkline_SelectDataRange"), MinWidth = 140 };
-        ApplyDataToolsButtonChrome(selectDataRangeButton, 140);
+        ApplySparklineButtonChrome(selectDataRangeButton, 140);
         AutomationProperties.SetAutomationId(selectDataRangeButton, "SparklineSelectDataRangeButton");
         selectDataRangeButton.Click += (_, _) =>
         {
@@ -86,18 +89,18 @@ public sealed partial class MainWindow
             MinWidth = 220,
             Text = FormatCellReference(_session.ActiveCell),
         };
-        ApplyDataToolsTextBoxChrome(locationBox);
+        ApplySparklineTextBoxChrome(locationBox);
         AutomationProperties.SetAutomationId(locationBox, "SparklineLocationRangeBox");
         AutomationProperties.SetName(locationBox, UiText.Get("Sparkline_LocationRange"));
 
         var selectLocationRangeButton = new Button { Content = UiText.Get("Sparkline_SelectLocationRange"), MinWidth = 140 };
-        ApplyDataToolsButtonChrome(selectLocationRangeButton, 140);
+        ApplySparklineButtonChrome(selectLocationRangeButton, 140);
         AutomationProperties.SetAutomationId(selectLocationRangeButton, "SparklineSelectLocationRangeButton");
         selectLocationRangeButton.Click += (_, _) =>
             locationBox.Text = FormatCellReference(_session.ActiveCell);
 
         var typeBox = BuildKindComboBox("SparklineTypeBox", kind);
-        ApplyDataToolsComboBoxChrome(typeBox);
+        ApplySparklineComboBoxChrome(typeBox);
 
         // Explicit Width+Height (rather than SizeToContent.WidthAndHeight) keeps the dialog as compact as
         // the Windows "Create Sparklines" dialog (Data Range row + Location Range row + Type + OK/Cancel).
@@ -117,10 +120,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "InsertSparklineDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyDataToolsButtonChrome(ok, 80, isDefault: true);
+        ApplySparklineButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "InsertSparklineOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyDataToolsButtonChrome(cancel, 80);
+        ApplySparklineButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "InsertSparklineCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -146,14 +149,7 @@ public sealed partial class MainWindow
         content.Children.Add(BuildSparklineRangeRow(locationBox, selectLocationRangeButton));
         content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_SparklineType")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(typeBox);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);
@@ -192,7 +188,7 @@ public sealed partial class MainWindow
         var selectedColor = current.SeriesColor;
 
         var typeBox = BuildKindComboBox("SparklineEditTypeBox", current.Kind);
-        ApplyDataToolsComboBoxChrome(typeBox);
+        ApplySparklineComboBoxChrome(typeBox);
 
         var toggleBoxes = new Dictionary<SparklinePointToggle, CheckBox>();
         foreach (var toggle in SparklinePlanner.PointToggles)
@@ -202,6 +198,7 @@ public sealed partial class MainWindow
                 Content = UiText.Get($"Sparkline_Toggle{SparklinePlanner.ToggleKey(toggle)}"),
                 IsChecked = SparklinePlanner.GetToggle(current, toggle),
             };
+            AvaloniaCompactDialogChrome.ApplyCheckBox(box, SparklineDialogChromeStyle);
             AutomationProperties.SetAutomationId(box, $"SparklineToggle{SparklinePlanner.ToggleKey(toggle)}Box");
             toggleBoxes[toggle] = box;
         }
@@ -217,7 +214,7 @@ public sealed partial class MainWindow
         SyncToggleAvailability();
 
         var colorButton = new Button { Content = UiText.Get("Sparkline_EditColor"), MinWidth = 120 };
-        ApplyDataToolsButtonChrome(colorButton, 120);
+        ApplySparklineButtonChrome(colorButton, 120);
         AutomationProperties.SetAutomationId(colorButton, "SparklineColorButton");
         var colorSwatch = new Border
         {
@@ -240,7 +237,7 @@ public sealed partial class MainWindow
             }
         };
         var clearColorButton = new Button { Content = UiText.Get("Sparkline_DefaultColor"), MinWidth = 120 };
-        ApplyDataToolsButtonChrome(clearColorButton, 120);
+        ApplySparklineButtonChrome(clearColorButton, 120);
         AutomationProperties.SetAutomationId(clearColorButton, "SparklineClearColorButton");
         clearColorButton.Click += (_, _) =>
         {
@@ -260,13 +257,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "EditSparklineDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
-        ApplyDataToolsButtonChrome(ok, 80, isDefault: true);
+        ApplySparklineButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "EditSparklineOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
-        ApplyDataToolsButtonChrome(cancel, 80);
+        ApplySparklineButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "EditSparklineCancelButton");
         var clear = new Button { Content = UiText.Get("Sparkline_Clear"), MinWidth = 80 };
-        ApplyDataToolsButtonChrome(clear, 80);
+        ApplySparklineButtonChrome(clear, 80);
         AutomationProperties.SetAutomationId(clear, "EditSparklineClearButton");
         cancel.Click += (_, _) => dialog.Close("cancel");
         ok.Click += (_, _) => dialog.Close("ok");
@@ -298,13 +295,7 @@ public sealed partial class MainWindow
         Grid.SetColumn(clear, 0);
         clear.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
         sparklineEditButtonGrid.Children.Add(clear);
-        var sparklineEditOkCancelRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Children = { ok, cancel },
-        };
+        var sparklineEditOkCancelRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
         Grid.SetColumn(sparklineEditOkCancelRow, 1);
         sparklineEditButtonGrid.Children.Add(sparklineEditOkCancelRow);
         content.Children.Add(sparklineEditButtonGrid);
@@ -383,4 +374,16 @@ public sealed partial class MainWindow
 
     private static IBrush SwatchBrush(CellColor? color) =>
         color is { } c ? new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B)) : Brushes.Transparent;
+
+    private static void ApplySparklineButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        AvaloniaCompactDialogChrome.ApplyButton(button, SparklineDialogChromeStyle, width, isDefault);
+    }
+
+    private static void ApplySparklineTextBoxChrome(TextBox textBox)
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SparklineDialogChromeStyle);
+
+    private static void ApplySparklineComboBoxChrome(ComboBox comboBox)
+        => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, SparklineDialogChromeStyle);
 }

@@ -4,11 +4,14 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle CommentDialogChromeStyle => new(FormulaBarFontFamily);
+
     // New Note / New Comment on the active cell (parity gap: the shell could navigate/clear comments
     // and notes but not create them). Routes through WorkbookSession.SetActiveCellNote /
     // SetActiveCellThreadedComment (SetCommentCommand / SetThreadedCommentCommand) for full undo/redo.
@@ -88,13 +91,14 @@ public sealed partial class MainWindow
     private async Task<string?> ShowCommentTextPromptAsync(string title, string label, string? initialText = null)
     {
         var box = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 72, TextWrapping = TextWrapping.Wrap, Text = initialText ?? string.Empty };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, CommentDialogChromeStyle, fixedHeight: false);
         AutomationProperties.SetName(box, label);
         AutomationProperties.SetAutomationId(box, "CommentTextBox");
 
         var ok = new Button { Content = "OK", IsDefault = true };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
-        ApplyDialogButtonChrome(ok, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancel, 84);
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, CommentDialogChromeStyle, 84, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, CommentDialogChromeStyle, 84);
 
         var dialog = new Window
         {
@@ -111,13 +115,7 @@ public sealed partial class MainWindow
                 {
                     new TextBlock { Text = label + ":", Margin = new Thickness(0, 0, 0, 6) },
                     box,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Margin = new Thickness(0, 10, 0, 0),
-                        Children = { ok, cancel },
-                    },
+                    AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 10, 0, 0)),
                 },
             },
         };

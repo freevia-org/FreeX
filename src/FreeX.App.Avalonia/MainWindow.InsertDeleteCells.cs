@@ -2,12 +2,15 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Free.Shared.Shell.Avalonia;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle InsertDeleteCellsDialogChromeStyle => new(FormulaBarFontFamily);
+
     // Home ▸ Cells ▸ Insert Cells / Delete Cells (parity gap: the ribbon buttons were no-ops). A small
     // shift-direction dialog mirrors Excel's prompt; the structural edit runs through the generic
     // review-command executor (undo/redo). Kept in the Avalonia shell to avoid WorkbookSession churn.
@@ -44,9 +47,11 @@ public sealed partial class MainWindow
         var first = new RadioButton { Content = optionA, GroupName = "shift", IsChecked = true, Margin = new Thickness(0, 2) };
         var second = new RadioButton { Content = optionB, GroupName = "shift", Margin = new Thickness(0, 2) };
         var ok = new Button { Content = "OK", IsDefault = true };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
-        ApplyDialogButtonChrome(ok, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancel, 84);
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyRadioButton(first, InsertDeleteCellsDialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyRadioButton(second, InsertDeleteCellsDialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDeleteCellsDialogChromeStyle, 84, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDeleteCellsDialogChromeStyle, 84);
 
         var dialog = new Window
         {
@@ -63,13 +68,7 @@ public sealed partial class MainWindow
                 {
                     first,
                     second,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Margin = new Thickness(0, 12, 0, 0),
-                        Children = { ok, cancel },
-                    },
+                    AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
                 },
             },
         };

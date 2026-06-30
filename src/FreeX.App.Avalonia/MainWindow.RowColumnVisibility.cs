@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -17,6 +18,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle RowColumnDialogChromeStyle => new(FormulaBarFontFamily);
+
     // Hide / Unhide rows and columns (Excel parity: Ctrl+9 / Ctrl+Shift+9 / Ctrl+0 / Ctrl+Shift+0,
     // Home ▸ Cells ▸ Format ▸ Hide & Unhide, and the row/column header right-click menus). The
     // selection→span math and the undoable mutation are fully portable: span extraction lives in
@@ -286,20 +289,17 @@ public sealed partial class MainWindow
             Text = current.ToString("0.##", CultureInfo.CurrentCulture),
             MinWidth = 240,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(valueBox, RowColumnDialogChromeStyle);
         AutomationProperties.SetName(valueBox, prompt);
         AutomationProperties.SetAutomationId(valueBox, automationId);
 
-        var validationText = new TextBlock
-        {
-            Foreground = Brushes.Firebrick,
-            TextWrapping = TextWrapping.Wrap,
-            IsVisible = false,
-        };
+        var validationText = new TextBlock();
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(validationText, RowColumnDialogChromeStyle);
 
         var okButton = new Button { Content = "OK", IsDefault = true };
         var cancelButton = new Button { Content = "Cancel", IsCancel = true };
-        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(cancelButton, 84);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, RowColumnDialogChromeStyle, 84, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, RowColumnDialogChromeStyle, 84);
         AutomationProperties.SetAutomationId(okButton, "DimensionDialogOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "DimensionDialogCancelButton");
 
@@ -336,13 +336,7 @@ public sealed partial class MainWindow
             }
         };
 
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children = { cancelButton, okButton },
-        };
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([cancelButton, okButton]);
 
         dialog.Content = new StackPanel
         {
