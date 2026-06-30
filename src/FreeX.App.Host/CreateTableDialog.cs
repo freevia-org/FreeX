@@ -103,8 +103,7 @@ public sealed class CreateTableDialog : Window
     {
         if (!TryParse(_sheetId, _rangeBox.Text, _headersBox.IsChecked == true, _tableStyleName, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("CreateTable_InvalidRangeMessage"), Title);
-            FocusRangeBox();
+            DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("CreateTable_InvalidRangeMessage"), Title, _rangeBox);
             return;
         }
 

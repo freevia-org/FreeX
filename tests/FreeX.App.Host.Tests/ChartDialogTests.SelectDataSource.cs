@@ -211,8 +211,7 @@ public sealed partial class ChartDialogTests
         dialogSource.Should().Contain("if (!ValidateInputs())");
         dialogSource.Should().Contain("ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, _resolveSheetId, out _)");
         dialogSource.Should().Contain("ShowInvalidInputWarning(UiText.Get(SelectDataSourcePlanner.InvalidRangeMessageResourceKey), _rangeBox);");
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        dialogSource.Should().Contain("FocusRangeSelectionInput(target);");
+        dialogSource.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         chartCommandSource.Should().Contain("sheetId: _currentSheetId");
         chartCommandSource.Should().Contain("resolveSheetId: ResolveSheetIdByName");
     }

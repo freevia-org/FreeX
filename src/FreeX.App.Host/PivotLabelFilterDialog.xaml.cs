@@ -52,11 +52,12 @@ public partial class PivotLabelFilterDialog : Window
                 out var error))
         {
             var errorPlan = PivotFieldFilterPlanner.DescribeLabelFilterValidationError(error);
-            DialogMessageHelper.ShowWarning(
+            var target = ResolveInvalidLabelValue(error);
+            DialogFocus.ShowWarningAndFocus(
                 this,
                 errorPlan is null ? UiText.Get("PivotLabelFilter_ValueRequiredMessage") : UiText.Get(errorPlan.ResourceKey),
-                UiText.Get("PivotLabelFilter_LabelFilter"));
-            FocusInvalidLabelValue(error);
+                UiText.Get("PivotLabelFilter_LabelFilter"),
+                target);
             return;
         }
 
@@ -85,13 +86,8 @@ public partial class PivotLabelFilterDialog : Window
         Keyboard.Focus(LabelFilterKindBox);
     }
 
-    private void FocusInvalidLabelValue(PivotLabelFilterValidationError error)
-    {
-        var target = error == PivotLabelFilterValidationError.SecondValueRequired
+    private TextBox ResolveInvalidLabelValue(PivotLabelFilterValidationError error) =>
+        error == PivotLabelFilterValidationError.SecondValueRequired
             ? LabelFilterValue2Box
             : LabelFilterValueBox;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
-    }
 }

@@ -403,9 +403,6 @@ public sealed partial class ScenarioManagerDialog : Window
 
     private void ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
     }
 }

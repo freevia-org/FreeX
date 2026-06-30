@@ -348,18 +348,13 @@ public partial class FormatCellsDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
     }
 
     private bool ShowInvalidInputWarning(string message, ComboBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
     }
 }

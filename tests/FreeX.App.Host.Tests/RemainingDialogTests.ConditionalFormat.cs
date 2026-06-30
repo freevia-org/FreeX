@@ -42,10 +42,7 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Remaining_EnterThresholdValue\"));");
         source.Should().Contain("ConditionalFormatThresholdDialogPlanner.TryCreateResult(thresholdText, out result)");
         source.Should().NotContain("string.IsNullOrWhiteSpace(result.ThresholdText)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("_thresholdBox.Focus();");
-        source.Should().Contain("_thresholdBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_thresholdBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, _thresholdBox);");
     }
 
     [Fact]

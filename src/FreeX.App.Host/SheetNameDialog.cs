@@ -2,7 +2,6 @@ using FreeX.App.Presentation.SheetUI;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 
 namespace FreeX.App.Host;
 
@@ -63,10 +62,7 @@ public sealed class SheetNameDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        _nameBox.Focus();
-        _nameBox.SelectAll();
-        Keyboard.Focus(_nameBox);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, _nameBox);
     }
 
     private void FocusInitialKeyboardTarget()

@@ -102,4 +102,18 @@ public sealed class CommonMessageTextTests
         source.Should().NotContain("WpfMessageBoxRealizer.Show(");
         source.Should().NotContain("MessageBox.Show(");
     }
+
+    [Fact]
+    public void SharedDialogChromeResources_LiveInShellWpfWithRibbonCompatibilityWrapper()
+    {
+        var shellDialogWindow = DialogSourceTestSupport.ReadShellSources("DialogWindow.cs");
+        var shellDialogResources = DialogSourceTestSupport.ReadShellSources("DialogResources.xaml");
+        var ribbonDialogWindow = WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Ribbon.Wpf", "DialogWindow.cs");
+
+        shellDialogWindow.Should().Contain("namespace Free.Shared.Shell.Wpf;");
+        shellDialogWindow.Should().Contain("/Free.Shared.Shell.Wpf;component/DialogResources.xaml");
+        shellDialogResources.Should().Contain("Shared dialog control theme.");
+        ribbonDialogWindow.Should().Contain("Free.Shared.Shell.Wpf.DialogWindow");
+        ribbonDialogWindow.Should().NotContain("DialogResources.xaml");
+    }
 }

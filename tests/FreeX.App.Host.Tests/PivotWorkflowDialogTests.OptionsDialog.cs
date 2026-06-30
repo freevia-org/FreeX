@@ -535,11 +535,8 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("if (!ValidateInputs())");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTableOptions_EnterCompactIndent\"), _compactIndentBox);");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotTableOptions_EnterPageFieldsPerColumn\"), _pageWrapBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
         source.Should().Contain("_tabs.SelectedItem = _layoutTab;");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

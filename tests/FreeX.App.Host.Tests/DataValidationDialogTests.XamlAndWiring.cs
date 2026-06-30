@@ -199,10 +199,9 @@ public sealed partial class DataValidationDialogTests
 
         xaml.Should().Contain("<TabControl x:Name=\"ValidationTabs\"");
         xaml.Should().Contain("<TabItem x:Name=\"SettingsTab\" Header=\"_Settings\"");
-        codeBehind.Should().Contain("FocusInvalidCriteriaInput(type, op);");
-        codeBehind.Should().Contain("private void FocusInvalidCriteriaInput(DvType type, DvOperator op)");
+        codeBehind.Should().Contain("DialogFocus.ShowWarningAndFocus(this, criteriaError, Title, ResolveInvalidCriteriaInput(type, op));");
+        codeBehind.Should().Contain("private TextBox ResolveInvalidCriteriaInput(DvType type, DvOperator op)");
         codeBehind.Should().Contain("ValidationTabs.SelectedItem = SettingsTab;");
-        codeBehind.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]

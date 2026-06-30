@@ -359,17 +359,13 @@ public partial class ExportPlannerTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
-        source.Should().Contain("FocusInvalidPageRangeInput(error);");
-        source.Should().Contain("private void FocusInvalidPageRangeInput(string? error)");
         source.Should().Contain("_pagesRangeButton.IsChecked = true;");
-        source.Should().Contain("var target = ResolveInvalidPageRangeInput(error);");
+        source.Should().Contain("SetPageRangeFieldsEnabled(true);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, error, UiText.Get(\"ExportOptions_ExportOptions\"), ResolveInvalidPageRangeInput(error));");
         source.Should().Contain("private TextBox ResolveInvalidPageRangeInput(string? error)");
         source.Should().Contain("ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(");
         source.Should().Contain("? _toPageBox");
         source.Should().Contain(": _fromPageBox");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -378,12 +374,7 @@ public partial class ExportPlannerTests
         var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
 
         source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError, WpfExportPlannerTextResolver.Instance)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, pdfLanguageError, UiText.Get(\"ExportOptions_ExportOptions\"));");
-        source.Should().Contain("FocusInvalidPdfLanguageInput();");
-        source.Should().Contain("private void FocusInvalidPdfLanguageInput()");
-        source.Should().Contain("_pdfLanguageBox.Focus();");
-        source.Should().Contain("_pdfLanguageBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_pdfLanguageBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, pdfLanguageError, UiText.Get(\"ExportOptions_ExportOptions\"), _pdfLanguageBox);");
     }
 
     [Fact]

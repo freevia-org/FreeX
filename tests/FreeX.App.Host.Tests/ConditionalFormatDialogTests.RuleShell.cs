@@ -253,9 +253,8 @@ public sealed partial class ConditionalFormatDialogTests
         source.Should().Contain("ConditionalFormatDialog_InvalidMaximumValueMessage");
         source.Should().Contain("ConditionalFormatDialog_InvalidTextMessage");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox? target)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
     }
 
     [Fact]

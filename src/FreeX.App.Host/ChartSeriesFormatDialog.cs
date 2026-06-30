@@ -176,10 +176,7 @@ public sealed class ChartSeriesFormatDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
     }
 

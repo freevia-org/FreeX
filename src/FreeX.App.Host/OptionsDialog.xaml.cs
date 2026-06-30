@@ -493,13 +493,7 @@ public partial class OptionsDialog : Window
 
     private bool ShowInvalidInputWarning(string message, Control target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        if (target is TextBox textBox)
-            textBox.SelectAll();
-        else if (target is ComboBox comboBox)
-            comboBox.Focus();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
     }
 

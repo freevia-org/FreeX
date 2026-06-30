@@ -76,9 +76,7 @@ public sealed partial class PivotWorkflowDialogTests
 
         source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"PivotSlicerTimeline_EnterSlicerOptions\")");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("Keyboard.Focus(target);");
-        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]
@@ -139,9 +137,7 @@ public sealed partial class PivotWorkflowDialogTests
 
         source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"PivotSlicerTimeline_EnterTimelineOptions\")");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("Keyboard.Focus(target);");
-        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

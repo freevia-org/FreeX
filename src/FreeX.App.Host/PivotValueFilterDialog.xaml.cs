@@ -58,11 +58,12 @@ public partial class PivotValueFilterDialog : Window
                 out var error))
         {
             var errorPlan = PivotFieldFilterPlanner.DescribeValueFilterValidationError(error);
-            DialogMessageHelper.ShowWarning(
+            var target = ResolveInvalidValueFilterInput(error);
+            DialogFocus.ShowWarningAndFocus(
                 this,
                 errorPlan is null ? UiText.Get("PivotValueFilter_InvalidValueMessage") : UiText.Get(errorPlan.ResourceKey),
-                UiText.Get("PivotValueFilter_ValueFilter"));
-            FocusInvalidValueFilterInput(error);
+                UiText.Get("PivotValueFilter_ValueFilter"),
+                target);
             return;
         }
 
@@ -100,13 +101,8 @@ public partial class PivotValueFilterDialog : Window
         Keyboard.Focus(ValueFilterKindBox);
     }
 
-    private void FocusInvalidValueFilterInput(PivotValueFilterValidationError error)
-    {
-        var target = error == PivotValueFilterValidationError.NumericSecondValueRequired
+    private TextBox ResolveInvalidValueFilterInput(PivotValueFilterValidationError error) =>
+        error == PivotValueFilterValidationError.NumericSecondValueRequired
             ? ValueFilterValue2Box
             : ValueFilterValueBox;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
-    }
 }

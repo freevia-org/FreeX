@@ -114,8 +114,7 @@ public partial class ColorPickerDialog : Window
     {
         if (!TryParseColorText(CustomColorTextBox.Text, out var color))
         {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("ColorPicker_InvalidColorMessage"), Title);
-            FocusInvalidCustomColorInput();
+            ShowInvalidCustomColorWarning(UiText.Get("ColorPicker_InvalidColorMessage"), CustomColorTextBox);
             return;
         }
 
@@ -132,19 +131,8 @@ public partial class ColorPickerDialog : Window
 
     private void ShowInvalidCustomColorWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        FocusInvalidCustomColorInput(target);
-    }
-
-    private void FocusInvalidCustomColorInput()
-    {
-        FocusInvalidCustomColorInput(CustomColorTextBox);
-    }
-
-    private void FocusInvalidCustomColorInput(TextBox target)
-    {
         ColorTabs.SelectedItem = CustomTab;
-        DialogFocus.FocusAndSelect(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
     }
 
     private void NoColorButton_Click(object sender, RoutedEventArgs e)

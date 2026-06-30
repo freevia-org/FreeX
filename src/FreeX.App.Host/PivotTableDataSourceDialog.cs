@@ -109,8 +109,7 @@ public sealed class PivotTableDataSourceDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        FocusRangeSelectionInput(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return false;
     }
 

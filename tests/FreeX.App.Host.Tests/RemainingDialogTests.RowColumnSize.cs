@@ -132,21 +132,19 @@ public sealed partial class RemainingDialogTests
         var rowSource = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed class ColumnWidthDialog");
         var columnSource = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
 
-        rowSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        rowSource.Should().Contain("DialogFocus.ShowWarningAndFocus(this,");
         rowSource.Should().Contain("error ?? UiText.Get(\"Remaining_EnterARowHeightFrom0To409\")");
         rowSource.Should().Contain("WorksheetDimensionDialogPlanner.TryCreateRowHeightResult(input, out result)");
         rowSource.Should().NotContain("WorksheetSizeInputParser.TryParseSizeInRange");
         rowSource.Should().NotContain("MaximumExcelRowHeight");
-        rowSource.Should().Contain("FocusInvalidHeightInput();");
         rowSource.Should().Contain("private void FocusInvalidHeightInput()");
         rowSource.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
 
-        columnSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        columnSource.Should().Contain("DialogFocus.ShowWarningAndFocus(this,");
         columnSource.Should().Contain("error ?? UiText.Get(\"Remaining_EnterAColumnWidthFrom0To255\")");
         columnSource.Should().Contain("WorksheetDimensionDialogPlanner.TryCreateColumnWidthResult(input, out result)");
         columnSource.Should().NotContain("WorksheetSizeInputParser.TryParseSizeInRange");
         columnSource.Should().NotContain("MaximumExcelColumnWidth");
-        columnSource.Should().Contain("FocusInvalidWidthInput();");
         columnSource.Should().Contain("private void FocusInvalidWidthInput()");
         columnSource.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");
     }

@@ -64,6 +64,23 @@ public static class DialogButtonRowFactory
         return row;
     }
 
+    public static StackPanel Create(Button acceptButton, Button cancelButton, Thickness rowMargin = default)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = rowMargin
+        };
+        acceptButton.Margin = new Thickness(0, 0, 8, 0);
+        acceptButton.IsDefault = true;
+        cancelButton.Margin = new Thickness();
+        cancelButton.IsCancel = true;
+        row.Children.Add(acceptButton);
+        row.Children.Add(cancelButton);
+        return row;
+    }
+
     private static string ResolveDefaultAcceptContent(string acceptContent) =>
         string.Equals(acceptContent, DefaultOkContent, StringComparison.Ordinal)
             ? ShellStrings.Current.Ok

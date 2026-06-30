@@ -78,6 +78,31 @@ public sealed class DialogButtonRowFactoryTests
     }
 
     [Fact]
+    public void Create_WithConfiguredButtons_BuildsSharedDefaultCancelRow()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var accept = new Button { Content = "_Keep Result", Width = 104 };
+            var cancel = new Button { Content = "_Restore Original Values", Width = 152 };
+
+            var row = DialogButtonRowFactory.Create(accept, cancel, new Thickness(0, 6, 0, 0));
+
+            row.Orientation.Should().Be(Orientation.Horizontal);
+            row.HorizontalAlignment.Should().Be(HorizontalAlignment.Right);
+            row.Margin.Should().Be(new Thickness(0, 6, 0, 0));
+            row.Children.Count.Should().Be(2);
+            row.Children[0].Should().BeSameAs(accept);
+            row.Children[1].Should().BeSameAs(cancel);
+            accept.Margin.Should().Be(new Thickness(0, 0, 8, 0));
+            accept.IsDefault.Should().BeTrue();
+            accept.Width.Should().Be(104);
+            cancel.Margin.Should().Be(new Thickness());
+            cancel.IsCancel.Should().BeTrue();
+            cancel.Width.Should().Be(152);
+        });
+    }
+
+    [Fact]
     public void Create_UsesMnemonicFreeAutomationNameForCustomAcceptContent()
     {
         StaTestRunner.Run(() =>

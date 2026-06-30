@@ -179,8 +179,8 @@ public partial class DataValidationDialog : Window
         {
             var criteriaError = LocalizeValidationError(validation.FirstError);
             LastValidationError = criteriaError;
-            DialogMessageHelper.ShowWarning(this, criteriaError, Title);
-            FocusInvalidCriteriaInput(type, op);
+            ValidationTabs.SelectedItem = SettingsTab;
+            DialogFocus.ShowWarningAndFocus(this, criteriaError, Title, ResolveInvalidCriteriaInput(type, op));
             return;
         }
 
@@ -216,15 +216,11 @@ public partial class DataValidationDialog : Window
             ErrorMessage = ErrorMessageBox.Text
         };
 
-    private void FocusInvalidCriteriaInput(DvType type, DvOperator op)
+    private TextBox ResolveInvalidCriteriaInput(DvType type, DvOperator op)
     {
-        ValidationTabs.SelectedItem = SettingsTab;
-        var target = ShouldFocusSecondCriteriaInput(type, op, Formula1Box.Text, Formula2Box.Text)
+        return ShouldFocusSecondCriteriaInput(type, op, Formula1Box.Text, Formula2Box.Text)
             ? Formula2Box
             : Formula1Box;
-        target.Focus();
-        Keyboard.Focus(target);
-        target.SelectAll();
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)

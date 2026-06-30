@@ -90,15 +90,8 @@ public sealed class AccessibilityCheckerDialog : Window
         root.Children.Add(title);
 
         // Button row — anchored to the bottom.
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-        };
         _goToButton.Click += (_, _) => GoToSelectedIssue();
-        buttons.Children.Add(_goToButton);
-        buttons.Children.Add(_closeButton);
+        var buttons = DialogButtonRowFactory.Create(_goToButton, _closeButton, new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 

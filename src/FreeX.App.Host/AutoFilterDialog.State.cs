@@ -109,10 +109,7 @@ public sealed partial class AutoFilterDialog
 
     private bool ShowInvalidCriteriaWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return false;
     }
 

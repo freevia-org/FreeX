@@ -133,15 +133,15 @@ internal sealed class ExportOptionsDialog : Window
             if (_pagesRangeButton.IsChecked == true &&
                 !ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error, WpfExportPlannerTextResolver.Instance))
             {
-                DialogMessageHelper.ShowWarning(this, error, UiText.Get("ExportOptions_ExportOptions"));
-                FocusInvalidPageRangeInput(error);
+                _pagesRangeButton.IsChecked = true;
+                SetPageRangeFieldsEnabled(true);
+                DialogFocus.ShowWarningAndFocus(this, error, UiText.Get("ExportOptions_ExportOptions"), ResolveInvalidPageRangeInput(error));
                 return;
             }
 
             if (!ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError, WpfExportPlannerTextResolver.Instance))
             {
-                DialogMessageHelper.ShowWarning(this, pdfLanguageError, UiText.Get("ExportOptions_ExportOptions"));
-                FocusInvalidPdfLanguageInput();
+                DialogFocus.ShowWarningAndFocus(this, pdfLanguageError, UiText.Get("ExportOptions_ExportOptions"), _pdfLanguageBox);
                 return;
             }
 
@@ -235,16 +235,6 @@ internal sealed class ExportOptionsDialog : Window
         AutomationProperties.SetHelpText(control, helpText);
     }
 
-    private void FocusInvalidPageRangeInput(string? error)
-    {
-        _pagesRangeButton.IsChecked = true;
-        SetPageRangeFieldsEnabled(true);
-        var target = ResolveInvalidPageRangeInput(error);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
-    }
-
     private TextBox ResolveInvalidPageRangeInput(string? error)
     {
         return ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(
@@ -253,13 +243,6 @@ internal sealed class ExportOptionsDialog : Window
             UiText.Get("Export_PageRangeFromLessThanToError")) == ExportOptionsDialogFocusTarget.ToPage
             ? _toPageBox
             : _fromPageBox;
-    }
-
-    private void FocusInvalidPdfLanguageInput()
-    {
-        _pdfLanguageBox.Focus();
-        _pdfLanguageBox.SelectAll();
-        Keyboard.Focus(_pdfLanguageBox);
     }
 
     public static ExportOptions CreateResult(

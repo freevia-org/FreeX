@@ -81,10 +81,8 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartTrendlineDialogParseIssue.Thickness => (UiText.Get(\"ChartTrendline_InvalidWidthMessage\"), _thicknessBox)");
         source.Should().Contain("_ => (UiText.Get(\"ChartTrendline_InvalidPeriodMessage\"), _periodBox)");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartTrendlineDialogParseIssue issue)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -172,11 +170,9 @@ public sealed partial class ChartDialogTests
         var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
 
         source.Should().Contain("ChartErrorBarsParseIssue.Value => (UiText.Get(\"ChartErrorBars_InvalidValueMessage\"), _valueBox)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartErrorBarsParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -300,11 +296,9 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartAxisFormatParseIssue.LabelAngle => (UiText.Get(\"ChartAxisFormat_InvalidLabelAngleMessage\"), _labelAngleBox)");
         source.Should().Contain("ChartAxisFormatParseIssue.LineColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _lineColorBox)");
         source.Should().Contain("ChartAxisFormatParseIssue.LineThickness => (UiText.Get(\"ChartAxisFormat_InvalidAxisLineWidthMessage\"), _lineThicknessBox)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartAxisFormatParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -401,11 +395,9 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartSeriesFormatParseIssue.StrokeColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _strokeBox)");
         source.Should().Contain("ChartSeriesFormatParseIssue.StrokeThickness => (UiText.Get(\"ChartSeriesFormat_InvalidLineWidthMessage\"), _strokeThicknessBox)");
         source.Should().Contain("ChartSeriesFormatParseIssue.MarkerSize => (UiText.Get(\"ChartSeriesFormat_InvalidMarkerSizeMessage\"), _markerSizeBox)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartSeriesFormatParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
     }
 
 }

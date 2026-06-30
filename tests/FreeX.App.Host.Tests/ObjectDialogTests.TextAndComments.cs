@@ -83,10 +83,7 @@ public sealed partial class ObjectDialogTests
 
         source.Should().Contain("if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))");
         source.Should().Contain("ShowInvalidThreadedCommentWarning(error ?? UiText.Get(\"ThreadedComment_EnterCommentMessage\"), _rootBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

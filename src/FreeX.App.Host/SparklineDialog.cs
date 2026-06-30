@@ -112,8 +112,7 @@ public sealed class SparklineDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox textBox)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        FocusRangeSelectionInput(textBox);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, textBox);
         return false;
     }
 

@@ -166,13 +166,11 @@ public partial class ConditionalFormatDialog
 
     private bool ShowInvalidInputWarning(string message, TextBox? target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        if (target is null)
-            return false;
+        if (target is not null)
+            DialogFocus.ShowWarningAndFocus(this, message, Title, target);
+        else
+            DialogMessageHelper.ShowWarning(this, message, Title);
 
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
         return false;
     }
 }

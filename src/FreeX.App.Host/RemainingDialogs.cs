@@ -64,10 +64,7 @@ public sealed class ConditionalFormatThresholdDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        _thresholdBox.Focus();
-        _thresholdBox.SelectAll();
-        Keyboard.Focus(_thresholdBox);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, _thresholdBox);
     }
 }
 
@@ -121,8 +118,7 @@ public sealed class RowHeightDialog : Window
     {
         if (!TryCreateResult(_heightBox.Text, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Remaining_EnterARowHeightFrom0To409"), Title);
-            FocusInvalidHeightInput();
+            DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("Remaining_EnterARowHeightFrom0To409"), Title, _heightBox);
             return;
         }
 
@@ -181,8 +177,7 @@ public sealed class ColumnWidthDialog : Window
     {
         if (!TryCreateResult(_widthBox.Text, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Remaining_EnterAColumnWidthFrom0To255"), Title);
-            FocusInvalidWidthInput();
+            DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("Remaining_EnterAColumnWidthFrom0To255"), Title, _widthBox);
             return;
         }
 

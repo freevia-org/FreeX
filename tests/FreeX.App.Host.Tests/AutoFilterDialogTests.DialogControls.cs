@@ -453,9 +453,7 @@ public sealed partial class AutoFilterDialogTests
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterFirstBetweenValue\"), _betweenMinBox);");
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterSecondBetweenValue\"), _betweenMaxBox);");
         source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterValidTopOrBottomCount\"), _topBottomCountBox);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

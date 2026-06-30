@@ -105,16 +105,15 @@ public sealed class PivotFilterDialogXamlTests
     }
 
     [Theory]
-    [InlineData("PivotLabelFilterDialog.xaml.cs", "FocusInvalidLabelValue")]
-    [InlineData("PivotValueFilterDialog.xaml.cs", "FocusInvalidValueFilterInput")]
+    [InlineData("PivotLabelFilterDialog.xaml.cs", "ResolveInvalidLabelValue")]
+    [InlineData("PivotValueFilterDialog.xaml.cs", "ResolveInvalidValueFilterInput")]
     public void PivotConditionDialogInvalidCriteria_RefocusesAndSelectsValueBox(string sourceFile, string helperName)
     {
         var source = DialogSourceTestSupport.ReadHostSources(sourceFile);
 
         source.Should().Contain($"{helperName}(");
-        source.Should().Contain("target.Focus();");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(");
+        source.Should().Contain("target);");
     }
 
     [Theory]

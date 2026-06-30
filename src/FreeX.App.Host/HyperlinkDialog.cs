@@ -204,10 +204,7 @@ public sealed class HyperlinkDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        _targetBox.Focus();
-        _targetBox.SelectAll();
-        Keyboard.Focus(_targetBox);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, _targetBox);
     }
 
     private static HyperlinkDialogResult FromPlan(HyperlinkDialogPlan plan) =>

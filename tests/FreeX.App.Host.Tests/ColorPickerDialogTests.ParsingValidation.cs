@@ -13,11 +13,9 @@ public sealed partial class ColorPickerDialogTests
 
         xaml.Should().Contain("<TabControl x:Name=\"ColorTabs\"");
         xaml.Should().Contain("<TabItem x:Name=\"CustomTab\" Header=\"_Custom\"");
-        source.Should().Contain("FocusInvalidCustomColorInput();");
-        source.Should().Contain("private void FocusInvalidCustomColorInput()");
+        source.Should().Contain("ShowInvalidCustomColorWarning(UiText.Get(\"ColorPicker_InvalidColorMessage\"), CustomColorTextBox);");
         source.Should().Contain("ColorTabs.SelectedItem = CustomTab;");
-        source.Should().Contain("FocusInvalidCustomColorInput(CustomColorTextBox);");
-        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Theory]
@@ -82,8 +80,8 @@ public sealed partial class ColorPickerDialogTests
         source.Should().Contain("TryParseRgbComponents(");
         source.Should().Contain("if (!TryParseCustomRgbFields(out _, out var invalidRgbInput))");
         source.Should().Contain("ShowInvalidCustomColorWarning(\"Enter RGB values from 0 to 255.\", invalidRgbInput);");
-        source.Should().Contain("private void FocusInvalidCustomColorInput(TextBox target)");
-        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+        source.Should().Contain("private void ShowInvalidCustomColorWarning(string message, TextBox target)");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().NotContain("byte.TryParse(CustomRedTextBox.Text");
     }
 }

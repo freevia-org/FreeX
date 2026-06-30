@@ -56,16 +56,6 @@ public sealed class FillSeriesStepDialog : Window
         Keyboard.Focus(_columnsButton);
     }
 
-    private void FocusInvalidStepInput()
-    {
-        DialogFocus.FocusAndSelect(_stepBox);
-    }
-
-    private void FocusInvalidStopInput()
-    {
-        DialogFocus.FocusAndSelect(_stopBox);
-    }
-
     private void UpdateDateUnitAvailability()
     {
         var isDateSeries = FillSeriesPlanner.IsDateUnitEnabled(SelectedSeriesType());
@@ -163,8 +153,7 @@ public sealed class FillSeriesStepDialog : Window
                 out var error,
                 out var inputError))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("FillSeriesStep_InvalidStepMessage"), Title);
-            FocusInvalidInput(inputError);
+            DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("FillSeriesStep_InvalidStepMessage"), Title, ResolveInvalidInput(inputError));
             return;
         }
 
@@ -184,13 +173,10 @@ public sealed class FillSeriesStepDialog : Window
         _yearButton.IsChecked == true ? FillSeriesDateUnit.Year :
         FillSeriesDateUnit.Day;
 
-    private void FocusInvalidInput(FillSeriesInputError inputError)
-    {
-        if (FillSeriesPlanner.FocusTargetFor(inputError) == FillSeriesInputFocusTarget.StopValue)
-            FocusInvalidStopInput();
-        else
-            FocusInvalidStepInput();
-    }
+    private TextBox ResolveInvalidInput(FillSeriesInputError inputError) =>
+        FillSeriesPlanner.FocusTargetFor(inputError) == FillSeriesInputFocusTarget.StopValue
+            ? _stopBox
+            : _stepBox;
 
     private static StackPanel CreateHorizontalRow(params UIElement[] children)
     {

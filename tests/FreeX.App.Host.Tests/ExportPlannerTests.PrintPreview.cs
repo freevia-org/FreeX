@@ -273,8 +273,7 @@ public partial class ExportPlannerTests
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
         source.Should().Contain("UiText.Format(\"PrintPreview_InvalidPageNumberMessage\", totalPages)");
-        source.Should().Contain("pageNumberBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(pageNumberBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, UiText.Format(\"PrintPreview_InvalidPageNumberMessage\", totalPages), Title, pageNumberBox);");
     }
 
     [Fact]
@@ -304,9 +303,7 @@ public partial class ExportPlannerTests
         source.Should().Contain("UseEXDialog = false");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title);");
-        source.Should().Contain("copiesBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(copiesBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title, copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("RefreshPrintStatus");
     }

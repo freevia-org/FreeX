@@ -121,11 +121,9 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartAreaFormatParseIssue.LegendBorderColor => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendBorderBox)");
         source.Should().Contain("ChartAreaFormatParseIssue.LegendBorderThickness => (UiText.Get(\"ChartAreaLegend_InvalidLegendBorderWidthMessage\"), _legendBorderThicknessBox)");
         source.Should().Contain("ChartAreaFormatParseIssue.LegendFontSize => (UiText.Get(\"ChartAreaLegend_InvalidLegendFontSizeMessage\"), _legendFontSizeBox)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartAreaFormatParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -255,11 +253,9 @@ public sealed partial class ChartDialogTests
         source.Should().Contain("ChartDataLabelsParseIssue.BorderThickness => (UiText.Get(\"ChartDataLabels_InvalidBorderThicknessMessage\"), _borderThicknessBox)");
         source.Should().Contain("ChartDataLabelsParseIssue.FontSize => (UiText.Get(\"ChartDataLabels_InvalidFontSizeMessage\"), _fontSizeBox)");
         source.Should().Contain("ChartDataLabelsParseIssue.Angle => (UiText.Get(\"ChartDataLabels_InvalidAngleMessage\"), _angleBox)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartDataLabelsParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
     }
 
 }

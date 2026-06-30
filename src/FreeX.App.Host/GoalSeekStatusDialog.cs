@@ -31,12 +31,7 @@ public sealed class GoalSeekStatusDialog : Window
         AutomationProperties.SetHelpText(statusBlock, UiText.Get("GoalSeekStatus_ReportsWhetherGoalSeekReachedTheTargetValue"));
         stack.Children.Add(statusBlock);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-
+        StackPanel buttons;
         if (result.Converged)
         {
             var keepButton = new Button
@@ -54,7 +49,6 @@ public sealed class GoalSeekStatusDialog : Window
                 ApplyResult = true;
                 DialogResult = true;
             };
-            buttons.Children.Add(keepButton);
 
             var restoreButton = new Button
             {
@@ -66,23 +60,15 @@ public sealed class GoalSeekStatusDialog : Window
             AutomationProperties.SetName(restoreButton, UiText.Get("GoalSeekStatus_RestoreOriginalValues2"));
             AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
             AutomationProperties.SetHelpText(restoreButton, UiText.Get("GoalSeekStatus_RestoreTheOriginalWorkbookValuesBeforeGoalSeekRan"));
-            buttons.Children.Add(restoreButton);
+            buttons = DialogButtonRowFactory.Create(keepButton, restoreButton);
         }
         else
         {
-            var okButton = new Button
-            {
-                Content = UiText.Ok,
-                Width = 76,
-                Margin = new Thickness(4, 0, 0, 0),
-                IsDefault = true,
-                IsCancel = true
-            };
+            buttons = DialogButtonRowFactory.CreateOkOnly(() => DialogResult = false, 76);
+            var okButton = (Button)buttons.Children[0];
             AutomationProperties.SetName(okButton, UiText.Get("GoalSeekStatus_Ok"));
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
             AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_CloseTheGoalSeekStatusDialog"));
-            okButton.Click += (_, _) => DialogResult = false;
-            buttons.Children.Add(okButton);
         }
 
         stack.Children.Add(buttons);

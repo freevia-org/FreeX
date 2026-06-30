@@ -101,10 +101,7 @@ public sealed class ChartBarFormatDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
     }
 }
@@ -221,10 +218,7 @@ public sealed class ChartPieFormatDialog : Window
 
     private bool ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
         return true;
     }
 
@@ -312,10 +306,7 @@ public sealed class ChartBubbleFormatDialog : Window
                 out var input,
                 out _))
         {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("ChartBubbleFormat_InvalidBubbleScaleMessage"), Title);
-            _bubbleScaleBox.Focus();
-            _bubbleScaleBox.SelectAll();
-            Keyboard.Focus(_bubbleScaleBox);
+            DialogFocus.ShowWarningAndFocus(this, UiText.Get("ChartBubbleFormat_InvalidBubbleScaleMessage"), Title, _bubbleScaleBox);
             return;
         }
 
@@ -482,9 +473,6 @@ public sealed class ChartStockFormatDialog : Window
 
     private void ShowInvalidInputWarning(string message, TextBox target)
     {
-        DialogMessageHelper.ShowWarning(this, message, Title);
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, message, Title, target);
     }
 }

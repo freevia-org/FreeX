@@ -26,9 +26,7 @@ public sealed partial class FormatCellsDialogXamlTests
         source.Should().Contain("ShowInvalidInputWarning(message, DlgTextRotationBox);");
         source.Should().Contain("FormatCellsDialogPlannerTab.Alignment => (int)FormatCellsDialogTab.Alignment");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("target.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
     }
 
     [Fact]

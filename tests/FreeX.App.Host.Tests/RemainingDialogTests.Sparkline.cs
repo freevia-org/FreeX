@@ -239,8 +239,7 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("SparklineInputValidation.InvalidLocation");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Sparkline_InvalidDataRange\"), _dataRangeBox)");
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Sparkline_InvalidLocationCell\"), _locationBox)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
-        source.Should().Contain("FocusRangeSelectionInput(textBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, textBox);");
         insertSource.Should().Contain("_currentSheetId,");
     }
 

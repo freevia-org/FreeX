@@ -63,8 +63,7 @@ public sealed class ForecastSheetDialog : Window
     {
         if (!TryCreateResult(_periodsBox.Text, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("ForecastSheet_InvalidPeriodsMessage"), Title);
-            FocusInvalidPeriodsInput();
+            DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("ForecastSheet_InvalidPeriodsMessage"), Title, _periodsBox);
             return;
         }
 

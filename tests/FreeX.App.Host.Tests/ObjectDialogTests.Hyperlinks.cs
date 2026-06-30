@@ -282,10 +282,7 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Hyperlink_EnterHyperlinkDetails\"));");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
-        source.Should().Contain("_targetBox.Focus();");
-        source.Should().Contain("_targetBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_targetBox);");
+        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, _targetBox);");
     }
 
     [Fact]

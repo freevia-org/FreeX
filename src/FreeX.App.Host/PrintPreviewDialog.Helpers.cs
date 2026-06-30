@@ -25,18 +25,12 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidCopiesWarning(TextBox copiesBox)
     {
-        DialogMessageHelper.ShowWarning(this, UiText.Get("PrintPreview_InvalidCopiesMessage"), Title);
-        copiesBox.Focus();
-        copiesBox.SelectAll();
-        Keyboard.Focus(copiesBox);
+        DialogFocus.ShowWarningAndFocus(this, UiText.Get("PrintPreview_InvalidCopiesMessage"), Title, copiesBox);
     }
 
     private void ShowInvalidPageNumberWarning(TextBox pageNumberBox, int totalPages)
     {
-        DialogMessageHelper.ShowWarning(this, UiText.Format("PrintPreview_InvalidPageNumberMessage", totalPages), Title);
-        pageNumberBox.Focus();
-        pageNumberBox.SelectAll();
-        Keyboard.Focus(pageNumberBox);
+        DialogFocus.ShowWarningAndFocus(this, UiText.Format("PrintPreview_InvalidPageNumberMessage", totalPages), Title, pageNumberBox);
     }
 
     internal static DocumentPaginator ResolvePrintPaginator(
@@ -57,13 +51,10 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
     {
-        DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("PrintPreview_InvalidPageRangeMessage"), Title);
         var target = string.Equals(error, UiText.Get("Export_PageRangeFromLessThanToError"), StringComparison.OrdinalIgnoreCase)
             ? toPageBox
             : fromPageBox;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
+        DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("PrintPreview_InvalidPageRangeMessage"), Title, target);
     }
 
     private void ShowNativePrintDialog(
