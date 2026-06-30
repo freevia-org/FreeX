@@ -42,7 +42,10 @@ public enum FreeXBackstageInfoDetailId
     Share,
     Export,
     WorkbookProtection,
-    ActiveSheetProtection
+    ActiveSheetProtection,
+    WorkbookStatistics,
+    Accessibility,
+    FormulaErrors
 }
 
 public sealed record FreeXBackstageInfoDetailDefinition(
@@ -251,9 +254,24 @@ public static class FreeXBackstagePaneCatalog
         new(FreeXBackstageInfoDetailId.Export, "MainWindow_Text_Export", "BackstageInfoExportStatus"),
         new(FreeXBackstageInfoDetailId.WorkbookProtection, "MainWindow_Text_WorkbookProtection", "BackstageInfoWorkbookProtection"),
         new(FreeXBackstageInfoDetailId.ActiveSheetProtection, "MainWindow_Text_ActiveSheetProtection", "BackstageInfoActiveSheetProtection"),
+        new(FreeXBackstageInfoDetailId.WorkbookStatistics, "MainWindow_Text_WorkbookStatistics", "BackstageInfoWorkbookStatistics"),
+        new(FreeXBackstageInfoDetailId.Accessibility, "MainWindow_Text_Accessibility", "BackstageInfoAccessibility"),
+        new(FreeXBackstageInfoDetailId.FormulaErrors, "MainWindow_Text_FormulaErrors", "BackstageInfoFormulaErrors"),
     ];
 
-    private static readonly FreeXBackstageInfoDetailDefinition[] ParityInfoDetails = WpfInfoDetails;
+    private static readonly FreeXBackstageInfoDetailDefinition[] ParityInfoDetails =
+    [
+        new(FreeXBackstageInfoDetailId.WorkbookName, "MainWindow_Text_WorkbookName", "BackstageInfoWorkbookName"),
+        new(FreeXBackstageInfoDetailId.FilePath, "MainWindow_Text_FilePath", "BackstageInfoFilePath"),
+        new(FreeXBackstageInfoDetailId.SheetCount, "MainWindow_Text_Sheets", "BackstageInfoSheetCount"),
+        new(FreeXBackstageInfoDetailId.Format, "MainWindow_Text_Format", "BackstageInfoFormat"),
+        new(FreeXBackstageInfoDetailId.FileSize, "MainWindow_Text_FileSize", "BackstageInfoFileSize"),
+        new(FreeXBackstageInfoDetailId.LastModified, "MainWindow_Text_LastModified", "BackstageInfoLastModified"),
+        new(FreeXBackstageInfoDetailId.Share, "MainWindow_Text_Share", "BackstageInfoShareStatus"),
+        new(FreeXBackstageInfoDetailId.Export, "MainWindow_Text_Export", "BackstageInfoExportStatus"),
+        new(FreeXBackstageInfoDetailId.WorkbookProtection, "MainWindow_Text_WorkbookProtection", "BackstageInfoWorkbookProtection"),
+        new(FreeXBackstageInfoDetailId.ActiveSheetProtection, "MainWindow_Text_ActiveSheetProtection", "BackstageInfoActiveSheetProtection"),
+    ];
 
     // Mirrors the File > Account page ("Local account information"): local app/OS identity,
     // version, and local workbook/sharing/export readiness rows (no cloud account). Interactive

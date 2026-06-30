@@ -120,44 +120,75 @@ public sealed partial class MainWindow
         WorkbookInfoDisplayPlan display,
         Window dialog)
     {
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.AvaloniaInfoDialog,
+            CreateBackstageInfoPaneRequest(display));
         var elements = new List<AvaloniaBackstagePaneElementSpec>
         {
-            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get("Backstage_Info_FileSectionHeader")),
-            new AvaloniaBackstageDetailRowsElementSpec(BuildBackstageInfoDetailRows(display)),
+            new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.FileSectionHeaderKey)),
+            new AvaloniaBackstageDetailRowsElementSpec(BuildBackstageInfoDetailRows(pane)),
         };
 
-        if (display.UnsavedChangesNote is { } unsavedChangesNote)
-            elements.Add(new AvaloniaBackstageNoteElementSpec(unsavedChangesNote, "BackstageInfoUnsaved"));
+        if (pane.UnsavedChangesNote is { } unsavedChangesNote)
+            elements.Add(new AvaloniaBackstageNoteElementSpec(
+                ResolveBackstageTextValue(unsavedChangesNote),
+                "BackstageInfoUnsaved"));
 
-        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get("Backstage_Info_ProtectionSectionHeader")));
-        elements.Add(new AvaloniaBackstageNoteElementSpec(display.WorkbookProtectionSummary, "BackstageInfoProtection"));
-        elements.Add(new AvaloniaBackstageNoteElementSpec(display.ActiveSheetProtectionSummary, "BackstageInfoActiveSheetProtection"));
-        elements.Add(new AvaloniaBackstageActionRowElementSpec(BuildBackstageInfoActionButtons(dialog)));
-        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get("Backstage_Info_StatisticsSectionHeader")));
-        elements.Add(new AvaloniaBackstageNoteElementSpec(display.StatisticsSummary, "BackstageInfoStatistics"));
+        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.ProtectionSectionHeaderKey)));
+        elements.Add(new AvaloniaBackstageNoteElementSpec(
+            ResolveBackstageTextValue(pane.WorkbookProtectionSummary),
+            "BackstageInfoProtection"));
+        elements.Add(new AvaloniaBackstageNoteElementSpec(
+            ResolveBackstageTextValue(pane.ActiveSheetProtectionSummary),
+            "BackstageInfoActiveSheetProtection"));
+        elements.Add(new AvaloniaBackstageActionRowElementSpec(BuildBackstageInfoActionButtons(pane, dialog)));
+        elements.Add(new AvaloniaBackstageSectionHeaderElementSpec(UiText.Get(pane.StatisticsSectionHeaderKey)));
+        elements.Add(new AvaloniaBackstageNoteElementSpec(
+            ResolveBackstageTextValue(pane.StatisticsSummary),
+            "BackstageInfoStatistics"));
 
         return new AvaloniaBackstagePaneSpec(elements);
     }
 
+    private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(
+        WorkbookInfoDisplayPlan display) =>
+        new(
+            display.WorkbookName,
+            display.FilePath,
+            display.SheetCount,
+            display.Format,
+            display.FileSize,
+            display.LastModified,
+            SharingStatus: string.Empty,
+            ExportStatus: string.Empty,
+            display.WorkbookProtectionSummary,
+            display.ActiveSheetProtectionSummary,
+            display.StatisticsSummary,
+            AccessibilitySummary: string.Empty,
+            FormulaErrorSummary: string.Empty,
+            display.UnsavedChangesNote);
+
     private static IReadOnlyList<AvaloniaBackstageDetailRowSpec> BuildBackstageInfoDetailRows(
-        WorkbookInfoDisplayPlan display)
+        FreeXBackstageInfoPanePlan pane)
     {
         var rows = new List<AvaloniaBackstageDetailRowSpec>();
-        foreach (var detail in FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.AvaloniaInfoDialog))
+        foreach (var detail in pane.Details)
         {
             rows.Add(new AvaloniaBackstageDetailRowSpec(
                 UiText.Get(detail.LabelKey),
-                ResolveBackstageInfoDetailValue(detail.Id, display),
+                ResolveBackstageTextValue(detail.Value),
                 detail.ValueAutomationId));
         }
 
         return rows;
     }
 
-    private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageInfoActionButtons(Window dialog)
+    private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageInfoActionButtons(
+        FreeXBackstageInfoPanePlan pane,
+        Window dialog)
     {
         var actions = new List<AvaloniaBackstageActionButtonSpec>();
-        foreach (var action in FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.AvaloniaInfoDialog))
+        foreach (var action in pane.Actions)
         {
             actions.Add(CreateBackstageClosingActionButtonSpec(
                 UiText.Get(action.LabelKey),
@@ -168,20 +199,6 @@ public sealed partial class MainWindow
 
         return actions;
     }
-
-    private static string ResolveBackstageInfoDetailValue(
-        FreeXBackstageInfoDetailId id,
-        WorkbookInfoDisplayPlan display) =>
-        id switch
-        {
-            FreeXBackstageInfoDetailId.WorkbookName => display.WorkbookName,
-            FreeXBackstageInfoDetailId.FilePath => display.FilePath,
-            FreeXBackstageInfoDetailId.Format => display.Format,
-            FreeXBackstageInfoDetailId.FileSize => display.FileSize,
-            FreeXBackstageInfoDetailId.LastModified => display.LastModified,
-            FreeXBackstageInfoDetailId.SheetCount => display.SheetCount,
-            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
-        };
 
     private Action ResolveBackstageInfoAction(FreeXBackstageInfoActionId id) =>
         id switch

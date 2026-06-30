@@ -14,6 +14,7 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private static readonly FreeXBackstageHomePanePlan BackstageHomePanePlan = FreeXBackstageHomePanePlanner.Build();
     private PrintPreviewSettings _backstagePrintPreviewSettings = new();
     private FixedDocument? _backstagePrintPreviewDocument;
 
@@ -48,9 +49,83 @@ public partial class MainWindow
     private void FocusDefaultBackstagePaneNavigation() =>
         _backstageFrame?.FocusEntry(BackstageFramePlan.Selection.DefaultPaneAutomationId);
 
+    private void ConfigureBackstageHomePaneDescriptors()
+    {
+        var plan = BackstageHomePanePlan;
+        ConfigureBackstageRecentTab(plan.RecentTab, SsRecentTabButton, SsRecentTabText);
+        ConfigureBackstageRecentTab(plan.PinnedTab, SsPinnedTabButton, SsPinnedTabText);
+
+        System.Windows.Automation.AutomationProperties.SetName(
+            SsSearchBox,
+            UiText.Get(plan.Search.AutomationNameKey));
+        System.Windows.Automation.AutomationProperties.SetHelpText(
+            SsSearchBox,
+            UiText.Get(plan.Search.AutomationHelpTextKey));
+
+        foreach (var column in plan.Columns)
+        {
+            ResolveBackstageRecentColumnHeader(column.Id).Text = UiText.Get(column.LabelKey);
+        }
+    }
+
+    private static void ConfigureBackstageRecentTab(
+        FreeXBackstageRecentTabDescriptor descriptor,
+        Button button,
+        TextBlock label)
+    {
+        label.Text = UiText.Get(descriptor.LabelKey);
+        RibbonTooltip.SetTitle(button, UiText.Get(descriptor.TooltipTitleKey));
+        RibbonTooltip.SetKeyTip(button, descriptor.KeyTip);
+        RibbonMetadata.SetCommandName(button, descriptor.CommandName);
+    }
+
+    private TextBlock ResolveBackstageRecentColumnHeader(FreeXBackstageRecentColumnId id) =>
+        id switch
+        {
+            FreeXBackstageRecentColumnId.Name => SsRecentNameColumnHeader,
+            FreeXBackstageRecentColumnId.DateModified => SsRecentDateModifiedColumnHeader,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private static void ApplyBackstageRecentFileRowDescriptor(
+        FrameworkElement element,
+        FreeXBackstageRecentFileRowKind kind)
+    {
+        var descriptor = BackstageHomePanePlan.Rows.Single(row => row.Kind == kind);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(element, descriptor.AutomationId);
+    }
+
+    private void SsRecentPinCommandButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button)
+            ConfigureBackstageRecentFileCommandButton(button, FreeXBackstageRecentFileCommandId.Pin);
+    }
+
+    private void SsPinnedUnpinCommandButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button)
+            ConfigureBackstageRecentFileCommandButton(button, FreeXBackstageRecentFileCommandId.Unpin);
+    }
+
+    private static void ConfigureBackstageRecentFileCommandButton(
+        Button button,
+        FreeXBackstageRecentFileCommandId id)
+    {
+        var command = BackstageHomePanePlan.RowCommands.Single(command => command.Id == id);
+        RibbonTooltip.SetTitle(button, UiText.Get(command.TooltipTitleKey));
+        RibbonTooltip.SetDescription(button, UiText.Get(command.TooltipDescriptionKey));
+        System.Windows.Automation.AutomationProperties.SetAutomationId(button, command.AutomationId);
+        button.ToolTip = UiText.Get(command.ToolTipKey);
+        RibbonMetadata.SetCommandName(button, command.CommandName);
+    }
+
     private void ConfigureBackstageInfoActionButtons()
     {
-        foreach (var action in FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.WpfInfoPane))
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.WpfInfoPane,
+            FreeXBackstageInfoPaneRequest.Empty);
+
+        foreach (var action in pane.Actions)
         {
             if (action.Id == FreeXBackstageInfoActionId.ProtectWorkbook)
             {
@@ -276,27 +351,63 @@ public partial class MainWindow
     private void UpdateInfoView()
     {
         var activeSheet = _workbook.GetSheet(_currentSheetId);
-        var plan = BackstageInfoPlanner.Build(
+        var info = BackstageInfoPlanner.Build(
             _workbook,
             _currentFilePath,
             BackstageInfoResources.Strings,
             activeSheet,
             hasSelection: SheetGrid.SelectedRange is not null);
-        InfoWorkbookName.Text = plan.WorkbookName;
-        InfoFilePath.Text = plan.FilePath;
-        InfoSheetCount.Text = plan.SheetCount;
-        InfoFormat.Text = plan.Format;
-        InfoFileSize.Text = plan.FileSize;
-        InfoLastModified.Text = plan.LastModified;
-        InfoShareStatus.Text = plan.SharingStatus;
-        InfoExportStatus.Text = plan.ExportStatus;
-        InfoWorkbookProtectionSummary.Text = plan.Summary.WorkbookProtectionSummary;
-        InfoActiveSheetProtectionSummary.Text = plan.Summary.ActiveSheetProtectionSummary;
-        InfoStatisticsSummary.Text = plan.StatisticsSummary;
-        InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
-        InfoFormulaErrorSummary.Text = plan.FormulaErrorSummary;
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.WpfInfoPane,
+            CreateBackstageInfoPaneRequest(info));
+
+        foreach (var detail in pane.Details)
+        {
+            ResolveBackstageInfoDetailTextBlock(detail.Id).Text = ResolveBackstageTextValue(detail.Value);
+        }
+
         RefreshBackstageInfoProtectionButton();
     }
+
+    private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(BackstageInfoPlan plan) =>
+        new(
+            plan.WorkbookName,
+            plan.FilePath,
+            plan.SheetCount,
+            plan.Format,
+            plan.FileSize,
+            plan.LastModified,
+            plan.SharingStatus,
+            plan.ExportStatus,
+            plan.Summary.WorkbookProtectionSummary,
+            plan.Summary.ActiveSheetProtectionSummary,
+            plan.StatisticsSummary,
+            plan.AccessibilitySummary,
+            plan.FormulaErrorSummary);
+
+    private TextBlock ResolveBackstageInfoDetailTextBlock(FreeXBackstageInfoDetailId id) =>
+        id switch
+        {
+            FreeXBackstageInfoDetailId.WorkbookName => InfoWorkbookName,
+            FreeXBackstageInfoDetailId.FilePath => InfoFilePath,
+            FreeXBackstageInfoDetailId.SheetCount => InfoSheetCount,
+            FreeXBackstageInfoDetailId.Format => InfoFormat,
+            FreeXBackstageInfoDetailId.FileSize => InfoFileSize,
+            FreeXBackstageInfoDetailId.LastModified => InfoLastModified,
+            FreeXBackstageInfoDetailId.Share => InfoShareStatus,
+            FreeXBackstageInfoDetailId.Export => InfoExportStatus,
+            FreeXBackstageInfoDetailId.WorkbookProtection => InfoWorkbookProtectionSummary,
+            FreeXBackstageInfoDetailId.ActiveSheetProtection => InfoActiveSheetProtectionSummary,
+            FreeXBackstageInfoDetailId.WorkbookStatistics => InfoStatisticsSummary,
+            FreeXBackstageInfoDetailId.Accessibility => InfoAccessibilitySummary,
+            FreeXBackstageInfoDetailId.FormulaErrors => InfoFormulaErrorSummary,
+            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+        };
+
+    private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
+        value.TextKey is { } key
+            ? UiText.Get(key)
+            : value.Text ?? string.Empty;
 
     private void RefreshBackstageInfoProtectionButton()
     {
