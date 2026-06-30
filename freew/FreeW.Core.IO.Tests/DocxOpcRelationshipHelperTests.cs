@@ -28,8 +28,16 @@ public sealed class DocxOpcRelationshipHelperTests
                 "private static Dictionary<string, string> ReadDocumentRelationshipTypesByTarget",
                 "    /// Resolves word/fontTable.xml")
             .Should()
-            .Contain("OpcRelationships.Load(archive, \"word/_rels/document.xml.rels\")")
+            .Contain("OpcRelationships.LoadTypeByTargetMap(archive, \"word/_rels/document.xml.rels\")")
             .And.NotContain("Elements(Rel + \"Relationship\")");
+
+        SourceBetween(
+                readerSource,
+                "private static Dictionary<string, string> ReadContentTypeOverrides",
+                "    /// <summary>")
+            .Should()
+            .Contain("OpcMediaTypes.ReadOverrideContentTypes(archive)")
+            .And.NotContain("Elements(Ct + \"Override\")");
 
         SourceBetween(
                 readerSource,
@@ -63,6 +71,14 @@ public sealed class DocxOpcRelationshipHelperTests
             .Contain("OpcRelationships.LoadTargetMap(")
             .And.Contain("OpcPathHelper.ResolveRelativeZipPath(\"word\", relationship.Target)")
             .And.NotContain("Elements(Rel + \"Relationship\")");
+
+        SourceBetween(
+                readerSource,
+                "private static Dictionary<string, string> ReadContentTypeDefaults",
+                "    /// <summary>Reads document.xml.rels")
+            .Should()
+            .Contain("OpcMediaTypes.ReadDefaultContentTypes(archive)")
+            .And.NotContain("Elements(Ct + \"Default\")");
 
         SourceBetween(
                 writerSource,

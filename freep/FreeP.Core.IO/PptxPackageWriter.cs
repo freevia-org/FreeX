@@ -3827,62 +3827,9 @@ public static class PptxPackageWriter
         if (packageSnapshot is null || !packageSnapshot.TryGetEntry("[Content_Types].xml", out var bytes))
             return;
 
-        XDocument sourceTypes;
-        try
-        {
-            using var stream = new MemoryStream(bytes);
-            sourceTypes = OpcXml.LoadXml(stream);
-        }
-        catch
-        {
-            return;
-        }
-
-        if (contentTypes.Root is null || sourceTypes.Root is null)
-            return;
-
-        var existingDefaults = new HashSet<string>(
-            contentTypes.Root.Elements(contentTypes.Root.Name.Namespace + "Default")
-                .Select(e => e.Attribute("Extension")?.Value)
-                .Where(v => !string.IsNullOrWhiteSpace(v))
-                .Select(v => v!),
-            StringComparer.OrdinalIgnoreCase);
-        var existingOverrides = new HashSet<string>(
-            contentTypes.Root.Elements(contentTypes.Root.Name.Namespace + "Override")
-                .Select(e => e.Attribute("PartName")?.Value)
-                .Where(v => !string.IsNullOrWhiteSpace(v))
-                .Select(v => v!),
-            StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sourceDefault in sourceTypes.Root.Elements(sourceTypes.Root.Name.Namespace + "Default"))
-        {
-            var extension = sourceDefault.Attribute("Extension")?.Value;
-            var contentType = sourceDefault.Attribute("ContentType")?.Value;
-            if (string.IsNullOrWhiteSpace(extension) || string.IsNullOrWhiteSpace(contentType))
-                continue;
-            if (!existingDefaults.Add(extension))
-                continue;
-
-            contentTypes.Root.Add(new XElement(contentTypes.Root.Name.Namespace + "Default",
-                new XAttribute("Extension", extension),
-                new XAttribute("ContentType", contentType)));
-        }
-
-        foreach (var sourceOverride in sourceTypes.Root.Elements(sourceTypes.Root.Name.Namespace + "Override"))
-        {
-            var partName = sourceOverride.Attribute("PartName")?.Value;
-            var contentType = sourceOverride.Attribute("ContentType")?.Value;
-            if (string.IsNullOrWhiteSpace(partName) || string.IsNullOrWhiteSpace(contentType))
-                continue;
-            if (IsWriterOwnedPath(partName))
-                continue;
-            if (!existingOverrides.Add(partName))
-                continue;
-
-            contentTypes.Root.Add(new XElement(contentTypes.Root.Name.Namespace + "Override",
-                new XAttribute("PartName", partName),
-                new XAttribute("ContentType", contentType)));
-        }
+        var sourceTypes = OpcXml.TryLoadXml(bytes);
+        if (sourceTypes is not null)
+            OpcMediaTypes.MergePreservedContentTypes(contentTypes, sourceTypes, IsWriterOwnedPath);
     }
 
     private static void MergePreservedRelationships(
@@ -3894,16 +3841,9 @@ public static class PptxPackageWriter
         if (packageSnapshot is null || !packageSnapshot.TryGetEntry(relsPath, out var bytes))
             return;
 
-        XDocument sourceRels;
-        try
-        {
-            using var stream = new MemoryStream(bytes);
-            sourceRels = OpcXml.LoadXml(stream);
-        }
-        catch
-        {
+        var sourceRels = OpcXml.TryLoadXml(bytes);
+        if (sourceRels is null)
             return;
-        }
 
         if (sourceRels.Root is null)
             return;

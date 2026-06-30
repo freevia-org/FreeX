@@ -343,21 +343,7 @@ public static class DocxReader
     /// when the part is absent. Used to re-emit a preserved part's content-type Override unchanged.
     /// </summary>
     private static Dictionary<string, string> ReadContentTypeOverrides(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        var ctXml = LoadPart(archive, "[Content_Types].xml");
-        var overrides = ctXml?.Root?.Elements(Ct + "Override");
-        if (overrides is null)
-            return map;
-        foreach (var ov in overrides)
-        {
-            var partName = ov.Attribute("PartName")?.Value;
-            var contentType = ov.Attribute("ContentType")?.Value;
-            if (!string.IsNullOrEmpty(partName) && !string.IsNullOrEmpty(contentType))
-                map[partName] = contentType;
-        }
-        return map;
-    }
+        => OpcMediaTypes.ReadOverrideContentTypes(archive);
 
     /// <summary>
     /// Reads <c>word/_rels/document.xml.rels</c>, mapping each relationship Target → its Type. Targets are kept
@@ -365,15 +351,7 @@ public static class DocxReader
     /// relationship type the document used to reference it. Returns an empty map when the rels part is absent.
     /// </summary>
     private static Dictionary<string, string> ReadDocumentRelationshipTypesByTarget(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var rel in OpcRelationships.Load(archive, "word/_rels/document.xml.rels"))
-        {
-            if (!string.IsNullOrEmpty(rel.Target) && !string.IsNullOrEmpty(rel.Type))
-                map[rel.Target] = rel.Type;
-        }
-        return map;
-    }
+        => OpcRelationships.LoadTypeByTargetMap(archive, "word/_rels/document.xml.rels");
 
     /// <summary>
     /// Resolves word/fontTable.xml (via the document's "/fontTable" relationship, falling back to the
@@ -3378,7 +3356,7 @@ public static class DocxReader
             if (rel.Type is not (ChartRelType or ChartExRelType))
                 continue;
 
-            var partName = ResolveWordRelativePartName(rel.Target);
+            var partName = OpcPathHelper.ResolveAbsolutePartName("/word", rel.Target);
             if (partName is null)
                 continue;
 
@@ -3443,7 +3421,7 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> contentTypeOverrides,
         IReadOnlyDictionary<string, string> contentTypeDefaults)
     {
-        var relsPartName = RelsPartNameFor(partName);
+        var relsPartName = OpcPathHelper.GetRelationshipPartName(partName);
         var relationships = OpcRelationships.Load(archive, relsPartName.TrimStart('/'));
         if (relationships.Count == 0)
             return;
@@ -3451,7 +3429,7 @@ public static class DocxReader
         // The part's own _rels is itself preserved (covered by the rels Default content type, so no Override).
         CapturePreservedPart(archive, document, relsPartName, contentTypeOverrides, contentTypeDefaults, relationshipType: null);
 
-        var baseFolder = FolderOf(partName);
+        var baseFolder = OpcPathHelper.GetPartDirectoryName(partName);
         foreach (var rel in relationships)
         {
             // External targets (TargetMode="External") have no package part to capture.
@@ -3459,7 +3437,7 @@ public static class DocxReader
                 continue;
             if (string.IsNullOrEmpty(rel.Target))
                 continue;
-            var targetPartName = ResolveRelativePartName(baseFolder, rel.Target);
+            var targetPartName = OpcPathHelper.ResolveAbsolutePartName(baseFolder, rel.Target);
             if (targetPartName is null || document.Preserved.Parts.Any(p => p.PartName == targetPartName))
                 continue;
             if (CapturePreservedPart(archive, document, targetPartName, contentTypeOverrides, contentTypeDefaults, relationshipType: null))
@@ -3472,21 +3450,7 @@ public static class DocxReader
     /// re-emit the Default a verbatim-preserved part relies on (e.g. a chart media part's png/emf Default).
     /// </summary>
     private static Dictionary<string, string> ReadContentTypeDefaults(ZipArchive archive)
-    {
-        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var ctXml = LoadPart(archive, "[Content_Types].xml");
-        var defaults = ctXml?.Root?.Elements(Ct + "Default");
-        if (defaults is null)
-            return map;
-        foreach (var def in defaults)
-        {
-            var extension = def.Attribute("Extension")?.Value;
-            var contentType = def.Attribute("ContentType")?.Value;
-            if (!string.IsNullOrEmpty(extension) && !string.IsNullOrEmpty(contentType))
-                map[extension] = contentType;
-        }
-        return map;
-    }
+        => OpcMediaTypes.ReadDefaultContentTypes(archive);
 
     /// <summary>Reads document.xml.rels as id → (Type, Target). Empty when the rels part is absent.</summary>
     private static Dictionary<string, (string Type, string Target)> ReadDocumentRelationships(ZipArchive archive) =>
@@ -3495,32 +3459,6 @@ public static class DocxReader
                 relationship => relationship.Key,
                 relationship => (Type: relationship.Value.Type, Target: relationship.Value.Target),
                 StringComparer.Ordinal);
-
-    /// <summary>
-    /// Resolves a document-relationship Target (relative to <c>word/</c>) to an absolute part name. A bare
-    /// target (e.g. <c>charts/chart1.xml</c>) lands under <c>/word/</c>; a <c>../</c>-prefixed target steps out
-    /// of word/. Returns null for an absolute or unresolvable target.
-    /// </summary>
-    private static string? ResolveWordRelativePartName(string target) =>
-        ResolveRelativePartName("/word", target);
-
-    /// <summary>
-    /// Resolves <paramref name="target"/> (relative to <paramref name="baseFolder"/>, an absolute folder such as
-    /// <c>/word/charts</c>) to an absolute part name, collapsing <c>../</c> and <c>./</c> segments. A target that
-    /// is already absolute (starts with <c>/</c>) is returned as-is. Returns null when the path escapes the root.
-    /// </summary>
-    private static string? ResolveRelativePartName(string baseFolder, string target)
-        => OpcPathHelper.ResolveAbsolutePartName(baseFolder, target);
-
-    /// <summary>The absolute folder (no trailing slash) containing <paramref name="partName"/>, e.g.
-    /// <c>/word/charts/chart1.xml</c> → <c>/word/charts</c>.</summary>
-    private static string FolderOf(string partName)
-        => OpcPathHelper.GetPartDirectoryName(partName);
-
-    /// <summary>The conventional <c>_rels</c> part name for a part, e.g. <c>/word/charts/chart1.xml</c> →
-    /// <c>/word/charts/_rels/chart1.xml.rels</c>.</summary>
-    private static string RelsPartNameFor(string partName)
-        => OpcPathHelper.GetRelationshipPartName(partName);
 
     /// <summary>
     /// Finds the plot area's single chart-type element and maps it to a <see cref="ChartKind"/>:
@@ -3807,7 +3745,9 @@ public static class DocxReader
         OpcRelationships.LoadTargetMap(
             archive,
             relsPath,
-            relationship => ResolveRelativePartName("/" + baseFolder.Trim('/'), relationship.Target)?.TrimStart('/'),
+            relationship => OpcPathHelper.ResolveAbsolutePartName(
+                "/" + baseFolder.Trim('/'),
+                relationship.Target)?.TrimStart('/'),
             relationship => !relationship.IsExternal);
 
     /// <summary>Maps relationship id -> external hyperlink target (URL) from document.xml.rels.</summary>
