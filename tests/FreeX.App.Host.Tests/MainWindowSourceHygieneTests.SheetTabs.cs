@@ -583,8 +583,10 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("StatusBarCalculator.ToShared(stats)");
-        gridStatusSource.Should().Contain("if (IsFileOperationProgressVisible())");
+        gridStatusSource.Should().Contain("StatusBarRefreshPlanner.Build(");
+        gridStatusSource.Should().Contain("ApplyStatusBarRefreshPlan(plan)");
+        gridStatusSource.Should().Contain("StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate");
+        gridStatusSource.Should().Contain("IsFileOperationProgressVisible()");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed)");
         gridStatusSource.Should().Contain("SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed)");
         gridStatusSource.Should().Contain("StatusBarPresentationPlanner.BuildRendererPlan(plan)");
@@ -616,7 +618,12 @@ public sealed partial class MainWindowSourceHygieneTests
             .Contain("StatusBar_CountFormat")
             .And.Contain("StatusBar_NumericalCountFormat")
             .And.Contain("StatusBar_SumFormat");
-        gridStatusSource.Should().Contain("if (stats.Count == 0)");
+        gridStatusSource.Should().NotContain("if (stats.Count == 0)");
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "StatusBarRefreshPlanner.cs")
+            .Should()
+            .Contain("StatusBarRefreshAction.Ready")
+            .And.Contain("StatusBarRefreshAction.Stats")
+            .And.Contain("StatusBarRefreshAction.HideReadouts");
     }
 
     [Fact]

@@ -22,41 +22,48 @@ public partial class MainWindow
 
     private void RefreshStatusBar()
     {
-        var viewMode = GetCurrentStatusBarViewMode();
-        if (IsFileOperationProgressVisible())
-        {
-            SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed);
-            SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed);
-            return;
-        }
-
-        if (SheetGrid.SelectedRange is not { } range)
-        {
-            ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
-                viewMode,
-                zoomPercent: 0));
-            return;
-        }
-
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        viewMode = WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(sheet.ViewMode);
+        var selectedRange = SheetGrid.SelectedRange;
+        WorkbookSelectionStats? stats = sheet is not null && selectedRange is { } range
+            ? StatusBarCalculator.ToShared(_statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision))
+            : null;
 
-        var stats = _statusBarStatsCache.GetOrCalculate(sheet, range, _navigationCacheRevision);
-
-        if (stats.Count == 0)
-        {
-            ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
-                viewMode,
-                zoomPercent: 0,
-                StatusBarCalculator.GetReadyStatusText(sheet, range.Start)));
-            return;
-        }
-
-        ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(
-            viewMode,
+        var plan = StatusBarRefreshPlanner.Build(
+            sheet,
+            selectedRange,
+            stats,
+            IsFileOperationProgressVisible(),
             zoomPercent: 0,
-            StatusBarCalculator.ToShared(stats)));
+            StatusBarCalculator.TextProvider);
+        ApplyStatusBarRefreshPlan(plan);
+    }
+
+    private void ApplyStatusBarRefreshPlan(StatusBarRefreshPlan plan)
+    {
+        switch (plan.Action)
+        {
+            case StatusBarRefreshAction.HideReadouts:
+                SetVisibilityIfChanged(StatusReadyText, Visibility.Collapsed);
+                SetVisibilityIfChanged(StatusStatsPanel, Visibility.Collapsed);
+                return;
+            case StatusBarRefreshAction.Ready:
+                ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
+                    plan.ViewMode,
+                    plan.ZoomPercent,
+                    plan.ReadyText));
+                return;
+            case StatusBarRefreshAction.Stats:
+                ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(
+                    plan.ViewMode,
+                    plan.ZoomPercent,
+                    plan.Stats));
+                return;
+            default:
+                ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
+                    plan.ViewMode,
+                    plan.ZoomPercent));
+                return;
+        }
     }
 
     private StatusBarViewMode GetCurrentStatusBarViewMode()
