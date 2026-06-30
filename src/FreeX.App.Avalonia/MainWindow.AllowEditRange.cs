@@ -4,11 +4,10 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Protection;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -45,6 +44,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "AllowEditRangeDialog");
 
         var rangesList = new ListBox { MinHeight = 80 };
+        ApplyDataOpsListBoxChrome(rangesList);
         AutomationProperties.SetAutomationId(rangesList, "AllowEditRangeExistingRangesList");
 
         var rangeBox = new TextBox
@@ -207,14 +207,9 @@ public sealed partial class MainWindow
         RefreshRanges();
 
         // WPF button order: [New...][Modify...][Delete][Permissions...] in a row, right-aligned
-        var rangeButtons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { newButton, modifyButton, deleteButton, permissionsButton },
-        };
+        var rangeButtons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [newButton, modifyButton, deleteButton, permissionsButton],
+            new Thickness(0, 8, 0, 0));
 
         // WPF: GroupBox (no explicit header visible) containing label + list + action buttons.
         // The label is shown as the GroupBox Header so it matches the WPF visual framing.
@@ -239,14 +234,7 @@ public sealed partial class MainWindow
         };
 
         // WPF bottom button order: [OK][Cancel]
-        var bottomRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
-            Children = { okButton, closeButton },
-        };
+        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(bottomRow, Dock.Bottom);
 
         dialog.Content = new DockPanel

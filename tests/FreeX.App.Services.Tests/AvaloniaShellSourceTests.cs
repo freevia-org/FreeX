@@ -2543,7 +2543,7 @@ public sealed class AvaloniaShellSourceTests
         selectionPaneSource.Should().Contain("ApplySelectionPaneListStyle(listBox)");
         selectionPaneSource.Should().Contain("x.OfType<ListBoxItem>().Class(\":selected\")");
         selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton }");
-        selectionPaneSource.Should().Contain("Children = { ok, cancel }");
+        selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
         selectionPaneSource.Should().Contain("CreateSelectionPaneEyeIcon()");
         selectionPaneSource.Should().NotContain("SelectionPane_Hint");
     }

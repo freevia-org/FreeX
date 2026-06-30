@@ -176,6 +176,48 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
     }
 
     [Fact]
+    public void ResidualClusterCDialogs_DelegateRemainingChromeToSharedHelper()
+    {
+        var allowEditRangeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AllowEditRange.cs"));
+        var definedNamesSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DefinedNames.cs"));
+        var consolidateSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Consolidate.cs"));
+        var protectionSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Protection.cs"));
+        var selectionPaneSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
+        var tableResizeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TableResize.cs"));
+
+        allowEditRangeSource.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        allowEditRangeSource.Should().Contain("ApplyDataOpsListBoxChrome(rangesList);");
+        allowEditRangeSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
+        allowEditRangeSource.Should().Contain("[newButton, modifyButton, deleteButton, permissionsButton]");
+        allowEditRangeSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], new Thickness(0, 10, 0, 0));");
+
+        consolidateSource.Should().Contain("ApplyDataOpsListBoxChrome(referencesList);");
+        consolidateSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, DataOpsDialogChromeStyle);");
+        consolidateSource.Should().Contain("[addButton, removeButton]");
+
+        definedNamesSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([closeButton], new Thickness(0, 10, 0, 0));");
+        definedNamesSource.Should().Contain("ApplyNamesCheckBoxChrome(topRowBox);");
+        definedNamesSource.Should().Contain("ApplyNamesCheckBoxChrome(leftColumnBox);");
+        definedNamesSource.Should().Contain("ApplyNamesCheckBoxChrome(bottomRowBox);");
+        definedNamesSource.Should().Contain("ApplyNamesCheckBoxChrome(rightColumnBox);");
+        definedNamesSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, NamesDialogChromeStyle);");
+        definedNamesSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
+        definedNamesSource.Should().Contain("[cancelButton, okButton]");
+
+        protectionSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
+        selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
+        selectionPaneSource.Should().NotContain("Children = { ok, cancel }");
+        tableResizeSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0))");
+
+        foreach (var source in new[] { allowEditRangeSource, definedNamesSource, consolidateSource, protectionSource, selectionPaneSource, tableResizeSource })
+        {
+            AssertNoLocalButtonChrome(source);
+            AssertNoLocalTextBoxChrome(source, "textBox");
+            AssertNoLocalComboBoxChrome(source, "comboBox");
+        }
+    }
+
+    [Fact]
     public void ConditionalFormatDialogs_DelegateCompactControlChromeToSharedHelper()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));

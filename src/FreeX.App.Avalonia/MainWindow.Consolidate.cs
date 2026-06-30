@@ -10,7 +10,6 @@ using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
@@ -72,6 +71,7 @@ public sealed partial class MainWindow
         };
 
         var referencesList = new ListBox { MinHeight = 96 };
+        ApplyDataOpsListBoxChrome(referencesList);
         AutomationProperties.SetAutomationId(referencesList, "ConsolidateAllReferencesList");
 
         var addButton = new Button { Content = UiText.Get("TableLoc_Add"), MinWidth = 76 };
@@ -216,14 +216,9 @@ public sealed partial class MainWindow
 
         // Windows: Add / Delete buttons sit between the Reference field and the "All references" list,
         // right-aligned side by side (matches the WPF ConsolidateDialog layout / win.png ground truth).
-        addButton.Margin = new Thickness(0, 0, 8, 0);
-        var addRemoveRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 6, 0, 2),
-            Children = { addButton, removeButton },
-        };
+        var addRemoveRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [addButton, removeButton],
+            new Thickness(0, 6, 0, 2));
 
         // Windows: "[...] <Destination textbox>" — Browse (ellipsis) sits left of the destination field.
         var destinationRow = new DockPanel { LastChildFill = true };
@@ -376,6 +371,12 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplyDataOpsComboBoxChrome(ComboBox comboBox)
         => AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, DataOpsDialogChromeStyle);
+
+    /// <summary>
+    /// Applies standard list-box row chrome: MinHeight=24 per row, FontSize=12.
+    /// </summary>
+    private static void ApplyDataOpsListBoxChrome(ListBox listBox)
+        => AvaloniaCompactDialogChrome.ApplyListBox(listBox, DataOpsDialogChromeStyle);
 
     /// <summary>
     /// Applies standard check box chrome: MinHeight=20, MaxHeight=20, FontSize=12,
