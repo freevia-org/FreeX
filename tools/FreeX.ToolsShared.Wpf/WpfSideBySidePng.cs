@@ -16,6 +16,13 @@ public sealed record WpfSideBySidePngOptions(
     string RightLabel,
     string? FooterText = null);
 
+public sealed record WpfHeaderSideBySidePngOptions(
+    int ThumbnailWidth,
+    int ThumbnailHeight,
+    int Padding,
+    int HeaderHeight,
+    string HeaderText);
+
 public static class WpfSideBySidePng
 {
     public static void Write(
@@ -66,6 +73,55 @@ public static class WpfSideBySidePng
 
             context.DrawImage(leftBitmap, new Rect(leftX, imageY, options.ThumbnailWidth, options.ThumbnailHeight));
             context.DrawImage(rightBitmap, new Rect(rightX, imageY, options.ThumbnailWidth, options.ThumbnailHeight));
+        }
+
+        var renderTarget = new RenderTargetBitmap(totalWidth, totalHeight, 96, 96, PixelFormats.Pbgra32);
+        renderTarget.Render(visual);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(renderTarget));
+        using var stream = File.Create(outputPath);
+        encoder.Save(stream);
+    }
+
+    public static void WriteHeaderOnly(
+        string leftImagePath,
+        string rightImagePath,
+        string outputPath,
+        WpfHeaderSideBySidePngOptions options)
+    {
+        var totalWidth = options.ThumbnailWidth * 2 + options.Padding * 3;
+        var totalHeight = options.ThumbnailHeight + options.Padding * 2 + options.HeaderHeight;
+
+        var leftBitmap = WpfImageDiff.ResizeTo(
+            WpfImageDiff.LoadBitmap(leftImagePath),
+            options.ThumbnailWidth,
+            options.ThumbnailHeight);
+        var rightBitmap = WpfImageDiff.ResizeTo(
+            WpfImageDiff.LoadBitmap(rightImagePath),
+            options.ThumbnailWidth,
+            options.ThumbnailHeight);
+
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            context.DrawRectangle(
+                new SolidColorBrush(Color.FromRgb(240, 240, 240)),
+                null,
+                new Rect(0, 0, totalWidth, totalHeight));
+
+            context.DrawText(
+                CreateText(options.HeaderText, 13, Brushes.Black, FontWeights.Normal),
+                new Point(options.Padding, 4));
+            context.DrawImage(
+                leftBitmap,
+                new Rect(options.Padding, options.HeaderHeight, options.ThumbnailWidth, options.ThumbnailHeight));
+            context.DrawImage(
+                rightBitmap,
+                new Rect(
+                    options.Padding * 2 + options.ThumbnailWidth,
+                    options.HeaderHeight,
+                    options.ThumbnailWidth,
+                    options.ThumbnailHeight));
         }
 
         var renderTarget = new RenderTargetBitmap(totalWidth, totalHeight, 96, 96, PixelFormats.Pbgra32);

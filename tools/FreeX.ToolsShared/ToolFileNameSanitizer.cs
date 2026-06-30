@@ -40,4 +40,15 @@ public static class ToolFileNameSanitizer
         var sanitized = ReplaceInvalidFileNameChars(value, lowerInvariant);
         return string.IsNullOrWhiteSpace(sanitized) ? fallback : sanitized;
     }
+
+    public static string ReplaceNonAlphaNumericWithUnderscore(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+        {
+            builder.Append(char.IsLetterOrDigit(character) ? character : '_');
+        }
+
+        return builder.ToString();
+    }
 }
