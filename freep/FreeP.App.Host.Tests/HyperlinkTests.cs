@@ -231,6 +231,16 @@ public sealed class HyperlinkTests : IDisposable
     // ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void OpenExternalUrl_RoutesThroughSharedLauncher()
+    {
+        var source = ReadHostSource("SlideShowWindow.cs");
+
+        source.Should().Contain("ExternalUriLauncher.Open(");
+        source.Should().NotContain("new Uri(url");
+        source.Should().NotContain("uri.Scheme is not");
+    }
+
+    [Fact]
     public void OpenExternalUrl_FileScheme_DoesNotThrow()
     {
         // file:// is rejected silently (no Process.Start call), so no exception.
@@ -560,5 +570,24 @@ public sealed class HyperlinkTests : IDisposable
         // Click at (100, 100) dip — inside the group, but NOT inside the child (200..300).
         var result = win.HitTestHyperlink(slide, canvasX: 100, canvasY: 100);
         result.Should().BeNull("click is inside group but not inside the child with the hyperlink");
+    }
+
+    private static string ReadHostSource(string fileName)
+    {
+        var path = Path.Combine(FindRepositoryRoot(), "freep", "FreeP.App.Host", fileName);
+        return File.ReadAllText(path);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
     }
 }

@@ -12,6 +12,7 @@ public sealed class FreeWFileDialogSourceTests
             ReadHostSource("CompareDocumentsDialog.cs"),
             ReadHostSource("CombineDocumentsDialog.cs"),
             ReadHostSource("MainWindow.cs"),
+            ReadHostSource("WatermarkOptionsDialog.cs"),
             ReadHostSource("Ribbon", "FreeWRibbonCommands.cs")
         };
         var combined = string.Join(Environment.NewLine, sources);
@@ -26,6 +27,8 @@ public sealed class FreeWFileDialogSourceTests
         combined.Should().Contain("\"Compare: pick the ORIGINAL document\"");
         combined.Should().Contain("\"Combine: pick the ORIGINAL (base) document\"");
         combined.Should().Contain("\"Combine: pick Reviewer B's revised document\"");
+        combined.Should().Contain("WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle");
+        combined.Should().Contain("WatermarkOptionsDialogPlanner.WatermarkImageFilter");
         combined.Should().NotContain("using Microsoft.Win32;");
         combined.Should().NotContain("new OpenFileDialog");
         combined.Should().NotContain("new Microsoft.Win32.OpenFileDialog");

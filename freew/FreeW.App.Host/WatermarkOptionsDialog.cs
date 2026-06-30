@@ -3,9 +3,9 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
-using Microsoft.Win32;
 
 namespace FreeW.App.Host;
 
@@ -199,19 +199,19 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void BrowseForImage()
     {
-        var dlg = new OpenFileDialog
-        {
-            Title = WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle,
-            Filter = WatermarkOptionsDialogPlanner.WatermarkImageFilter
-        };
-        if (dlg.ShowDialog(this) != true)
+        var result = WpfFileDialogService.ShowOpenDialog(
+            this,
+            WatermarkOptionsDialogPlanner.WatermarkImageFilter,
+            checkFileExists: true,
+            title: WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle);
+        if (!result.Chosen || result.FileName is not { Length: > 0 } fileName)
             return;
 
         try
         {
-            _pendingImageBytes = File.ReadAllBytes(dlg.FileName);
+            _pendingImageBytes = File.ReadAllBytes(fileName);
             _pathBox.Text = WatermarkOptionsDialogPlanner.FormatPickedImageLabel(
-                Path.GetFileName(dlg.FileName),
+                Path.GetFileName(fileName),
                 _pendingImageBytes.Length);
         }
         catch (Exception ex)

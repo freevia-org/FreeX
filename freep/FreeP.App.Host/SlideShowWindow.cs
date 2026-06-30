@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
@@ -303,25 +304,17 @@ public sealed class SlideShowWindow : Window
     }
 
     /// <summary>
-    /// Opens an external URL in the default browser.
-    /// Only http, https, and mailto schemes are allowed; all others are silently ignored.
+    /// Opens an external URL in the default browser through the shared URI allowlist.
+    /// Blocked schemes and launch failures are silently ignored so a bad slideshow link never crashes playback.
     /// </summary>
     internal static void OpenExternalUrl(string url)
     {
-        try
-        {
-            var uri = new Uri(url, UriKind.Absolute);
-            if (uri.Scheme is not ("http" or "https" or "mailto"))
-                return; // security guard: reject file:// and other schemes
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+        ExternalUriLauncher.Open(
+            url,
+            uri => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri)
             {
                 UseShellExecute = true
-            });
-        }
-        catch
-        {
-            // Swallow — never crash the slideshow over a bad URL.
-        }
+            }));
     }
 
     /// <summary>
