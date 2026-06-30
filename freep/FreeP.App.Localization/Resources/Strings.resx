@@ -847,4 +847,61 @@
   <data name="Ribbon_Option_AnimationTriggerAfterPrevious_Label" xml:space="preserve">
     <value>After Previous</value>
   </data>
+  <data name="File_OpenPresentationPickerTitle" xml:space="preserve">
+    <value>Open Presentation</value>
+  </data>
+  <data name="File_SavePresentationPickerTitle" xml:space="preserve">
+    <value>Save Presentation</value>
+  </data>
+  <data name="File_PresentationFallbackDisplayName" xml:space="preserve">
+    <value>Presentation</value>
+  </data>
+  <data name="File_NewPresentationAction" xml:space="preserve">
+    <value>creating a new presentation</value>
+  </data>
+  <data name="File_OpenPresentationAction" xml:space="preserve">
+    <value>opening another presentation</value>
+  </data>
+  <data name="File_OpenCommand" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="File_SaveCommand" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="File_InsertPictureCommand" xml:space="preserve">
+    <value>Insert picture</value>
+  </data>
+  <data name="File_InsertPicturePickerTitle" xml:space="preserve">
+    <value>Insert Picture</value>
+  </data>
+  <data name="File_PictureFileTypeName" xml:space="preserve">
+    <value>Images</value>
+  </data>
+  <data name="File_CommandUnavailableFormat" xml:space="preserve">
+    <value>{0} unavailable.</value>
+  </data>
+  <data name="File_SelectedFileNotLocalPathFormat" xml:space="preserve">
+    <value>{0} failed: selected file is not available as a local path.</value>
+  </data>
+  <data name="File_UnsupportedFileTypeFormat" xml:space="preserve">
+    <value>{0} failed: unsupported file type &quot;{1}&quot;.</value>
+  </data>
+  <data name="File_UnsupportedExtensionFormat" xml:space="preserve">
+    <value>Save failed: unsupported extension &quot;{0}&quot;.</value>
+  </data>
+  <data name="File_CommandFailedFormat" xml:space="preserve">
+    <value>{0} failed: {1}</value>
+  </data>
+  <data name="File_OpenedFormat" xml:space="preserve">
+    <value>Opened {0}</value>
+  </data>
+  <data name="File_SavedFormat" xml:space="preserve">
+    <value>Saved {0}</value>
+  </data>
+  <data name="File_InsertedFormat" xml:space="preserve">
+    <value>Inserted {0}</value>
+  </data>
+  <data name="File_SaveAsTitleFormat" xml:space="preserve">
+    <value>Save as {0}</value>
+  </data>
 </root>

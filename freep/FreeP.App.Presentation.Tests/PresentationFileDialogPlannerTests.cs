@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 
@@ -71,6 +72,22 @@ public sealed class PresentationFileDialogPlannerTests
     [Fact]
     public void FileTextResources_ExposeAvaloniaPicturePickerTypeName()
     {
+        var presentationText = PresentationFileTextResources.Presentation;
+
         PresentationFileTextResources.PictureFileTypeName.Should().Be("Images");
+        presentationText.OpenPickerTitle.Should().Be("Open Presentation");
+        presentationText.SavePickerTitle.Should().Be("Save Presentation");
+        presentationText.FallbackDisplayName.Should().Be("Presentation");
+        presentationText.NewAction.Should().Be("creating a new presentation");
+        presentationText.OpenAction.Should().Be("opening another presentation");
+        presentationText.OpenCommand.Should().Be("Open");
+        presentationText.SaveCommand.Should().Be("Save");
+        presentationText.InsertPictureCommand.Should().Be("Insert picture");
+        presentationText.InsertPicturePickerTitle.Should().Be("Insert Picture");
+        SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(presentationText, presentationText.OpenCommand)
+            .Should().Be("Open failed: selected file is not available as a local path.");
+        SisterAppFileTextPlanner.FormatSaved(presentationText, "Deck.pptx").Should().Be("Saved Deck.pptx");
+        SisterAppFileTextPlanner.Presentation.OpenPickerTitle.Should().Be(presentationText.OpenPickerTitle);
+        SisterAppFileTextPlanner.FormatSaved("Deck.pptx").Should().Be("Saved Deck.pptx");
     }
 }

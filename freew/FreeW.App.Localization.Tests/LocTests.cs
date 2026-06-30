@@ -195,6 +195,45 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void GetNeutralResourceKeys_CoversFileTextResources()
+    {
+        Loc.GetNeutralResourceKeys().Should().Contain([
+            "File_OpenDocumentPickerTitle",
+            "File_SaveDocumentPickerTitle",
+            "File_DocumentFallbackDisplayName",
+            "File_NewDocumentAction",
+            "File_OpenDocumentAction",
+            "File_OpenCommand",
+            "File_SaveCommand",
+            "File_InsertPictureCommand",
+            "File_InsertPicturePickerTitle",
+            "File_InsertTextCommand",
+            "File_NewWindowCommand",
+            "File_PdfFileTypeName",
+            "File_PictureFileTypeName",
+            "File_TextFromFileTypeName",
+            "File_ExportPdfPickerTitle",
+            "File_PdfExportCommand",
+            "File_CommandUnavailableFormat",
+            "File_SelectedFileNotLocalPathFormat",
+            "File_UnsupportedFileTypeFormat",
+            "File_UnsupportedExtensionFormat",
+            "File_CommandFailedFormat",
+            "File_OpenedFormat",
+            "File_SavedFormat",
+            "File_InsertedFormat",
+            "File_SaveAsTitleFormat",
+            "File_PdfExportedStatusFormat",
+            "File_PageSingular",
+            "File_PagePlural"
+        ]);
+
+        WithUiCulture("en-US", () => Loc.Get("File_OpenDocumentPickerTitle")).Should().Be("Open document");
+        WithUiCulture("en-US", () => Loc.Format("File_CommandFailedFormat", "Open", "Denied"))
+            .Should().Be("Open failed: Denied");
+    }
+
+    [Fact]
     public void SharedHelpers_ExposeCatalogContracts()
     {
         Loc.PseudoLocalizationCultureName.Should().Be(LocalizedTextCatalog.PseudoLocalizationCultureName);
