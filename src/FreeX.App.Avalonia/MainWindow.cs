@@ -20493,34 +20493,25 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(openPlan.FileTypes);
-        var storageFiles = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Open Workbook",
-            AllowMultiple = false,
-            FileTypeFilter = fileTypes,
-        });
+        var pickedStorageFile = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromDescriptors("Open Workbook", openPlan.FileTypes));
 
-        IStorageFile? storageFile = null;
-        foreach (var file in storageFiles)
-        {
-            storageFile = file;
-            break;
-        }
-
-        if (storageFile is null)
+        if (pickedStorageFile is null)
             return;
 
-        using (storageFile)
+        using (pickedStorageFile)
         {
-            var path = storageFile.TryGetLocalPath();
+            var path = pickedStorageFile.LocalPath;
             if (string.IsNullOrWhiteSpace(path))
             {
                 ShowOpenIssue("Open requires a local file path.");
                 return;
             }
 
-            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+            var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(
+                path,
+                pickedStorageFile.StorageFile);
             await OpenWorkbookPathAsync(path, fileAccessIdentity, confirmDirtyWorkbook: false);
         }
     }
@@ -20880,23 +20871,20 @@ public sealed partial class MainWindow : Window
                 return false;
             }
 
-            var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(savePlan.FileTypes);
-            var storageFile = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = "Save Workbook",
-                SuggestedFileName = savePlan.SuggestedFileName,
-                DefaultExtension = savePlan.DefaultExtensionWithoutDot,
-                FileTypeChoices = fileTypes,
-                SuggestedFileType = fileTypes[0],
-                ShowOverwritePrompt = true,
-            });
+            var pickedStorageFile = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+                StorageProvider,
+                AvaloniaFilePickerSaveRequest.FromSavePlan(
+                    "Save Workbook",
+                    savePlan.Picker,
+                    showOverwritePrompt: true,
+                    suggestFirstFileType: true));
 
-            if (storageFile is null)
+            if (pickedStorageFile is null)
                 return false;
 
-            using (storageFile)
+            using (pickedStorageFile)
             {
-                var path = storageFile.TryGetLocalPath();
+                var path = pickedStorageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
                     ShowSaveIssue("Save As requires a local file path.");
@@ -20921,7 +20909,9 @@ public sealed partial class MainWindow : Window
                     return false;
                 }
 
-                var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path, storageFile);
+                var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(
+                    path,
+                    pickedStorageFile.StorageFile);
                 return await SaveWorkbookToTargetAsync(target!, fileAccessIdentity);
             }
         }
@@ -20954,7 +20944,7 @@ public sealed partial class MainWindow : Window
 
             using (storageFile)
             {
-                var path = storageFile.TryGetLocalPath();
+                var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
                     ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
@@ -21255,7 +21245,7 @@ public sealed partial class MainWindow : Window
 
             using (storageFile)
             {
-                var path = storageFile.TryGetLocalPath();
+                var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
                     ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
@@ -21331,19 +21321,18 @@ public sealed partial class MainWindow : Window
         return _session.Workbook.ActiveSheetIndex ?? 0;
     }
 
-    private async Task<IStorageFile?> ShowPortablePdfSavePickerAsync(string title)
+    private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)
     {
         var pickerPlan = ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle);
-        var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes);
-        return await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = title,
-            SuggestedFileName = pickerPlan.SuggestedFileName,
-            DefaultExtension = pickerPlan.DefaultExtensionWithoutDot,
-            FileTypeChoices = fileTypes,
-            SuggestedFileType = fileTypes[0],
-            ShowOverwritePrompt = true,
-        });
+        return AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromDescriptors(
+                title,
+                pickerPlan.FileTypes,
+                pickerPlan.SuggestedFileName,
+                pickerPlan.DefaultExtensionWithoutDot,
+                showOverwritePrompt: true,
+                suggestFirstFileType: true));
     }
 
     private async Task<bool> SaveWorkbookToTargetAsync(

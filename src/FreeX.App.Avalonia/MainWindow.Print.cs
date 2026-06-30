@@ -461,7 +461,7 @@ public sealed partial class MainWindow
 
             using (storageFile)
             {
-                var path = storageFile.TryGetLocalPath();
+                var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
                     ShowExportIssue(UiText.Get("Print_RequiresLocalPath"));

@@ -92,6 +92,19 @@ public class DocumentFilePickerTypesTests
         type.Patterns.Should().Equal("*.docx", "*.txt", "*.docx");
     }
 
+    [Fact]
+    public void Shared_adapter_builds_named_file_types_with_mime_types()
+    {
+        var type = AvaloniaFilePickerTypeAdapter.CreateFileType(
+            "Images",
+            ["*.png", "*.jpg"],
+            ["image/png", "image/jpeg"]);
+
+        type.Name.Should().Be("Images");
+        type.Patterns.Should().Equal("*.png", "*.jpg");
+        type.MimeTypes.Should().Equal("image/png", "image/jpeg");
+    }
+
     private static List<string> AllPatterns(IEnumerable<FilePickerFileType> types) =>
         types.SelectMany(t => t.Patterns ?? []).ToList();
 }

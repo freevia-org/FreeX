@@ -324,20 +324,11 @@ public sealed partial class MainWindow
             return;
 
         var pickerPlan = SheetBackgroundPickerPlanner.BuildOpenPickerPlan();
-        var fileTypes = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes);
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = UiText.Get("RibbonWire_BackgroundPickerTitle"),
-            AllowMultiple = false,
-            FileTypeFilter = fileTypes,
-        });
-
-        IStorageFile? file = null;
-        foreach (var candidate in files)
-        {
-            file = candidate;
-            break;
-        }
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromDescriptors(
+                UiText.Get("RibbonWire_BackgroundPickerTitle"),
+                pickerPlan.FileTypes));
 
         if (file is null)
             return;

@@ -34,11 +34,11 @@ public sealed class MainWindow : Window
     /// </summary>
     private const int DefaultRecentFilesCap = 10;
 
-    private static readonly FilePickerFileType PdfFileType = new(FreeWFileTextResources.PdfFileTypeName)
-    {
-        Patterns = ["*.pdf"],
-        MimeTypes = ["application/pdf"],
-    };
+    private static readonly FilePickerFileType PdfFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            FreeWFileTextResources.PdfFileTypeName,
+            ["*.pdf"],
+            ["application/pdf"]);
 
     private readonly DocumentPersistenceWorkflow _documentPersistence = new();
     private readonly DocumentView _editor = new();
@@ -782,17 +782,12 @@ public sealed class MainWindow : Window
 
     private async Task<string?> PromptOpenPathAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = FileText.OpenPickerTitle,
-            AllowMultiple = false,
-            FileTypeFilter = [.. DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)],
-        });
-
-        if (files.Count == 0)
-            return null;
-
-        return files[0].TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                FileText.OpenPickerTitle,
+                DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)));
+        return file?.LocalPath;
     }
 
     private Task<bool> OpenPathAsync(string path)
@@ -832,15 +827,10 @@ public sealed class MainWindow : Window
             _fileWorkflow.CurrentPath,
             _fileWorkflow.CurrentFileName,
             FileText.FallbackDisplayName);
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = FileText.SavePickerTitle,
-            DefaultExtension = savePlan.DefaultExtensionWithoutDot,
-            SuggestedFileName = savePlan.SuggestedFileName,
-            FileTypeChoices = [.. savePlan.FileTypes.Select(DocumentFilePickerTypes.ToFileType)],
-        });
-
-        var path = file?.TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, savePlan));
+        var path = file?.LocalPath;
         return path is not null && await SaveToPathAsync(path);
     }
 
@@ -881,14 +871,14 @@ public sealed class MainWindow : Window
     /// </summary>
     private async Task ExportPdfAsync()
     {
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = FreeWFileTextResources.ExportPdfPickerTitle,
-            DefaultExtension = "pdf",
-            SuggestedFileName = _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + ".pdf",
-            FileTypeChoices = [PdfFileType],
-        });
-        var path = file?.TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromFileTypes(
+                FreeWFileTextResources.ExportPdfPickerTitle,
+                [PdfFileType],
+                _fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName) + ".pdf",
+                "pdf"));
+        var path = file?.LocalPath;
         if (path is null)
             return;
 
@@ -903,11 +893,11 @@ public sealed class MainWindow : Window
         }
     }
 
-    private static readonly FilePickerFileType ImageFileType = new(FreeWFileTextResources.PictureFileTypeName)
-    {
-        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
-        MimeTypes = ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"],
-    };
+    private static readonly FilePickerFileType ImageFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            FreeWFileTextResources.PictureFileTypeName,
+            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
+            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]);
 
     /// <summary>
     /// Insert &gt; Picture (AV-INSERT): open a file picker, read the chosen image, and insert it at the
@@ -916,15 +906,12 @@ public sealed class MainWindow : Window
     /// </summary>
     private async Task InsertPictureAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = SisterAppFileTextPlanner.InsertPicturePickerTitle,
-            AllowMultiple = false,
-            FileTypeFilter = [ImageFileType],
-        });
-        if (files.Count == 0)
-            return;
-        var path = files[0].TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                SisterAppFileTextPlanner.InsertPicturePickerTitle,
+                [ImageFileType]));
+        var path = file?.LocalPath;
         if (path is null)
             return;
 
@@ -1031,15 +1018,12 @@ public sealed class MainWindow : Window
     /// </summary>
     private async Task InsertTextFromFileAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = InsertDialogTextResources.TextFromFilePickerTitle,
-            AllowMultiple = false,
-            FileTypeFilter = [TextFromFileType],
-        });
-        if (files.Count == 0)
-            return;
-        var path = files[0].TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                InsertDialogTextResources.TextFromFilePickerTitle,
+                [TextFromFileType]));
+        var path = file?.LocalPath;
         if (path is null)
             return;
 
@@ -1073,11 +1057,11 @@ public sealed class MainWindow : Window
         }
     }
 
-    private static readonly FilePickerFileType TextFromFileType = new(FreeWFileTextResources.TextFromFileTypeName)
-    {
-        Patterns = ["*.docx", "*.txt"],
-        MimeTypes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"],
-    };
+    private static readonly FilePickerFileType TextFromFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            FreeWFileTextResources.TextFromFileTypeName,
+            ["*.docx", "*.txt"],
+            ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
 
     private void ApplyOpenResult(DocumentOpenResult result) =>
         LoadDocumentAsSaved(result.Document, result.SavedPath);
@@ -1222,18 +1206,18 @@ public sealed class MainWindow : Window
             FileText.FallbackDisplayName,
             normalizedExt);
 
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = SisterAppFileTextPlanner.FormatSaveAsTitle(format?.FormatName ?? extension),
-            DefaultExtension = savePlan.DefaultExtensionWithoutDot,
-            SuggestedFileName = savePlan.SuggestedFileName,
-            FileTypeChoices = [DocumentFilePickerTypes.ToFileType(
-                new Free.Shared.IO.FileDialogPickerTypeDescriptor(
-                    format?.FormatName ?? extension,
-                    [$"*{normalizedExt}"]))],
-        });
-
-        var path = file?.TryGetLocalPath();
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromFileTypes(
+                SisterAppFileTextPlanner.FormatSaveAsTitle(format?.FormatName ?? extension),
+                [
+                    AvaloniaFilePickerTypeAdapter.CreateFileType(
+                        format?.FormatName ?? extension,
+                        [$"*{normalizedExt}"])
+                ],
+                savePlan.SuggestedFileName,
+                savePlan.DefaultExtensionWithoutDot));
+        var path = file?.LocalPath;
         if (path is not null)
             await SaveToPathAsync(path);
     }

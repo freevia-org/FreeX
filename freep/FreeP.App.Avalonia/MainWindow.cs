@@ -50,11 +50,11 @@ public sealed class MainWindow : Window
     private const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
 
-    private static readonly FilePickerFileType PictureFileType = new(PresentationFileTextResources.PictureFileTypeName)
-    {
-        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg"],
-        MimeTypes = ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml"],
-    };
+    private static readonly FilePickerFileType PictureFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType(
+            PresentationFileTextResources.PictureFileTypeName,
+            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg"],
+            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml"]);
 
     // ── Presentation model ─────────────────────────────────────────────────────
 
@@ -393,25 +393,23 @@ public sealed class MainWindow : Window
 
     private async Task InsertPictureFromFileAsync()
     {
-        if (!StorageProvider.CanOpen)
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.InsertPictureCommand);
             return;
         }
 
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = SisterAppFileTextPlanner.InsertPicturePickerTitle,
-            AllowMultiple = false,
-            FileTypeFilter = [PictureFileType],
-        });
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                SisterAppFileTextPlanner.InsertPicturePickerTitle,
+                [PictureFileType]));
 
-        if (files.Count == 0)
+        if (file is null)
             return;
 
         try
         {
-            var file = files[0];
             await using var source = await file.OpenReadAsync();
             using var memory = new MemoryStream();
             await source.CopyToAsync(memory);
@@ -463,24 +461,21 @@ public sealed class MainWindow : Window
 
     private async Task<string?> PromptOpenPathAsync()
     {
-        if (!StorageProvider.CanOpen)
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.OpenCommand);
             return null;
         }
 
         var plan = PresentationFileDialogPlanner.BuildOpenPickerPlan();
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title         = FileText.OpenPickerTitle,
-            AllowMultiple = false,
-            FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes),
-        });
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromDescriptors(FileText.OpenPickerTitle, plan.FileTypes));
 
-        if (files.Count == 0)
+        if (file is null)
             return null;
 
-        var path = files[0].TryGetLocalPath();
+        var path = file.LocalPath;
         if (path is null)
             _statusText.Text = SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(SisterAppFileTextPlanner.OpenCommand);
 
@@ -494,7 +489,7 @@ public sealed class MainWindow : Window
 
     private async Task<bool> FileSaveAsAsync()
     {
-        if (!StorageProvider.CanSave)
+        if (!AvaloniaFilePickerService.CanSave(StorageProvider))
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(SisterAppFileTextPlanner.SaveCommand);
             return false;
@@ -502,15 +497,11 @@ public sealed class MainWindow : Window
 
         var plan = PresentationFileDialogPlanner.BuildSavePickerPlan(_fileWorkflow.CurrentFileName);
 
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title             = FileText.SavePickerTitle,
-            DefaultExtension  = plan.DefaultExtensionWithoutDot,
-            SuggestedFileName = plan.SuggestedFileName,
-            FileTypeChoices   = AvaloniaFilePickerTypeAdapter.ToFileTypes(plan.FileTypes),
-        });
+        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, plan));
 
-        var path = file?.TryGetLocalPath();
+        var path = file?.LocalPath;
         if (path is null)
         {
             if (file is not null)

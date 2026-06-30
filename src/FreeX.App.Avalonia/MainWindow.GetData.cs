@@ -244,27 +244,19 @@ public sealed partial class MainWindow
         async Task BrowseAsync()
         {
             var pickerPlan = ImportDataFilePickerPlanner.BuildTextOpenPickerPlan(UiText.Get("GetData_FileTypeName"));
-            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = UiText.Get("GetData_FilePickerTitle"),
-                AllowMultiple = false,
-                FileTypeFilter = AvaloniaFilePickerTypeAdapter.ToFileTypes(pickerPlan.FileTypes),
-            });
+            using var pickedFile = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+                StorageProvider,
+                AvaloniaFilePickerOpenRequest.FromDescriptors(
+                    UiText.Get("GetData_FilePickerTitle"),
+                    pickerPlan.FileTypes));
 
-            IStorageFile? file = null;
-            foreach (var candidate in files)
-            {
-                file = candidate;
-                break;
-            }
-
-            if (file is null)
+            if (pickedFile is null)
                 return;
 
-            var path = file.TryGetLocalPath();
+            var path = pickedFile.LocalPath;
             if (string.IsNullOrEmpty(path))
             {
-                warningText.Text = UiText.Format("GetData_ReadError", file.Name);
+                warningText.Text = UiText.Format("GetData_ReadError", pickedFile.Name);
                 warningText.IsVisible = true;
                 return;
             }
@@ -272,7 +264,7 @@ public sealed partial class MainWindow
             byte[] bytes;
             try
             {
-                await using var stream = await file.OpenReadAsync();
+                await using var stream = await pickedFile.StorageFile.OpenReadAsync();
                 using var memory = new MemoryStream();
                 await stream.CopyToAsync(memory);
                 bytes = memory.ToArray();
