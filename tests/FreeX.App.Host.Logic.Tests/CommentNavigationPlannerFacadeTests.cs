@@ -23,9 +23,13 @@ public sealed class CommentNavigationPlannerDedupSourceTests
         commentListWindow.Should().Contain("CommentNavigationPlanner.FormatThreadedComment(threadedComments[address])");
         commentListWindow.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(notes)");
 
+        var printRenderer = DialogSourceTestSupport.ReadHostSources("PrintRenderer.cs");
+        printRenderer.Should().Contain("PrintCommentSummaryPlanner.BuildPages(");
+
         var printRendererComments = DialogSourceTestSupport.ReadHostSources("PrintRenderer.Comments.cs");
-        printRendererComments.Should().Contain("using FreeX.App.Presentation.Comments;");
-        printRendererComments.Should().Contain("CommentNavigationPlanner.FormatThreadedComment(pair.Value)");
+        printRendererComments.Should().Contain("using FreeX.App.Presentation.PageLayout;");
+        printRendererComments.Should().Contain("PrintCommentSummaryPlanner.WrapOverlayText(");
+        printRendererComments.Should().NotContain("CommentNavigationPlanner.FormatThreadedComment(");
         printRendererComments.Should().NotContain("SharedCommentNavigationPlanner");
     }
 }
