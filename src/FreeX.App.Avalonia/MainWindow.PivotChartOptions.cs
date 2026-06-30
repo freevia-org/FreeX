@@ -58,86 +58,31 @@ public sealed partial class MainWindow
         if (!TryResolveActivePivotChart(UiText.Get("PivotChart_OptionsInsertFirst"), out var chart))
             return;
 
-        var showFieldButtons = new CheckBox
-        {
-            Content = UiText.Get("PivotChartOptions_ShowFieldButtons"),
-            IsChecked = chart!.ShowPivotChartFieldButtons,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            MinHeight = 20,
-            MaxHeight = 20,
-        };
-        AutomationProperties.SetAutomationId(showFieldButtons, "PivotChartOptionsShowFieldButtons");
+        var current = PivotChartOptionsPlanner.Read(chart!);
 
-        var reportFilterButtons = new CheckBox
-        {
-            Content = UiText.Get("PivotChartOptions_ShowReportFilterButtons"),
-            IsChecked = chart.ShowPivotChartReportFilterButtons,
-            Margin = new Thickness(18, 0, 0, 0),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            MinHeight = 20,
-            MaxHeight = 20,
-        };
-        AutomationProperties.SetAutomationId(reportFilterButtons, "PivotChartOptionsReportFilterButtons");
+        var showFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowFieldButtons, current.ShowFieldButtons);
+        var reportFilterButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowReportFilterButtons, current.ShowReportFilterButtons, new Thickness(18, 0, 0, 0));
+        var axisFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowAxisFieldButtons, current.ShowAxisFieldButtons, new Thickness(18, 0, 0, 0));
+        var valueFieldButtons = MakeCheck(PivotChartOptionsDialogFieldId.ShowValueFieldButtons, current.ShowValueFieldButtons, new Thickness(18, 0, 0, 0));
+        var showDataTable = MakeCheck(PivotChartOptionsDialogFieldId.ShowDataTable, current.ShowDataTable);
+        var dataTableLegendKeys = MakeCheck(PivotChartOptionsDialogFieldId.ShowDataTableLegendKeys, current.ShowDataTableLegendKeys, new Thickness(18, 0, 0, 0));
+        var roundedCorners = MakeCheck(PivotChartOptionsDialogFieldId.RoundedCorners, current.RoundedCorners);
+        var showHiddenData = MakeCheck(PivotChartOptionsDialogFieldId.ShowHiddenData, current.ShowHiddenData);
 
-        var axisFieldButtons = new CheckBox
+        var blankChoices = PivotChartOptionsPlanner.GetBlankDisplayChoices()
+            .Select(choice => new PivotChartBlankDisplayOption(UiText.Get(choice.LabelResourceKey), choice.Mode))
+            .ToList();
+        var blankDisplayBox = new ComboBox
         {
-            Content = UiText.Get("PivotChartOptions_ShowAxisFieldButtons"),
-            IsChecked = chart.ShowPivotChartAxisFieldButtons,
-            Margin = new Thickness(18, 0, 0, 0),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            MinHeight = 20,
-            MaxHeight = 20,
+            Width = 260,
+            ItemsSource = blankChoices,
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(PivotChartBlankDisplayOption.Label)),
         };
-        AutomationProperties.SetAutomationId(axisFieldButtons, "PivotChartOptionsAxisFieldButtons");
-
-        var valueFieldButtons = new CheckBox
-        {
-            Content = UiText.Get("PivotChartOptions_ShowValueFieldButtons"),
-            IsChecked = chart.ShowPivotChartValueFieldButtons,
-            Margin = new Thickness(18, 0, 0, 0),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            MinHeight = 20,
-            MaxHeight = 20,
-        };
-        AutomationProperties.SetAutomationId(valueFieldButtons, "PivotChartOptionsValueFieldButtons");
-
-        var showDataTable = new CheckBox
-        {
-            Content = StripDisplayMnemonic(UiText.Get("PivotChartOptions_ShowDataTable")),
-            IsChecked = chart.DataTable is not null,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            MinHeight = 20,
-            MaxHeight = 20,
-        };
-        AutomationProperties.SetAutomationId(showDataTable, "PivotChartOptionsShowDataTable");
-
-        var dataTableLegendKeys = new CheckBox
-        {
-            Content = UiText.Get("PivotChartOptions_ShowDataTableLegendKeys"),
-            IsChecked = chart.DataTable?.ShowLegendKeys ?? false,
-            Margin = new Thickness(18, 0, 0, 0),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            MinHeight = 20,
-            MaxHeight = 20,
-        };
-        AutomationProperties.SetAutomationId(dataTableLegendKeys, "PivotChartOptionsDataTableLegendKeys");
-
-        var roundedCorners = new CheckBox
-        {
-            Content = StripDisplayMnemonic(UiText.Get("PivotChartOptions_RoundedCorners")),
-            IsChecked = chart.RoundedCorners,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            MinHeight = 20,
-            MaxHeight = 20,
-        };
-        AutomationProperties.SetAutomationId(roundedCorners, "PivotChartOptionsRoundedCorners");
+        ApplyPivotComboBoxChrome(blankDisplayBox);
+        ApplyFieldAutomation(blankDisplayBox, PivotChartOptionsDialogFieldId.BlankDisplayMode);
+        blankDisplayBox.SelectedItem =
+            blankChoices.FirstOrDefault(choice => choice.Mode == current.BlankDisplayMode)
+            ?? (blankChoices.Count > 0 ? blankChoices[0] : null);
 
         void SyncSubButtons()
         {
@@ -154,14 +99,14 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("PivotChartOptions_Title"),
+            Title = UiText.Get(PivotChartOptionsPlanner.DialogTitleResourceKey),
             Width = 420,
-            Height = 430,
+            Height = 480,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "PivotChartOptionsDialog");
+        AutomationProperties.SetAutomationId(dialog, PivotChartOptionsPlanner.DialogAutomationId);
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
         ApplyPivotButtonChrome(ok, 80, isDefault: true);
@@ -180,6 +125,15 @@ public sealed partial class MainWindow
         content.Children.Add(showDataTable);
         content.Children.Add(dataTableLegendKeys);
         content.Children.Add(roundedCorners);
+        content.Children.Add(showHiddenData);
+        content.Children.Add(new TextBlock
+        {
+            Text = FieldLabel(PivotChartOptionsDialogFieldId.BlankDisplayMode),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 4, 0, 0),
+        });
+        content.Children.Add(blankDisplayBox);
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -198,23 +152,68 @@ public sealed partial class MainWindow
         if (!TryResolveActivePivotChart(UiText.Get("PivotChart_OptionsInsertFirst"), out chart))
             return;
 
+        var blankDisplayMode = blankDisplayBox.SelectedItem is PivotChartBlankDisplayOption pickedBlankDisplay
+            ? pickedBlankDisplay.Mode
+            : current.BlankDisplayMode;
+        var input = PivotChartOptionsPlanner.CreateResult(
+            current.ChartStyleId,
+            showFieldButtons.IsChecked == true,
+            reportFilterButtons.IsChecked == true,
+            axisFieldButtons.IsChecked == true,
+            valueFieldButtons.IsChecked == true,
+            showDataTable.IsChecked == true,
+            dataTableLegendKeys.IsChecked == true,
+            roundedCorners.IsChecked == true,
+            showHiddenData.IsChecked == true,
+            blankDisplayMode);
+
         var command = new ConfigurePivotChartOptionsCommand(
             _session.ActiveSheet.Id,
             chart!.Id,
-            chartStyleId: chart.ChartStyleId,
-            showFieldButtons: showFieldButtons.IsChecked == true,
-            showReportFilterButtons: reportFilterButtons.IsChecked == true,
-            showAxisFieldButtons: axisFieldButtons.IsChecked == true,
-            showValueFieldButtons: valueFieldButtons.IsChecked == true,
-            showDataTable: showDataTable.IsChecked == true,
-            showDataTableLegendKeys: dataTableLegendKeys.IsChecked == true,
-            roundedCorners: roundedCorners.IsChecked == true);
+            chartStyleId: input.ChartStyleId,
+            showFieldButtons: input.ShowFieldButtons,
+            showReportFilterButtons: input.ShowReportFilterButtons,
+            showAxisFieldButtons: input.ShowAxisFieldButtons,
+            showValueFieldButtons: input.ShowValueFieldButtons,
+            showDataTable: input.ShowDataTable,
+            showDataTableLegendKeys: input.ShowDataTableLegendKeys,
+            roundedCorners: input.RoundedCorners,
+            showHiddenData: input.ShowHiddenData,
+            blankDisplayMode: input.BlankDisplayMode);
 
         var result = _session.ExecuteReviewCommand(command);
         RefreshShell(result.Success
             ? UiText.Get("PivotChart_OptionsApplied")
             : result.ErrorMessage ?? UiText.Get("PivotChart_OptionsInsertFirst"));
+
+        CheckBox MakeCheck(PivotChartOptionsDialogFieldId fieldId, bool isChecked, Thickness? margin = null)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = FieldLabel(fieldId),
+                IsChecked = isChecked,
+                Margin = margin ?? new Thickness(0),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                MinHeight = 20,
+                MaxHeight = 20,
+            };
+            ApplyFieldAutomation(checkBox, fieldId);
+            return checkBox;
+        }
+
+        string FieldLabel(PivotChartOptionsDialogFieldId fieldId) =>
+            StripDisplayMnemonic(UiText.Get(PivotChartOptionsPlanner.GetDialogField(fieldId).LabelResourceKey));
+
+        void ApplyFieldAutomation(Control control, PivotChartOptionsDialogFieldId fieldId)
+        {
+            var descriptor = PivotChartOptionsPlanner.GetDialogField(fieldId);
+            AutomationProperties.SetName(control, FieldLabel(fieldId));
+            AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
+        }
     }
+
+    private sealed record PivotChartBlankDisplayOption(string Label, ChartBlankDisplayMode Mode);
 
     /// <summary>
     /// Resolves the active pivot and its bound PivotChart, reporting an honest status (and returning false)

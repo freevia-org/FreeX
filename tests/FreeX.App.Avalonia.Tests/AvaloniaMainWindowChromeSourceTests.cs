@@ -113,8 +113,30 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         chartTabsSource.Should().Contain("SelectDataSourcePlanner.FormatSeriesListItem");
         chartTabsSource.Should().Contain("SelectDataSourcePlanner.FormatNewSeriesItem");
         chartTabsSource.Should().Contain("SelectDataSourcePlanner.CreateResult(");
+        chartTabsSource.Should().Contain("ChartTypePickerPlanner.GetAllChartsPanel()");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.GetChartDataRangeField()");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.GetSeriesPanel()");
+        chartTabsSource.Should().Contain("SelectDataSourcePlanner.GetAxisLabelsPanel()");
         chartTabsSource.Should().NotContain("TryParseCellRef");
         chartTabsSource.Should().NotContain("TryParseRangeReference");
+    }
+
+    [Fact]
+    public void ChartWorkflowDialogs_UseSharedResidualDescriptors()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var remainingDialogsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));
+        var pivotOptionsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotChartOptions.cs"));
+
+        chartTabsSource.Should().Contain("ChartTypePickerPlanner.GetAllChartsPanel()");
+        chartTabsSource.Should().Contain("BuildChartTypePreviewPanel(panel.Preview)");
+        remainingDialogsSource.Should().Contain("ChartMovePlanner.GetTargetChoices()");
+        remainingDialogsSource.Should().Contain("ChartMovePlanner.GetTargetNameField()");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.Read(chart!)");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.CreateResult(");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.GetBlankDisplayChoices()");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsDialogFieldId.ShowHiddenData");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsDialogFieldId.BlankDisplayMode");
     }
 
     [Fact]

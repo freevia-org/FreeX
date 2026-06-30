@@ -19,18 +19,63 @@ public sealed record ChartTypeGalleryChoicePlan(
     string PreviewTextFormatKey,
     bool IsRecommended = false);
 
+public enum ChartTypePickerPanelKind
+{
+    Recommended,
+    AllCharts,
+}
+
+public sealed record ChartTypePickerPreviewDescriptor(
+    string TitleResourceKey,
+    string BodyResourceKey,
+    string SampleLabelResourceKey);
+
+public sealed record ChartTypePickerPanelDescriptor(
+    ChartTypePickerPanelKind Kind,
+    string HeadingResourceKey,
+    string HelpResourceKey,
+    string SubtypeGalleryAutomationNameResourceKey,
+    ChartTypePickerPreviewDescriptor Preview,
+    string? CategoryListAutomationNameResourceKey = null);
+
 /// <summary>
 /// Renderer-neutral planner for chart type picker option/category/gallery data. Shells resolve the
 /// returned resource keys through their own localization layer and bind the projected values to UI.
 /// </summary>
 public static class ChartTypePickerPlanner
 {
+    public const string ChooseChartTypeHeadingKey = "ChartTypePicker_ChooseChartTypeHeading";
     public const string RecommendedCategoryKey = "ChartTypePicker_RecommendedCategory";
     public const string PreviewTextFormatKey = "ChartTypePicker_PreviewTextFormat";
 
     private static readonly HashSet<ChartType> RecommendedTypes = ChartTypeChangePlanner
         .GetRecommendedTypes()
         .ToHashSet();
+
+    private static readonly ChartTypePickerPreviewDescriptor RecommendedPreview = new(
+        "ChartTypePicker_PreviewTitle",
+        "ChartTypePicker_RecommendedPreviewBody",
+        "ChartTypePicker_PreviewSampleLabel");
+
+    private static readonly ChartTypePickerPreviewDescriptor AllChartsPreview = new(
+        "ChartTypePicker_PreviewTitle",
+        "ChartTypePicker_ChartPreviewBody",
+        "ChartTypePicker_PreviewSampleLabel");
+
+    private static readonly ChartTypePickerPanelDescriptor RecommendedPanel = new(
+        ChartTypePickerPanelKind.Recommended,
+        ChooseChartTypeHeadingKey,
+        "ChartTypePicker_RecommendedHelpText",
+        "ChartTypePicker_SubtypeGalleryAutomationName",
+        RecommendedPreview);
+
+    private static readonly ChartTypePickerPanelDescriptor AllChartsPanel = new(
+        ChartTypePickerPanelKind.AllCharts,
+        "ChartTypePicker_AllChartsHeading",
+        "ChartTypePicker_AllChartsHelpText",
+        "ChartTypePicker_SubtypeGalleryAutomationName",
+        AllChartsPreview,
+        "ChartTypePicker_CategoriesAutomationName");
 
     public static IReadOnlyList<ChartTypePickerOptionPlan> GetSupportedOptions() =>
         ChartTypeChangePlanner.GetSupportedChoices()
@@ -74,6 +119,10 @@ public static class ChartTypePickerPlanner
                 PreviewTextFormatKey,
                 IsRecommended: true))
             .ToList();
+
+    public static ChartTypePickerPanelDescriptor GetRecommendedPanel() => RecommendedPanel;
+
+    public static ChartTypePickerPanelDescriptor GetAllChartsPanel() => AllChartsPanel;
 
     private static ChartTypePickerOptionPlan CreateOption(ChartType type) =>
         new(

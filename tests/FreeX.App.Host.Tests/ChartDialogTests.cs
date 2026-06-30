@@ -184,13 +184,15 @@ public sealed partial class ChartDialogTests
 
         source.Should().Contain("UiText.Get(\"InsertChart_RecommendedChartsTab\")");
         source.Should().Contain("UiText.Get(\"InsertChart_AllChartsTab\")");
-        source.Should().Contain("UiText.Get(\"ChartTypePicker_CategoriesAutomationName\")");
-        source.Should().Contain("UiText.Get(\"ChartTypePicker_SubtypeGalleryAutomationName\")");
-        source.Should().Contain("UiText.Get(\"ChartTypePicker_PreviewTitle\")");
-        source.Should().Contain("UiText.Get(\"ChartTypePicker_ChooseChartTypeHeading\")");
-        source.Should().Contain("UiText.Get(\"ChartTypePicker_RecommendedHelpText\")");
-        source.Should().Contain("UiText.Get(\"ChartTypePicker_PreviewSampleLabel\")");
-        source.Should().Contain("UiText.Get(\"ChartTypePicker_AllChartsHelpText\")");
+        source.Should().Contain("PresentationChartTypePickerPlanner.GetRecommendedPanel()");
+        source.Should().Contain("PresentationChartTypePickerPlanner.GetAllChartsPanel()");
+        source.Should().Contain("UiText.Get(panel.CategoryListAutomationNameResourceKey!)");
+        source.Should().Contain("UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey)");
+        source.Should().Contain("UiText.Get(panel.HeadingResourceKey)");
+        source.Should().Contain("UiText.Get(panel.HelpResourceKey)");
+        source.Should().Contain("CreatePreviewPanel(panel.Preview)");
+        source.Should().Contain("UiText.Get(preview.TitleResourceKey)");
+        source.Should().Contain("UiText.Get(preview.SampleLabelResourceKey)");
     }
 
     [Fact]

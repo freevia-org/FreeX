@@ -27,7 +27,7 @@ public sealed partial class PivotWorkflowDialogTests
             "PivotDialogLayout.AddLabeledControl(fieldPanel, UiText.Get(\"PivotSlicerTimeline_DateFieldToConnectLabel\"), _fieldBox",
             "PivotDialogLayout.AddLabeledControl(fieldPanel, UiText.Get(\"PivotSlicerTimeline_TimelineCaptionLabel\"), _nameBox",
             "InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery",
-            "AutomationProperties.SetName(_styleGallery, UiText.Get(\"PivotChartOptions_PivotChartStyleGallery\"))",
+            "ApplyFieldAutomation(_styleGallery, PivotChartOptionsDialogFieldId.ChartStyle)",
             "AddCombo(selectionPanel, UiText.Get(\"PivotFieldGrouping_FieldLabel\"), _fieldBox",
             "AddCombo(groupingPanel, UiText.Get(\"PivotFieldGrouping_GroupByLabel\"), _groupingBox",
             "AddTextBox(rangePanel, UiText.Get(\"PivotFieldGrouping_StartingAtLabel\"), _startBox",

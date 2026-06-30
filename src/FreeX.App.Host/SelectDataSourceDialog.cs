@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -9,8 +10,8 @@ public sealed partial class SelectDataSourceDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = UiText.Get("SelectDataSource_FirstColumnCategories") };
-    private readonly CheckBox _switchRowColumnBox = new() { Content = UiText.Get("SelectDataSource_SwitchRowColumn") };
+    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = FieldLabel(SelectDataSourcePlanner.GetFirstColumnCategoriesField()) };
+    private readonly CheckBox _switchRowColumnBox = new() { Content = FieldLabel(SelectDataSourcePlanner.GetSwitchRowColumnField()) };
     private readonly ListBox _seriesList = new() { Height = 72 };
     private readonly ListBox _axisLabelsList = new() { Height = 72 };
     private readonly Action<SelectDataSourceRangeSelectionRequest>? _requestRangeSelection;
@@ -33,49 +34,59 @@ public sealed partial class SelectDataSourceDialog : Window
         _requestRangeSelection = requestRangeSelection;
         _resolveSheetId = resolveSheetId ?? (_ => null);
         Result = CreateResult(sourceRangeText, firstColumnIsCategories);
-        Title = UiText.Get("SelectDataSource_Title");
+        Title = UiText.Get(SelectDataSourcePlanner.DialogTitleResourceKey);
         Width = 620;
         Height = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
+        var rangeField = SelectDataSourcePlanner.GetChartDataRangeField();
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new Label { Content = UiText.Get("SelectDataSource_ChartDataRangeLabel"), Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = FieldLabel(rangeField), Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
-        AutomationProperties.SetName(_rangeBox, UiText.Get("SelectDataSource_ChartDataRangeAutomationName"));
-        stack.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get("SelectDataSource_SelectChartDataRangeAutomationName")));
+        AutomationProperties.SetName(_rangeBox, UiText.Get(rangeField.AutomationNameResourceKey!));
+        AutomationProperties.SetAutomationId(_rangeBox, rangeField.AutomationId);
+        stack.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get(SelectDataSourcePlanner.SelectRangeAutomationNameResourceKey)));
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
+        AutomationProperties.SetAutomationId(_switchRowColumnBox, SelectDataSourcePlanner.GetSwitchRowColumnField().AutomationId);
         stack.Children.Add(_switchRowColumnBox);
         _seriesList.MouseDoubleClick += EditSeriesButton_Click;
         _seriesList.SelectionChanged += (_, _) => UpdateActionButtonState();
         _axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;
         _axisLabelsList.SelectionChanged += (_, _) => UpdateActionButtonState();
         stack.Children.Add(CreateSourceListPanel(
-            UiText.Get("SelectDataSource_SeriesPanelTitle"),
-            UiText.Get("SelectDataSource_SeriesListAutomationName"),
-            UiText.Get("SelectDataSource_SeriesListHelpText"),
+            SelectDataSourcePlanner.GetSeriesPanel(),
             _seriesList,
-            ((UiText.Get("SelectDataSource_AddSeriesButton"), AddSeriesButton_Click), (UiText.Get("SelectDataSource_EditSeriesButton"), EditSeriesButton_Click), (UiText.Get("SelectDataSource_RemoveSeriesButton"), RemoveSeriesButton_Click))));
+            new Dictionary<SelectDataSourceDialogActionId, RoutedEventHandler>
+            {
+                [SelectDataSourceDialogActionId.AddSeries] = AddSeriesButton_Click,
+                [SelectDataSourceDialogActionId.EditSeries] = EditSeriesButton_Click,
+                [SelectDataSourceDialogActionId.RemoveSeries] = RemoveSeriesButton_Click,
+            }));
         stack.Children.Add(CreateSourceListPanel(
-            UiText.Get("SelectDataSource_AxisLabelsPanelTitle"),
-            UiText.Get("SelectDataSource_AxisLabelsListAutomationName"),
-            UiText.Get("SelectDataSource_AxisLabelsListHelpText"),
+            SelectDataSourcePlanner.GetAxisLabelsPanel(),
             _axisLabelsList,
-            ((UiText.Get("SelectDataSource_EditAxisLabelsButton"), EditAxisLabelsButton_Click), null, null)));
+            new Dictionary<SelectDataSourceDialogActionId, RoutedEventHandler>
+            {
+                [SelectDataSourceDialogActionId.EditAxisLabels] = EditAxisLabelsButton_Click,
+            }));
         _firstColumnCategoriesBox.IsChecked = firstColumnIsCategories;
         _firstColumnCategoriesBox.Margin = new Thickness(0, 10, 0, 8);
+        AutomationProperties.SetAutomationId(_firstColumnCategoriesBox, SelectDataSourcePlanner.GetFirstColumnCategoriesField().AutomationId);
         stack.Children.Add(_firstColumnCategoriesBox);
         _firstColumnCategoriesBox.Checked += (_, _) => RefreshPreviewLists();
         _firstColumnCategoriesBox.Unchecked += (_, _) => RefreshPreviewLists();
         _rangeBox.TextChanged += (_, _) => RefreshPreviewLists();
+        var hiddenEmptyAction = SelectDataSourcePlanner.GetHiddenEmptyCellsAction();
         var hiddenEmptyButton = new Button
         {
-            Content = UiText.Get("SelectDataSource_HiddenEmptyCellsButton"),
+            Content = UiText.Get(hiddenEmptyAction.LabelResourceKey),
             Width = 150,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 16)
         };
+        AutomationProperties.SetAutomationId(hiddenEmptyButton, hiddenEmptyAction.AutomationId);
         hiddenEmptyButton.Click += HiddenEmptyCellsButton_Click;
         stack.Children.Add(hiddenEmptyButton);
         RefreshPreviewLists();
@@ -125,7 +136,7 @@ public sealed partial class SelectDataSourceDialog : Window
     {
         if (!ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, _resolveSheetId, out _))
         {
-            ShowInvalidInputWarning(UiText.Get("SelectDataSource_InvalidRangeMessage"), _rangeBox);
+            ShowInvalidInputWarning(UiText.Get(SelectDataSourcePlanner.InvalidRangeMessageResourceKey), _rangeBox);
             return false;
         }
 
@@ -139,4 +150,6 @@ public sealed partial class SelectDataSourceDialog : Window
         return false;
     }
 
+    private static string FieldLabel(SelectDataSourceDialogFieldDescriptor field) =>
+        UiText.Get(field.LabelResourceKey);
 }
