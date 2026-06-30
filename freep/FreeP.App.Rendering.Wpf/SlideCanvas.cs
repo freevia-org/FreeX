@@ -965,45 +965,26 @@ public sealed class SlideCanvas : FrameworkElement
         IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        if (chart.Series.Count == 0) return;
-
-        var firstSeries = chart.Series[0];
-        var values = firstSeries.Values.Where(v => v.HasValue && v.Value > 0).Select(v => v!.Value).ToList();
-        if (values.Count == 0) return;
-
-        double total = values.Sum();
-        if (total <= 0) return;
-
-        double cx = plotX + plotW / 2;
-        double cy = plotY + plotH / 2;
-        double r  = Math.Min(plotW, plotH) / 2 * 0.85;
-
-        double startAngle = -Math.PI / 2; // start at top (12 o'clock, clockwise)
-
-        for (int i = 0; i < values.Count; i++)
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildPieSlicePrimitives(chart, plot))
         {
-            double sweepAngle = values[i] / total * 2 * Math.PI;
-            double endAngle   = startAngle + sweepAngle;
-
             // Resolve slice color: seriesColors is pre-expanded per-point by the compositor
-            // (cycling accent1-6 from the theme) so index i gives the correct slice fill.
-            SrgbColor sc = i < seriesColors.Count
-                ? seriesColors[i]
+            // (cycling accent1-6 from the theme) so point index gives the correct slice fill.
+            SrgbColor sc = primitive.PointIndex < seriesColors.Count
+                ? seriesColors[primitive.PointIndex]
                 : new SrgbColor(0x4F, 0x81, 0xBD);
 
             var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B)));
 
-            // Build wedge geometry via StreamGeometry
             var geo = new StreamGeometry();
             using (var ctx = geo.Open())
             {
-                bool largeArc = sweepAngle > Math.PI;
-                var start = new Point(cx + r * Math.Cos(startAngle), cy + r * Math.Sin(startAngle));
-                var end   = new Point(cx + r * Math.Cos(endAngle),   cy + r * Math.Sin(endAngle));
+                var start = ToPoint(primitive.OuterStart);
+                var end = ToPoint(primitive.OuterEnd);
 
-                ctx.BeginFigure(new Point(cx, cy), isFilled: true, isClosed: true);
+                ctx.BeginFigure(ToPoint(primitive.Center), isFilled: true, isClosed: true);
                 ctx.LineTo(start, isStroked: false, isSmoothJoin: false);
-                ctx.ArcTo(end, new Size(r, r), 0, largeArc,
+                ctx.ArcTo(end, new Size(primitive.OuterRadius, primitive.OuterRadius), 0, primitive.IsLargeArc,
                     SweepDirection.Clockwise, isStroked: false, isSmoothJoin: false);
             }
             if (geo.CanFreeze) geo.Freeze();
@@ -1012,8 +993,6 @@ public sealed class SlideCanvas : FrameworkElement
             if (borderPen.CanFreeze) borderPen.Freeze();
 
             dc.DrawGeometry(brush, borderPen, geo);
-
-            startAngle = endAngle;
         }
     }
 
@@ -1074,70 +1053,42 @@ public sealed class SlideCanvas : FrameworkElement
         IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
-        if (chart.Series.Count == 0) return;
-
-        double cx  = plotX + plotW / 2;
-        double cy  = plotY + plotH / 2;
-        double rOut = Math.Min(plotW, plotH) / 2 * 0.85;
-        double rIn  = rOut * Math.Clamp(chart.DoughnutHolePercent, 0, 90) / 100.0;
-
         var borderPen = new Pen(FreezeBrush(new SolidColorBrush(Colors.White)), 0.8);
         if (borderPen.CanFreeze) borderPen.Freeze();
 
-        // BV3: PowerPoint draws series 0 as the INNERMOST ring (nearest the hole), later series outward.
-        // The old formula rOut - si*(ringW+ringGap) made series 0 the outermost — inverted.
-        // Fix: series 0 starts at rIn, each subsequent series adds one ring band outward.
-        int serCount = chart.Series.Count;
-        double ringGap = serCount > 1 ? rOut * 0.04 : 0;
-        double ringW   = serCount > 1 ? (rOut - rIn - (serCount - 1) * ringGap) / serCount : (rOut - rIn);
-
-        for (int si = 0; si < serCount; si++)
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildDoughnutSlicePrimitives(chart, plot))
         {
-            var series   = chart.Series[si];
-            var values   = series.Values.Where(v => v.HasValue && v.Value > 0).Select(v => v!.Value).ToList();
-            if (values.Count == 0) continue;
+            SrgbColor sc = primitive.PointIndex < seriesColors.Count
+                ? seriesColors[primitive.PointIndex]
+                : GetSeriesColor(chart, primitive.PointIndex, 0, seriesColors);
+            var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B)));
 
-            double total = values.Sum();
-            if (total <= 0) continue;
-
-            // si=0 → innermost ring; si=serCount-1 → outermost ring (matches PowerPoint order)
-            double innerR = rIn + si * (ringW + ringGap);
-            double outerR = innerR + ringW;
-            if (outerR <= 0 || innerR < 0) innerR = 0;
-
-            double startAngle = -Math.PI / 2;
-            for (int pi = 0; pi < values.Count; pi++)
+            // Build annular wedge: outer arc CW, then inner arc CCW.
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
             {
-                double sweepAngle = values[pi] / total * 2 * Math.PI;
-                double endAngle   = startAngle + sweepAngle;
-
-                SrgbColor sc = pi < seriesColors.Count
-                    ? seriesColors[pi]
-                    : GetSeriesColor(chart, pi, 0, seriesColors);
-                var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B)));
-
-                // Build annular wedge: outer arc CW, then inner arc CCW
-                var geo = new StreamGeometry();
-                using (var ctx = geo.Open())
-                {
-                    bool largeArc = sweepAngle > Math.PI;
-                    var outerStart = new Point(cx + outerR * Math.Cos(startAngle), cy + outerR * Math.Sin(startAngle));
-                    var outerEnd   = new Point(cx + outerR * Math.Cos(endAngle),   cy + outerR * Math.Sin(endAngle));
-                    var innerEnd   = new Point(cx + innerR * Math.Cos(endAngle),   cy + innerR * Math.Sin(endAngle));
-                    var innerStart = new Point(cx + innerR * Math.Cos(startAngle), cy + innerR * Math.Sin(startAngle));
-
-                    ctx.BeginFigure(outerStart, isFilled: true, isClosed: true);
-                    ctx.ArcTo(outerEnd, new Size(outerR, outerR), 0, largeArc,
-                        SweepDirection.Clockwise, isStroked: false, isSmoothJoin: false);
-                    ctx.LineTo(innerEnd, isStroked: false, isSmoothJoin: false);
-                    ctx.ArcTo(innerStart, new Size(innerR, innerR), 0, largeArc,
-                        SweepDirection.Counterclockwise, isStroked: false, isSmoothJoin: false);
-                }
-                if (geo.CanFreeze) geo.Freeze();
-                dc.DrawGeometry(brush, borderPen, geo);
-
-                startAngle = endAngle;
+                ctx.BeginFigure(ToPoint(primitive.OuterStart), isFilled: true, isClosed: true);
+                ctx.ArcTo(
+                    ToPoint(primitive.OuterEnd),
+                    new Size(primitive.OuterRadius, primitive.OuterRadius),
+                    0,
+                    primitive.IsLargeArc,
+                    SweepDirection.Clockwise,
+                    isStroked: false,
+                    isSmoothJoin: false);
+                ctx.LineTo(ToPoint(primitive.InnerEnd), isStroked: false, isSmoothJoin: false);
+                ctx.ArcTo(
+                    ToPoint(primitive.InnerStart),
+                    new Size(primitive.InnerRadius, primitive.InnerRadius),
+                    0,
+                    primitive.IsLargeArc,
+                    SweepDirection.Counterclockwise,
+                    isStroked: false,
+                    isSmoothJoin: false);
             }
+            if (geo.CanFreeze) geo.Freeze();
+            dc.DrawGeometry(brush, borderPen, geo);
         }
     }
 

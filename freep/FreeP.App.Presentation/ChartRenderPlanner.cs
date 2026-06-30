@@ -65,6 +65,26 @@ public readonly record struct ChartLineSeriesPrimitive(
     bool WithMarkers,
     IReadOnlyList<ChartPlanPoint?> Points);
 
+public readonly record struct ChartPieSlicePrimitive(
+    int SeriesIndex,
+    int PointIndex,
+    ChartPlanPoint Center,
+    double InnerRadius,
+    double OuterRadius,
+    double StartAngle,
+    double EndAngle)
+{
+    public double SweepAngle => EndAngle - StartAngle;
+    public bool IsLargeArc => SweepAngle > Math.PI;
+    public ChartPlanPoint OuterStart => PointOnCircle(OuterRadius, StartAngle);
+    public ChartPlanPoint OuterEnd => PointOnCircle(OuterRadius, EndAngle);
+    public ChartPlanPoint InnerEnd => PointOnCircle(InnerRadius, EndAngle);
+    public ChartPlanPoint InnerStart => PointOnCircle(InnerRadius, StartAngle);
+
+    private ChartPlanPoint PointOnCircle(double radius, double angle) =>
+        new(Center.X + radius * Math.Cos(angle), Center.Y + radius * Math.Sin(angle));
+}
+
 public readonly record struct ChartDataLabelPlan(
     int SeriesIndex,
     int CategoryIndex,
@@ -582,6 +602,55 @@ public static class ChartRenderPlanner
         return primitives;
     }
 
+    public static IReadOnlyList<ChartPieSlicePrimitive> BuildPieSlicePrimitives(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+            return Array.Empty<ChartPieSlicePrimitive>();
+
+        return BuildSlicePrimitivesForSeries(
+            chart.Series[0],
+            seriesIndex: 0,
+            plot,
+            innerRadius: 0,
+            outerRadius: Math.Min(plot.Width, plot.Height) / 2 * 0.85);
+    }
+
+    public static IReadOnlyList<ChartPieSlicePrimitive> BuildDoughnutSlicePrimitives(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+            return Array.Empty<ChartPieSlicePrimitive>();
+
+        double outerRadius = Math.Min(plot.Width, plot.Height) / 2 * 0.85;
+        double innerHoleRadius = outerRadius * Math.Clamp(chart.DoughnutHolePercent, 0, 90) / 100.0;
+        int seriesCount = chart.Series.Count;
+        double ringGap = seriesCount > 1 ? outerRadius * 0.04 : 0;
+        double ringWidth = seriesCount > 1
+            ? (outerRadius - innerHoleRadius - (seriesCount - 1) * ringGap) / seriesCount
+            : outerRadius - innerHoleRadius;
+
+        var primitives = new List<ChartPieSlicePrimitive>();
+        for (int seriesIndex = 0; seriesIndex < seriesCount; seriesIndex++)
+        {
+            double innerRadius = innerHoleRadius + seriesIndex * (ringWidth + ringGap);
+            double seriesOuterRadius = innerRadius + ringWidth;
+            if (seriesOuterRadius <= 0 || innerRadius < 0)
+                innerRadius = 0;
+
+            primitives.AddRange(BuildSlicePrimitivesForSeries(
+                chart.Series[seriesIndex],
+                seriesIndex,
+                plot,
+                innerRadius,
+                seriesOuterRadius));
+        }
+
+        return primitives;
+    }
+
     public static IReadOnlyList<ChartDataLabelPlan> BuildDataLabelPlans(
         ChartShape chart,
         ChartPlanRect plot)
@@ -744,6 +813,47 @@ public static class ChartRenderPlanner
         }
 
         return FormatAxisValue(value);
+    }
+
+    private static IReadOnlyList<ChartPieSlicePrimitive> BuildSlicePrimitivesForSeries(
+        ChartSeries series,
+        int seriesIndex,
+        ChartPlanRect plot,
+        double innerRadius,
+        double outerRadius)
+    {
+        var values = series.Values
+            .Where(value => value.HasValue && value.Value > 0)
+            .Select(value => value!.Value)
+            .ToList();
+        if (values.Count == 0)
+            return Array.Empty<ChartPieSlicePrimitive>();
+
+        double total = values.Sum();
+        if (total <= 0)
+            return Array.Empty<ChartPieSlicePrimitive>();
+
+        var center = new ChartPlanPoint(
+            plot.X + plot.Width / 2,
+            plot.Y + plot.Height / 2);
+        double startAngle = -Math.PI / 2;
+        var primitives = new List<ChartPieSlicePrimitive>(values.Count);
+        for (int pointIndex = 0; pointIndex < values.Count; pointIndex++)
+        {
+            double sweepAngle = values[pointIndex] / total * 2 * Math.PI;
+            double endAngle = startAngle + sweepAngle;
+            primitives.Add(new ChartPieSlicePrimitive(
+                seriesIndex,
+                pointIndex,
+                center,
+                innerRadius,
+                outerRadius,
+                startAngle,
+                endAngle));
+            startAngle = endAngle;
+        }
+
+        return primitives;
     }
 
     private static IReadOnlyList<ChartDataLabelPlan> BuildColumnDataLabelPlans(
