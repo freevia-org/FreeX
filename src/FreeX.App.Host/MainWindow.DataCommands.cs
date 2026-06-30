@@ -14,6 +14,8 @@ using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using AdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;
+using AdvancedFilterRangeSelectionRequest = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionRequest;
 
 namespace FreeX.App.Host;
 
@@ -287,7 +289,7 @@ public partial class MainWindow
     }
 
     private bool TryParseAdvancedFilterRange(string input, out GridRange range)
-        => AdvancedFilterInputParser.TryParseRange(
+        => AdvancedFilterPlanner.TryParseRange(
             _currentSheetId,
             input,
             ResolveSheetIdByName,

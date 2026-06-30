@@ -1,11 +1,12 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using ServicesAdvancedFilterOutputMode = FreeX.App.Services.AdvancedFilterOutputMode;
-using ServicesAdvancedFilterPlanError = FreeX.App.Services.AdvancedFilterPlanError;
-using ServicesAdvancedFilterPlanner = FreeX.App.Services.AdvancedFilterPlanner;
-using ServicesAdvancedFilterPlanResult = FreeX.App.Services.AdvancedFilterPlanResult;
-using ServicesAdvancedFilterRangeSelectionRequest = FreeX.App.Services.AdvancedFilterRangeSelectionRequest;
-using ServicesAdvancedFilterRangeSelectionTarget = FreeX.App.Services.AdvancedFilterRangeSelectionTarget;
+using AdvancedFilterDialogResult = FreeX.App.Presentation.Filtering.AdvancedFilterDialogResult;
+using AdvancedFilterRangeSelectionRequest = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionRequest;
+using AdvancedFilterRangeSelectionTarget = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionTarget;
+using SharedAdvancedFilterOutputMode = FreeX.App.Presentation.Filtering.AdvancedFilterOutputMode;
+using SharedAdvancedFilterPlanError = FreeX.App.Presentation.Filtering.AdvancedFilterPlanError;
+using SharedAdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;
+using SharedAdvancedFilterPlanResult = FreeX.App.Presentation.Filtering.AdvancedFilterPlanResult;
 
 namespace FreeX.App.Host;
 
@@ -22,8 +23,8 @@ public sealed partial class AdvancedFilterDialog
         out string? error)
     {
         var outputMode = string.IsNullOrWhiteSpace(copyToCellText)
-            ? ServicesAdvancedFilterOutputMode.FilterInPlace
-            : ServicesAdvancedFilterOutputMode.CopyToAnotherLocation;
+            ? SharedAdvancedFilterOutputMode.FilterInPlace
+            : SharedAdvancedFilterOutputMode.CopyToAnotherLocation;
 
         return TryParse(
             currentSheetId,
@@ -71,8 +72,8 @@ public sealed partial class AdvancedFilterDialog
             criteriaRangeText,
             copyToCellText,
             copyToAnotherLocation
-                ? ServicesAdvancedFilterOutputMode.CopyToAnotherLocation
-                : ServicesAdvancedFilterOutputMode.FilterInPlace,
+                ? SharedAdvancedFilterOutputMode.CopyToAnotherLocation
+                : SharedAdvancedFilterOutputMode.FilterInPlace,
             uniqueRecordsOnly,
             resolveSheetId,
             out result,
@@ -93,8 +94,8 @@ public sealed partial class AdvancedFilterDialog
             criteriaRangeText,
             copyToCellText,
             copyToAnotherLocation
-                ? ServicesAdvancedFilterOutputMode.CopyToAnotherLocation
-                : ServicesAdvancedFilterOutputMode.FilterInPlace,
+                ? SharedAdvancedFilterOutputMode.CopyToAnotherLocation
+                : SharedAdvancedFilterOutputMode.FilterInPlace,
             uniqueRecordsOnly,
             resolveSheetId: null,
             out result,
@@ -102,24 +103,18 @@ public sealed partial class AdvancedFilterDialog
 
     public static AdvancedFilterRangeSelectionRequest CreateRangeSelectionRequest(
         AdvancedFilterRangeSelectionTarget target,
-        string currentText)
-    {
-        var request = ServicesAdvancedFilterPlanner.CreateRangeSelectionRequest(
-            ToServicesRangeSelectionTarget(target),
-            currentText);
+        string currentText) =>
+        SharedAdvancedFilterPlanner.CreateRangeSelectionRequest(target, currentText);
 
-        return ToHostRangeSelectionRequest(request);
-    }
-
-    private static ServicesAdvancedFilterPlanResult CreateAdvancedFilterPlan(
+    private static SharedAdvancedFilterPlanResult CreateAdvancedFilterPlan(
         SheetId currentSheetId,
         string listRangeText,
         string criteriaRangeText,
         string? copyToCellText,
-        ServicesAdvancedFilterOutputMode outputMode,
+        SharedAdvancedFilterOutputMode outputMode,
         bool uniqueRecordsOnly,
         Func<string, SheetId?>? resolveSheetId) =>
-        ServicesAdvancedFilterPlanner.CreatePlan(
+        SharedAdvancedFilterPlanner.CreatePlan(
             currentSheetId,
             listRangeText,
             criteriaRangeText,
@@ -133,7 +128,7 @@ public sealed partial class AdvancedFilterDialog
         string listRangeText,
         string criteriaRangeText,
         string? copyToCellText,
-        ServicesAdvancedFilterOutputMode outputMode,
+        SharedAdvancedFilterOutputMode outputMode,
         bool uniqueRecordsOnly,
         Func<string, SheetId?>? resolveSheetId,
         out AdvancedFilterDialogResult result,
@@ -152,74 +147,33 @@ public sealed partial class AdvancedFilterDialog
     }
 
     private static bool TryCreateDialogResult(
-        ServicesAdvancedFilterPlanResult planResult,
+        SharedAdvancedFilterPlanResult planResult,
         out AdvancedFilterDialogResult result,
         out string? error)
     {
-        if (!planResult.Success || planResult.Plan is null)
+        if (!SharedAdvancedFilterPlanner.TryCreateDialogResult(planResult, out result))
         {
-            result = default!;
             error = FormatAdvancedFilterPlanError(planResult.Error);
             return false;
         }
 
-        var plan = planResult.Plan;
-        result = new AdvancedFilterDialogResult(
-            plan.ListRange,
-            plan.CriteriaRange,
-            plan.CopyToCell,
-            plan.UniqueRecordsOnly,
-            plan.CopyToRange);
         error = null;
         return true;
     }
 
-    private static string FormatAdvancedFilterPlanError(ServicesAdvancedFilterPlanError error) =>
+    private static string FormatAdvancedFilterPlanError(SharedAdvancedFilterPlanError error) =>
         error switch
         {
-            ServicesAdvancedFilterPlanError.InvalidListRange => UiText.Get("AdvancedFilter_EnterValidListRange"),
-            ServicesAdvancedFilterPlanError.ListRangeRequiresDataRows => UiText.Get("AdvancedFilter_ListRangeMustIncludeHeaders"),
-            ServicesAdvancedFilterPlanError.ListRangeTooLarge => AdvancedFilterCommand.ListRangeTooLargeMessage,
-            ServicesAdvancedFilterPlanError.InvalidCriteriaRange => UiText.Get("AdvancedFilter_EnterValidCriteriaRange"),
-            ServicesAdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => UiText.Get("AdvancedFilter_CriteriaRangeMustIncludeHeaders"),
-            ServicesAdvancedFilterPlanError.CriteriaRangeTooLarge => AdvancedFilterCommand.CriteriaRangeTooLargeMessage,
-            ServicesAdvancedFilterPlanError.CopyDestinationRequired or
-            ServicesAdvancedFilterPlanError.InvalidCopyDestinationRange => UiText.Get("AdvancedFilter_EnterValidCopyToRange"),
-            ServicesAdvancedFilterPlanError.CopyDestinationRangeTooLarge => AdvancedFilterCommand.CopyOutputTooLargeMessage,
-            ServicesAdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => UiText.Get("AdvancedFilter_EnterValidCopyToRange"),
+            SharedAdvancedFilterPlanError.InvalidListRange => UiText.Get("AdvancedFilter_EnterValidListRange"),
+            SharedAdvancedFilterPlanError.ListRangeRequiresDataRows => UiText.Get("AdvancedFilter_ListRangeMustIncludeHeaders"),
+            SharedAdvancedFilterPlanError.ListRangeTooLarge => AdvancedFilterCommand.ListRangeTooLargeMessage,
+            SharedAdvancedFilterPlanError.InvalidCriteriaRange => UiText.Get("AdvancedFilter_EnterValidCriteriaRange"),
+            SharedAdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => UiText.Get("AdvancedFilter_CriteriaRangeMustIncludeHeaders"),
+            SharedAdvancedFilterPlanError.CriteriaRangeTooLarge => AdvancedFilterCommand.CriteriaRangeTooLargeMessage,
+            SharedAdvancedFilterPlanError.CopyDestinationRequired or
+            SharedAdvancedFilterPlanError.InvalidCopyDestinationRange => UiText.Get("AdvancedFilter_EnterValidCopyToRange"),
+            SharedAdvancedFilterPlanError.CopyDestinationRangeTooLarge => AdvancedFilterCommand.CopyOutputTooLargeMessage,
+            SharedAdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => UiText.Get("AdvancedFilter_EnterValidCopyToRange"),
             _ => UiText.Get("AdvancedFilter_EnterValidFilterRanges")
-        };
-
-    private static bool IsAdvancedFilterCriteriaError(ServicesAdvancedFilterPlanError error) =>
-        error is ServicesAdvancedFilterPlanError.InvalidCriteriaRange or
-            ServicesAdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows or
-            ServicesAdvancedFilterPlanError.CriteriaRangeTooLarge;
-
-    private static bool IsAdvancedFilterCopyDestinationError(ServicesAdvancedFilterPlanError error) =>
-        error is ServicesAdvancedFilterPlanError.CopyDestinationRequired or
-            ServicesAdvancedFilterPlanError.InvalidCopyDestinationRange or
-            ServicesAdvancedFilterPlanError.CopyDestinationRangeTooLarge or
-            ServicesAdvancedFilterPlanError.CopyDestinationMustBeOnListSheet;
-
-    private static ServicesAdvancedFilterRangeSelectionTarget ToServicesRangeSelectionTarget(
-        AdvancedFilterRangeSelectionTarget target) =>
-        target switch
-        {
-            AdvancedFilterRangeSelectionTarget.CriteriaRange => ServicesAdvancedFilterRangeSelectionTarget.CriteriaRange,
-            AdvancedFilterRangeSelectionTarget.CopyTo => ServicesAdvancedFilterRangeSelectionTarget.CopyTo,
-            _ => ServicesAdvancedFilterRangeSelectionTarget.ListRange
-        };
-
-    private static AdvancedFilterRangeSelectionRequest ToHostRangeSelectionRequest(
-        ServicesAdvancedFilterRangeSelectionRequest request) =>
-        new(ToHostRangeSelectionTarget(request.Target), request.CurrentText, request.CollapseDialog);
-
-    private static AdvancedFilterRangeSelectionTarget ToHostRangeSelectionTarget(
-        ServicesAdvancedFilterRangeSelectionTarget target) =>
-        target switch
-        {
-            ServicesAdvancedFilterRangeSelectionTarget.CriteriaRange => AdvancedFilterRangeSelectionTarget.CriteriaRange,
-            ServicesAdvancedFilterRangeSelectionTarget.CopyTo => AdvancedFilterRangeSelectionTarget.CopyTo,
-            _ => AdvancedFilterRangeSelectionTarget.ListRange
         };
 }

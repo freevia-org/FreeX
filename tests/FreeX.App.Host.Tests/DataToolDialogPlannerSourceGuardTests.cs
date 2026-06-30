@@ -8,8 +8,9 @@ public sealed class DataToolDialogPlannerSourceGuardTests
     public void HostDataToolPlanningFacades_DelegatePortableLogicToSharedPlanners()
     {
         var advancedFilter = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.Planning.cs");
-        advancedFilter.Should().Contain("ServicesAdvancedFilterPlanner.CreatePlan(");
-        advancedFilter.Should().Contain("ServicesAdvancedFilterOutputMode");
+        advancedFilter.Should().Contain("SharedAdvancedFilterPlanner.CreatePlan(");
+        advancedFilter.Should().Contain("SharedAdvancedFilterOutputMode");
+        advancedFilter.Should().NotContain("ServicesAdvancedFilterPlanner");
         advancedFilter.Should().NotContain("WorkbookReferenceNavigator");
 
         var consolidate = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.Planning.cs");

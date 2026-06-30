@@ -5,6 +5,8 @@ using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using AdvancedFilterRangeSelectionRequest = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionRequest;
+using AdvancedFilterRangeSelectionTarget = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionTarget;
 
 namespace FreeX.App.Host.Tests;
 
@@ -385,9 +387,10 @@ public sealed partial class DataToolDialogTests
             "AdvancedFilterDialog.Planning.cs");
 
         source.Should().Contain("FocusInvalidRangeInput(planResult.Error);");
-        source.Should().Contain("private void FocusInvalidRangeInput(ServicesAdvancedFilterPlanError error)");
-        source.Should().Contain("IsAdvancedFilterCriteriaError(error)");
-        source.Should().Contain("IsAdvancedFilterCopyDestinationError(error)");
+        source.Should().Contain("private void FocusInvalidRangeInput(SharedAdvancedFilterPlanError error)");
+        source.Should().Contain("SharedAdvancedFilterPlanner.FocusTargetForPlanError(error)");
+        source.Should().Contain("AdvancedFilterErrorFocusTarget.CriteriaRange");
+        source.Should().Contain("AdvancedFilterErrorFocusTarget.CopyTo");
         source.Should().Contain("UiText.Get(\"AdvancedFilter_CriteriaRangeMustIncludeHeaders\")");
         source.Should().Contain("_copyToAnotherLocationButton.IsChecked = true;");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
@@ -536,8 +539,8 @@ public sealed partial class DataToolDialogTests
                 CollapseDialog: true));
 
         var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.Planning.cs");
-        source.Should().Contain("ServicesAdvancedFilterPlanner.CreateRangeSelectionRequest(");
-        source.Should().Contain("ToServicesRangeSelectionTarget(target)");
+        source.Should().Contain("SharedAdvancedFilterPlanner.CreateRangeSelectionRequest(target, currentText)");
+        source.Should().NotContain("ToServicesRangeSelectionTarget(target)");
     }
 
     [Theory]

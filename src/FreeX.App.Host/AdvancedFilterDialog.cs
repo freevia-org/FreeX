@@ -2,30 +2,13 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Model;
-using ServicesAdvancedFilterOutputMode = FreeX.App.Services.AdvancedFilterOutputMode;
-using ServicesAdvancedFilterPlanError = FreeX.App.Services.AdvancedFilterPlanError;
+using SharedAdvancedFilterOutputMode = FreeX.App.Presentation.Filtering.AdvancedFilterOutputMode;
+using SharedAdvancedFilterPlanError = FreeX.App.Presentation.Filtering.AdvancedFilterPlanError;
+using SharedAdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;
 
 namespace FreeX.App.Host;
-
-public sealed record AdvancedFilterDialogResult(
-    GridRange ListRange,
-    GridRange CriteriaRange,
-    CellAddress? CopyToCell,
-    bool UniqueRecordsOnly,
-    GridRange? CopyToRange = null);
-
-public enum AdvancedFilterRangeSelectionTarget
-{
-    ListRange,
-    CriteriaRange,
-    CopyTo
-}
-
-public sealed record AdvancedFilterRangeSelectionRequest(
-    AdvancedFilterRangeSelectionTarget Target,
-    string CurrentText,
-    bool CollapseDialog = true);
 
 public sealed partial class AdvancedFilterDialog : Window
 {
@@ -222,23 +205,21 @@ public sealed partial class AdvancedFilterDialog : Window
             : Visibility.Visible;
     }
 
-    private void FocusInvalidRangeInput(ServicesAdvancedFilterPlanError error)
+    private void FocusInvalidRangeInput(SharedAdvancedFilterPlanError error)
     {
-        TextBox target;
-        if (IsAdvancedFilterCriteriaError(error))
-        {
-            target = _criteriaRangeBox;
-        }
-        else if (IsAdvancedFilterCopyDestinationError(error))
+        var focusTarget = SharedAdvancedFilterPlanner.FocusTargetForPlanError(error);
+        if (focusTarget == AdvancedFilterErrorFocusTarget.CopyTo)
         {
             _copyToAnotherLocationButton.IsChecked = true;
             UpdateCopyToState();
-            target = _copyToBox;
         }
-        else
+
+        var target = focusTarget switch
         {
-            target = _listRangeBox;
-        }
+            AdvancedFilterErrorFocusTarget.CriteriaRange => _criteriaRangeBox,
+            AdvancedFilterErrorFocusTarget.CopyTo => _copyToBox,
+            _ => _listRangeBox
+        };
 
         DialogFocus.FocusAndSelect(target);
     }
@@ -246,8 +227,8 @@ public sealed partial class AdvancedFilterDialog : Window
     private void Accept()
     {
         var outputMode = _copyToAnotherLocationButton.IsChecked == true
-            ? ServicesAdvancedFilterOutputMode.CopyToAnotherLocation
-            : ServicesAdvancedFilterOutputMode.FilterInPlace;
+            ? SharedAdvancedFilterOutputMode.CopyToAnotherLocation
+            : SharedAdvancedFilterOutputMode.FilterInPlace;
         var planResult = CreateAdvancedFilterPlan(
                 _sheetId,
                 _listRangeBox.Text,

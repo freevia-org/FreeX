@@ -1,5 +1,10 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using SharedAdvancedFilterOutputMode = FreeX.App.Presentation.Filtering.AdvancedFilterOutputMode;
+using SharedAdvancedFilterPlanError = FreeX.App.Presentation.Filtering.AdvancedFilterPlanError;
+using SharedAdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;
+using SharedAdvancedFilterPlanResult = FreeX.App.Presentation.Filtering.AdvancedFilterPlanResult;
+using SharedAdvancedFilterRangeSelectionTarget = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionTarget;
 
 namespace FreeX.App.Services;
 
@@ -69,27 +74,8 @@ public sealed record AdvancedFilterRangeSelectionRequest(
 
 public static class AdvancedFilterPlanner
 {
-    public static GridRange CreateDefaultListRange(Sheet sheet, GridRange selectedRange)
-    {
-        if (selectedRange.RowCount == 1 &&
-            selectedRange.ColCount == 1 &&
-            SelectionRangeService.GetCurrentRegion(sheet, selectedRange.Start) is { } currentRegion &&
-            currentRegion.RowCount > 1)
-        {
-            return currentRegion;
-        }
-
-        if (selectedRange.RowCount == 1 &&
-            selectedRange.ColCount == 1 &&
-            sheet.GetUsedRange() is { } usedRange &&
-            usedRange.RowCount > 1 &&
-            usedRange.Contains(selectedRange.Start))
-        {
-            return usedRange;
-        }
-
-        return selectedRange;
-    }
+    public static GridRange CreateDefaultListRange(Sheet sheet, GridRange selectedRange) =>
+        SharedAdvancedFilterPlanner.CreateDefaultListRange(sheet, selectedRange);
 
     public static AdvancedFilterPlanResult CreatePlan(
         SheetId currentSheetId,
@@ -115,80 +101,15 @@ public static class AdvancedFilterPlanner
         string? copyToRangeText,
         AdvancedFilterOutputMode outputMode,
         bool uniqueRecordsOnly,
-        Func<string, SheetId?>? resolveSheetId = null)
-    {
-        if (outputMode is not AdvancedFilterOutputMode.FilterInPlace and
-            not AdvancedFilterOutputMode.CopyToAnotherLocation)
-            throw new ArgumentOutOfRangeException(nameof(outputMode), outputMode, "Unknown Advanced Filter output mode.");
-
-        resolveSheetId ??= static _ => null;
-
-        if (!TryParseRange(currentSheetId, listRangeText, resolveSheetId, out var listRange))
-            return AdvancedFilterPlanResult.Invalid(
-                AdvancedFilterPlanError.InvalidListRange,
-                NormalizeInput(listRangeText));
-
-        if (listRange.RowCount < 2)
-            return AdvancedFilterPlanResult.Invalid(
-                AdvancedFilterPlanError.ListRangeRequiresDataRows,
-                NormalizeInput(listRangeText));
-
-        if (!AdvancedFilterCommand.IsListRangeWithinSupportedBounds(listRange))
-            return AdvancedFilterPlanResult.Invalid(
-                AdvancedFilterPlanError.ListRangeTooLarge,
-                NormalizeInput(listRangeText));
-
-        if (!TryParseRange(currentSheetId, criteriaRangeText, resolveSheetId, out var criteriaRange))
-            return AdvancedFilterPlanResult.Invalid(
-                AdvancedFilterPlanError.InvalidCriteriaRange,
-                NormalizeInput(criteriaRangeText));
-
-        if (criteriaRange.RowCount < 2)
-            return AdvancedFilterPlanResult.Invalid(
-                AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows,
-                NormalizeInput(criteriaRangeText));
-
-        if (!AdvancedFilterCommand.IsCriteriaRangeWithinSupportedBounds(criteriaRange))
-            return AdvancedFilterPlanResult.Invalid(
-                AdvancedFilterPlanError.CriteriaRangeTooLarge,
-                NormalizeInput(criteriaRangeText));
-
-        GridRange? copyToRange = null;
-        if (outputMode == AdvancedFilterOutputMode.CopyToAnotherLocation)
-        {
-            var copyInput = NormalizeInput(copyToRangeText);
-            if (copyInput.Length == 0)
-                return AdvancedFilterPlanResult.Invalid(AdvancedFilterPlanError.CopyDestinationRequired);
-
-            if (!TryParseCopyDestinationRange(copyInput, currentSheetId, out copyToRange))
-                return AdvancedFilterPlanResult.Invalid(
-                    AdvancedFilterPlanError.InvalidCopyDestinationRange,
-                    copyInput);
-
-            if (copyToRange is { } parsedCopyRange &&
-                parsedCopyRange.ColCount > AdvancedFilterCommand.MaxListColumns)
-            {
-                return AdvancedFilterPlanResult.Invalid(
-                    AdvancedFilterPlanError.CopyDestinationRangeTooLarge,
-                    copyInput);
-            }
-
-            if (copyToRange is { } destinationRange &&
-                destinationRange.Start.Sheet != listRange.Start.Sheet)
-            {
-                return AdvancedFilterPlanResult.Invalid(
-                    AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet,
-                    copyInput);
-            }
-        }
-
-        return AdvancedFilterPlanResult.Valid(new AdvancedFilterPlan(
-            listRange,
-            criteriaRange,
-            outputMode,
+        Func<string, SheetId?>? resolveSheetId = null) =>
+        ToServicesPlanResult(SharedAdvancedFilterPlanner.CreatePlan(
+            currentSheetId,
+            listRangeText,
+            criteriaRangeText,
+            copyToRangeText,
+            ToSharedOutputMode(outputMode),
             uniqueRecordsOnly,
-            copyToRange));
-    }
+            resolveSheetId));
 
     public static bool TryCreatePlan(
         SheetId currentSheetId,
@@ -225,67 +146,96 @@ public static class AdvancedFilterPlanner
         string? input,
         Func<string, SheetId?>? resolveSheetId,
         out GridRange range) =>
-        WorkbookReferenceNavigator.TryParseReferenceRange(
-            NormalizeInput(input),
-            defaultSheetId,
-            resolveSheetId ?? (static _ => null),
-            definedNames: null,
-            out range);
+        SharedAdvancedFilterPlanner.TryParseRange(defaultSheetId, input, resolveSheetId, out range);
 
     public static bool TryParseCopyDestination(
         string? input,
         SheetId sheetId,
-        out CellAddress? destination)
-    {
-        destination = null;
-        var normalized = NormalizeInput(input);
-        if (normalized.Length == 0)
-            return true;
-
-        if (!WorkbookReferenceNavigator.TryParseAddress(normalized, sheetId, out var parsed))
-            return false;
-
-        destination = parsed;
-        return true;
-    }
+        out CellAddress? destination) =>
+        SharedAdvancedFilterPlanner.TryParseCopyDestination(input, sheetId, out destination);
 
     public static bool TryParseCopyDestinationRange(
         string? input,
         SheetId sheetId,
-        out GridRange? destination)
-    {
-        destination = null;
-        var normalized = NormalizeInput(input);
-        if (normalized.Length == 0)
-            return true;
+        out GridRange? destination) =>
+        SharedAdvancedFilterPlanner.TryParseCopyDestinationRange(input, sheetId, out destination);
 
-        if (!WorkbookReferenceNavigator.TryParseReferenceRange(
-                normalized,
-                sheetId,
-                static _ => null,
-                definedNames: null,
-                out var parsed))
-            return false;
-
-        if (parsed.Start.Row != parsed.End.Row)
-            return false;
-
-        destination = parsed;
-        return true;
-    }
-
-    public static bool ParseUniqueRecordsOnly(string? input)
-    {
-        var normalized = NormalizeInput(input);
-        return normalized.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
-               normalized.Equals("y", StringComparison.OrdinalIgnoreCase) ||
-               normalized.Equals("true", StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool ParseUniqueRecordsOnly(string? input) =>
+        SharedAdvancedFilterPlanner.ParseUniqueRecordsOnly(input);
 
     public static AdvancedFilterRangeSelectionRequest CreateRangeSelectionRequest(
         AdvancedFilterRangeSelectionTarget target,
-        string? currentText) =>
-        new(target, NormalizeInput(currentText), CollapseDialog: true);
+        string? currentText)
+    {
+        var request = SharedAdvancedFilterPlanner.CreateRangeSelectionRequest(
+            ToSharedRangeSelectionTarget(target),
+            currentText);
 
-    private static string NormalizeInput(string? input) => input?.Trim() ?? "";
+        return new(
+            ToServicesRangeSelectionTarget(request.Target),
+            request.CurrentText,
+            request.CollapseDialog);
+    }
+
+    private static AdvancedFilterPlanResult ToServicesPlanResult(SharedAdvancedFilterPlanResult result) =>
+        result.Plan is { } plan
+            ? AdvancedFilterPlanResult.Valid(ToServicesPlan(plan))
+            : AdvancedFilterPlanResult.Invalid(ToServicesPlanError(result.Error), result.InvalidText);
+
+    private static AdvancedFilterPlan ToServicesPlan(FreeX.App.Presentation.Filtering.AdvancedFilterPlan plan) =>
+        new(
+            plan.ListRange,
+            plan.CriteriaRange,
+            ToServicesOutputMode(plan.OutputMode),
+            plan.UniqueRecordsOnly,
+            plan.CopyToRange);
+
+    private static SharedAdvancedFilterOutputMode ToSharedOutputMode(AdvancedFilterOutputMode outputMode) =>
+        outputMode switch
+        {
+            AdvancedFilterOutputMode.FilterInPlace => SharedAdvancedFilterOutputMode.FilterInPlace,
+            AdvancedFilterOutputMode.CopyToAnotherLocation => SharedAdvancedFilterOutputMode.CopyToAnotherLocation,
+            _ => throw new ArgumentOutOfRangeException(nameof(outputMode), outputMode, "Unknown Advanced Filter output mode.")
+        };
+
+    private static AdvancedFilterOutputMode ToServicesOutputMode(SharedAdvancedFilterOutputMode outputMode) =>
+        outputMode switch
+        {
+            SharedAdvancedFilterOutputMode.CopyToAnotherLocation => AdvancedFilterOutputMode.CopyToAnotherLocation,
+            _ => AdvancedFilterOutputMode.FilterInPlace
+        };
+
+    private static AdvancedFilterPlanError ToServicesPlanError(SharedAdvancedFilterPlanError error) =>
+        error switch
+        {
+            SharedAdvancedFilterPlanError.InvalidListRange => AdvancedFilterPlanError.InvalidListRange,
+            SharedAdvancedFilterPlanError.ListRangeRequiresDataRows => AdvancedFilterPlanError.ListRangeRequiresDataRows,
+            SharedAdvancedFilterPlanError.InvalidCriteriaRange => AdvancedFilterPlanError.InvalidCriteriaRange,
+            SharedAdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows,
+            SharedAdvancedFilterPlanError.ListRangeTooLarge => AdvancedFilterPlanError.ListRangeTooLarge,
+            SharedAdvancedFilterPlanError.CriteriaRangeTooLarge => AdvancedFilterPlanError.CriteriaRangeTooLarge,
+            SharedAdvancedFilterPlanError.CopyDestinationRequired => AdvancedFilterPlanError.CopyDestinationRequired,
+            SharedAdvancedFilterPlanError.InvalidCopyDestinationRange => AdvancedFilterPlanError.InvalidCopyDestinationRange,
+            SharedAdvancedFilterPlanError.CopyDestinationRangeTooLarge => AdvancedFilterPlanError.CopyDestinationRangeTooLarge,
+            SharedAdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet,
+            _ => AdvancedFilterPlanError.None
+        };
+
+    private static SharedAdvancedFilterRangeSelectionTarget ToSharedRangeSelectionTarget(
+        AdvancedFilterRangeSelectionTarget target) =>
+        target switch
+        {
+            AdvancedFilterRangeSelectionTarget.CriteriaRange => SharedAdvancedFilterRangeSelectionTarget.CriteriaRange,
+            AdvancedFilterRangeSelectionTarget.CopyTo => SharedAdvancedFilterRangeSelectionTarget.CopyTo,
+            _ => SharedAdvancedFilterRangeSelectionTarget.ListRange
+        };
+
+    private static AdvancedFilterRangeSelectionTarget ToServicesRangeSelectionTarget(
+        SharedAdvancedFilterRangeSelectionTarget target) =>
+        target switch
+        {
+            SharedAdvancedFilterRangeSelectionTarget.CriteriaRange => AdvancedFilterRangeSelectionTarget.CriteriaRange,
+            SharedAdvancedFilterRangeSelectionTarget.CopyTo => AdvancedFilterRangeSelectionTarget.CopyTo,
+            _ => AdvancedFilterRangeSelectionTarget.ListRange
+        };
 }
