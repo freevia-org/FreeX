@@ -87,7 +87,7 @@ public static class PptxPackageWriter
     [
         "[Content_Types].xml",
         "_rels/.rels",
-        "docProps/core.xml",
+        OpcPackageProperties.CorePropertiesZipEntry,
         "ppt/presentation.xml",
         "ppt/_rels/presentation.xml.rels",
         "ppt/presProps.xml",
@@ -125,7 +125,6 @@ public static class PptxPackageWriter
     private const string PresPropsCT     = "application/vnd.openxmlformats-officedocument.presentationml.presProps+xml";
     private const string ViewPropsCT     = "application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml";
     private const string TableStylesCT   = "application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml";
-    private const string CorePropsCT     = OpcPackageProperties.CorePropertiesContentType;
     private const string RelsCT          = OpcMediaTypes.RelationshipsContentType;
     private const string ChartCT         = PptxChartWriter.ChartCT;
     private const string NotesSlideCT    = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
@@ -276,12 +275,18 @@ public static class PptxPackageWriter
         // --- 2. Root rels ---
         var rootRels = new OpcRelationshipDocument();
         rootRels.Add("rId1", OfficeDocRelType, "ppt/presentation.xml");
-        rootRels.Add("rId2", CorePropsRelType, "docProps/core.xml");
+        rootRels.Add("rId2", CorePropsRelType, OpcPackageProperties.CorePropertiesZipEntry);
         MergePreservedRelationships(rootRels, packageSnapshot, "_rels/.rels", string.Empty);
         WriteEntry(archive, "_rels/.rels", rootRels.ToXDocument());
 
         // --- 3. Core properties ---
-        WriteEntry(archive, "docProps/core.xml", BuildCorePropsXml(presentation.Properties));
+        WriteEntry(
+            archive,
+            OpcPackageProperties.CorePropertiesZipEntry,
+            OpcDocumentProperties.BuildCorePropertiesDocument(
+                presentation.Properties.ToCoreProperties(),
+                includeEmptyStrings: true,
+                includeXmlDeclaration: true));
 
         // --- 4. Theme(s) — one per master (MM4: multi-master theme fix) ---
         // Build the per-master theme map: master index (0-based) → theme to write.
@@ -601,7 +606,7 @@ public static class PptxPackageWriter
             Override(CT, "/ppt/presProps.xml", PresPropsCT),
             Override(CT, "/ppt/viewProps.xml", ViewPropsCT),
             Override(CT, "/ppt/tableStyles.xml", TableStylesCT),
-            Override(CT, "/docProps/core.xml", CorePropsCT),
+            Override(CT, OpcPackageProperties.CorePropertiesPartName, OpcPackageProperties.CorePropertiesContentType),
         };
         // MM4: one theme Override entry per master (theme1.xml, theme2.xml, …).
         for (int mi = 0; mi < masters.Count; mi++)
@@ -1839,12 +1844,6 @@ public static class PptxPackageWriter
                 new XAttribute("def", "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}")));
 
     // ── Core properties ───────────────────────────────────────────────────────────
-
-    private static XDocument BuildCorePropsXml(DocumentProperties props) =>
-        OpcDocumentProperties.BuildCorePropertiesDocument(
-            props.ToCoreProperties(),
-            includeEmptyStrings: true,
-            includeXmlDeclaration: true);
 
     // ── Shape elements ────────────────────────────────────────────────────────────
 
