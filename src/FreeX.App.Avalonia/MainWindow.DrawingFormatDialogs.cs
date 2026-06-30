@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -29,54 +30,25 @@ public sealed partial class MainWindow
     // Drawing dialog chrome helpers
     // -------------------------------------------------------------------------------------------------------
 
+    private static AvaloniaCompactDialogChromeStyle DrawingDialogChromeStyle => new(FormulaBarFontFamily);
+
     private static void ApplyDrawingButtonChrome(Button button, double width = 0, bool isDefault = false)
     {
-        if (width > 0) { button.Width = width; button.MinWidth = width; }
-        button.Height = 24;
-        button.MinHeight = 24;
-        button.MaxHeight = 24;
-        button.Padding = new Thickness(4, 1);
-        button.Background = Brushes.White;
-        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
-        button.BorderThickness = new Thickness(1);
-        button.FontSize = 12;
-        button.FontFamily = FormulaBarFontFamily;
-        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
-        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        if (width > 0)
+            button.Width = width;
+        AvaloniaCompactDialogChrome.ApplyButton(button, DrawingDialogChromeStyle, width, isDefault);
     }
 
     private static void ApplyDrawingTextBoxChrome(TextBox tb)
-    {
-        tb.Height = 24;
-        tb.MinHeight = 24;
-        tb.MaxHeight = 24;
-        tb.Padding = new Thickness(4, 1);
-        tb.FontSize = 12;
-        tb.FontFamily = FormulaBarFontFamily;
-        tb.BorderBrush = Brush(130, 130, 130);
-        tb.BorderThickness = new Thickness(1);
-        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-    }
+        => AvaloniaCompactDialogChrome.ApplyTextBox(tb, DrawingDialogChromeStyle);
 
     private static void ApplyDrawingComboBoxChrome(ComboBox cb)
-    {
-        cb.Height = 24;
-        cb.MinHeight = 24;
-        cb.MaxHeight = 24;
-        cb.Padding = new Thickness(5, 0, 4, 0);
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
-        cb.BorderBrush = Brush(130, 130, 130);
-        cb.BorderThickness = new Thickness(1);
-    }
+        => AvaloniaCompactDialogChrome.ApplyComboBox(cb, DrawingDialogChromeStyle);
 
     private static void ApplyDrawingCheckBoxChrome(CheckBox cb)
     {
         StripContentMnemonic(cb);
-        cb.MinHeight = 20;
-        cb.MaxHeight = 20;
-        cb.FontSize = 12;
-        cb.FontFamily = FormulaBarFontFamily;
+        AvaloniaCompactDialogChrome.ApplyCheckBox(cb, DrawingDialogChromeStyle);
     }
 
     // -------------------------------------------------------------------------------------------------------
@@ -212,14 +184,7 @@ public sealed partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
         });
         content.Children.Add(altTextBox);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);
@@ -342,14 +307,7 @@ public sealed partial class MainWindow
         content.Children.Add(FormRow(UiText.Get("PictureCrop_TopLabel"), topBox));
         content.Children.Add(FormRow(UiText.Get("PictureCrop_RightLabel"), rightBox));
         content.Children.Add(FormRow(UiText.Get("PictureCrop_BottomLabel"), bottomBox));
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { resetButton, ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([resetButton, ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);
@@ -470,14 +428,7 @@ public sealed partial class MainWindow
                 new TextBlock { Text = UiText.Get("ShapeEffects_Label"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 effectBox,
                 descriptionText,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Spacing = 8,
-                    Margin = new Thickness(0, 4, 0, 0),
-                    Children = { ok, cancel },
-                },
+                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 4, 0, 0)),
             },
         };
 
@@ -661,14 +612,7 @@ public sealed partial class MainWindow
         content.Children.Add(gradientGroup);
         content.Children.Add(startSummary);
         content.Children.Add(endSummary);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
 
         UpdatePreview();
@@ -760,20 +704,16 @@ public sealed partial class MainWindow
         grid.Children.Add(directionBox);
     }
 
-    private static TextBox CreateGradientTextBox(string text) => new()
+    private static TextBox CreateGradientTextBox(string text)
     {
-        Text = text,
-        Width = 198,
-        Height = 24,
-        MinHeight = 24,
-        MaxHeight = 24,
-        Padding = new Thickness(4, 1, 4, 1),
-        FontSize = 12,
-        FontFamily = FormulaBarFontFamily,
-        BorderBrush = Brush(130, 130, 130),
-        BorderThickness = new Thickness(1),
-        VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-    };
+        var box = new TextBox
+        {
+            Text = text,
+            Width = 198,
+        };
+        ApplyDrawingTextBoxChrome(box);
+        return box;
+    }
 
     private static Button CreateGradientDialogButton(string text, bool isDefault)
     {
@@ -782,19 +722,12 @@ public sealed partial class MainWindow
             Content = text,
             IsDefault = isDefault,
             Width = 76,
-            MinWidth = 76,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(8, 1),
-            Background = Brushes.White,
-            BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            DrawingDialogChromeStyle with { ButtonPadding = new Thickness(8, 1) },
+            76,
+            isDefault);
         return button;
     }
 

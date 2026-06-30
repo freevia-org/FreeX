@@ -255,6 +255,112 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         AssertNoLocalComboBoxChrome(source, "comboBox");
     }
 
+    [Fact]
+    public void ResidualRibbonMenuSymbolAndInsertDialogs_DelegateCompactControlChromeToSharedHelper()
+    {
+        var ribbonSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuDialogs.cs"));
+        var symbolSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Symbol.cs"));
+        var insertSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
+        var moreColorsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.MoreColors.cs"));
+
+        ribbonSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle RibbonMenuDialogChromeStyle => new(FormulaBarFontFamily);");
+        ribbonSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, RibbonMenuDialogChromeStyle, minWidth, isDefault);");
+        ribbonSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, RibbonMenuDialogChromeStyle);");
+        ribbonSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
+
+        symbolSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SymbolDialogChromeStyle => new(FormulaBarFontFamily);");
+        symbolSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SymbolDialogChromeStyle, minWidth, isDefault);");
+        symbolSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SymbolDialogChromeStyle);");
+        symbolSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(");
+        symbolSource.Should().Contain("SymbolDialogChromeStyle with { ComboBoxPadding = new Thickness(6, 1) }");
+        symbolSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([insert, cancel], new Thickness(0, 12, 0, 0));");
+
+        insertSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle InsertObjectDialogChromeStyle => new(FormulaBarFontFamily);");
+        insertSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, InsertObjectDialogChromeStyle, width, isDefault);");
+        insertSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, InsertObjectDialogChromeStyle);");
+        insertSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, InsertObjectDialogChromeStyle);");
+        insertSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);");
+
+        moreColorsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle MoreColorsDialogChromeStyle => new(FormulaBarFontFamily);");
+        moreColorsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, MoreColorsDialogChromeStyle, width, isDefault);");
+        moreColorsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, MoreColorsDialogChromeStyle);");
+        moreColorsSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);");
+
+        foreach (var source in new[] { symbolSource, insertSource, moreColorsSource })
+        {
+            source.Should().NotContain("Height = 24,");
+            source.Should().NotContain("BorderBrush = Brush(130, 130, 130),");
+            source.Should().NotContain("BorderBrush = Brush(0, 120, 215),");
+            source.Should().NotContain("BorderBrush = Brush(112, 112, 112),");
+        }
+    }
+
+    [Fact]
+    public void ResidualDataOutlinePrintAndFilterDialogs_DelegateCompactControlChromeToSharedHelper()
+    {
+        var getDataSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.GetData.cs"));
+        var outlineSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Outline.cs"));
+        var printSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
+        var autoFilterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
+        var errorCheckingSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs"));
+
+        getDataSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle GetDataDialogChromeStyle => new(FormulaBarFontFamily);");
+        getDataSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, GetDataDialogChromeStyle, minWidth, isDefault);");
+        getDataSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(tb, GetDataDialogChromeStyle);");
+        getDataSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(cb, GetDataDialogChromeStyle);");
+        getDataSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(cb, GetDataDialogChromeStyle);");
+        getDataSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(rb, GetDataDialogChromeStyle);");
+        getDataSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([loadButton, cancelButton], new Thickness(0, 8, 0, 0));");
+
+        outlineSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle OutlineDialogChromeStyle => new(FormulaBarFontFamily);");
+        outlineSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, OutlineDialogChromeStyle, minWidth, isDefault);");
+        outlineSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(cb, OutlineDialogChromeStyle);");
+        outlineSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 12, 0, 0))");
+
+        printSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle PrintDialogChromeStyle => new(FormulaBarFontFamily);");
+        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, PrintDialogChromeStyle, minWidth, isDefault);");
+        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(tb, PrintDialogChromeStyle);");
+        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(cb, PrintDialogChromeStyle);");
+        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyRadioButton(rb, PrintDialogChromeStyle);");
+        printSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(cb, PrintDialogChromeStyle);");
+        printSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([cancelButton, printButton]);");
+
+        autoFilterSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);");
+        autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(okButton, AutoFilterDialogChromeStyle, 72, isDefault: true);");
+        autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton], new Thickness(0, 6, 0, 0))");
+
+        errorCheckingSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily);");
+        errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(");
+        errorCheckingSource.Should().Contain("ErrorCheckingDialogChromeStyle,");
+        errorCheckingSource.Should().NotContain("Height=24, Padding=(4,1), white background");
+
+        foreach (var source in new[] { getDataSource, outlineSource, printSource, autoFilterSource })
+        {
+            AssertNoLocalButtonChrome(source);
+            AssertNoLocalTextBoxChrome(source, "tb");
+            AssertNoLocalComboBoxChrome(source, "cb");
+        }
+    }
+
+    [Fact]
+    public void DrawingFormatDialogs_DelegateResidualCompactControlChromeToSharedHelper()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("private static AvaloniaCompactDialogChromeStyle DrawingDialogChromeStyle => new(FormulaBarFontFamily);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, DrawingDialogChromeStyle, width, isDefault);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(tb, DrawingDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(cb, DrawingDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(cb, DrawingDialogChromeStyle);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([resetButton, ok, cancel], new Thickness(0, 8, 0, 0))");
+        source.Should().Contain("DrawingDialogChromeStyle with { ButtonPadding = new Thickness(8, 1) }");
+
+        AssertNoLocalButtonChrome(source);
+        AssertNoLocalTextBoxChrome(source, "tb");
+        AssertNoLocalComboBoxChrome(source, "cb");
+    }
+
     private static void AssertNoLocalButtonChrome(string source)
     {
         source.Should().NotContain("button.Height = 24;");

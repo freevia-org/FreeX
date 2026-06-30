@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -26,6 +27,17 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle MoreColorsDialogChromeStyle => new(FormulaBarFontFamily);
+
+    private static void ApplyMoreColorsFixedButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        AvaloniaCompactDialogChrome.ApplyButton(button, MoreColorsDialogChromeStyle, width, isDefault);
+    }
+
+    private static void ApplyMoreColorsTextBoxChrome(TextBox textBox)
+        => AvaloniaCompactDialogChrome.ApplyTextBox(textBox, MoreColorsDialogChromeStyle);
+
     private async void ShowMoreFillColorDialog()
     {
         if (_isOpening || _isSaving)
@@ -78,17 +90,9 @@ public sealed partial class MainWindow
         {
             Text = FormatHex(initial),
             Width = 120,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        ApplyMoreColorsTextBoxChrome(hexBox);
         AutomationProperties.SetName(hexBox, "Hex color");
         AutomationProperties.SetAutomationId(hexBox, "MoreColorsHexBox");
 
@@ -142,20 +146,9 @@ public sealed partial class MainWindow
         var okButton = new Button
         {
             Content = "OK",
-            Width = 80,
             IsDefault = true,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyMoreColorsFixedButtonChrome(okButton, 80, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "MoreColorsOkButton");
         okButton.Click += (_, _) =>
         {
@@ -167,30 +160,13 @@ public sealed partial class MainWindow
         var cancelButton = new Button
         {
             Content = "Cancel",
-            Width = 80,
             IsCancel = true,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyMoreColorsFixedButtonChrome(cancelButton, 80);
         AutomationProperties.SetAutomationId(cancelButton, "MoreColorsCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((CellColor?)null);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children = { okButton, cancelButton },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
         var hexRow = new StackPanel
         {

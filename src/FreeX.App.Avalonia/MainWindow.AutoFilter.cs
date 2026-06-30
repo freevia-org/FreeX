@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -19,6 +20,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
+
     // AutoFilter button visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
     private static readonly IBrush AutoFilterBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(142, 153, 166));
     private static readonly IBrush AutoFilterGlyphBrush = new ImmutableSolidColorBrush(Color.FromRgb(45, 55, 65));
@@ -211,18 +214,8 @@ public sealed partial class MainWindow
             Content = "OK",
             IsDefault = true,
             MinWidth = 72,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, AutoFilterDialogChromeStyle, 72, isDefault: true);
         okButton.Click += (_, _) =>
         {
             flyout.Hide();
@@ -232,13 +225,7 @@ public sealed partial class MainWindow
                 .ToList();
             RunAutoFilter(range, columnOffset, allowed);
         };
-        panel.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 6, 0, 0),
-            Children = { okButton },
-        });
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([okButton], new Thickness(0, 6, 0, 0)));
 
         flyout.Content = new Border { Padding = new Thickness(8), Child = panel };
         flyout.ShowAt(anchor);

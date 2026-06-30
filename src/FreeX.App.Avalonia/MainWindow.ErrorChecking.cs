@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -16,6 +17,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily);
+
     private async Task CheckFormulaErrorsAsync()
     {
         _session.RecalculateWorkbook();
@@ -393,10 +396,9 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Creates a chrome-styled Error Checking dialog button: Height=24, Padding=(4,1), white background,
-    /// Brush(112,112,112) border, FontSize=12, FontFamily=FormulaBarFontFamily. Side-panel buttons
-    /// (no explicit width) stretch full-width with bottom margin; bottom-bar buttons use the provided
-    /// width with a left margin.
+    /// Creates a shared compact-chrome Error Checking dialog button. Side-panel buttons (no explicit
+    /// width) stretch full-width with bottom margin; bottom-bar buttons use the provided width with
+    /// a left margin.
     /// </summary>
     private static Button CreateErrorCheckingButton(string contentKey, double? width = null)
     {
@@ -404,22 +406,15 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get(contentKey),
             Width = width ?? double.NaN,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(4, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             // Side-panel buttons (no explicit width) stretch to a uniform full-panel width so the
             // "Error help" action stack is not ragged; bottom-bar buttons keep their fixed width.
             HorizontalAlignment = width is null ? AvaloniaHorizontalAlignment.Stretch : AvaloniaHorizontalAlignment.Left,
             Margin = new Thickness(width is null ? 0 : 4, 0, 0, width is null ? 6 : 0),
         };
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            ErrorCheckingDialogChromeStyle,
+            width ?? 0);
         return button;
     }
 
