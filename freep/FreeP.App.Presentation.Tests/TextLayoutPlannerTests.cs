@@ -92,6 +92,43 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanBodyText_BottomAnchor_UsesInsetsIndentAndLineSpacingScale()
+    {
+        var text = new ResolvedTextLayout
+        {
+            Anchor = VerticalAnchor.Bottom,
+            LnSpcReduction = 0.25,
+            InsetLeftDip = 5,
+            InsetTopDip = 6,
+            InsetRightDip = 7,
+            InsetBottomDip = 8,
+            Paragraphs = new[]
+            {
+                Paragraph(),
+                Paragraph(indent: 12)
+            }
+        };
+        var measures = new[]
+        {
+            new TextParagraphMeasure(0, 40, 4, 8),
+            new TextParagraphMeasure(1, 20, 2, 6)
+        };
+
+        var plan = TextLayoutPlanner.PlanBodyText(
+            text,
+            new LayoutRect(10, 20, 200, 100),
+            measures);
+
+        plan.Area.Should().Be(new TextLayoutArea(15, 26, 188, 86));
+        plan.Paragraphs.Should().HaveCount(2);
+        plan.Paragraphs[0].Should().Be(new TextParagraphPlacement(0, 0, 15, 35, 188));
+        plan.Paragraphs[1].ParagraphIndex.Should().Be(1);
+        plan.Paragraphs[1].X.Should().BeApproximately(27, 0.001);
+        plan.Paragraphs[1].Y.Should().BeApproximately(72.5, 0.001);
+        plan.Paragraphs[1].MaxWidthDip.Should().BeApproximately(176, 0.001);
+    }
+
+    [Fact]
     public void CreateParagraphMeasure_AppliesPointAndLineSpacingScale()
     {
         var measure = TextLayoutPlanner.CreateParagraphMeasure(
@@ -115,17 +152,21 @@ public sealed class TextLayoutPlannerTests
 
         wpf.Should().Contain("TextLayoutPlanner.GetTextArea");
         wpf.Should().Contain("TextLayoutPlanner.PlanTableCellText");
+        wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
         wpf.Should().Contain("TextLayoutPlanner.GetColumnLayout");
         wpf.Should().Contain("TextLayoutPlanner.PlanColumns");
         wpf.Should().NotContain("const double DefaultSpacingDip");
         wpf.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
+        wpf.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
 
         avalonia.Should().Contain("TextLayoutPlanner.GetTextArea");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTableCellText");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
         avalonia.Should().Contain("TextLayoutPlanner.GetColumnLayout");
         avalonia.Should().Contain("TextLayoutPlanner.PlanColumns");
         avalonia.Should().NotContain("const double DefaultSpacingDip");
         avalonia.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
+        avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
     }
 
     private static ResolvedParagraph Paragraph(double indent = 0) => new()

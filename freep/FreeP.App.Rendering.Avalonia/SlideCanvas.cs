@@ -198,7 +198,7 @@ public sealed class SlideCanvas : Control
 
         IDisposable? transformScope = null;
         if (hasTransform)
-            transformScope = dc.PushTransform(BuildShapeMatrix(shape));
+            transformScope = dc.PushTransform(ToAvaloniaMatrix(ShapeTransformPlanner.PlanShapeTransform(shape)));
 
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);
@@ -225,60 +225,32 @@ public sealed class SlideCanvas : Control
 
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
     {
-        var fx = shape.Effects!;
         if (shape.Geometry.Contours.Count == 0) return;
+        var plan = ShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects);
 
-        if (fx.HasOuterShadow)
+        if (plan.ShadowPasses.Count > 0)
         {
-            double rad = fx.OuterShadowDirDeg * Math.PI / 180.0;
-            double dx  = Math.Cos(rad) * fx.OuterShadowDistDip;
-            double dy  = Math.Sin(rad) * fx.OuterShadowDistDip;
-
-            byte a = fx.OuterShadowAlpha;
-            var shadowBrush = new SolidColorBrush(
-                Color.FromArgb(a, fx.OuterShadowColor.R, fx.OuterShadowColor.G, fx.OuterShadowColor.B));
             var shadowGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
             if (shadowGeo is null) return;
 
-            using var shadowScope = dc.PushTransform(Matrix.CreateTranslation(dx, dy));
-
-            if (fx.OuterShadowBlurDip > 1.0)
+            foreach (var pass in plan.ShadowPasses)
             {
-                int passes = Math.Min(4, (int)Math.Ceiling(fx.OuterShadowBlurDip / 2));
-                for (int i = passes; i >= 1; i--)
-                {
-                    double spread  = fx.OuterShadowBlurDip * i / passes;
-                    byte passAlpha = (byte)(a / (passes + 1));
-                    var passBrush  = new SolidColorBrush(
-                        Color.FromArgb(passAlpha, fx.OuterShadowColor.R, fx.OuterShadowColor.G, fx.OuterShadowColor.B));
-                    for (int ox = -1; ox <= 1; ox++)
-                    for (int oy = -1; oy <= 1; oy++)
-                    {
-                        if (ox == 0 && oy == 0) continue;
-                        using var spreadScope = dc.PushTransform(Matrix.CreateTranslation(ox * spread, oy * spread));
-                        dc.DrawGeometry(passBrush, null, shadowGeo);
-                    }
-                }
-                dc.DrawGeometry(shadowBrush, null, shadowGeo);
-            }
-            else
-            {
+                var shadowBrush = new SolidColorBrush(
+                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+                using var shadowScope = dc.PushTransform(Matrix.CreateTranslation(pass.OffsetX, pass.OffsetY));
                 dc.DrawGeometry(shadowBrush, null, shadowGeo);
             }
         }
 
-        if (fx.HasGlow)
+        if (plan.GlowPasses.Count > 0)
         {
             var glowGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
             if (glowGeo is null) return;
-            int passes = Math.Min(5, (int)Math.Ceiling(fx.GlowRadiusDip / 2));
-            for (int i = passes; i >= 1; i--)
+            foreach (var pass in plan.GlowPasses)
             {
-                double r       = fx.GlowRadiusDip * i / passes;
-                byte passAlpha = (byte)(fx.GlowAlpha / (passes + 1));
                 var glowBrush  = new SolidColorBrush(
-                    Color.FromArgb(passAlpha, fx.GlowColor.R, fx.GlowColor.G, fx.GlowColor.B));
-                var glowPen    = new Pen(glowBrush, r * 2);
+                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+                var glowPen    = new Pen(glowBrush, pass.StrokeWidthDip);
                 dc.DrawGeometry(null, glowPen, glowGeo);
             }
         }
@@ -366,25 +338,14 @@ public sealed class SlideCanvas : Control
             new Point(x + w, y + h), new Point(x + w - bw, y + h - bh));
     }
 
-    private static Matrix BuildShapeMatrix(DrawOp.Shape shape)
-    {
-        var b  = shape.BoundsDip;
-        double cx = b.X + b.Width  / 2;
-        double cy = b.Y + b.Height / 2;
-
-        var m = Matrix.Identity;
-        if (shape.FlipH) m = m * new Matrix(-1, 0, 0, 1, cx * 2, 0);
-        if (shape.FlipV) m = m * new Matrix(1, 0, 0, -1, 0, cy * 2);
-        if (shape.RotationDeg != 0)
-        {
-            double rad = shape.RotationDeg * Math.PI / 180.0;
-            m = m
-                * Matrix.CreateTranslation(-cx, -cy)
-                * Matrix.CreateRotation(rad)
-                * Matrix.CreateTranslation(cx, cy);
-        }
-        return m;
-    }
+    private static Matrix ToAvaloniaMatrix(ShapeAffineTransform transform) =>
+        new(
+            transform.M11,
+            transform.M12,
+            transform.M21,
+            transform.M22,
+            transform.OffsetX,
+            transform.OffsetY);
 
     // ── Picture ──────────────────────────────────────────────────────────────
 
@@ -2028,50 +1989,34 @@ public sealed class SlideCanvas : Control
             return;
         }
 
-        double insetLeft   = text.InsetLeftDip;
-        double insetTop    = text.InsetTopDip;
-        double insetRight  = text.InsetRightDip;
-        double insetBottom = text.InsetBottomDip;
-        double textAreaW   = Math.Max(0, bounds.Width  - insetLeft - insetRight);
-        double textAreaH   = Math.Max(0, bounds.Height - insetTop  - insetBottom);
-
-        var formatted = new List<(FormattedText ft, double spaceAfter)>();
-        double totalH = 0;
-        foreach (var para in text.Paragraphs)
+        var area = TextLayoutPlanner.GetTextArea(text, bounds);
+        var formatted = new Dictionary<int, FormattedText>();
+        var measured = new List<TextParagraphMeasure>();
+        for (int i = 0; i < text.Paragraphs.Count; i++)
         {
+            var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, textAreaW, text.Wrap);
-            formatted.Add((ft, para.SpaceAfterPt * (96.0 / 72.0)));
-            totalH += ft.Height + para.SpaceBeforePt * (96.0 / 72.0) + para.SpaceAfterPt * (96.0 / 72.0);
+            var ft = BuildFormattedText(para, area.Width, text.Wrap);
+            formatted[i] = ft;
+            measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                i,
+                ft.Height,
+                para.SpaceBeforePt,
+                para.SpaceAfterPt));
         }
 
-        double startY = text.Anchor switch
+        var plan = TextLayoutPlanner.PlanBodyText(text, bounds, measured);
+        foreach (var placement in plan.Paragraphs)
         {
-            VerticalAnchor.Middle => bounds.Y + insetTop + Math.Max(0, (textAreaH - totalH) / 2),
-            VerticalAnchor.Bottom => bounds.Y + insetTop + Math.Max(0, textAreaH - totalH),
-            _                     => bounds.Y + insetTop
-        };
-
-        double curY   = startY;
-        double textX  = bounds.X + insetLeft;
-
-        // Wave 19A: line-spacing scale from normAutofit lnSpcReduction
-        double lnSpcScale = 1.0 - text.LnSpcReduction;
-
-        int paraIdx = 0;
-        foreach (var para in text.Paragraphs)
-        {
-            if (para.Runs.Count == 0) { paraIdx++; continue; }
-            var (ft, spaceAfterDip) = formatted[paraIdx];
-            curY += para.SpaceBeforePt * (96.0 / 72.0) * lnSpcScale;
+            var para = text.Paragraphs[placement.ParagraphIndex];
+            var ft = formatted[placement.ParagraphIndex];
 
             // Wave 19A: draw bullet (char or number) to the left of paragraph text.
-            double paraTextX = textX + para.IndentDip;
             if (!string.IsNullOrEmpty(para.BulletText))
             {
-                double bulletX = paraTextX - para.HangingDip;
+                double bulletX = placement.X - para.HangingDip;
                 DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, bulletX, curY);
+                    para.BulletColor, bulletX, placement.Y);
             }
 
             // Wave 16A: use geometry-based rendering when any run has text effects or warp is active.
@@ -2088,22 +2033,19 @@ public sealed class SlideCanvas : Control
 
             if (hasEffects)
             {
-                RenderParaWithEffects(dc, para, paraTextX, curY, bounds, text.WarpPreset);
+                RenderParaWithEffects(dc, para, placement.X, placement.Y, bounds, text.WarpPreset);
             }
             else if (hasTabs)
             {
-                RenderParaWithTabs(dc, para, paraTextX, curY, para.TabStops);
+                RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
             }
             else
             {
                 // Adjust MaxTextWidth to account for indent
                 if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                    ft.MaxTextWidth = Math.Max(1, textAreaW - para.IndentDip);
-                dc.DrawText(ft, new Point(paraTextX, curY));
+                    ft.MaxTextWidth = placement.MaxWidthDip;
+                dc.DrawText(ft, new Point(placement.X, placement.Y));
             }
-
-            curY += ft.Height * lnSpcScale + spaceAfterDip * lnSpcScale;
-            paraIdx++;
         }
     }
 
@@ -2389,26 +2331,6 @@ public sealed class SlideCanvas : Control
         return accX;
     }
 
-    private static Func<double, double, double>? BuildWarpYFunc(string? preset, LayoutRect shapeBounds)
-    {
-        if (string.IsNullOrWhiteSpace(preset)) return null;
-        double ampFrac = 0.35;
-        return preset.ToLowerInvariant() switch
-        {
-            "textarchup"   or "textcirclecurve"      => (t, sh) => -sh * ampFrac * 4 * t * (1 - t),
-            "textarchdown" or "textarchdownpour"      => (t, sh) =>  sh * ampFrac * 4 * t * (1 - t),
-            "textcircle"                              => (t, sh) => -sh * ampFrac * Math.Sin(t * Math.PI),
-            "textwaveup"   or "textwave1" or "textwaves" => (t, sh) => -sh * 0.15 * Math.Sin(t * 2 * Math.PI),
-            "textwave2"                               => (t, sh) => -sh * 0.10 * Math.Sin(t * 4 * Math.PI),
-            "texttriangle" or "texttrianglepour"      => (t, sh) =>  sh * ampFrac * (0.5 - t),
-            "textinversetriangle"                     => (t, sh) => -sh * ampFrac * (0.5 - t),
-            "textslantup"                             => (t, sh) => -sh * 0.3 * t,
-            "textslantdown"                           => (t, sh) =>  sh * 0.3 * t,
-            "textcantop"   or "textcan"               => (t, sh) => -sh * ampFrac * Math.Sin(t * Math.PI),
-            _                                         => null
-        };
-    }
-
     private static void RenderParaWithEffects(
         DrawingContext dc,
         ResolvedParagraph para,
@@ -2416,7 +2338,7 @@ public sealed class SlideCanvas : Control
         LayoutRect shapeBounds,
         string? warpPreset)
     {
-        Func<double, double, double>? warpYOffset = BuildWarpYFunc(warpPreset, shapeBounds);
+        bool hasWarp = WordArtWarpPlanner.ComputeYOffset(warpPreset, 0, shapeBounds).HasValue;
 
         int pos = 0;
         foreach (var run in para.Runs)
@@ -2429,7 +2351,7 @@ public sealed class SlideCanvas : Control
 
             // BA2 fix: plain runs are no longer drawn by an outer DrawText pass, so draw them here
             // at their flat baseline (no warp, solid-color fill, no outline).
-            if (!hasEffects && warpYOffset is null)
+            if (!hasEffects && !hasWarp)
             {
                 var plainFt  = BuildSingleRunFormattedText(run);
                 var plainGeo = plainFt.BuildGeometry(new Point(drawX, drawY));
@@ -2443,9 +2365,11 @@ public sealed class SlideCanvas : Control
                 continue;
             }
 
-            if (warpYOffset is not null)
-                drawY += warpYOffset(shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0,
-                                     shapeBounds.Height);
+            if (hasWarp)
+            {
+                double t = shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0;
+                drawY += WordArtWarpPlanner.ComputeYOffset(warpPreset, t, shapeBounds) ?? 0;
+            }
 
             var runFt = BuildSingleRunFormattedText(run);
             var geo   = runFt.BuildGeometry(new Point(drawX, drawY));

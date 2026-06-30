@@ -221,7 +221,7 @@ public sealed class SlideCanvas : FrameworkElement
 
         if (hasTransform)
         {
-            dc.PushTransform(BuildShapeTransform(shape));
+            dc.PushTransform(ToWpfTransform(ShapeTransformPlanner.PlanShapeTransform(shape)));
         }
 
         // Effects: draw before the shape (painter's algorithm — shadow behind shape)
@@ -251,70 +251,32 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
     {
-        var fx = shape.Effects!;
-
         if (shape.Geometry.Contours.Count == 0) return;
+        var plan = ShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects);
 
-        if (fx.HasOuterShadow)
+        if (plan.ShadowPasses.Count > 0)
         {
-            // Compute shadow offset from direction and distance
-            double rad = fx.OuterShadowDirDeg * Math.PI / 180.0;
-            double dx  = Math.Cos(rad) * fx.OuterShadowDistDip;
-            double dy  = Math.Sin(rad) * fx.OuterShadowDistDip;
-
-            // Push offset transform, draw geometry with shadow color
-            dc.PushTransform(new TranslateTransform(dx, dy));
-
-            byte a = fx.OuterShadowAlpha;
-            var shadowBrush = new SolidColorBrush(
-                Color.FromArgb(a, fx.OuterShadowColor.R, fx.OuterShadowColor.G, fx.OuterShadowColor.B));
-            if (shadowBrush.CanFreeze) shadowBrush.Freeze();
-
             var shadowGeo = ContourListToGeometry(shape.Geometry);
-
-            if (fx.OuterShadowBlurDip > 1.0)
+            foreach (var pass in plan.ShadowPasses)
             {
-                // Approximate blur by drawing multiple offset copies at decreasing opacity
-                int passes = Math.Min(4, (int)Math.Ceiling(fx.OuterShadowBlurDip / 2));
-                for (int i = passes; i >= 1; i--)
-                {
-                    double spread = fx.OuterShadowBlurDip * i / passes;
-                    byte passAlpha = (byte)(a / (passes + 1));
-                    var passBrush = new SolidColorBrush(
-                        Color.FromArgb(passAlpha, fx.OuterShadowColor.R, fx.OuterShadowColor.G, fx.OuterShadowColor.B));
-                    if (passBrush.CanFreeze) passBrush.Freeze();
-
-                    for (int ox = -1; ox <= 1; ox++)
-                    for (int oy = -1; oy <= 1; oy++)
-                    {
-                        if (ox == 0 && oy == 0) continue;
-                        dc.PushTransform(new TranslateTransform(ox * spread, oy * spread));
-                        dc.DrawGeometry(passBrush, null, shadowGeo);
-                        dc.Pop();
-                    }
-                }
+                var shadowBrush = new SolidColorBrush(
+                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+                if (shadowBrush.CanFreeze) shadowBrush.Freeze();
+                dc.PushTransform(new TranslateTransform(pass.OffsetX, pass.OffsetY));
                 dc.DrawGeometry(shadowBrush, null, shadowGeo);
+                dc.Pop();
             }
-            else
-            {
-                dc.DrawGeometry(shadowBrush, null, shadowGeo);
-            }
-
-            dc.Pop(); // pop TranslateTransform
         }
 
-        if (fx.HasGlow)
+        if (plan.GlowPasses.Count > 0)
         {
             var glowGeo = ContourListToGeometry(shape.Geometry);
-            int passes = Math.Min(5, (int)Math.Ceiling(fx.GlowRadiusDip / 2));
-            for (int i = passes; i >= 1; i--)
+            foreach (var pass in plan.GlowPasses)
             {
-                double r = fx.GlowRadiusDip * i / passes;
-                byte passAlpha = (byte)(fx.GlowAlpha / (passes + 1));
                 var glowBrush = new SolidColorBrush(
-                    Color.FromArgb(passAlpha, fx.GlowColor.R, fx.GlowColor.G, fx.GlowColor.B));
+                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
                 if (glowBrush.CanFreeze) glowBrush.Freeze();
-                var glowPen = new Pen(glowBrush, r * 2);
+                var glowPen = new Pen(glowBrush, pass.StrokeWidthDip);
                 if (glowPen.CanFreeze) glowPen.Freeze();
                 dc.DrawGeometry(null, glowPen, glowGeo);
             }
@@ -438,24 +400,17 @@ public sealed class SlideCanvas : FrameworkElement
         dc.Pop(); // pop clip
     }
 
-    private static Transform BuildShapeTransform(DrawOp.Shape shape)
+    private static Transform ToWpfTransform(ShapeAffineTransform transform)
     {
-        var bounds = shape.BoundsDip;
-        double cx = bounds.X + bounds.Width / 2;
-        double cy = bounds.Y + bounds.Height / 2;
-
-        var group = new TransformGroup();
-
-        if (shape.FlipH)
-            group.Children.Add(new ScaleTransform(-1, 1, cx, cy));
-
-        if (shape.FlipV)
-            group.Children.Add(new ScaleTransform(1, -1, cx, cy));
-
-        if (shape.RotationDeg != 0)
-            group.Children.Add(new RotateTransform(shape.RotationDeg, cx, cy));
-
-        return group;
+        var matrixTransform = new MatrixTransform(new Matrix(
+            transform.M11,
+            transform.M12,
+            transform.M21,
+            transform.M22,
+            transform.OffsetX,
+            transform.OffsetY));
+        if (matrixTransform.CanFreeze) matrixTransform.Freeze();
+        return matrixTransform;
     }
 
     // ── Picture ────────────────────────────────────────────────────────────────
@@ -2413,58 +2368,37 @@ public sealed class SlideCanvas : FrameworkElement
             return;
         }
 
-        double insetLeft = text.InsetLeftDip;
-        double insetTop = text.InsetTopDip;
-        double insetRight = text.InsetRightDip;
-        double insetBottom = text.InsetBottomDip;
+        var area = TextLayoutPlanner.GetTextArea(text, bounds);
+        var formatted = new Dictionary<int, FormattedText>();
+        var measured = new List<TextParagraphMeasure>();
 
-        double textAreaW = Math.Max(0, bounds.Width - insetLeft - insetRight);
-        double textAreaH = Math.Max(0, bounds.Height - insetTop - insetBottom);
-
-        // Measure all paragraphs to determine total height for vertical anchoring.
-        var formatted = new List<(FormattedText ft, double spaceAfter)>();
-        double totalH = 0;
-
-        foreach (var para in text.Paragraphs)
+        for (int i = 0; i < text.Paragraphs.Count; i++)
         {
+            var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
 
-            var ft = BuildFormattedText(para, textAreaW, text.Wrap);
-            formatted.Add((ft, para.SpaceAfterPt * (96.0 / 72.0)));
-            totalH += ft.Height + para.SpaceBeforePt * (96.0 / 72.0) + para.SpaceAfterPt * (96.0 / 72.0);
+            var ft = BuildFormattedText(para, area.Width, text.Wrap);
+            formatted[i] = ft;
+            measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
+                i,
+                ft.Height,
+                para.SpaceBeforePt,
+                para.SpaceAfterPt));
         }
 
-        // Determine starting Y based on vertical anchor.
-        double startY = text.Anchor switch
+        var plan = TextLayoutPlanner.PlanBodyText(text, bounds, measured);
+        foreach (var placement in plan.Paragraphs)
         {
-            VerticalAnchor.Middle => bounds.Y + insetTop + Math.Max(0, (textAreaH - totalH) / 2),
-            VerticalAnchor.Bottom => bounds.Y + insetTop + Math.Max(0, textAreaH - totalH),
-            _ => bounds.Y + insetTop  // Top (default)
-        };
-
-        double curY = startY;
-        double textX = bounds.X + insetLeft;
-
-        // Wave 19A: line-spacing scale from normAutofit lnSpcReduction
-        double lnSpcScale = 1.0 - text.LnSpcReduction;
-
-        int paraIdx = 0;
-        foreach (var para in text.Paragraphs)
-        {
-            if (para.Runs.Count == 0) { paraIdx++; continue; }
-
-            var (ft, spaceAfterDip) = formatted[paraIdx];
-            double spaceBefore = para.SpaceBeforePt * (96.0 / 72.0) * lnSpcScale;
-            curY += spaceBefore;
+            var para = text.Paragraphs[placement.ParagraphIndex];
+            var ft = formatted[placement.ParagraphIndex];
 
             // Wave 19A: draw bullet (char or number) to the left of the paragraph text.
             // The bullet sits at textX + indentDip - hangingDip; text starts at textX + indentDip.
-            double paraTextX = textX + para.IndentDip;
             if (!string.IsNullOrEmpty(para.BulletText))
             {
-                double bulletX = paraTextX - para.HangingDip;
+                double bulletX = placement.X - para.HangingDip;
                 DrawBulletWpf(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
-                    para.BulletColor, bulletX, curY);
+                    para.BulletColor, bulletX, placement.Y);
             }
 
             // Wave 16A: use geometry-based rendering when any run has text effects, or warp is active.
@@ -2481,22 +2415,19 @@ public sealed class SlideCanvas : FrameworkElement
 
             if (hasEffects)
             {
-                RenderParaWithEffects(dc, para, paraTextX, curY, textAreaW - para.IndentDip, text.Wrap, text.WarpPreset, bounds);
+                RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, text.Wrap, text.WarpPreset, bounds);
             }
             else if (hasTabs)
             {
-                RenderParaWithTabs(dc, para, paraTextX, curY, para.TabStops);
+                RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
             }
             else
             {
                 // Adjust MaxTextWidth to account for indent
                 if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
-                    ft.MaxTextWidth = Math.Max(1, textAreaW - para.IndentDip);
-                dc.DrawText(ft, new Point(paraTextX, curY));
+                    ft.MaxTextWidth = placement.MaxWidthDip;
+                dc.DrawText(ft, new Point(placement.X, placement.Y));
             }
-
-            curY += ft.Height * lnSpcScale + spaceAfterDip * lnSpcScale;
-            paraIdx++;
         }
     }
 
@@ -2840,7 +2771,7 @@ public sealed class SlideCanvas : FrameworkElement
 
         // Warp offset function: returns a Y offset at fractional horizontal position t ∈ [0,1]
         // relative to the shape bounds.
-        Func<double, double, double>? warpYOffset = BuildWarpYFunc(warpPreset, shapeBounds);
+        bool hasWarp = WordArtWarpPlanner.ComputeYOffset(warpPreset, 0, shapeBounds).HasValue;
 
         pos = 0;
         foreach (var run in para.Runs)
@@ -2855,7 +2786,7 @@ public sealed class SlideCanvas : FrameworkElement
             double drawX = x + runOffX;
             double drawY = y;
 
-            if (!hasEffects && warpYOffset is null)
+            if (!hasEffects && !hasWarp)
             {
                 // Plain run: draw at flat baseline with solid run colour and no outline.
                 var plainGeo = runFt2.BuildGeometry(new Point(drawX, drawY));
@@ -2875,9 +2806,11 @@ public sealed class SlideCanvas : FrameworkElement
             // to match where it would appear in the full paragraph.
             var runFt = runFt2;   // already built above
 
-            if (warpYOffset is not null)
-                drawY += warpYOffset(shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0,
-                                     shapeBounds.Height);
+            if (hasWarp)
+            {
+                double t = shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0;
+                drawY += WordArtWarpPlanner.ComputeYOffset(warpPreset, t, shapeBounds) ?? 0;
+            }
 
             var geo = runFt.BuildGeometry(new Point(drawX, drawY));
 
@@ -2973,72 +2906,6 @@ public sealed class SlideCanvas : FrameworkElement
         if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, txt.Length);
         if (maxWidth > 0) ft.MaxTextWidth = maxWidth;
         return ft;
-    }
-
-    // ── WordArt warp helpers (Wave 16A) ───────────────────────────────────────
-
-    /// <summary>
-    /// Returns a function(t_horizontal, shapeHeight) → Y-offset for warp presets.
-    /// t_horizontal is in [0,1] across the shape width.
-    /// Returns null for unrecognized or null presets (flat-text fallback).
-    ///
-    /// Approximated presets: textArchUp, textArchDown, textCircle, textWave1, textTriangle,
-    ///                        textInverseTriangle, textCan, textSlantUp, textSlantDown.
-    /// All others: flat fallback (null).
-    /// </summary>
-    private static Func<double, double, double>? BuildWarpYFunc(string? preset, LayoutRect shapeBounds)
-    {
-        if (string.IsNullOrWhiteSpace(preset)) return null;
-
-        // Amplitude is bounded to a fraction of shape height
-        double h = shapeBounds.Height;
-        double ampFrac = 0.35; // default arch amplitude = 35% of shape height
-
-        return preset.ToLowerInvariant() switch
-        {
-            // Arc up: glyphs rise in the middle like a "∩" arch
-            "textarchup" or "textcirclecurve" =>
-                (t, sh) => -sh * ampFrac * 4 * t * (1 - t),
-
-            // Arc down: glyphs dip in the middle like a "∪" valley
-            "textarchdown" or "textarchdownpour" =>
-                (t, sh) => sh * ampFrac * 4 * t * (1 - t),
-
-            // Circle: sine curve (full arc)
-            "textcircle" =>
-                (t, sh) => -sh * ampFrac * Math.Sin(t * Math.PI),
-
-            // Wave 1: single sine cycle
-            "textwaveup" or "textwave1" or "textwaves" =>
-                (t, sh) => -sh * 0.15 * Math.Sin(t * 2 * Math.PI),
-
-            // Wave 2: double sine cycle
-            "textwave2" =>
-                (t, sh) => -sh * 0.10 * Math.Sin(t * 4 * Math.PI),
-
-            // Triangle: glyphs scale up left-to-right (simulate ascent)
-            "texttriangle" or "texttrianglepour" =>
-                (t, sh) => sh * ampFrac * (0.5 - t),
-
-            // Inverse triangle: descend left-to-right
-            "textinversetriangle" =>
-                (t, sh) => -sh * ampFrac * (0.5 - t),
-
-            // Slant up: linear ascent
-            "textslantup" =>
-                (t, sh) => -sh * 0.3 * t,
-
-            // Slant down: linear descent
-            "textslantdown" =>
-                (t, sh) => sh * 0.3 * t,
-
-            // Can: top and bottom follow arcs (approximated as single arch)
-            "textcantop" or "textcan" =>
-                (t, sh) => -sh * ampFrac * Math.Sin(t * Math.PI),
-
-            // Unrecognized — flat fallback
-            _ => null
-        };
     }
 
     // ── WPF primitive helpers ──────────────────────────────────────────────────
