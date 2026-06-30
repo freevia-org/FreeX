@@ -2,18 +2,11 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
-
-public sealed record ScenarioManagerItem(
-    string Name,
-    IReadOnlyList<ScenarioCellValue> ChangingCells,
-    string? Comment,
-    string ChangingCellsText,
-    bool Hidden,
-    bool Locked);
 
 public enum ScenarioManagerRangeSelectionTarget
 {
@@ -90,7 +83,7 @@ public sealed partial class ScenarioManagerDialog : Window
         AutomationProperties.SetAutomationId(_scenarioList, "ScenarioManagerScenarioList");
         AutomationProperties.SetHelpText(_scenarioList, UiText.Get("ScenarioManager_SelectAScenarioToShowEditOrDelete"));
         _scenarioList.ItemsSource = BuildScenarioItems(workbook);
-        _scenarioList.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
+        _scenarioList.DisplayMemberPath = nameof(ScenarioManagerDialogItem.Name);
         _scenarioList.SelectionChanged += (_, _) => UpdateSelectionState();
         _scenarioList.MouseDoubleClick += ScenarioList_MouseDoubleClick;
         _scenarioList.SelectedIndex = _scenarioList.Items.Count > 0 ? 0 : -1;
@@ -281,7 +274,7 @@ public sealed partial class ScenarioManagerDialog : Window
 
     private void UpdateSelectionState()
     {
-        var selected = _scenarioList.SelectedItem as ScenarioManagerItem;
+        var selected = _scenarioList.SelectedItem as ScenarioManagerDialogItem;
         if (ProjectSelectionFields(selected, _newNameBox.Text, _defaultScenarioName) is { } fields)
         {
             ApplySelectionFields(fields);
@@ -326,13 +319,14 @@ public sealed partial class ScenarioManagerDialog : Window
                 _currentSheetId,
                 _resolveSheetIdByName) is { } failure)
         {
-            ShowInvalidInputWarning(failure.Message, GetValidationTarget(failure.Field));
+            var message = LocalizeValidationError(failure.Error) ?? GetValidationFallbackText(failure.Field);
+            ShowInvalidInputWarning(message, GetValidationTarget(failure.Field));
             return;
         }
 
         ApplyAcceptResult(ProjectAcceptResult(
             action,
-            _scenarioList.SelectedItem as ScenarioManagerItem,
+            _scenarioList.SelectedItem as ScenarioManagerDialogItem,
             _newNameBox.Text,
             _changingCellsBox.Text,
             _resultCellsBox.Text,
@@ -342,7 +336,7 @@ public sealed partial class ScenarioManagerDialog : Window
         DialogResult = true;
     }
 
-    private void ApplySelectionFields(ScenarioManagerSelectionFields fields)
+    private void ApplySelectionFields(ScenarioManagerDialogSelectionFields fields)
     {
         _newNameBox.Text = fields.ScenarioName;
         _changingCellsBox.Text = fields.ChangingCellsText;
@@ -352,9 +346,9 @@ public sealed partial class ScenarioManagerDialog : Window
         _hiddenBox.IsChecked = fields.Hidden;
     }
 
-    private void ApplyAcceptResult(ScenarioManagerAcceptResult result)
+    private void ApplyAcceptResult(ScenarioManagerDialogAcceptResult result)
     {
-        SelectedAction = result.Action;
+        SelectedAction = ToServiceAction(result.Action);
         SelectedScenarioName = result.SelectedScenarioName;
         NewScenarioName = result.NewScenarioName;
         ChangingCellsText = result.ChangingCellsText;
@@ -392,12 +386,12 @@ public sealed partial class ScenarioManagerDialog : Window
         DialogFocus.FocusAndSelect(textBox);
     }
 
-    private TextBox GetValidationTarget(ScenarioManagerValidationField field) =>
+    private TextBox GetValidationTarget(ScenarioManagerDialogValidationField field) =>
         field switch
         {
-            ScenarioManagerValidationField.ScenarioName => _newNameBox,
-            ScenarioManagerValidationField.ChangingCells => _changingCellsBox,
-            ScenarioManagerValidationField.ResultCells => _resultCellsBox,
+            ScenarioManagerDialogValidationField.ScenarioName => _newNameBox,
+            ScenarioManagerDialogValidationField.ChangingCells => _changingCellsBox,
+            ScenarioManagerDialogValidationField.ResultCells => _resultCellsBox,
             _ => _newNameBox
         };
 

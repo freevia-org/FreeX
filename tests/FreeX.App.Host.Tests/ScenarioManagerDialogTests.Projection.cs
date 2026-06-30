@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
@@ -8,7 +9,7 @@ public sealed partial class ScenarioManagerDialogTests
     [Fact]
     public void ProjectSelectionFields_UsesSelectedScenarioFields()
     {
-        var item = new ScenarioManagerItem(
+        var item = new ScenarioManagerDialogItem(
             "Best Case",
             [],
             "Revenue lift",
@@ -52,7 +53,7 @@ public sealed partial class ScenarioManagerDialogTests
     [Fact]
     public void ProjectAcceptResult_CapturesSelectedAndEditedFieldValues()
     {
-        var selected = new ScenarioManagerItem("Best Case", [], null, "B2", Hidden: false, Locked: false);
+        var selected = new ScenarioManagerDialogItem("Best Case", [], null, "B2", Hidden: false, Locked: false);
 
         var result = ScenarioManagerDialog.ProjectAcceptResult(
             ScenarioManagerAction.Edit,
@@ -64,7 +65,7 @@ public sealed partial class ScenarioManagerDialogTests
             locked: true,
             hidden: true);
 
-        result.Action.Should().Be(ScenarioManagerAction.Edit);
+        result.Action.Should().Be(ScenarioManagerDialogAction.Edit);
         result.SelectedScenarioName.Should().Be("Best Case");
         result.NewScenarioName.Should().Be("Better Case");
         result.ChangingCellsText.Should().Be("C3");

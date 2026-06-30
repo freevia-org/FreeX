@@ -63,7 +63,9 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("ProjectSelectionFields(selected, _newNameBox.Text, _defaultScenarioName)");
         source.Should().Contain("ApplySelectionFields(fields)");
         source.Should().Contain("SharedScenarioManagerDialogPlanner.ProjectSelectionFields(");
-        source.Should().Contain("ToHostSelectionFields(fields)");
+        source.Should().Contain("ScenarioManagerDialogSelectionFields");
+        source.Should().NotContain("ScenarioManagerSelectionFields");
+        source.Should().NotContain("ToHostSelectionFields");
     }
 
     [Fact]
@@ -91,7 +93,9 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("ValidateAcceptRequest(");
         source.Should().Contain("SharedScenarioManagerDialogPlanner.ValidateAcceptRequest(");
         source.Should().Contain("LocalizeValidationError(failure.Error)");
-        source.Should().Contain("ToHostValidationField(failure.Field)");
+        source.Should().Contain("ScenarioManagerDialogValidationField");
+        source.Should().NotContain("ScenarioManagerValidationField");
+        source.Should().NotContain("ToHostValidationField");
         source.Should().NotContain("WorkbookRangeTextCodec.TryParseMany");
         source.Should().Contain("GetValidationTarget(failure.Field)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");

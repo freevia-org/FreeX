@@ -6,37 +6,10 @@ using SharedScenarioManagerDialogPlanner = FreeX.App.Presentation.ScenarioManage
 
 namespace FreeX.App.Host;
 
-internal sealed record ScenarioManagerSelectionFields(
-    string ScenarioName,
-    string ChangingCellsText,
-    string ResultCellsText,
-    string CommentText,
-    bool Locked,
-    bool Hidden);
-
-internal sealed record ScenarioManagerAcceptResult(
-    ScenarioManagerAction Action,
-    string? SelectedScenarioName,
-    string NewScenarioName,
-    string ChangingCellsText,
-    string ResultCellsText,
-    string CommentText,
-    bool Locked,
-    bool Hidden);
-
-internal enum ScenarioManagerValidationField
-{
-    ScenarioName,
-    ChangingCells,
-    ResultCells
-}
-
-internal sealed record ScenarioManagerValidationFailure(string Message, ScenarioManagerValidationField Field);
-
 public sealed partial class ScenarioManagerDialog
 {
-    public static IReadOnlyList<ScenarioManagerItem> BuildScenarioItems(Workbook workbook) =>
-        SharedScenarioManagerDialogPlanner.BuildItems(workbook).Select(ToHostItem).ToList();
+    public static IReadOnlyList<ScenarioManagerDialogItem> BuildScenarioItems(Workbook workbook) =>
+        SharedScenarioManagerDialogPlanner.BuildItems(workbook);
 
     public static bool TryParseAction(string text, out ScenarioManagerAction action)
     {
@@ -84,19 +57,16 @@ public sealed partial class ScenarioManagerDialog
     public static string FormatScenarioChangingCells(Workbook workbook, WorkbookScenario scenario) =>
         SharedScenarioManagerDialogPlanner.FormatChangingCells(workbook, scenario);
 
-    internal static ScenarioManagerSelectionFields? ProjectSelectionFields(
-        ScenarioManagerItem? selected,
+    internal static ScenarioManagerDialogSelectionFields? ProjectSelectionFields(
+        ScenarioManagerDialogItem? selected,
         string currentScenarioNameText,
-        string defaultScenarioName)
-    {
-        var fields = SharedScenarioManagerDialogPlanner.ProjectSelectionFields(
-            ToPlannerItem(selected),
+        string defaultScenarioName) =>
+        SharedScenarioManagerDialogPlanner.ProjectSelectionFields(
+            selected,
             currentScenarioNameText,
             defaultScenarioName);
-        return fields is null ? null : ToHostSelectionFields(fields);
-    }
 
-    internal static ScenarioManagerValidationFailure? ValidateAcceptRequest(
+    internal static ScenarioManagerDialogValidationFailure? ValidateAcceptRequest(
         ScenarioManagerAction action,
         string? scenarioName,
         string? changingCellsText,
@@ -104,94 +74,33 @@ public sealed partial class ScenarioManagerDialog
         SheetId? currentSheetId,
         Func<string, SheetId?>? resolveSheetIdByName)
     {
-        var failure = SharedScenarioManagerDialogPlanner.ValidateAcceptRequest(
+        return SharedScenarioManagerDialogPlanner.ValidateAcceptRequest(
             ToDialogAction(action),
             scenarioName,
             changingCellsText,
             resultCellsText,
             currentSheetId,
             resolveSheetIdByName);
-        if (failure is null)
-            return null;
-
-        return new ScenarioManagerValidationFailure(
-            LocalizeValidationError(failure.Error) ?? GetValidationFallbackText(failure.Field),
-            ToHostValidationField(failure.Field));
     }
 
-    internal static ScenarioManagerAcceptResult ProjectAcceptResult(
+    internal static ScenarioManagerDialogAcceptResult ProjectAcceptResult(
         ScenarioManagerAction action,
-        ScenarioManagerItem? selected,
+        ScenarioManagerDialogItem? selected,
         string newScenarioName,
         string changingCellsText,
         string resultCellsText,
         string commentText,
         bool locked,
-        bool hidden)
-    {
-        var result = SharedScenarioManagerDialogPlanner.ProjectAcceptResult(
+        bool hidden) =>
+        SharedScenarioManagerDialogPlanner.ProjectAcceptResult(
             ToDialogAction(action),
-            ToPlannerItem(selected),
+            selected,
             newScenarioName,
             changingCellsText,
             resultCellsText,
             commentText,
             locked,
             hidden);
-        return ToHostAcceptResult(result);
-    }
-
-    private static ScenarioManagerItem ToHostItem(ScenarioManagerDialogItem item) =>
-        new(
-            item.Name,
-            item.ChangingCells,
-            item.Comment,
-            item.ChangingCellsText,
-            item.Hidden,
-            item.Locked);
-
-    private static ScenarioManagerDialogItem? ToPlannerItem(ScenarioManagerItem? item) =>
-        item is null
-            ? null
-            : new ScenarioManagerDialogItem(
-                item.Name,
-                item.ChangingCells,
-                item.Comment,
-                item.ChangingCellsText,
-                item.Hidden,
-                item.Locked);
-
-    private static ScenarioManagerSelectionFields ToHostSelectionFields(
-        ScenarioManagerDialogSelectionFields fields) =>
-        new(
-            fields.ScenarioName,
-            fields.ChangingCellsText,
-            fields.ResultCellsText,
-            fields.CommentText,
-            fields.Locked,
-            fields.Hidden);
-
-    private static ScenarioManagerAcceptResult ToHostAcceptResult(
-        ScenarioManagerDialogAcceptResult result) =>
-        new(
-            ToServiceAction(result.Action),
-            result.SelectedScenarioName,
-            result.NewScenarioName,
-            result.ChangingCellsText,
-            result.ResultCellsText,
-            result.CommentText,
-            result.Locked,
-            result.Hidden);
-
-    private static ScenarioManagerValidationField ToHostValidationField(
-        ScenarioManagerDialogValidationField field) =>
-        field switch
-        {
-            ScenarioManagerDialogValidationField.ScenarioName => ScenarioManagerValidationField.ScenarioName,
-            ScenarioManagerDialogValidationField.ChangingCells => ScenarioManagerValidationField.ChangingCells,
-            ScenarioManagerDialogValidationField.ResultCells => ScenarioManagerValidationField.ResultCells,
-            _ => throw new ArgumentOutOfRangeException(nameof(field), field, null)
-        };
 
     private static ScenarioManagerDialogAction ToDialogAction(ScenarioManagerAction action) =>
         action switch
