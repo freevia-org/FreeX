@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Charts.Editing;
@@ -165,15 +166,7 @@ public static class ChartWorkflowCommandCatalog
     public static IReadOnlyList<ChartWorkflowCommandDescriptor> All => Commands;
 
     public static ChartWorkflowCommandDescriptor Get(ChartWorkflowCommandId id)
-    {
-        foreach (var command in Commands)
-        {
-            if (command.Id == id)
-                return command;
-        }
-
-        throw new ArgumentOutOfRangeException(nameof(id), id, null);
-    }
+        => WorkflowCommandCatalogPolicy.GetById(Commands, id, command => command.Id);
 
     public static bool CanOpenDialog(ChartModel chart, ChartWorkflowCommandDescriptor command)
     {
