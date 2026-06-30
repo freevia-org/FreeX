@@ -138,6 +138,80 @@ public sealed class DocumentViewLayoutPlannerTests
         gridlines.Should().Contain(g => g.Y1 == 260 && g.Y2 == 260);
         ticks.Should().Equal(104, 176, 248);
     }
+
+    [Fact]
+    public void BuildFloatingObjectPlacement_ResolvesParagraphAndPageAnchors()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+
+        var paragraph = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip: 0,
+            columnCount: 1,
+            HorizontalAnchor.Column,
+            horizontalOffsetPt: 36,
+            VerticalAnchor.Paragraph,
+            verticalOffsetPt: 72);
+        var page = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            surface,
+            anchorContentYDip: 0,
+            columnCount: 1,
+            HorizontalAnchor.Page,
+            horizontalOffsetPt: 18,
+            VerticalAnchor.Page,
+            verticalOffsetPt: 36);
+
+        paragraph.XDip.Should().BeApproximately(168, 0.01);
+        paragraph.YDip.Should().BeApproximately(216, 0.01);
+        paragraph.AnchorPageIndex.Should().Be(0);
+
+        page.XDip.Should().BeApproximately(48, 0.01);
+        page.YDip.Should().BeApproximately(72, 0.01);
+        page.AnchorPageIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void BuildFloatingObjectPlacement_ResolvesMarginAndContinuousAnchors()
+    {
+        var print = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816);
+        var web = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.WebLayout,
+            availableWidthDip: 1200);
+
+        var margin = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            print,
+            anchorContentYDip: 0,
+            columnCount: 1,
+            new FloatingPlacement
+            {
+                HorizontalAnchor = HorizontalAnchor.Margin,
+                HorizontalOffsetPt = 18,
+                VerticalAnchor = VerticalAnchor.Margin,
+                VerticalOffsetPt = 36,
+            });
+        var continuous = DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(
+            web,
+            anchorContentYDip: 500,
+            columnCount: 1,
+            HorizontalAnchor.Page,
+            horizontalOffsetPt: 9,
+            VerticalAnchor.Paragraph,
+            verticalOffsetPt: 18);
+
+        margin.XDip.Should().BeApproximately(144, 0.01);
+        margin.YDip.Should().BeApproximately(168, 0.01);
+
+        continuous.XDip.Should().BeApproximately(36, 0.01);
+        continuous.YDip.Should().BeApproximately(548, 0.01);
+        continuous.AnchorPageIndex.Should().Be(0);
+    }
 }
 
 public sealed class DocumentViewLayoutPlannerSourceGuardTests
@@ -155,6 +229,7 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         avaloniaSource.Should().Contain("using FreeW.App.Presentation.DocumentView;");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildSurfacePlan(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildColumnPlan(");
+        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectPlacement(");
         avaloniaSource.Should().Contain("BuildGridlines(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildRulerTicks(");
     }
@@ -169,6 +244,9 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         source.Should().NotContain("_contentWidth = Math.Max(120, _pageWidth - marginLeft - marginRight)");
         source.Should().NotContain("(_contentWidth - (pageColCount - 1) * gapDip) / pageColCount");
         source.Should().NotContain("for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)");
+        source.Should().NotContain("var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout");
+        source.Should().NotContain("HorizontalAnchor.Page   => _pageLeft");
+        source.Should().NotContain("PageTop(anchorPageIndex)");
     }
 
     private static string ReadSource(params string[] relativeParts)
