@@ -32,7 +32,7 @@ namespace FreeP.App.Host;
 /// PowerPoint will read the embedded workbook and may warn about a mismatch; this is
 /// acceptable for the current wave and is documented here.
 /// </summary>
-public sealed class ChartDataDialog : Window
+public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 

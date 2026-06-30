@@ -20,7 +20,7 @@ namespace FreeP.App.Host;
 /// The dialog is modeless (Show, not ShowDialog) so the user can interact with
 /// the slide canvas while the dialog is open.
 /// </summary>
-public sealed class FindReplaceDialog : Window
+public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly EditingSession _editor;
 

@@ -5,6 +5,22 @@ namespace FreeP.App.Host.Tests;
 public sealed class DialogSharedHelperSourceTests
 {
     [Fact]
+    public void FreePDialogs_RouteChromeThroughSharedDialogWindow()
+    {
+        var shellDialogWindow = ReadWorkspaceSource("shared", "Free.Shared.Shell.Wpf", "DialogWindow.cs");
+        shellDialogWindow.Should().Contain("/Free.Shared.Shell.Wpf;component/DialogResources.xaml");
+
+        var ribbonDialogWindow = ReadWorkspaceSource("shared", "Free.Shared.Ribbon.Wpf", "DialogWindow.cs");
+        ribbonDialogWindow.Should().Contain("Free.Shared.Shell.Wpf.DialogWindow");
+        ribbonDialogWindow.Should().NotContain("DialogResources.xaml");
+
+        AssertUsesSharedDialogWindow("ChartDataDialog.cs", "ChartDataDialog");
+        AssertUsesSharedDialogWindow("FindReplaceDialog.cs", "FindReplaceDialog");
+        AssertUsesSharedDialogWindow("HyperlinkDialog.cs", "HyperlinkDialog");
+        AssertUsesSharedDialogWindow("SlideSizeDialog.cs", "SlideSizeDialog");
+    }
+
+    [Fact]
     public void FreePModalDialogs_RouteOkCancelRowsThroughSharedFactory()
     {
         var slideSize = ReadHostSource("SlideSizeDialog.cs");
@@ -31,8 +47,24 @@ public sealed class DialogSharedHelperSourceTests
         chartData.Should().NotContain("Content = \"Cancel\"");
     }
 
+    private static void AssertUsesSharedDialogWindow(string fileName, string className)
+    {
+        var source = ReadHostSource(fileName);
+        source.Should().Contain($"public sealed class {className} : Free.Shared.Ribbon.Wpf.DialogWindow");
+        source.Should().NotContain($"public sealed class {className} : Window");
+        source.Should().NotContain($"public sealed class {className} : System.Windows.Window");
+    }
+
     private static string ReadHostSource(string fileName) =>
-        File.ReadAllText(Path.Combine(FindRepositoryRoot(), "freep", "FreeP.App.Host", fileName));
+        ReadWorkspaceSource("freep", "FreeP.App.Host", fileName);
+
+    private static string ReadWorkspaceSource(params string[] relativeParts)
+    {
+        var parts = new string[relativeParts.Length + 1];
+        parts[0] = FindRepositoryRoot();
+        relativeParts.CopyTo(parts, 1);
+        return File.ReadAllText(Path.Combine(parts));
+    }
 
     private static string FindRepositoryRoot()
     {
