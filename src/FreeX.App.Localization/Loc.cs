@@ -12,41 +12,10 @@ namespace FreeX.App.Localization;
 /// <c>qps-ploc</c> pseudo-localization culture expands neutral English so layout/format bugs
 /// surface in tests and manual smoke runs.
 /// </summary>
-public static class Loc
+[LocalizedResourceCatalog("FreeX.App.Localization.Resources.Strings", "FreeX.App.Localization.resources.dll")]
+public abstract class Loc : LocalizedResourceCatalog<Loc>
 {
-    /// <summary>Synthetic culture name used to request pseudo-localized output.</summary>
-    public const string PseudoLocalizationCultureName = LocalizedTextCatalog.PseudoLocalizationCultureName;
-
-    private const string ResourceBaseName = "FreeX.App.Localization.Resources.Strings";
-    internal static readonly LocalizedResourceFacade Resources = new(ResourceBaseName, typeof(Loc).Assembly);
-
-    /// <summary>
-    /// Returns the localized string for <paramref name="key"/> in the current UI culture, falling
-    /// back to neutral English when the active culture lacks a translation. Returns a visible
-    /// <c>[[missing]]</c> marker when the key is unknown so gaps are obvious.
-    /// </summary>
-    public static string Get(string key) => Resources.Get(key);
-
-    /// <summary>Returns the neutral (invariant English) string for <paramref name="key"/>.</summary>
-    public static string GetNeutral(string key) => Resources.GetNeutral(key);
-
-    /// <summary>
-    /// Returns the localized format string for <paramref name="key"/> with <paramref name="args"/>
-    /// substituted using the current culture's formatting rules.
-    /// </summary>
-    public static string Format(string key, params object?[] args) => Resources.Format(key, args);
-
-    /// <summary>Returns the full set of keys defined in the neutral catalog.</summary>
-    public static IReadOnlySet<string> GetNeutralResourceKeys() => Resources.GetNeutralResourceKeys();
-
-    /// <summary>True when <paramref name="cultureName"/> requests pseudo-localized output.</summary>
-    public static bool IsPseudoLocalizationCulture(string? cultureName) =>
-        Resources.IsPseudoLocalizationCulture(cultureName);
-
-    /// <summary>Strips access-key markers from menu/label text to derive an automation name.</summary>
-    public static string CreateAutomationName(string textWithAccessKey) =>
-        Resources.CreateAutomationName(textWithAccessKey);
-
-    /// <summary>Creates the visible missing-resource marker used by UI text wrappers.</summary>
-    public static string CreateMissingText(string key) => Resources.CreateMissingText(key);
+    protected Loc()
+    {
+    }
 }
