@@ -79,6 +79,31 @@ public sealed class ThemeColorTransformTests
         resolverSource.Should().NotContain("private static SrgbColor ApplyShade");
     }
 
+    [Theory]
+    [InlineData("tx1", ThemeColorSlot.Dk1)]
+    [InlineData("bg1", ThemeColorSlot.Lt1)]
+    [InlineData("accent6", ThemeColorSlot.Accent6)]
+    [InlineData("folHlink", ThemeColorSlot.FolHLink)]
+    public void ThemeColorSlotMapper_MapsOfficeRoles(string roleName, ThemeColorSlot expectedSlot)
+    {
+        ThemeColorSlotMapper.TryMapRole(roleName, out var slot).Should().BeTrue();
+        slot.Should().Be(expectedSlot);
+    }
+
+    [Fact]
+    public void ThemeColorConsumers_UseSharedRoleMapHelper()
+    {
+        var root = FindRepositoryRoot();
+        var readerSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.Core.IO", "PptxColorReader.cs"));
+        var resolverSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Presentation", "ThemeColorResolver.cs"));
+
+        readerSource.Should().Contain("ThemeColorSlotMapper.TryMapRole(");
+        readerSource.Should().Contain("ThemeColorSlotMapper.ToSchemeColorString(");
+        resolverSource.Should().Contain("ThemeColorSlotMapper.MapRoleToSlot(");
+        resolverSource.Should().NotContain("DefaultClrMap");
+        readerSource.Should().NotContain("\"tx1\" or");
+    }
+
     private static XElement BuildSchemeFill(string? lumMod, string? lumOff, string? tint, string? shade)
     {
         var schemeClr = new XElement(A + "schemeClr", new XAttribute("val", "accent1"));

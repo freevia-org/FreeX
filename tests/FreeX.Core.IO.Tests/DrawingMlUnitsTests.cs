@@ -51,6 +51,15 @@ public sealed class DrawingMlUnitsTests
         => DrawingMlUnits.EmuToPoints(emuText).Should().BeApproximately(expectedPoints, 1e-9);
 
     [Theory]
+    [InlineData(12700,  1.0)]
+    [InlineData(0,      0.0)]
+    [InlineData(6350,   0.5)]
+    [InlineData(19050,  1.5)]
+    [InlineData(127000, 10.0)]
+    public void EmuToPoints_Numeric_ReturnsExpected(double emu, double expectedPoints)
+        => DrawingMlUnits.EmuToPoints(emu).Should().BeApproximately(expectedPoints, 1e-9);
+
+    [Theory]
     [InlineData(0.5)]
     [InlineData(1.0)]
     [InlineData(1.5)]

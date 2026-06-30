@@ -26,6 +26,9 @@ public static class DrawingMlUnits
     /// <summary>Converts a point value to the nearest integer number of EMU.</summary>
     public static long PointsToEmu(double points) => (long)Math.Round(points * EmuPerPoint);
 
+    /// <summary>Converts an EMU value to points.</summary>
+    public static double EmuToPoints(double emus) => emus / EmuPerPoint;
+
     /// <summary>Converts a DIP pixel value to the nearest integer number of EMU.</summary>
     public static long PixelsToEmu(double pixels) => (long)Math.Round(Math.Max(0, pixels) * EmuPerPixel);
 
@@ -47,7 +50,7 @@ public static class DrawingMlUnits
     /// </summary>
     public static double EmuToPoints(string? value) =>
         long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
-            ? v / (double)EmuPerPoint
+            ? EmuToPoints(v)
             : 0;
 
     /// <summary>OOXML "dxa" = twentieths of a point. Parses an integer dxa attribute and converts to points.</summary>
