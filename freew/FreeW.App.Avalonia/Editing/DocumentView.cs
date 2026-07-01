@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Links;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
@@ -9312,13 +9313,10 @@ public sealed class DocumentView : Control
         if (string.IsNullOrWhiteSpace(target))
             return;
 
-        // A leading '#' denotes an internal bookmark anchor; everything else is an external URL.
-        var isInternal = target.StartsWith('#');
-        var url = isInternal ? null : target.Trim();
-        var anchor = isInternal ? target[1..].Trim() : null;
-        if (isInternal && string.IsNullOrEmpty(anchor))
+        if (!HyperlinkTarget.TryParse(target, out var parsedTarget))
             return;
-        var link = new LinkInfo(url, anchor, null);
+
+        var link = new LinkInfo(parsedTarget.Url, parsedTarget.Anchor, null);
 
         var sel = NormalizedSelection();
         // Only a same-paragraph selection can be wrapped in place; a cross-paragraph (or no) selection
@@ -9346,7 +9344,7 @@ public sealed class DocumentView : Control
         }
 
         // No usable selection → insert the display text (or the target itself) as a new hyperlinked run.
-        var text = string.IsNullOrEmpty(displayText) ? (isInternal ? anchor! : url!) : displayText;
+        var text = string.IsNullOrEmpty(displayText) ? parsedTarget.DisplayFallback : displayText;
         if (_hfCaret is not null || _cellCaret is not null)
         {
             // Header/footer and table-cell carets do not carry the body-paragraph hyperlink round-trip;
@@ -9426,6 +9424,80 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-LINK: True when the caret sits on an external URL or internal bookmark link.
+    /// </summary>
+    public bool IsCaretOnHyperlink() => HyperlinksAtCaret().Count > 0;
+
+    /// <summary>The current external URL under the caret, or null when the caret is not on an external link.</summary>
+    public string? HyperlinkUrlAtCaret()
+    {
+        var links = HyperlinksAtCaret();
+        return links.Count > 0 ? links[0].Url : null;
+    }
+
+    /// <summary>The current ScreenTip under the caret, or null when no linked ScreenTip exists.</summary>
+    public string? HyperlinkTooltipAtCaret()
+    {
+        var links = HyperlinksAtCaret();
+        return links.Count > 0 ? links[0].Tooltip : null;
+    }
+
+    /// <summary>The bookmark names defined in the document, in document order.</summary>
+    public IReadOnlyList<string> BookmarkNames() =>
+        Bookmarks.List(_doc).Select(b => b.Name).Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>
+    /// AV-LINK: Retarget the hyperlink span under the caret, preserving visible text and ScreenTip.
+    /// </summary>
+    public void EditHyperlink(string newTarget)
+    {
+        if (!HyperlinkTarget.TryParse(newTarget, out var parsedTarget)
+            || !TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out var current))
+        {
+            return;
+        }
+
+        var next = new LinkInfo(parsedTarget.Url, parsedTarget.Anchor, current.Tooltip);
+        ApplyLinkSpan(block, start, end, _ => next);
+    }
+
+    /// <summary>
+    /// AV-LINK: Remove the hyperlink span under the caret while preserving visible text.
+    /// </summary>
+    public void RemoveHyperlink()
+    {
+        if (TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out _))
+            ApplyLinkSpan(block, start, end, _ => null);
+    }
+
+    /// <summary>
+    /// AV-LINK: Set or clear the ScreenTip on the hyperlink span under the caret.
+    /// </summary>
+    public void SetHyperlinkTooltip(string? tip)
+    {
+        if (!TryFindHyperlinkSpanAtCaret(out var block, out var start, out var end, out var current))
+            return;
+
+        var tooltip = string.IsNullOrWhiteSpace(tip) ? null : tip.Trim();
+        ApplyLinkSpan(block, start, end, _ => new LinkInfo(current.Url, current.Anchor, tooltip));
+    }
+
+    /// <summary>
+    /// AV-LINK: Link the current selection, or insert the bookmark name at the caret, as an internal link.
+    /// </summary>
+    public void ApplyInternalLink(string anchor)
+    {
+        if (string.IsNullOrWhiteSpace(anchor))
+            return;
+
+        var normalized = anchor.Trim().TrimStart('#').Trim();
+        if (!HyperlinkTarget.TryParse("#" + normalized, out var parsedTarget))
+            return;
+
+        InsertHyperlink(parsedTarget.DisplayFallback, "#" + parsedTarget.Anchor);
+    }
+
+    /// <summary>
     /// AV-LINK: The hyperlink targets covering the caret (or the current selection), for ribbon-state /
     /// tests. Each entry is <c>(Url, Anchor, Tooltip)</c> with exactly one of Url/Anchor set. Empty when the
     /// caret is not on a hyperlink. Reads the live model so it reflects the latest edit.
@@ -9458,6 +9530,62 @@ public sealed class DocumentView : Control
             if (cells[i].Link is { HasTarget: true } link && seen.Add(link))
                 found.Add((link.Url, link.Anchor, link.Tooltip));
         return found;
+    }
+
+    private bool TryFindHyperlinkSpanAtCaret(out int block, out int start, out int end, out LinkInfo link)
+    {
+        block = _caret.Block;
+        start = 0;
+        end = 0;
+        link = default;
+
+        if (_cellCaret is not null || _hfCaret is not null || CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return false;
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return false;
+
+        var sel = NormalizedSelection();
+        var index = sel is { } s && s.Start.Block == block && s.End.Block == block
+            ? Math.Clamp(s.Start.Offset, 0, cells.Count - 1)
+            : Math.Clamp(_caret.Offset - 1, 0, cells.Count - 1);
+
+        if (cells[index].Link is not { HasTarget: true } current)
+            return false;
+
+        var lo = index;
+        while (lo > 0 && cells[lo - 1].Link == current)
+            lo--;
+
+        var hi = index + 1;
+        while (hi < cells.Count && cells[hi].Link == current)
+            hi++;
+
+        start = lo;
+        end = hi;
+        link = current;
+        return true;
+    }
+
+    private void ApplyLinkSpan(int block, int start, int end, Func<LinkInfo, LinkInfo?> transform)
+    {
+        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+        {
+            var cells = ParaCells(p);
+            var lo = Math.Clamp(start, 0, cells.Count);
+            var hi = Math.Clamp(end, lo, cells.Count);
+            for (var i = lo; i < hi; i++)
+            {
+                if (cells[i].Link is { HasTarget: true } link)
+                    cells[i] = cells[i] with { Link = transform(link) };
+            }
+            SetRuns(p, cells);
+        }));
+
+        _caret = new DocPosition(block, Math.Clamp(_caret.Offset, start, end));
+        _selectionAnchor = _caret;
+        Focus();
     }
 
     /// <summary>

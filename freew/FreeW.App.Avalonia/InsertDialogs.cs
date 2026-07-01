@@ -41,9 +41,9 @@ public sealed class HyperlinkDialog : Window
     /// </summary>
     public string? Address { get; private set; }
 
-    public HyperlinkDialog(string? initialDisplay = null, string? initialAddress = null)
+    public HyperlinkDialog(string? initialDisplay = null, string? initialAddress = null, string? title = null)
     {
-        Title = InsertDialogTextResources.Hyperlink.Title;
+        Title = title ?? InsertDialogTextResources.Hyperlink.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -80,6 +80,55 @@ public sealed class HyperlinkDialog : Window
 
         _addressBox.KeyDown += (_, e) => InsertDialogLayout.HandleEnterEscape(e, buttons);
         _displayBox.KeyDown += (_, e) => InsertDialogLayout.HandleEnterEscape(e, buttons);
+    }
+}
+
+/// <summary>
+/// AV-LINKS: Edits the ScreenTip for the hyperlink at the caret. A blank OK result clears the ScreenTip.
+/// </summary>
+public sealed class ScreenTipDialog : Window
+{
+    private readonly TextBox _tipBox = new()
+    {
+        MinWidth = 280,
+        PlaceholderText = InsertDialogTextResources.ScreenTip.Placeholder,
+        Margin = new Thickness(0, 6, 0, 0),
+    };
+
+    /// <summary>The entered ScreenTip, empty to clear it, or null when cancelled.</summary>
+    public string? ScreenTip { get; private set; }
+
+    public ScreenTipDialog(string? initialTip = null)
+    {
+        Title = InsertDialogTextResources.ScreenTip.Title;
+        Width = 380;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+
+        _tipBox.Text = initialTip ?? string.Empty;
+        AvaloniaCompactDialogChrome.ApplyTextBox(_tipBox, InsertDialogLayout.ChromeStyle);
+
+        var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.ScreenTip.Label, _tipBox);
+
+        var buttons = InsertDialogLayout.OkCancelRow(
+            ok: () =>
+            {
+                ScreenTip = _tipBox.Text?.Trim() ?? string.Empty;
+                Close();
+            },
+            cancel: Close);
+
+        var outer = new StackPanel();
+        outer.Children.Add(grid);
+        outer.Children.Add(buttons);
+        Content = outer;
+
+        _tipBox.KeyDown += (_, e) => InsertDialogLayout.HandleEnterEscape(e, buttons);
     }
 }
 
@@ -162,6 +211,60 @@ public sealed class BookmarkDialog : Window
         {
             if (e.Key == Key.Escape) { Close(); e.Handled = true; }
         };
+    }
+}
+
+/// <summary>
+/// AV-LINKS: Picks an existing bookmark and links the current selection to it.
+/// </summary>
+public sealed class LinkBookmarkDialog : Window
+{
+    private readonly ComboBox _existing = new()
+    {
+        MinWidth = 260,
+        Margin = new Thickness(0, 6, 0, 0),
+    };
+
+    /// <summary>The chosen bookmark name, or null when cancelled.</summary>
+    public string? BookmarkName { get; private set; }
+
+    public LinkBookmarkDialog(IReadOnlyList<string> existingNames)
+    {
+        ArgumentNullException.ThrowIfNull(existingNames);
+
+        Title = InsertDialogTextResources.LinkBookmark.Title;
+        Width = 380;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        CanResize = false;
+        ShowInTaskbar = false;
+
+        _existing.ItemsSource = existingNames;
+        if (existingNames.Count > 0)
+            _existing.SelectedIndex = 0;
+        _existing.IsEnabled = existingNames.Count > 0;
+        AvaloniaCompactDialogChrome.ApplyComboBox(_existing, InsertDialogLayout.ChromeStyle);
+
+        var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        InsertDialogLayout.AddLabeledRow(grid, 0, InsertDialogTextResources.LinkBookmark.BookmarkLabel, _existing);
+
+        var linkButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.LinkBookmark.LinkButton, (_, _) =>
+        {
+            if (_existing.SelectedItem is string s && !string.IsNullOrWhiteSpace(s))
+            {
+                BookmarkName = s;
+                Close();
+            }
+        });
+        var closeButton = InsertDialogLayout.MakeButton(InsertDialogTextResources.LinkBookmark.CloseButton, (_, _) => Close());
+        var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([linkButton, closeButton], new Thickness(14, 12, 14, 12));
+
+        var outer = new StackPanel();
+        outer.Children.Add(grid);
+        outer.Children.Add(btnRow);
+        Content = outer;
     }
 }
 

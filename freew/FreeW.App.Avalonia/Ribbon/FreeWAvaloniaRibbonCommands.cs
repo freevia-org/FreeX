@@ -704,15 +704,15 @@ internal static class FreeWAvaloniaRibbonCommands
         RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
     {
         // ── Links ────────────────────────────────────────────────────────────
-        // Hyperlink / Bookmark open small dialogs (shell callbacks) that call InsertHyperlink / InsertBookmark.
+        // Hyperlink / Bookmark open small dialogs (shell callbacks) that call the model-backed editor methods.
         r.Register("freew.hyperlink",        new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
         r.Register("freew.insert-hyperlink", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
-        r.Register("freew.edit-hyperlink", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
-        r.Register("freew.remove-hyperlink", EmptyRibbonCommand.Instance);
-        r.Register("freew.hyperlink-tooltip", new ActionRibbonCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
+        r.Register("freew.edit-hyperlink",   new ActionRibbonCommand(callbacks.OpenEditHyperlinkDialog ?? (() => { })));
+        r.Register("freew.remove-hyperlink", new ActionRibbonCommand(editor.RemoveHyperlink));
+        r.Register("freew.hyperlink-tooltip", new ActionRibbonCommand(callbacks.OpenHyperlinkTooltipDialog ?? (() => { })));
         r.Register("freew.bookmark",         new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
         r.Register("freew.insert-bookmark",  new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
-        r.Register("freew.link-bookmark",    new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+        r.Register("freew.link-bookmark",    new ActionRibbonCommand(callbacks.OpenLinkBookmarkDialog ?? (() => LinkToFirstBookmark(editor))));
         r.Register("freew.bookmark-manager", new ActionRibbonCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
 
         // ── Cover Page ───────────────────────────────────────────────────────
@@ -761,6 +761,13 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.object", new ActionRibbonCommand(() => editor.InsertEmbeddedObject()));
         r.Register("freew.update-fields", new ActionRibbonCommand(editor.UpdateFields));
         r.Register("freew.toggle-field-codes", new ActionRibbonCommand(editor.ToggleFieldCodes));
+    }
+
+    private static void LinkToFirstBookmark(DocumentView editor)
+    {
+        var bookmarks = editor.BookmarkNames();
+        if (bookmarks.Count > 0)
+            editor.ApplyInternalLink(bookmarks[0]);
     }
 
     /// <summary>

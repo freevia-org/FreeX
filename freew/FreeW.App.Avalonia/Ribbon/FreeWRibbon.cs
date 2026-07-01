@@ -115,10 +115,25 @@ internal sealed record RibbonHostCallbacks(
     /// </summary>
     Action? OpenHyperlinkDialog = null,
     /// <summary>
+    /// AV-LINKS: Opens the Edit Hyperlink dialog for the hyperlink at the caret.
+    /// Optional (default null); the registry no-ops when null.
+    /// </summary>
+    Action? OpenEditHyperlinkDialog = null,
+    /// <summary>
+    /// AV-LINKS: Opens the ScreenTip dialog for the hyperlink at the caret.
+    /// Optional (default null); the registry no-ops when null.
+    /// </summary>
+    Action? OpenHyperlinkTooltipDialog = null,
+    /// <summary>
     /// AV-INSERT2: Opens the Bookmark dialog (add a named bookmark at the caret, or Go To an existing one).
     /// Optional (default null); the registry no-ops when null.
     /// </summary>
     Action? OpenBookmarkDialog = null,
+    /// <summary>
+    /// AV-LINKS: Opens the Link to Bookmark picker and applies the chosen internal link.
+    /// Optional (default null); the registry falls back to the first bookmark when null.
+    /// </summary>
+    Action? OpenLinkBookmarkDialog = null,
     /// <summary>
     /// AV-INSERT2: Opens the Insert Quick Part dialog (a multi-line snippet) and inserts it at the caret.
     /// Optional (default null); the registry no-ops when null.

@@ -288,6 +288,111 @@ public sealed class DocumentViewHyperlinkBookmarkTests
     }
 
     [Fact]
+    public async Task EditHyperlink_retargets_the_link_under_the_caret_and_preserves_text_and_screentip()
+    {
+        string? text = null;
+        string? url = null;
+        string? anchor = null;
+        string? tooltip = null;
+        var isOnLink = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+            view.SetHyperlinkTooltip("Old tip");
+
+            isOnLink = view.IsCaretOnHyperlink();
+            view.EditHyperlink("#TargetBookmark");
+
+            var link = ((Paragraph)view.Document.Blocks[0]).Runs.First(r => r.HyperlinkAnchor == "TargetBookmark");
+            text = link.Text;
+            url = link.HyperlinkUrl;
+            anchor = link.HyperlinkAnchor;
+            tooltip = link.HyperlinkTooltip;
+        });
+
+        if (!ran) return;
+        isOnLink.Should().BeTrue();
+        text.Should().Be("Acme");
+        url.Should().BeNull();
+        anchor.Should().Be("TargetBookmark");
+        tooltip.Should().Be("Old tip", "retargeting should keep the existing ScreenTip");
+    }
+
+    [Fact]
+    public async Task RemoveHyperlink_clears_the_link_under_the_caret_but_keeps_visible_text()
+    {
+        var plainText = "";
+        var hasLink = true;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+
+            view.RemoveHyperlink();
+
+            var paragraph = (Paragraph)view.Document.Blocks[0];
+            plainText = paragraph.PlainText;
+            hasLink = paragraph.Runs.Any(r => r.HyperlinkUrl is { Length: > 0 } || r.HyperlinkAnchor is { Length: > 0 });
+        });
+
+        if (!ran) return;
+        plainText.Should().Be("See Acme site");
+        hasLink.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SetHyperlinkTooltip_sets_and_clears_the_link_screentip()
+    {
+        string? afterSet = null;
+        string? afterClear = "still set";
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://old.example");
+            view.MoveCaretToBlock(0, 6);
+
+            view.SetHyperlinkTooltip("Screen tip");
+            afterSet = view.HyperlinkTooltipAtCaret();
+            view.SetHyperlinkTooltip(" ");
+            afterClear = view.HyperlinkTooltipAtCaret();
+        });
+
+        if (!ran) return;
+        afterSet.Should().Be("Screen tip");
+        afterClear.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ApplyInternalLink_wraps_selection_with_bookmark_anchor()
+    {
+        string? anchor = null;
+        IReadOnlyList<string>? bookmarkNames = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Jump target", "Target");
+            view.MoveCaretToBlock(1, 0);
+            view.InsertBookmark("Target1");
+            bookmarkNames = view.BookmarkNames();
+
+            view.SetSelectionRangePublic(0, 0, 0, 4);
+            view.ApplyInternalLink("Target1");
+
+            anchor = ((Paragraph)view.Document.Blocks[0]).Runs
+                .FirstOrDefault(r => r.Text == "Jump")?.HyperlinkAnchor;
+        });
+
+        if (!ran) return;
+        bookmarkNames.Should().Contain("Target1");
+        anchor.Should().Be("Target1");
+    }
+
+    [Fact]
     public async Task Editing_inside_a_hyperlink_keeps_it_one_link_run()
     {
         var linkText = "";
