@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using FreeX.App.Presentation.ConditionalFormatting;
+
 namespace FreeX.App.Avalonia.Tests.Parity;
 
 /// <summary>
@@ -85,43 +87,10 @@ public static class FunctionalParityClassifier
         "Accounting Number Format Japanese Yen",
     };
 
-    private static readonly IReadOnlySet<string> ConditionalFormattingGalleryRows = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "Greater Than",
-        "Less Than",
-        "Between",
-        "Equal To",
-        "Text that Contains",
-        "A Date Occurring",
-        "Duplicate Values",
-        "Top 10 Items",
-        "Top 10%",
-        "Bottom 10 Items",
-        "Bottom 10%",
-        "Above Average",
-        "Below Average",
-        "Data Bars",
-        "Color Scales",
-        "3 Arrows",
-        "3 Arrows (Gray)",
-        "4 Arrows",
-        "4 Arrows (Gray)",
-        "5 Arrows",
-        "5 Arrows (Gray)",
-        "3 Traffic Lights",
-        "3 Traffic Lights (Rimmed)",
-        "3 Signs",
-        "3 Symbols",
-        "3 Symbols (Uncircled)",
-        "3 Flags",
-        "4 Traffic Lights",
-        "4 Red To Black",
-        "4 Ratings",
-        "5 Ratings",
-        "5 Quarters",
-        "5 Boxes",
-        "More Rules",
-    };
+    public static IReadOnlySet<string> ConditionalFormattingGalleryRows { get; } =
+        ConditionalFormatPresetGalleryPlanner.PopupItems
+            .Select(item => item.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
 
     private static readonly IReadOnlySet<string> FontAndBorderChoiceRows = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -223,6 +192,12 @@ public static class FunctionalParityClassifier
         ClassificationKind.Excluded => "Excluded",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown classification kind."),
     };
+
+    public static bool IsConditionalFormattingGalleryRow(ClassifiedRow row) =>
+        row.Classification == ClassificationKind.PseudoCommandGalleryItem &&
+        string.Equals(row.MatrixRow.TabHeader, "Home", StringComparison.Ordinal) &&
+        string.Equals(row.MatrixRow.GroupHeader, "Styles", StringComparison.Ordinal) &&
+        ConditionalFormattingGalleryRows.Contains(row.MatrixRow.CommandId);
 
     public static IReadOnlyList<ClassificationKind> OrderedKinds { get; } =
     [

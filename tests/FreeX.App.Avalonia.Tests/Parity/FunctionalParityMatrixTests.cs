@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
+using FreeX.App.Presentation.ConditionalFormatting;
+
 using Xunit;
 
 namespace FreeX.App.Avalonia.Tests.Parity;
@@ -121,6 +123,34 @@ public sealed class FunctionalParityMatrixTests
             .Select(g => g.Key));
     }
 
+    [Fact]
+    public void Classifier_ConditionalFormatPseudoGalleryRows_AreBackedByRuntimePopupCatalog()
+    {
+        var wpf = FunctionalParityMatrix.LoadWpfHandlerIds();
+        var rows = FunctionalParityMatrix.Compute(wpf);
+        var classifications = FunctionalParityClassifier.Classify(rows);
+        var catalogIds = ConditionalFormatPresetGalleryPlanner.PopupItems
+            .Select(item => item.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var conditionalFormatRows = classifications
+            .Where(FunctionalParityClassifier.IsConditionalFormattingGalleryRow)
+            .ToArray();
+
+        Assert.Equal(34, conditionalFormatRows.Length);
+        Assert.All(conditionalFormatRows, row =>
+        {
+            Assert.Equal(FunctionalParityClassifier.ClassificationKind.PseudoCommandGalleryItem, row.Classification);
+            Assert.Contains(row.MatrixRow.CommandId, catalogIds);
+            Assert.Equal("Use the conditional-format popup/gallery parity lane for richer evidence instead of adding placeholder handlers.", row.NextAction);
+        });
+
+        Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "Data Bars");
+        Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "Color Scales");
+        Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "3 Arrows");
+        Assert.Contains(conditionalFormatRows, row => row.MatrixRow.CommandId == "More Rules");
+    }
+
     private static void WriteJson(IReadOnlyList<FunctionalParityMatrix.Row> rows)
     {
         var total = rows.Count;
@@ -217,6 +247,7 @@ public sealed class FunctionalParityMatrixTests
         IReadOnlyList<FunctionalParityClassifier.ClassifiedRow> classifications)
     {
         int Count(FunctionalParityMatrix.ParityStatus s) => rows.Count(r => r.Status == s);
+        var conditionalFormatPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsConditionalFormattingGalleryRow);
 
         var sb = new StringBuilder();
         sb.Append('{').Append('\n');
@@ -229,6 +260,8 @@ public sealed class FunctionalParityMatrixTests
         sb.Append("    \"wpfMissing\": ").Append(Count(FunctionalParityMatrix.ParityStatus.WpfMissing)).Append(",\n");
         sb.Append("    \"bothMissing\": ").Append(Count(FunctionalParityMatrix.ParityStatus.BothMissing)).Append(",\n");
         sb.Append("    \"intentionalLinuxOmissions\": ").Append(IntentionalLinuxOmissions.Count).Append(",\n");
+        sb.Append("    \"conditional-format-popup-gallery-row\": ").Append(conditionalFormatPopupGalleryRows).Append(",\n");
+        sb.Append("    \"conditional-format-popup-catalog-item\": ").Append(FunctionalParityClassifier.ConditionalFormattingGalleryRows.Count).Append(",\n");
         for (var i = 0; i < FunctionalParityClassifier.OrderedKinds.Count; i++)
         {
             var kind = FunctionalParityClassifier.OrderedKinds[i];
@@ -293,6 +326,7 @@ public sealed class FunctionalParityMatrixTests
         IReadOnlyList<FunctionalParityClassifier.ClassifiedRow> classifications)
     {
         int Count(FunctionalParityMatrix.ParityStatus s) => rows.Count(r => r.Status == s);
+        var conditionalFormatPopupGalleryRows = classifications.Count(FunctionalParityClassifier.IsConditionalFormattingGalleryRow);
 
         var sb = new StringBuilder();
         sb.Append("# FreeX functional parity classification dashboard\n\n");
@@ -306,6 +340,8 @@ public sealed class FunctionalParityMatrixTests
         sb.Append("| Non-parity rows classified | ").Append(classifications.Count).Append(" |\n");
         sb.Append("| AVALONIA-MISSING | ").Append(Count(FunctionalParityMatrix.ParityStatus.AvaloniaMissing)).Append(" |\n");
         sb.Append("| Intentional Linux omissions | ").Append(IntentionalLinuxOmissions.Count).Append(" |\n");
+        sb.Append("| Conditional-format popup/gallery rows backed by runtime catalog | ").Append(conditionalFormatPopupGalleryRows).Append(" |\n");
+        sb.Append("| Conditional-format popup runtime catalog items | ").Append(FunctionalParityClassifier.ConditionalFormattingGalleryRows.Count).Append(" |\n");
         foreach (var kind in FunctionalParityClassifier.OrderedKinds)
         {
             sb.Append("| ").Append(FunctionalParityClassifier.ClassificationLabel(kind))
