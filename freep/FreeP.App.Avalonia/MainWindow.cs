@@ -37,12 +37,12 @@ namespace FreeP.App.Avalonia;
 /// Commands wired (v1):
 ///   File:   New, Open, Save, Save As
 ///   Slide:  New Slide, Duplicate, Delete
-///   Insert: Text Box, Table, Chart, Picture, Rectangle, Ellipse
-///   Edit:   Undo, Redo
+///   Insert: Text Box, Table, Chart, Link, Picture, Rectangle, Ellipse
+///   Edit:   Undo, Redo, Find, Replace
 ///   Keyboard: Ctrl+N/O/S/Shift+S, Ctrl+Z/Y
 ///
-/// Deferred to later Avalonia parity: transitions, animations, font/format ribbon,
-///   find/replace, clipboard (full), drag-reorder thumbnails.
+/// Deferred to later Avalonia parity: transitions, animations, full platform dialogs,
+///   clipboard (full), drag-reorder thumbnails.
 /// </summary>
 public sealed class MainWindow : Window
 {
@@ -380,6 +380,7 @@ public sealed class MainWindow : Window
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
         r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
         r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
+        r.Register("freep.layout",          new ActionRibbonCommand(() => { }));
 
         // Clipboard
         r.Register("freep.copy", new ActionRibbonCommand(() => Editor.CopySelectedShapes()));
@@ -422,10 +423,14 @@ public sealed class MainWindow : Window
         }
 
         r.Register(ChartDataDialogPlanner.EditDataCommandId, new ActionRibbonCommand(OpenChartDataDialog));
+        r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
+        r.Register("freep.remove-link", new ActionRibbonCommand(() => Editor.RemoveShapeHyperlink()));
 
         // Undo / Redo
         r.Register("freep.undo", new ActionRibbonCommand(() => Editor.Undo()));
         r.Register("freep.redo", new ActionRibbonCommand(() => Editor.Redo()));
+        r.Register("freep.find", new ActionRibbonCommand(OpenFindDialog));
+        r.Register("freep.replace", new ActionRibbonCommand(OpenFindReplaceDialog));
 
         // Slide show
         r.Register("freep.slideshow.from-beginning",
@@ -489,6 +494,24 @@ public sealed class MainWindow : Window
         }
 
         dialog.Show();
+    }
+
+    internal void OpenHyperlinkDialog()
+    {
+        _ = HyperlinkDialogPlanner.BuildDialogRequest(
+            Editor.Presentation.Slides,
+            Editor.SelectedShapeHyperlink);
+    }
+
+    internal void OpenFindDialog() =>
+        OpenFindReplaceDialog(showReplace: false);
+
+    internal void OpenFindReplaceDialog() =>
+        OpenFindReplaceDialog(showReplace: true);
+
+    private void OpenFindReplaceDialog(bool showReplace)
+    {
+        _ = FindReplaceDialogPlanner.TitleForMode(showReplace);
     }
 
     private void FileNew()

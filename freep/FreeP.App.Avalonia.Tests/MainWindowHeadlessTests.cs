@@ -245,6 +245,7 @@ public sealed class MainWindowHeadlessTests
         home.Groups.Should().Contain(g => g.Id == "clipboard", "Clipboard group required");
         home.Groups.Should().Contain(g => g.Id == "arrange", "Arrange group required");
         home.Groups.Should().Contain(g => g.Id == "edit",   "Edit group required");
+        home.Groups.Should().Contain(g => g.Id == "editing", "Editing group required");
     }
 
     [Fact]
@@ -270,6 +271,7 @@ public sealed class MainWindowHeadlessTests
         ids.Should().Contain("freep.new-slide",       "New Slide command required");
         ids.Should().Contain("freep.duplicate-slide", "Duplicate Slide command required");
         ids.Should().Contain("freep.delete-slide",    "Delete Slide command required");
+        ids.Should().Contain("freep.layout",          "Layout command required");
     }
 
     [Fact]
@@ -294,6 +296,18 @@ public sealed class MainWindowHeadlessTests
         var ids  = edit.Controls.Select(i => i.CommandId.Value).ToList();
         ids.Should().Contain("freep.undo", "Undo command required");
         ids.Should().Contain("freep.redo", "Redo command required");
+    }
+
+    [Fact]
+    public void RibbonDefinition_editing_group_has_find_and_replace()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var home = definition.Tabs.Single(t => t.Id == "home");
+        var editing = home.Groups.Single(g => g.Id == "editing");
+        var ids = editing.Controls.Select(i => i.CommandId.Value).ToList();
+
+        ids.Should().Contain("freep.find", "Find command required");
+        ids.Should().Contain("freep.replace", "Replace command required");
     }
 
     [Fact]
@@ -333,6 +347,7 @@ public sealed class MainWindowHeadlessTests
         insert.Groups.Should().Contain(g => g.Id == "text", "Text group required");
         insert.Groups.Should().Contain(g => g.Id == "tables", "Tables group required");
         insert.Groups.Should().Contain(g => g.Id == "charts", "Charts group required");
+        insert.Groups.Should().Contain(g => g.Id == "links", "Links group required");
         insert.Groups.Should().Contain(g => g.Id == "illustrations", "Illustrations group required");
 
         var textIds = insert.Groups.Single(g => g.Id == "text")
@@ -340,6 +355,8 @@ public sealed class MainWindowHeadlessTests
         var tableIds = insert.Groups.Single(g => g.Id == "tables")
             .Controls.Select(i => i.CommandId.Value).ToList();
         var chartIds = insert.Groups.Single(g => g.Id == "charts")
+            .Controls.Select(i => i.CommandId.Value).ToList();
+        var linkIds = insert.Groups.Single(g => g.Id == "links")
             .Controls.Select(i => i.CommandId.Value).ToList();
         var illustrationIds = insert.Groups.Single(g => g.Id == "illustrations")
             .Controls.Select(i => i.CommandId.Value).ToList();
@@ -353,6 +370,8 @@ public sealed class MainWindowHeadlessTests
         chartIds.Should().Contain("freep.insert-chart-line", "Line chart command required");
         chartIds.Should().Contain("freep.insert-chart-pie", "Pie chart command required");
         chartIds.Should().Contain(ChartDataDialogPlanner.EditDataCommandId, "Edit Data command required");
+        linkIds.Should().Contain("freep.insert-link", "Insert Link command required");
+        linkIds.Should().Contain("freep.remove-link", "Remove Link command required");
         illustrationIds.Should().Contain("freep.picture", "Picture command required");
         illustrationIds.Should().Contain("freep.shape-rectangle", "Rectangle command required");
         illustrationIds.Should().Contain("freep.shape-ellipse", "Ellipse command required");
@@ -742,6 +761,53 @@ public sealed class MainWindowHeadlessTests
         if (!ran) return;
         found.Should().BeTrue("the Avalonia chart-data command must be registered");
         after.Should().Be(before, "opening chart data without a selected chart should preserve WPF's no-op behavior");
+    }
+
+    [Theory]
+    [InlineData("freep.layout")]
+    [InlineData("freep.find")]
+    [InlineData("freep.replace")]
+    [InlineData("freep.insert-link")]
+    [InlineData("freep.remove-link")]
+    public async Task Ribbon_command_parity_gap_commands_are_registered(string commandId)
+    {
+        var found = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(commandId, out _);
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue($"{commandId} must be registered");
+    }
+
+    [Fact]
+    public async Task Ribbon_remove_link_command_routes_to_editor()
+    {
+        var found = false;
+        Hyperlink? remainingLink = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.remove-link", out var command);
+            found.Should().BeTrue("Remove Link must be registered");
+
+            var shape = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(shape.Id);
+            window.Editor.SetShapeHyperlink(url: "https://example.com");
+
+            command!.Execute(RibbonCommandContext.Empty);
+            remainingLink = window.Editor.SelectedShapeHyperlink;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("Remove Link must be registered");
+        remainingLink.Should().BeNull("Remove Link should clear the selected shape hyperlink through EditingSession");
     }
 
     [Theory]
