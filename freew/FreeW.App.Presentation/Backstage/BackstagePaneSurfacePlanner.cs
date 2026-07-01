@@ -145,11 +145,24 @@ public static class BackstagePaneSurfacePlanner
         string displayName,
         string? currentPath,
         Action saveAs,
-        Action<string> saveAsExtension)
+        Action<string> saveAsExtension) =>
+        BuildSaveAsPane(
+            formats,
+            displayName,
+            currentPath,
+            saveAs,
+            (extension, _) => saveAsExtension(extension));
+
+    public static BackstageSaveAsPaneSurfaceSpec BuildSaveAsPane(
+        IEnumerable<FileFormatDescriptor> formats,
+        string displayName,
+        string? currentPath,
+        Action saveAs,
+        Action<string, int> saveAsFormat)
     {
         ArgumentNullException.ThrowIfNull(formats);
         ArgumentNullException.ThrowIfNull(saveAs);
-        ArgumentNullException.ThrowIfNull(saveAsExtension);
+        ArgumentNullException.ThrowIfNull(saveAsFormat);
 
         var formatList = formats.ToArray();
         var groups = new List<BackstageActionGroup>
@@ -160,7 +173,7 @@ public static class BackstagePaneSurfacePlanner
                 new("Browse", "Open the Windows save dialog.", saveAs),
             ]),
         };
-        groups.AddRange(BackstageSaveAsFileTypePlanner.Build(formatList, saveAsExtension));
+        groups.AddRange(BackstageSaveAsFileTypePlanner.Build(formatList, saveAsFormat));
 
         return new BackstageSaveAsPaneSurfaceSpec(
             BackstageViewTextResources.SaveAs.Title,
@@ -198,11 +211,24 @@ public static class BackstagePaneSurfacePlanner
         Action exportPdf,
         Action? exportXps,
         Action<string> saveAsExtension,
+        BackstageExportPaneSurfaceText? text = null) =>
+        BuildExportPane(
+            formats,
+            exportPdf,
+            exportXps,
+            (extension, _) => saveAsExtension(extension),
+            text);
+
+    public static BackstageActionPaneSurfaceSpec BuildExportPane(
+        IEnumerable<FileFormatDescriptor> formats,
+        Action exportPdf,
+        Action? exportXps,
+        Action<string, int> saveAsFormat,
         BackstageExportPaneSurfaceText? text = null)
     {
         ArgumentNullException.ThrowIfNull(formats);
         ArgumentNullException.ThrowIfNull(exportPdf);
-        ArgumentNullException.ThrowIfNull(saveAsExtension);
+        ArgumentNullException.ThrowIfNull(saveAsFormat);
 
         text ??= BackstageExportPaneSurfaceText.FreeW;
 
@@ -229,7 +255,7 @@ public static class BackstagePaneSurfacePlanner
             text.Description,
             [
                 new(text.FixedLayoutGroupHeading, fixedLayoutRows),
-                BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(formats.ToArray(), saveAsExtension),
+                BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(formats.ToArray(), saveAsFormat),
             ]);
     }
 

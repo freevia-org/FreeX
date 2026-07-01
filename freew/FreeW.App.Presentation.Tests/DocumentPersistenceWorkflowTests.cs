@@ -68,6 +68,51 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void TryResolveSaveTarget_UsesSelectedFilterIndexForDuplicateExtensionAdapters()
+    {
+        var transitional = new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Word Document")]);
+        var strict = new FakeDocumentAdapter([new FileFormatDescriptor(".docx", "Strict Open XML Document")]);
+        var flatOpc = new FakeDocumentAdapter([new FileFormatDescriptor(".xml", "Word XML Document")]);
+        var word2003 = new FakeDocumentAdapter([new FileFormatDescriptor(".xml", "Word 2003 XML Document")]);
+        var workflow = new DocumentPersistenceWorkflow([transitional, strict, flatOpc, word2003]);
+
+        workflow.TryResolveSaveTarget(Path.Combine(_tempDir, "Strict.docx"), filterIndex: 2, out var strictTarget)
+            .Should()
+            .BeTrue();
+        workflow.TryResolveSaveTarget(Path.Combine(_tempDir, "Word2003.xml"), filterIndex: 4, out var word2003Target)
+            .Should()
+            .BeTrue();
+
+        strictTarget.Adapter.Should().BeSameAs(strict);
+        strictTarget.Format!.FormatName.Should().Be("Strict Open XML Document");
+        word2003Target.Adapter.Should().BeSameAs(word2003);
+        word2003Target.Format!.FormatName.Should().Be("Word 2003 XML Document");
+    }
+
+    [Fact]
+    public void TryResolveSaveTarget_SelectedHtmlAdapterWinsForSiblingExtension()
+    {
+        var filtered = new FakeDocumentAdapter(
+            [
+                new FileFormatDescriptor(".html", "Web Page, Filtered"),
+                new FileFormatDescriptor(".htm", "Web Page, Filtered"),
+            ]);
+        var full = new FakeDocumentAdapter(
+            [
+                new FileFormatDescriptor(".html", "Web Page"),
+                new FileFormatDescriptor(".htm", "Web Page"),
+            ]);
+        var workflow = new DocumentPersistenceWorkflow([filtered, full]);
+
+        workflow.TryResolveSaveTarget(Path.Combine(_tempDir, "Full.htm"), filterIndex: 3, out var target)
+            .Should()
+            .BeTrue();
+
+        target.Adapter.Should().BeSameAs(full);
+        target.Format!.FormatName.Should().Be("Web Page");
+    }
+
+    [Fact]
     public void Save_WritesThroughSiblingTempSoFailuresDoNotTruncateExistingTarget()
     {
         var path = WriteText("Existing.docx", "original");

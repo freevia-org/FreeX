@@ -845,9 +845,12 @@ public sealed class MainWindow : Window
         return path is not null && await SaveToPathAsync(path);
     }
 
-    private Task<bool> SaveToPathAsync(string path)
+    private Task<bool> SaveToPathAsync(string path) =>
+        SaveToPathAsync(path, filterIndex: 0);
+
+    private Task<bool> SaveToPathAsync(string path, int filterIndex)
     {
-        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex: 0, out var target))
+        if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
                 SisterAppFileTextPlanner.SaveCommand,
@@ -1173,7 +1176,7 @@ public sealed class MainWindow : Window
             Browse: () => _ = OpenAsync(),
             RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
             SaveAs: () => _ = SaveAsAsync(),
-            SaveAsExtension: ext => _ = SaveAsWithExtensionAsync(ext),
+            SaveAsFormat: (ext, filterIndex) => _ = SaveAsWithFormatAsync(ext, filterIndex),
             OpenContainingFolder: path =>
             {
                 var folder = System.IO.Path.GetDirectoryName(path);
@@ -1293,14 +1296,15 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>
-    /// Save As targeting a specific file extension chosen from the backstage planner.
-    /// Builds a save-picker pre-filtered to the requested extension and lets the user
+    /// Save As targeting a specific file format chosen from the backstage planner.
+    /// Builds a save-picker pre-filtered to the requested format and lets the user
     /// confirm the filename before saving.
     /// </summary>
-    private async Task SaveAsWithExtensionAsync(string extension)
+    private async Task SaveAsWithFormatAsync(string extension, int filterIndex)
     {
         var normalizedExt = DocumentFileFormatResolver.NormalizeExtension(extension);
-        if (!_documentPersistence.TryGetSaveFormat(normalizedExt, out var format))
+        if (!_documentPersistence.TryGetSaveFormat(filterIndex, out var format) &&
+            !_documentPersistence.TryGetSaveFormat(normalizedExt, out format))
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(extension);
             return;
@@ -1325,7 +1329,7 @@ public sealed class MainWindow : Window
                 savePlan.DefaultExtensionWithoutDot));
         var path = file?.LocalPath;
         if (path is not null)
-            await SaveToPathAsync(path);
+            await SaveToPathAsync(path, filterIndex);
     }
 
     // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.
