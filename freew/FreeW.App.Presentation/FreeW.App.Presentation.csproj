@@ -20,4 +20,9 @@
     <Using Include="Free.Shared.IO" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\FreeW.App.Host\Resources\thesaurus-en.txt"
+                      LogicalName="FreeW.App.Presentation.Resources.thesaurus-en.txt" />
+  </ItemGroup>
+
 </Project>

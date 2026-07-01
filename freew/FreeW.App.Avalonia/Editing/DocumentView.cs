@@ -193,6 +193,7 @@ public sealed class DocumentView : Control
     private RunFormatting? _pendingRunFmt;
     private FormatPainterClipboard? _formatPainter;
     private bool _formatPainterLocked;
+    private readonly CustomDictionary _customDictionary = new();
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -347,6 +348,8 @@ public sealed class DocumentView : Control
     public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
     public bool CanUndo => _bus.CanUndo;
     public bool CanRedo => _bus.CanRedo;
+    public bool SpellCheckEnabled { get; private set; } = true;
+    public IReadOnlyList<string> CustomDictionaryWords => _customDictionary.Words;
 
     /// <summary>Raised whenever document protection or Mark-as-Final state changes.</summary>
     public event EventHandler? ProtectionStateChanged;
@@ -7889,6 +7892,53 @@ public sealed class DocumentView : Control
             CharacterShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
         });
 
+    public void SetProofingLanguage(string? languageTag)
+    {
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        var normalizedTag = ProofingLanguageCatalog.NormalizeTag(languageTag);
+        if (indices.Count > 1)
+            _bus.BeginUndoGroup();
+
+        foreach (var blockIndex in indices)
+        {
+            _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, paragraph =>
+            {
+                var cells = ParaCells(paragraph);
+                for (var i = 0; i < cells.Count; i++)
+                    cells[i] = cells[i] with { Fmt = cells[i].Fmt with { LanguageTag = normalizedTag } };
+                SetRuns(paragraph, cells);
+            }));
+        }
+
+        if (indices.Count > 1)
+            _bus.CommitUndoGroup("Proofing Language");
+    }
+
+    public bool ToggleSpellCheck()
+    {
+        SpellCheckEnabled = !SpellCheckEnabled;
+        InvalidateVisual();
+        return SpellCheckEnabled;
+    }
+
+    public bool AddCurrentWordToDictionary() =>
+        CurrentProofingWord is { } word && _customDictionary.Add(word);
+
+    public bool AddToDictionary(string? word)
+    {
+        var normalized = NormalizeProofingWord(word);
+        return normalized is not null && _customDictionary.Add(normalized);
+    }
+
+    public bool IsInCustomDictionary(string? word) =>
+        NormalizeProofingWord(word) is { } normalized && _customDictionary.Contains(normalized);
+
+    public string? CurrentProofingWord =>
+        NormalizeProofingWord(SelectedText) ?? WordAtCaret();
+
     // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
     // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
     // DocumentCommandBus so they are undoable, mirroring the WPF host's InsertComment / DeleteComment /
@@ -10631,6 +10681,53 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Cycles text case: lower → Title Case → UPPER → lower.</summary>
+    private string? WordAtCaret()
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return null;
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return null;
+
+        var index = Math.Clamp(_caret.Offset, 0, cells.Count - 1);
+        if (!IsProofingWordChar(cells[index].Ch) && index > 0 && IsProofingWordChar(cells[index - 1].Ch))
+            index--;
+        if (!IsProofingWordChar(cells[index].Ch))
+            return null;
+
+        var start = index;
+        while (start > 0 && IsProofingWordChar(cells[start - 1].Ch))
+            start--;
+        var end = index + 1;
+        while (end < cells.Count && IsProofingWordChar(cells[end].Ch))
+            end++;
+
+        return NormalizeProofingWord(new string(cells.Skip(start).Take(end - start).Select(c => c.Ch).ToArray()));
+    }
+
+    private static string? NormalizeProofingWord(string? word)
+    {
+        if (string.IsNullOrWhiteSpace(word))
+            return null;
+
+        var trimmed = word.Trim();
+        var start = 0;
+        while (start < trimmed.Length && !IsProofingWordChar(trimmed[start]))
+            start++;
+        var end = trimmed.Length - 1;
+        while (end >= start && !IsProofingWordChar(trimmed[end]))
+            end--;
+        if (end < start)
+            return null;
+
+        var normalized = trimmed[start..(end + 1)];
+        return normalized.Any(char.IsWhiteSpace) ? null : normalized;
+    }
+
+    private static bool IsProofingWordChar(char ch) =>
+        char.IsLetter(ch) || ch is '\'' or '-' or '\u2019';
+
     private static string CycleCase(string text)
     {
         if (string.IsNullOrEmpty(text))
