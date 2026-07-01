@@ -171,6 +171,36 @@ internal sealed record RibbonHostCallbacks(
     Action? ReplyComment = null,
     /// <summary>AV-REVIEW: Review &gt; Comments &gt; Show Comments. Optional; registry no-ops when null.</summary>
     Action<IReadOnlyList<CommentListItem>>? ShowComments = null,
+    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Spelling &amp; Grammar. Optional; registry no-ops when null.</summary>
+    Action? ToggleSpellcheck = null,
+    /// <summary>AV-REVIEW: Whether the spelling proofing overlay is active.</summary>
+    Func<bool>? IsSpellcheckActive = null,
+    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Add to Dictionary. Optional; registry no-ops when null.</summary>
+    Action? AddToDictionary = null,
+    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Thesaurus. Optional; registry no-ops when null.</summary>
+    Action? OpenThesaurus = null,
+    /// <summary>AV-REVIEW: Review &gt; Proofing &gt; Set Proofing Language. Optional; registry no-ops when null.</summary>
+    Action? SetProofingLanguage = null,
+    /// <summary>AV-REVIEW: Review &gt; Speech &gt; Read Aloud. Optional; registry no-ops when null.</summary>
+    Action? ToggleReadAloud = null,
+    /// <summary>AV-REVIEW: Whether Read Aloud is currently active.</summary>
+    Func<bool>? IsReadAloudActive = null,
+    /// <summary>AV-REVIEW: Review &gt; Changes &gt; Previous. Optional; registry no-ops when null.</summary>
+    Action? PreviousChange = null,
+    /// <summary>AV-REVIEW: Review &gt; Changes &gt; Next. Optional; registry no-ops when null.</summary>
+    Action? NextChange = null,
+    /// <summary>AV-REVIEW: Review &gt; Compare &gt; Compare. Optional; registry no-ops when null.</summary>
+    Action? CompareDocuments = null,
+    /// <summary>AV-REVIEW: Review &gt; Compare &gt; Combine. Optional; registry no-ops when null.</summary>
+    Action? CombineDocuments = null,
+    /// <summary>AV-VIEW: View &gt; Views &gt; Outline. Optional; registry falls back to Draft view when null.</summary>
+    Action? SetOutlineView = null,
+    /// <summary>AV-VIEW: Whether Outline view is active.</summary>
+    Func<bool>? IsOutlineViewActive = null,
+    /// <summary>AV-VIEW: View &gt; Views &gt; Page Edit. Optional; registry falls back to Print Layout when null.</summary>
+    Action? TogglePagedEditView = null,
+    /// <summary>AV-VIEW: Whether Page Edit view is active.</summary>
+    Func<bool>? IsPagedEditViewActive = null,
     /// <summary>FreeW File &gt; Import PDF (text only). Optional; registry no-ops when null.</summary>
     Action? ImportPdfText = null,
     /// <summary>Table Layout &gt; Properties / Cell Margins. Optional; registry no-ops when null.</summary>

@@ -381,7 +381,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         AssertGapClassification(commands, "freew.insert-bookmark", "command-id-alias");
         AssertGapClassification(commands, "freew.about", "platform-only");
         AssertGapClassification(commands, "freew.cc-checkbox", "deferred");
-        AssertGapClassification(commands, "freew.add-to-dictionary", "actionable-gap");
+        AssertGapClassification(commands, "freew.add-to-dictionary", "shared-profile");
+        AssertGapClassification(commands, "freew.split", "command-id-alias");
 
         var markdown = ReadRepositoryFile("docs", "parity", "freew-command-inventory.md");
         markdown.Should().Contain($"| {commandIds.Length} | {both} | {wpfOnly} | {avaloniaOnly} | {avaloniaOnly} | {wpfOnly} |");
