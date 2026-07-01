@@ -203,6 +203,39 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Avalonia_profile_uses_shared_layout_page_setup_command_ids()
+    {
+        var avaloniaIds = CommandEntries(FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia))
+            .Select(entry => entry.CommandId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        avaloniaIds.Should().Contain(new[]
+        {
+            "freew.margins",
+            "freew.orientation",
+            "freew.size",
+            "freew.columns",
+            "freew.columns-one",
+            "freew.columns-two",
+            "freew.columns-three",
+            "freew.columns-left",
+            "freew.columns-right",
+            "freew.breaks",
+            "freew.column-break",
+            "freew.section-break-next-page",
+            "freew.section-break-continuous",
+            "freew.section-break-even-page",
+            "freew.section-break-odd-page",
+            "freew.page-setup",
+            "freew.custom-margins",
+            "freew.more-paper-sizes",
+        });
+
+        avaloniaIds.Should().NotContain("freew.page-setup-dialog");
+        avaloniaIds.Should().NotContain("freew.page-orientation");
+    }
+
+    [Fact]
     public void Checked_in_command_inventory_matches_compiled_profiles()
     {
         var wpf = InventoryLocations(FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf), "WPF");

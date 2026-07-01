@@ -87,6 +87,47 @@ internal static class FreeWAvaloniaRibbonDefinition
         });
 
     /// <summary>AV-REF: References &gt; Insert Caption dropdown — Figure / Table caption labels.</summary>
+    private static RibbonMenu BuildMarginsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Normal", new RibbonCommandId("freew.page-margins-normal")),
+            new("Narrow", new RibbonCommandId("freew.page-margins-narrow")),
+            new("Wide", new RibbonCommandId("freew.page-margins-wide")),
+            RibbonMenuItem.Separator(),
+            new("Custom Margins...", new RibbonCommandId("freew.custom-margins")),
+        });
+
+    private static RibbonMenu BuildPageSizeMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Letter", new RibbonCommandId("freew.page-size-letter")),
+            new("A4", new RibbonCommandId("freew.page-size-a4")),
+            RibbonMenuItem.Separator(),
+            new("More Paper Sizes...", new RibbonCommandId("freew.more-paper-sizes")),
+        });
+
+    private static RibbonMenu BuildColumnsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("One", new RibbonCommandId("freew.columns-one")),
+            new("Two", new RibbonCommandId("freew.columns-two")),
+            new("Three", new RibbonCommandId("freew.columns-three")),
+            new("Left", new RibbonCommandId("freew.columns-left")),
+            new("Right", new RibbonCommandId("freew.columns-right")),
+        });
+
+    private static RibbonMenu BuildBreaksMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Page Break", new RibbonCommandId("freew.page-break")),
+            new("Column Break", new RibbonCommandId("freew.column-break")),
+            RibbonMenuItem.Separator(),
+            new("Next Page", new RibbonCommandId("freew.section-break-next-page")),
+            new("Continuous", new RibbonCommandId("freew.section-break-continuous")),
+            new("Even Page", new RibbonCommandId("freew.section-break-even-page")),
+            new("Odd Page", new RibbonCommandId("freew.section-break-odd-page")),
+        });
+
     private static RibbonMenu BuildCaptionMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -443,13 +484,12 @@ internal static class FreeWAvaloniaRibbonDefinition
                 // AV-PAGE: page-setup group — dialog launcher + quick orientation/margins/size.
                 tab.Group("page-setup", "Page Setup", null, 100, g =>
                 {
-                    g.Button("freew.page-setup-dialog",   "Page Setup…");
-                    g.Button("freew.page-orientation",    "Orientation");
-                    g.Button("freew.page-margins-normal", "Normal Margins");
-                    g.Button("freew.page-margins-narrow", "Narrow Margins");
-                    g.Button("freew.page-margins-wide",   "Wide Margins");
-                    g.Button("freew.page-size-letter",    "Letter");
-                    g.Button("freew.page-size-a4",        "A4");
+                    g.Dropdown("freew.margins", "Margins", BuildMarginsMenu());
+                    g.Button("freew.orientation", "Orientation");
+                    g.Dropdown("freew.size", "Size", BuildPageSizeMenu());
+                    g.Dropdown("freew.columns", "Columns", BuildColumnsMenu());
+                    g.Dropdown("freew.breaks", "Breaks", BuildBreaksMenu());
+                    g.Button("freew.page-setup", "Page Setup...");
                 });
                 tab.Group("preview", "Preview", null, 90, g =>
                 {

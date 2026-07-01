@@ -59,16 +59,24 @@ public sealed class PageSetupDialogTests
     public void Page_setup_dialog_command_is_registered()
     {
         var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        registry.TryGet(new RibbonCommandId("freew.page-setup"), out _)
+            .Should().BeTrue("freew.page-setup must be the shared registered command");
         registry.TryGet(new RibbonCommandId("freew.page-setup-dialog"), out _)
-            .Should().BeTrue("freew.page-setup-dialog must be registered");
+            .Should().BeTrue("freew.page-setup-dialog must remain a compatibility alias");
+        registry.TryGet(new RibbonCommandId("freew.custom-margins"), out _)
+            .Should().BeTrue("freew.custom-margins must route to the shared page setup dialog");
+        registry.TryGet(new RibbonCommandId("freew.more-paper-sizes"), out _)
+            .Should().BeTrue("freew.more-paper-sizes must route to the shared page setup dialog");
     }
 
     [Fact]
     public void Page_orientation_command_is_registered()
     {
         var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        registry.TryGet(new RibbonCommandId("freew.orientation"), out _)
+            .Should().BeTrue("freew.orientation must be the shared registered command");
         registry.TryGet(new RibbonCommandId("freew.page-orientation"), out _)
-            .Should().BeTrue("freew.page-orientation must be registered");
+            .Should().BeTrue("freew.page-orientation must remain a compatibility alias");
     }
 
     [Fact]
@@ -111,7 +119,101 @@ public sealed class PageSetupDialogTests
             .Should().BeTrue("freew.page-size-a4 must be registered");
     }
 
+    [Fact]
+    public void Shared_layout_page_setup_registry_commands_are_registered()
+    {
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+
+        foreach (var commandId in new[]
+        {
+            "freew.margins",
+            "freew.orientation",
+            "freew.size",
+            "freew.columns",
+            "freew.columns-one",
+            "freew.columns-two",
+            "freew.columns-three",
+            "freew.columns-left",
+            "freew.columns-right",
+            "freew.breaks",
+            "freew.column-break",
+            "freew.section-break-next-page",
+            "freew.section-break-continuous",
+            "freew.section-break-even-page",
+            "freew.section-break-odd-page",
+            "freew.page-setup",
+            "freew.custom-margins",
+            "freew.more-paper-sizes",
+        })
+        {
+            registry.TryGet(new RibbonCommandId(commandId), out _)
+                .Should().BeTrue($"{commandId} must be registered for the Avalonia Layout/Page Setup surface");
+        }
+    }
+
     // ── Ribbon definition ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Shared_and_alias_page_setup_commands_invoke_callbacks()
+    {
+        var opened = 0;
+        var orientationToggles = 0;
+        var marginPresets = new List<string>();
+        var paperSizes = new List<string>();
+        var callbacks = NoopCallbacks() with
+        {
+            OpenPageSetupDialog = () => opened++,
+            ToggleOrientation = () => orientationToggles++,
+            ApplyMarginPreset = preset => marginPresets.Add(preset),
+            ApplyPaperSize = size => paperSizes.Add(size),
+        };
+        var view = new DocumentView();
+        var registry = FreeWRibbon.BuildRegistry(view, callbacks);
+
+        Execute(registry, "freew.page-setup");
+        Execute(registry, "freew.page-setup-dialog");
+        Execute(registry, "freew.custom-margins");
+        Execute(registry, "freew.more-paper-sizes");
+        Execute(registry, "freew.orientation");
+        Execute(registry, "freew.page-orientation");
+        Execute(registry, "freew.margins");
+        Execute(registry, "freew.page-margins-wide");
+        Execute(registry, "freew.size");
+        Execute(registry, "freew.page-size-a4");
+
+        opened.Should().Be(4, "shared page setup ids and the old alias must open the dialog route");
+        orientationToggles.Should().Be(2, "shared orientation id and alias must use the same callback");
+        marginPresets.Should().Equal("narrow", "wide");
+        paperSizes.Should().Equal("a4", "a4");
+    }
+
+    [Fact]
+    public void Column_and_break_commands_mutate_existing_document_model()
+    {
+        var doc = MakeDoc();
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.columns-three");
+        view.Document.Page.ColumnCount.Should().Be(3);
+        view.CanUndo.Should().BeTrue("column presets must use the undoable page-settings path");
+
+        Execute(registry, "freew.columns-left");
+        view.Document.Page.ColumnCount.Should().Be(2);
+        view.Document.Page.ColumnWidthsPt.Should().NotBeNull("Left columns should use unequal widths");
+
+        var blockCount = view.Document.Blocks.Count;
+        Execute(registry, "freew.column-break");
+        view.Document.Blocks.Should().HaveCount(blockCount + 1);
+
+        Execute(registry, "freew.section-break-continuous");
+        view.Document.Blocks
+            .OfType<Paragraph>()
+            .Any(paragraph => paragraph.SectionBreak is { BreakKind: SectionBreakKind.Continuous })
+            .Should()
+            .BeTrue();
+    }
 
     [Fact]
     public void Ribbon_definition_contains_layout_tab()
@@ -132,17 +234,38 @@ public sealed class PageSetupDialogTests
     }
 
     [Fact]
-    public void Layout_tab_page_setup_group_contains_dialog_button()
+    public void Layout_tab_page_setup_group_uses_shared_command_ids()
     {
         var definition = FreeWRibbon.BuildDefinition();
         var layoutTab = definition.Tabs.First(t => t.Id == "layout");
         var group = layoutTab.Groups.First(g => g.Id == "page-setup");
-        var ids = group.Controls
-            .OfType<RibbonButton>()
-            .Select(b => b.CommandId.Value)
-            .ToList();
-        ids.Should().Contain("freew.page-setup-dialog",
-            "the page-setup group must include a dialog-launcher button");
+        var ids = CommandIds(group).ToList();
+
+        ids.Should().Contain(new[]
+        {
+            "freew.margins",
+            "freew.orientation",
+            "freew.size",
+            "freew.columns",
+            "freew.columns-one",
+            "freew.columns-two",
+            "freew.columns-three",
+            "freew.columns-left",
+            "freew.columns-right",
+            "freew.breaks",
+            "freew.page-break",
+            "freew.column-break",
+            "freew.section-break-next-page",
+            "freew.section-break-continuous",
+            "freew.section-break-even-page",
+            "freew.section-break-odd-page",
+            "freew.page-setup",
+            "freew.custom-margins",
+            "freew.more-paper-sizes",
+        });
+
+        ids.Should().NotContain("freew.page-setup-dialog");
+        ids.Should().NotContain("freew.page-orientation");
     }
 
     // ── PageSetupDialog.ApplyResult ───────────────────────────────────────────
@@ -451,5 +574,47 @@ public sealed class PageSetupDialogTests
         }
 
         throw new DirectoryNotFoundException("Could not locate repository root.");
+    }
+
+    private static void Execute(RibbonCommandRegistry registry, string commandId)
+    {
+        registry.TryGet(new RibbonCommandId(commandId), out var command)
+            .Should().BeTrue($"{commandId} must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
+    }
+
+    private static IEnumerable<string> CommandIds(RibbonGroup group)
+    {
+        foreach (var control in group.Controls)
+        {
+            if (!string.IsNullOrEmpty(control.CommandId.Value))
+                yield return control.CommandId.Value;
+
+            foreach (var menuItem in MenuItems(control))
+            {
+                foreach (var commandId in CommandIds(menuItem))
+                    yield return commandId;
+            }
+        }
+    }
+
+    private static IEnumerable<RibbonMenuItem> MenuItems(RibbonControl control) =>
+        control switch
+        {
+            RibbonDropdown dropdown => dropdown.Menu.Items,
+            RibbonSplitButton splitButton => splitButton.Menu.Items,
+            _ => Array.Empty<RibbonMenuItem>(),
+        };
+
+    private static IEnumerable<string> CommandIds(RibbonMenuItem item)
+    {
+        if (item.CommandId is { } commandId)
+            yield return commandId.Value;
+
+        foreach (var child in item.Children)
+        {
+            foreach (var childCommandId in CommandIds(child))
+                yield return childCommandId;
+        }
     }
 }

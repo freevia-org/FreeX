@@ -280,16 +280,38 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
-        r.Register("freew.page-setup-dialog",   new ActionRibbonCommand(callbacks.OpenPageSetupDialog));
+        var pageSetupCommand = new ActionRibbonCommand(callbacks.OpenPageSetupDialog);
+        r.Register("freew.page-setup", pageSetupCommand);
+        r.Register("freew.custom-margins", pageSetupCommand);
+        r.Register("freew.more-paper-sizes", pageSetupCommand);
+        r.Register("freew.page-setup-dialog", pageSetupCommand);
         // Toggle orientation (portrait ↔ landscape).
-        r.Register("freew.page-orientation",    new ActionRibbonCommand(callbacks.ToggleOrientation));
+        var orientationCommand = new ActionRibbonCommand(callbacks.ToggleOrientation);
+        r.Register("freew.orientation", orientationCommand);
+        r.Register("freew.page-orientation", orientationCommand);
         // Margin presets.
+        r.Register("freew.margins", new ActionRibbonCommand(() => ToggleNormalNarrowMargins(editor, callbacks)));
         r.Register("freew.page-margins-normal", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("normal")));
         r.Register("freew.page-margins-narrow", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("narrow")));
-        r.Register("freew.page-margins-wide",   new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("wide")));
+        r.Register("freew.page-margins-wide", new ActionRibbonCommand(() => callbacks.ApplyMarginPreset("wide")));
         // Quick paper-size selectors.
-        r.Register("freew.page-size-letter",    new ActionRibbonCommand(() => callbacks.ApplyPaperSize("letter")));
-        r.Register("freew.page-size-a4",        new ActionRibbonCommand(() => callbacks.ApplyPaperSize("a4")));
+        r.Register("freew.size", new ActionRibbonCommand(() => ToggleLetterA4Paper(editor, callbacks)));
+        r.Register("freew.page-size-letter", new ActionRibbonCommand(() => callbacks.ApplyPaperSize("letter")));
+        r.Register("freew.page-size-a4", new ActionRibbonCommand(() => callbacks.ApplyPaperSize("a4")));
+
+        r.Register("freew.columns", EmptyRibbonCommand.Instance);
+        r.Register("freew.columns-one", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.One)));
+        r.Register("freew.columns-two", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Two)));
+        r.Register("freew.columns-three", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Three)));
+        r.Register("freew.columns-left", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Left)));
+        r.Register("freew.columns-right", new ActionRibbonCommand(() => ApplyColumnPreset(editor, ColumnsPreset.Right)));
+
+        r.Register("freew.breaks", EmptyRibbonCommand.Instance);
+        r.Register("freew.column-break", new ActionRibbonCommand(editor.InsertColumnBreak));
+        r.Register("freew.section-break-next-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.NextPage)));
+        r.Register("freew.section-break-continuous", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.Continuous)));
+        r.Register("freew.section-break-even-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.EvenPage)));
+        r.Register("freew.section-break-odd-page", new ActionRibbonCommand(() => editor.InsertSectionBreak(SectionBreakKind.OddPage)));
 
         // ── View ─────────────────────────────────────────────────────────────
         var printPreviewCommand = new ActionRibbonCommand(callbacks.OpenPrintPreview ?? (() => { }));
@@ -406,6 +428,80 @@ internal static class FreeWAvaloniaRibbonCommands
         var paragraph = editor.GetCaretFormatting().Paragraph;
         editor.SetSpaceAfter(paragraph.SpaceAfterPt > 0 ? 0 : ParagraphSpacingTogglePoints);
     }
+
+    private static void ToggleNormalNarrowMargins(DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        var page = editor.Document.Page;
+        var isNormal =
+            Nearly(page.MarginTopPt, 72) &&
+            Nearly(page.MarginBottomPt, 72) &&
+            Nearly(page.MarginLeftPt, 72) &&
+            Nearly(page.MarginRightPt, 72);
+
+        callbacks.ApplyMarginPreset(isNormal ? "narrow" : "normal");
+    }
+
+    private static void ToggleLetterA4Paper(DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        var page = editor.Document.Page;
+        callbacks.ApplyPaperSize(IsPaper(page, 612.0, 792.0) ? "a4" : "letter");
+    }
+
+    private enum ColumnsPreset
+    {
+        One,
+        Two,
+        Three,
+        Left,
+        Right
+    }
+
+    private static void ApplyColumnPreset(DocumentView editor, ColumnsPreset preset) =>
+        editor.ApplyPageSettings(page =>
+        {
+            var spacing = page.ColumnSpacingPt;
+            page.ColumnsLineBetween = false;
+            page.ColumnWidthsPt = null;
+
+            switch (preset)
+            {
+                case ColumnsPreset.One:
+                    page.ColumnCount = 1;
+                    break;
+                case ColumnsPreset.Two:
+                    page.ColumnCount = 2;
+                    break;
+                case ColumnsPreset.Three:
+                    page.ColumnCount = 3;
+                    break;
+                case ColumnsPreset.Left:
+                    page.ColumnCount = 2;
+                    page.ColumnWidthsPt = UnequalColumnWidths(page, narrowFirst: true, spacing);
+                    break;
+                case ColumnsPreset.Right:
+                    page.ColumnCount = 2;
+                    page.ColumnWidthsPt = UnequalColumnWidths(page, narrowFirst: false, spacing);
+                    break;
+            }
+        });
+
+    private static IReadOnlyList<double> UnequalColumnWidths(PageSettings page, bool narrowFirst, double spacing)
+    {
+        var contentWidthPt = Math.Max(72, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
+        const double narrowPt = 108;
+        var widePt = Math.Max(36, contentWidthPt - spacing - narrowPt);
+        return narrowFirst ? [narrowPt, widePt] : [widePt, narrowPt];
+    }
+
+    private static bool IsPaper(PageSettings page, double portraitWidthPt, double portraitHeightPt)
+    {
+        var width = Math.Min(page.WidthPt, page.HeightPt);
+        var height = Math.Max(page.WidthPt, page.HeightPt);
+        return Nearly(width, portraitWidthPt) && Nearly(height, portraitHeightPt);
+    }
+
+    private static bool Nearly(double actual, double expected) =>
+        Math.Abs(actual - expected) < 0.5;
 
     private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand
     {
