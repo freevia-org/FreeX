@@ -1,5 +1,6 @@
 using System.Globalization;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
@@ -221,6 +222,10 @@ internal static class FreeWAvaloniaRibbonCommands
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
         r.Register("freew.table-header-row",  new ActionRibbonCommand(editor.ToggleTableHeaderRow));
         r.Register("freew.table-banded-rows", new ActionRibbonCommand(editor.ToggleBandedRows));
+        r.Register("freew.table-last-row", new ActionRibbonCommand(editor.ToggleTableLastRow));
+        r.Register("freew.table-first-column", new ActionRibbonCommand(editor.ToggleTableFirstColumn));
+        r.Register("freew.table-last-column", new ActionRibbonCommand(editor.ToggleTableLastColumn));
+        r.Register("freew.table-banded-cols", new ActionRibbonCommand(editor.ToggleTableBandedColumns));
 
         // Table shading: apply a quick neutral fill. Full color picker is deferred.
         r.Register("freew.table-shading", new ActionRibbonCommand(() => editor.SetCellShading("#D9D9D9")));
@@ -231,6 +236,11 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Table Layout contextual tab ───────────────────────────────────────
         // Selection helpers.
+        r.Register("freew.table-view-gridlines", new ActionRibbonCommand(() =>
+        {
+            editor.ViewTableGridlines = !editor.ViewTableGridlines;
+        }));
+        r.Register("freew.table-properties", new TablePropertiesCommand(editor, callbacks));
         r.Register("freew.table-select-table", new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
@@ -279,10 +289,29 @@ internal static class FreeWAvaloniaRibbonCommands
         // Merge / split.
         r.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
         r.Register("freew.table-split-cell",  new ActionRibbonCommand(() => editor.SplitCurrentCell()));
+        r.Register("freew.split-table", new ActionRibbonCommand(editor.SplitTable));
+
+        // Cell size.
+        var tablePropertiesCommand = new TablePropertiesCommand(editor, callbacks);
+        r.Register("freew.table-row-height", tablePropertiesCommand);
+        r.Register("freew.table-col-width", tablePropertiesCommand);
+        r.Register("freew.table-distribute-rows", new ActionRibbonCommand(editor.DistributeTableRows));
+        r.Register("freew.table-distribute-cols", new ActionRibbonCommand(editor.DistributeTableColumns));
+        r.Register("freew.table-autofit-contents", new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Contents)));
+        r.Register("freew.table-autofit-window", new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Window)));
+        r.Register("freew.table-autofit-fixed", new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Fixed)));
 
         // Cell alignment — 9 = 3 vertical (Top/Center/Bottom) × 3 horizontal (Left/Center/Right).
         // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).
         RegisterCellAlignmentCommands(r, editor);
+        r.Register("freew.table-cell-margins", tablePropertiesCommand);
+        r.Register("freew.cell-text-direction-horizontal", new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Horizontal)));
+        r.Register("freew.cell-text-direction-rotate90", new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate90)));
+        r.Register("freew.cell-text-direction-rotate270", new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate270)));
+
+        // Data.
+        r.Register("freew.table-repeat-header", new ActionRibbonCommand(editor.ToggleTableRepeatHeaderRow));
+        r.Register("freew.table-formula", new TableFormulaCommand(editor, callbacks));
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
@@ -691,6 +720,54 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.cell-align-bottom-left",    TableCellVerticalAlignment.Bottom, TextAlignment.Left);
         Add(r, editor, "freew.cell-align-bottom-center",  TableCellVerticalAlignment.Bottom, TextAlignment.Center);
         Add(r, editor, "freew.cell-align-bottom-right",   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
+    }
+
+    private sealed class TablePropertiesCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (editor.CaretTableContext() is not { } tableContext)
+                return;
+
+            var values = callbacks.OpenTablePropertiesDialog?.Invoke(tableContext);
+            if (values is null)
+                return;
+
+            editor.ApplyTableProperties(values);
+        }
+    }
+
+    private sealed class TableFormulaCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (editor.CaretTableCell() is not { } caret)
+                return;
+
+            var initialState = TableFormulaDialogPlanner.BuildInitialState(
+                caret.Table,
+                caret.RowIndex,
+                caret.ColumnIndex);
+            var formula = callbacks.OpenTableFormulaDialog?.Invoke(initialState);
+            if (formula is null)
+            {
+                var format = initialState.NumberFormatIndex >= 0
+                    && initialState.NumberFormatIndex < TableFormulaDialogPlanner.NumberFormats.Count
+                        ? TableFormulaDialogPlanner.NumberFormats[initialState.NumberFormatIndex]
+                        : string.Empty;
+                if (!TableFormulaDialogPlanner.TryBuildResult(
+                        new TableFormulaDialogInput(initialState.FormulaText, format),
+                        out formula,
+                        out _))
+                {
+                    return;
+                }
+            }
+
+            if (formula is null)
+                return;
+            editor.InsertTableFormula(formula);
+        }
     }
 
     /// <summary>

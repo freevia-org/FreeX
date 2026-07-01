@@ -203,6 +203,45 @@ public static class TablePropertiesDialogPlanner
         return true;
     }
 
+    public static void ApplyValues(ModelTableContext context, TablePropertiesValues values)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(values);
+
+        var table = context.Table;
+
+        table.PreferredWidthPt = values.PreferredWidthPt;
+        table.Alignment = values.Alignment;
+        table.IndentFromLeftPt = values.IndentFromLeftPt;
+        table.TextWrapping = values.TextWrapping;
+        table.DefaultCellMargins = values.DefaultCellMargins;
+        table.CellSpacingPt = values.CellSpacingPt;
+        TableLayoutOperations.UpdateFormatting(
+            table,
+            formatting => formatting with { RepeatHeaderRow = values.RepeatHeaderRow });
+
+        if (context.Row is { } row)
+        {
+            row.HeightPt = values.RowHeightPt;
+            row.HeightRule = values.RowHeightRule;
+            row.AllowBreakAcrossPages = values.AllowRowBreak;
+        }
+
+        var columnIndex = context.Row is not null && context.Cell is not null
+            ? context.Row.Cells.IndexOf(context.Cell)
+            : -1;
+        if (values.ColumnWidthPt is not null)
+            TableLayoutOperations.SetColumnWidth(table, columnIndex, values.ColumnWidthPt);
+
+        if (context.Cell is { } cell)
+        {
+            if (values.CellPreferredWidthPt is { } cellWidthPt)
+                cell.WidthPt = cellWidthPt;
+            cell.VerticalAlignment = values.CellVerticalAlignment;
+            cell.Margins = values.CellMargins;
+        }
+    }
+
     public static string FormatPoints(double value, CultureInfo culture)
         => DialogNumericTextPolicy.FormatPoints(value, culture);
 }

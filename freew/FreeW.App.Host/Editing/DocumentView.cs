@@ -1489,24 +1489,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
             || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        if (rowIndex <= 0)
-            return; // nothing above — already the first row
-
-        // Top table: rows [0, rowIndex-1]
-        var top = new ModelTable { Formatting = table.Formatting };
-        top.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
-        for (var i = 0; i < rowIndex; i++)
-            top.Rows.Add(table.Rows[i]);
-
-        // Bottom table: rows [rowIndex, end]
-        var bottom = new ModelTable { Formatting = table.Formatting };
-        bottom.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
-        for (var i = rowIndex; i < table.Rows.Count; i++)
-            bottom.Rows.Add(table.Rows[i]);
-
-        // Replace the single table block with: top table + blank paragraph + bottom table
-        var separator = new ModelParagraph(string.Empty);
-        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [top, separator, bottom]));
+        if (TableLayoutOperations.TryBuildSplitReplacement(table, rowIndex, out var replacement))
+            _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, replacement));
     }
 
     /// <summary>
@@ -1604,23 +1588,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
             || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        if (table.Rows.Count == 0)
-            return;
-
-        var explicitHeights = table.Rows
-            .Where(r => r.HeightPt.HasValue)
-            .Select(r => r.HeightPt!.Value)
-            .ToList();
-        var targetHeight = explicitHeights.Count > 0
-            ? explicitHeights.Average()
-            : (double?)null;
-
-        foreach (var row in table.Rows)
-        {
-            row.HeightPt = targetHeight;
-            row.HeightRule = targetHeight.HasValue ? TableRowHeightRule.Exact : TableRowHeightRule.Auto;
-        }
-        Render();
+        if (TableLayoutOperations.DistributeRows(table))
+            Render();
     }
 
     /// <summary>
@@ -1635,24 +1604,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
             || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        var colCount = table.ColumnCount;
-        if (colCount == 0)
-            return;
-
-        double totalWidth = table.ColumnWidthsPt.Count == colCount
-            ? table.ColumnWidthsPt.Sum()
-            : table.PreferredWidthPt ?? 468.0;
-        var colWidth = totalWidth / colCount;
-
-        table.ColumnWidthsPt.Clear();
-        for (var i = 0; i < colCount; i++)
-            table.ColumnWidthsPt.Add(colWidth);
-
-        foreach (var row in table.Rows)
-            foreach (var cell in row.Cells)
-                cell.WidthPt = colWidth;
-
-        Render();
+        if (TableLayoutOperations.DistributeColumns(table))
+            Render();
     }
 
     /// <summary>
@@ -1666,20 +1619,8 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
             || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-
-        table.AutoFit = mode;
-        if (mode == AutoFitMode.Contents)
-        {
-            table.ColumnWidthsPt.Clear();
-            foreach (var row in table.Rows)
-                foreach (var cell in row.Cells)
-                    cell.WidthPt = null;
-        }
-        else if (mode == AutoFitMode.Window)
-        {
-            table.PreferredWidthPt = 468.0;
-        }
-        Render();
+        if (TableLayoutOperations.SetAutoFit(table, mode))
+            Render();
     }
 
     /// <summary>
@@ -1779,13 +1720,8 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-            return;
-        var cells = table.Rows[rowIndex].Cells;
-        if (columnIndex < 0 || columnIndex >= cells.Count)
-            return;
-        cells[columnIndex].TextDirection = direction;
-        Render();
+        if (TableLayoutOperations.SetCellTextDirection(table, rowIndex, columnIndex, direction))
+            Render();
     }
 
     /// <summary>
@@ -1843,8 +1779,8 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        table.Formatting = update(table.Formatting);
-        Render();
+        if (TableLayoutOperations.UpdateFormatting(table, update))
+            Render();
     }
 
     /// <summary>
@@ -7459,8 +7395,7 @@ public sealed class DocumentView : RichTextBox
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return;
 
-        var result = TableFormulaEvaluator.Evaluate(table, rowIndex, columnIndex, formula);
-        var run = ModelRun.TableFormulaFieldRun(formula, result);
+        var run = TableLayoutOperations.BuildFormulaRun(table, rowIndex, columnIndex, formula);
         InsertInlineAtCaret(BuildTableFormulaRun(run, _model));
     }
 
@@ -7500,50 +7435,11 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ApplyTableProperties(TablePropertiesValues values)
     {
-        CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        var context = CaretTableContext();
+        if (context is null)
             return;
 
-        // Table tab.
-        table.PreferredWidthPt = values.PreferredWidthPt;
-        table.Alignment = values.Alignment;
-        table.IndentFromLeftPt = values.IndentFromLeftPt;
-        table.TextWrapping = values.TextWrapping;
-        table.DefaultCellMargins = values.DefaultCellMargins;
-        table.CellSpacingPt = values.CellSpacingPt;
-        // "Repeat as header row" lives on the Row tab in Word but is a table-level flag in the model.
-        table.Formatting = table.Formatting with { RepeatHeaderRow = values.RepeatHeaderRow };
-
-        // Row tab → caret's row.
-        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
-        {
-            var row = table.Rows[rowIndex];
-            row.HeightPt = values.RowHeightPt;
-            row.HeightRule = values.RowHeightRule;
-            row.AllowBreakAcrossPages = values.AllowRowBreak;
-        }
-
-        // Column tab → preferred width of every cell in the caret's column.
-        if (values.ColumnWidthPt is { } columnWidthPt && columnIndex >= 0)
-            foreach (var r in table.Rows)
-                if (columnIndex < r.Cells.Count)
-                    r.Cells[columnIndex].WidthPt = columnWidthPt;
-
-        // Cell tab → caret's cell.
-        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
-        {
-            var cells = table.Rows[rowIndex].Cells;
-            if (columnIndex >= 0 && columnIndex < cells.Count)
-            {
-                var cell = cells[columnIndex];
-                if (values.CellPreferredWidthPt is { } cellWidthPt)
-                    cell.WidthPt = cellWidthPt;
-                cell.VerticalAlignment = values.CellVerticalAlignment;
-                cell.Margins = values.CellMargins;
-            }
-        }
-
+        TablePropertiesDialogPlanner.ApplyValues(context, values);
         Render();
     }
 

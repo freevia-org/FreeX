@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -94,6 +95,7 @@ public sealed class DocumentView : Control
     // left vertical with tick marks and margin markers). Both are view-only chrome — they never
     // affect layout, only the Render pass — so toggling them just invalidates the visual.
     private bool _showGridlines;
+    private bool _showTableGridlines;
     private bool _showRuler;
 
     // Standard Word font-size ladder (pt).
@@ -1641,28 +1643,167 @@ public sealed class DocumentView : Control
     /// Toggles the <see cref="TableFormatting.HeaderRow"/> flag on the table containing the caret.
     /// No-op outside a table. Undoable via the document command bus.
     /// </summary>
-    public void ToggleTableHeaderRow()
-    {
-        if (_cellCaret is not { } cc) return;
-        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
-            || _doc.Blocks[cc.TableBlock] is not Table tbl) return;
-        var newFmt = tbl.Formatting with { HeaderRow = !tbl.Formatting.HeaderRow };
-        _bus.Execute(new SetTableFormattingCommand(cc.TableBlock, newFmt));
-        InvalidateLayoutAndVisual();
-    }
+    public void ToggleTableHeaderRow() =>
+        UpdateCaretTableFormatting(formatting => formatting with { HeaderRow = !formatting.HeaderRow });
 
     /// <summary>
     /// Toggles the <see cref="TableFormatting.BandedRows"/> flag on the table containing the caret.
     /// No-op outside a table. Undoable via the document command bus.
     /// </summary>
-    public void ToggleBandedRows()
+    public void ToggleBandedRows() =>
+        UpdateCaretTableFormatting(formatting => formatting with { BandedRows = !formatting.BandedRows });
+
+    public void ToggleTableRepeatHeaderRow() =>
+        UpdateCaretTableFormatting(formatting => formatting with { RepeatHeaderRow = !formatting.RepeatHeaderRow });
+
+    public void ToggleTableLastRow() =>
+        UpdateCaretTableFormatting(formatting => formatting with { LastRow = !formatting.LastRow });
+
+    public void ToggleTableFirstColumn() =>
+        UpdateCaretTableFormatting(formatting => formatting with { FirstColumn = !formatting.FirstColumn });
+
+    public void ToggleTableLastColumn() =>
+        UpdateCaretTableFormatting(formatting => formatting with { LastColumn = !formatting.LastColumn });
+
+    public void ToggleTableBandedColumns() =>
+        UpdateCaretTableFormatting(formatting => formatting with { BandedColumns = !formatting.BandedColumns });
+
+    private void UpdateCaretTableFormatting(Func<TableFormatting, TableFormatting> update)
     {
-        if (_cellCaret is not { } cc) return;
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
         if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
-            || _doc.Blocks[cc.TableBlock] is not Table tbl) return;
-        var newFmt = tbl.Formatting with { BandedRows = !tbl.Formatting.BandedRows };
+            || _doc.Blocks[cc.TableBlock] is not Table tbl)
+            return;
+
+        var newFmt = update(tbl.Formatting);
         _bus.Execute(new SetTableFormattingCommand(cc.TableBlock, newFmt));
         InvalidateLayoutAndVisual();
+    }
+
+    public void SplitTable()
+    {
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        if (TableLayoutOperations.TryBuildSplitReplacement(table, cc.Row, out var replacement))
+        {
+            _bus.Execute(new ReplaceBlocksCommand(cc.TableBlock, 1, replacement));
+            _cellCaret = null;
+            _cellAnchor = null;
+            _cellBlockAnchor = null;
+            _cellBlockFocus = null;
+            ClampCaret();
+            InvalidateLayoutAndVisual();
+        }
+    }
+
+    public void DistributeTableRows()
+    {
+        if (IsEditingLocked || CaretTable() is not { } table)
+            return;
+        if (TableLayoutOperations.DistributeRows(table))
+            InvalidateLayoutAndVisual();
+    }
+
+    public void DistributeTableColumns()
+    {
+        if (IsEditingLocked || CaretTable() is not { } table)
+            return;
+        if (TableLayoutOperations.DistributeColumns(table))
+            InvalidateLayoutAndVisual();
+    }
+
+    public void SetTableAutoFit(AutoFitMode mode)
+    {
+        if (IsEditingLocked || CaretTable() is not { } table)
+            return;
+        if (TableLayoutOperations.SetAutoFit(table, mode))
+            InvalidateLayoutAndVisual();
+    }
+
+    public void SetCaretCellTextDirection(CellTextDirection direction)
+    {
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        if (TableLayoutOperations.SetCellTextDirection(table, cc.Row, cellIndex, direction))
+            InvalidateLayoutAndVisual();
+    }
+
+    public (Table Table, int RowIndex, int ColumnIndex)? CaretTableCell()
+    {
+        if (_cellCaret is not { } cc)
+            return null;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table table)
+            return null;
+
+        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        return cellIndex < 0 ? null : (table, cc.Row, cellIndex);
+    }
+
+    public ModelTableContext? CaretTableContext()
+    {
+        if (CaretTableCell() is not { } caret)
+            return null;
+
+        var row = caret.RowIndex >= 0 && caret.RowIndex < caret.Table.Rows.Count
+            ? caret.Table.Rows[caret.RowIndex]
+            : null;
+        var cell = row is not null && caret.ColumnIndex >= 0 && caret.ColumnIndex < row.Cells.Count
+            ? row.Cells[caret.ColumnIndex]
+            : null;
+        return new ModelTableContext(caret.Table, row, cell);
+    }
+
+    public void ApplyTableProperties(TablePropertiesValues values)
+    {
+        if (IsEditingLocked || CaretTableContext() is not { } context)
+            return;
+
+        TablePropertiesDialogPlanner.ApplyValues(context, values);
+        InvalidateLayoutAndVisual();
+    }
+
+    public void InsertTableFormula(TableFormulaField formula)
+    {
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        if (cellIndex < 0)
+            return;
+
+        var run = TableLayoutOperations.BuildFormulaRun(table, cc.Row, cellIndex, formula);
+        var targetOffset = cc.Offset;
+        _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, paragraph =>
+            InsertRunAtOffset(paragraph, targetOffset, run)));
+        var newOffset = targetOffset + run.Text.Length;
+        _cellCaret = cc with { Offset = newOffset };
+        _cellAnchor = _cellCaret;
+        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, newOffset));
+        _selectionAnchor = _caret;
+        InvalidateLayoutAndVisual();
+    }
+
+    private Table? CaretTable()
+    {
+        if (_cellCaret is not { } cc)
+            return null;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count)
+            return null;
+        return _doc.Blocks[cc.TableBlock] as Table;
     }
 
     // ── AV-TBL2: cross-cell rectangular selection ────────────────────────────────────────────────
@@ -4267,7 +4408,7 @@ public sealed class DocumentView : Control
         colOffsets[cols] = running;
 
         const double pad = 5;
-        var borders = table.Formatting.Borders;
+        var borders = table.Formatting.Borders || _showTableGridlines;
         var headerOffset = table.Formatting.HeaderRow ? 1 : 0;
         // AV-TBL: glyphOffset is unique within this table block and is used as PlacedChar.Offset so
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
@@ -8157,6 +8298,22 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Display-only Table Layout > View Gridlines toggle. Draws table cell outlines for borderless
+    /// tables without changing the document model.
+    /// </summary>
+    public bool ViewTableGridlines
+    {
+        get => _showTableGridlines;
+        set
+        {
+            if (_showTableGridlines == value)
+                return;
+            _showTableGridlines = value;
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
     /// AV-VIEW: Toggle a horizontal (top) + vertical (left) ruler strip with tick marks and margin
     /// markers, drawn on the first page in <see cref="DocumentViewMode.PrintLayout"/> (View → Show →
     /// Ruler in Word). View-only chrome; does not affect layout.
@@ -10420,6 +10577,75 @@ public sealed class DocumentView : Control
             cells.Add(new Cell(ch, RunFormatting.Default));
         return cells;
     }
+
+    private static void InsertRunAtOffset(Paragraph paragraph, int offset, Run insertedRun)
+    {
+        var targetOffset = Math.Clamp(offset, 0, paragraph.PlainText.Length);
+        var consumed = 0;
+        for (var i = 0; i < paragraph.Runs.Count; i++)
+        {
+            var run = paragraph.Runs[i];
+            var runLength = run.Text.Length;
+            if (targetOffset > consumed + runLength)
+            {
+                consumed += runLength;
+                continue;
+            }
+
+            var local = targetOffset - consumed;
+            if (local <= 0)
+            {
+                paragraph.Runs.Insert(i, insertedRun);
+            }
+            else if (local >= runLength)
+            {
+                paragraph.Runs.Insert(i + 1, insertedRun);
+            }
+            else
+            {
+                var before = CloneRunWithText(run, run.Text[..local]);
+                var after = CloneRunWithText(run, run.Text[local..]);
+                paragraph.Runs.RemoveAt(i);
+                paragraph.Runs.Insert(i, before);
+                paragraph.Runs.Insert(i + 1, insertedRun);
+                paragraph.Runs.Insert(i + 2, after);
+            }
+            return;
+        }
+
+        paragraph.Runs.Add(insertedRun);
+    }
+
+    private static Run CloneRunWithText(Run source, string text) => new(text, source.Formatting)
+    {
+        Image = source.Image,
+        Equation = source.Equation,
+        Shape = source.Shape,
+        WordArt = source.WordArt,
+        Chart = source.Chart,
+        EmbeddedObject = source.EmbeddedObject,
+        SmartArt = source.SmartArt,
+        PreservedDrawing = source.PreservedDrawing,
+        DrawingGroup = source.DrawingGroup,
+        HyperlinkUrl = source.HyperlinkUrl,
+        HyperlinkAnchor = source.HyperlinkAnchor,
+        HyperlinkTooltip = source.HyperlinkTooltip,
+        FieldKind = source.FieldKind,
+        TableFormula = source.TableFormula,
+        Citation = source.Citation,
+        CrossReference = source.CrossReference,
+        ComplexField = source.ComplexField,
+        FootnoteId = source.FootnoteId,
+        EndnoteId = source.EndnoteId,
+        CommentId = source.CommentId,
+        IsCommentReference = source.IsCommentReference,
+        IsPageBreak = source.IsPageBreak,
+        Revision = source.Revision,
+        Control = source.Control,
+        RevisionAuthor = source.RevisionAuthor,
+        RevisionDateXml = source.RevisionDateXml,
+        FormatRevision = source.FormatRevision
+    };
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {

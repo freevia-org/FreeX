@@ -1,5 +1,7 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
 
 namespace FreeW.App.Avalonia.Ribbon;
@@ -147,5 +149,9 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>AV-REVIEW: Review &gt; Accessibility &gt; Check Accessibility. Optional; registry no-ops when null.</summary>
     Action? CheckAccessibility = null,
     /// <summary>FreeW File &gt; Import PDF (text only). Optional; registry no-ops when null.</summary>
-    Action? ImportPdfText = null);
+    Action? ImportPdfText = null,
+    /// <summary>Table Layout &gt; Properties / Cell Margins. Optional; registry no-ops when null.</summary>
+    Func<ModelTableContext, TablePropertiesValues?>? OpenTablePropertiesDialog = null,
+    /// <summary>Table Layout &gt; Formula. Optional; registry inserts the shared default formula when null.</summary>
+    Func<TableFormulaDialogInitialState, TableFormulaField?>? OpenTableFormulaDialog = null);
 
