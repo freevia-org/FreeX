@@ -33,6 +33,12 @@ public sealed class DocumentPersistenceWorkflow
     public bool TryGetSaveFormat(string extension, out FileFormatDescriptor? format) =>
         DocumentFileFormatResolver.FindSaveAdapter(_adapters, extension, out format) is not null;
 
+    public bool TryGetSaveFormat(int filterIndex, out FileFormatDescriptor? format)
+    {
+        format = SaveFormats.ElementAtOrDefault(filterIndex - 1);
+        return format is not null;
+    }
+
     public FileOpenDialogPlan BuildOpenDialogPlan(string allSupportedName = DocumentFileDialogRequestPlanner.AllSupportedDocumentsName) =>
         DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_adapters, allSupportedName);
 
@@ -107,7 +113,12 @@ public sealed class DocumentPersistenceWorkflow
             return false;
         }
 
-        DocumentFileFormatResolver.FindSaveAdapter(_adapters, chosenExtension, out var format);
+        var selectedFormat = SaveFormats.ElementAtOrDefault(filterIndex - 1);
+        var format = selectedFormat is not null && AdapterOwnsFormat(adapter, selectedFormat)
+            ? selectedFormat
+            : DocumentFileFormatResolver.FindSaveAdapter(_adapters, chosenExtension, out var fallbackFormat) is not null
+                ? fallbackFormat
+                : null;
         target = new DocumentSaveTarget(path, adapter, format);
         return true;
     }
@@ -150,6 +161,15 @@ public sealed class DocumentPersistenceWorkflow
             ? DefaultSaveExtension
             : Path.GetExtension(currentPath);
     }
+
+    private static bool AdapterOwnsFormat(IDocumentFileAdapter adapter, FileFormatDescriptor selectedFormat) =>
+        adapter.Formats.Any(format =>
+            format.CanSave &&
+            string.Equals(format.FormatName, selectedFormat.FormatName, StringComparison.Ordinal) &&
+            string.Equals(
+                DocumentFileFormatResolver.NormalizeExtension(format.Extension),
+                DocumentFileFormatResolver.NormalizeExtension(selectedFormat.Extension),
+                StringComparison.OrdinalIgnoreCase));
 }
 
 public sealed record DocumentOpenResult(

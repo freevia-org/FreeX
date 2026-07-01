@@ -3,8 +3,11 @@
 This corpus backs the **on-demand** FreeW DOCX fidelity work. It is intentionally shaped like
 FreeX's `fidelity-corpus`: the catalogue and downloader are committed, while third-party DOCX
 binaries are downloaded into an ignored `files/` folder and are never redistributed from this repo.
+Curated repo-generated fixtures may also live under `files/` when each tracked DOCX has a manifest
+row with `source=local` and a `local://files/...` provenance URL.
 
-Current status as of 2026-06-21: `manifest.csv` has 134 redistributable rows, and the manifest is
+Current status as of 2026-07-01: `manifest.csv` has 157 rows: 134 redistributable on-demand rows
+plus 23 repo-generated local fixtures under `files/review/` and `files/tables/`. The manifest is
 guarded by `freew/FreeW.Core.IO.Tests/FreeWFidelityCorpusManifestTests.cs`. The current expansion
 summary is [../docs/fidelity/2026-06-19-freew-corpus-feature-growth.md](../docs/fidelity/2026-06-19-freew-corpus-feature-growth.md).
 
@@ -29,8 +32,10 @@ referenced by a direct raw GitHub URL in `manifest.csv`.
 ## What is committed vs. downloaded
 
 - **Committed:** `manifest.csv` and `tools/Fetch-FreeWFidelityCorpus.ps1`.
-- **Not committed:** DOCX binaries in `freew-fidelity-corpus/files/` and future run output under
-  `freew-fidelity-corpus/runs/`.
+- **Committed local fixtures:** repo-generated DOCX files under `freew-fidelity-corpus/files/review/`
+  and `freew-fidelity-corpus/files/tables/`, each covered by a `source=local` manifest row.
+- **Not committed:** downloaded third-party DOCX binaries in `freew-fidelity-corpus/files/` and future
+  run output under `freew-fidelity-corpus/runs/`.
 
 ## Getting the files
 
@@ -80,5 +85,6 @@ the per-page PNGs kept under `freew/` and `baseline/` for eyeballing. The render
 
 For truly messy real-world documents that cannot be redistributed, drop files into
 `freew-fidelity-corpus/files/` and add manifest rows with `source=local` and
-`url=local://<file>`. The downloader skips local rows but future FreeW fidelity tooling can still
-run them from the ignored folder.
+`url=local://files/<relative-path-under-files>`. The downloader skips local rows but future FreeW
+fidelity tooling can still run them from the ignored folder. Do not commit private/local-only
+documents unless they are repo-generated or otherwise redistribution-safe and manifest-described.

@@ -1,4 +1,5 @@
 using System.Linq;
+using Free.Shared.IO;
 using FreeW.App.Presentation.Backstage;
 using FreeW.Core.IO;
 
@@ -18,6 +19,7 @@ public sealed class BackstageSaveAsFileTypePlannerTests
         plan.SelectedExtension.Should().Be(".docx");
         plan.FileTypes.Select(type => type.Label).Should().ContainInOrder(
             "Word Document (*.docx)",
+            "Strict Open XML Document (*.docx)",
             "Word Macro-Enabled Document (*.docm)",
             "Rich Text Format (*.rtf)",
             "Plain Text (*.txt, *.text)");
@@ -41,21 +43,25 @@ public sealed class BackstageSaveAsFileTypePlannerTests
     [Fact]
     public void Build_UsesWritableCatalogFormatsWithoutReadOnlyPlaceholders()
     {
-        var invoked = "";
+        var invoked = ("", 0);
+        var formats = DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(adapter => adapter.Formats).ToArray();
 
         var groups = BackstageSaveAsFileTypePlanner.Build(
-            DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(adapter => adapter.Formats),
-            extension => invoked = extension);
+            formats,
+            (extension, filterIndex) => invoked = (extension, filterIndex));
 
         groups.Select(group => group.Heading).Should().Equal("Word Documents", "Web Pages", "Other Formats");
 
         var labels = groups.SelectMany(group => group.Actions).Select(action => action.Label).ToList();
         labels.Should().ContainInOrder(
             "Word Document (*.docx)",
+            "Strict Open XML Document (*.docx)",
             "Word Macro-Enabled Document (*.docm)",
             "Word Template (*.dotx)",
             "Word Macro-Enabled Template (*.dotm)",
             "Word XML Document (*.xml)",
+            "Word 2003 XML Document (*.xml)",
+            "Web Page, Filtered (*.htm, *.html)",
             "Web Page (*.htm, *.html)",
             "Single File Web Page (*.mht, *.mhtml)",
             "Rich Text Format (*.rtf)",
@@ -68,6 +74,37 @@ public sealed class BackstageSaveAsFileTypePlannerTests
             .Single(action => action.Label == "Web Page (*.htm, *.html)")
             .Invoke();
 
-        invoked.Should().Be(".htm");
+        invoked.Should().Be((".htm", SaveFilterIndex(formats, "Web Page", ".htm")));
     }
+
+    [Theory]
+    [InlineData("Strict Open XML Document (*.docx)", "Strict Open XML Document", ".docx")]
+    [InlineData("Word 2003 XML Document (*.xml)", "Word 2003 XML Document", ".xml")]
+    [InlineData("Web Page, Filtered (*.htm, *.html)", "Web Page, Filtered", ".htm")]
+    [InlineData("Web Page (*.htm, *.html)", "Web Page", ".htm")]
+    public void Build_PreservesDuplicateExtensionFormatIdentity(string label, string formatName, string extension)
+    {
+        var invoked = ("", 0);
+        var formats = DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(adapter => adapter.Formats).ToArray();
+
+        var groups = BackstageSaveAsFileTypePlanner.Build(
+            formats,
+            (selectedExtension, filterIndex) => invoked = (selectedExtension, filterIndex));
+
+        groups.SelectMany(group => group.Actions).Single(action => action.Label == label).Invoke();
+
+        invoked.Should().Be((extension, SaveFilterIndex(formats, formatName, extension)));
+    }
+
+    private static int SaveFilterIndex(IEnumerable<FileFormatDescriptor> formats, string formatName, string extension) =>
+        formats
+            .Where(format => format.CanSave)
+            .Select((format, index) => new { Format = format, Index = index + 1 })
+            .Single(row =>
+                row.Format.FormatName == formatName &&
+                string.Equals(
+                    DocumentFileFormatResolver.NormalizeExtension(row.Format.Extension),
+                    extension,
+                    StringComparison.OrdinalIgnoreCase))
+            .Index;
 }
