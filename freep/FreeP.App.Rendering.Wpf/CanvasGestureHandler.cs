@@ -282,9 +282,13 @@ public sealed class CanvasGestureHandler
     private void CommitMove(Point screenPt, SlideTransform xf)
     {
         if (_moveStartShapes is null) return;
-        double ddxPx = screenPt.X - _dragStartScreen.X;
-        double ddyPx = screenPt.Y - _dragStartScreen.Y;
-        if (Math.Abs(ddxPx) < 1 && Math.Abs(ddyPx) < 1) return; // no meaningful move
+        var drag = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            DragStarted: true,
+            StartThresholdPx: 0,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
+        if (!drag.ShouldCommit) return;
 
         var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
             StartScreen: ToGesturePoint(_dragStartScreen),

@@ -285,10 +285,9 @@ public sealed class AvaloniaCanvasGestureHandler
 
     private void PreviewMove(Point screenPt, SlideTransformCore xf, Slide slide, KeyModifiers modifiers)
     {
-        double ddxPx = screenPt.X - _dragStartScreen.X;
-        double ddyPx = screenPt.Y - _dragStartScreen.Y;
-        if (!_dragStarted && Math.Abs(ddxPx) < 3 && Math.Abs(ddyPx) < 3) return;
-        _dragStarted = true;
+        var drag = ReduceDrag(screenPt);
+        if (!drag.DragStarted) return;
+        _dragStarted = drag.DragStarted;
 
         if (_moveStartShapes is null)
             return;
@@ -309,10 +308,8 @@ public sealed class AvaloniaCanvasGestureHandler
 
     private void CommitMove(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
-        if (_moveStartShapes is null || !_dragStarted) return;
-        double ddxPx = screenPt.X - _dragStartScreen.X;
-        double ddyPx = screenPt.Y - _dragStartScreen.Y;
-        if (Math.Abs(ddxPx) < 1 && Math.Abs(ddyPx) < 1) return;
+        var drag = ReduceDrag(screenPt);
+        if (_moveStartShapes is null || !_dragStarted || !drag.ShouldCommit) return;
 
         var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
             StartScreen: ToGesturePoint(_dragStartScreen),
@@ -348,13 +345,10 @@ public sealed class AvaloniaCanvasGestureHandler
 
     private void PreviewResize(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
-        if (!_dragStarted)
-        {
-            double ddxPx = screenPt.X - _dragStartScreen.X;
-            double ddyPx = screenPt.Y - _dragStartScreen.Y;
-            if (Math.Abs(ddxPx) < 3 && Math.Abs(ddyPx) < 3) return;
-            _dragStarted = true;
-        }
+        var drag = ReduceDrag(screenPt);
+        if (!drag.DragStarted) return;
+        _dragStarted = drag.DragStarted;
+
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf, modifiers);
         var r = SlideCanvasGeometryPlanner.EmuBoundsToScreen(nx, ny, ncx, ncy, xf);
         _adorner.UpdatePreview(ToAvaloniaRect(r));
@@ -362,7 +356,8 @@ public sealed class AvaloniaCanvasGestureHandler
 
     private void CommitResize(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
-        if (!_dragStarted) return;
+        var drag = ReduceDrag(screenPt);
+        if (!_dragStarted || !drag.ShouldCommit) return;
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf, modifiers);
         _editor.ResizeShape(_resizeShapeId, nx, ny, ncx, ncy);
     }
@@ -457,10 +452,9 @@ public sealed class AvaloniaCanvasGestureHandler
 
     private void PreviewMarquee(Point screenPt, SlideTransformCore xf)
     {
-        double ddxPx = screenPt.X - _dragStartScreen.X;
-        double ddyPx = screenPt.Y - _dragStartScreen.Y;
-        if (!_dragStarted && Math.Abs(ddxPx) < 3 && Math.Abs(ddyPx) < 3) return;
-        _dragStarted = true;
+        var drag = ReduceDrag(screenPt);
+        if (!drag.DragStarted) return;
+        _dragStarted = drag.DragStarted;
 
         var rect = SlideCanvasGeometryPlanner.ScreenRectBetween(
             ToGesturePoint(_dragStartScreen),
@@ -471,7 +465,8 @@ public sealed class AvaloniaCanvasGestureHandler
     private void CommitMarquee(Point screenPt, SlideTransformCore xf)
     {
         _adorner.UpdateMarquee(null);
-        if (!_dragStarted) return;
+        var drag = ReduceDrag(screenPt);
+        if (!_dragStarted || !drag.ShouldCommit) return;
         var slide = _editor.CurrentSlide;
         if (slide is null || _editor.Presentation is null) return;
 
@@ -591,6 +586,14 @@ public sealed class AvaloniaCanvasGestureHandler
 
     private static CanvasGesturePoint ToGesturePoint(Point point)
         => new(point.X, point.Y);
+
+    private CanvasDragReducerPlan ReduceDrag(Point screenPt)
+        => CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            DragStarted: _dragStarted,
+            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
 
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransformCore xf)
     {

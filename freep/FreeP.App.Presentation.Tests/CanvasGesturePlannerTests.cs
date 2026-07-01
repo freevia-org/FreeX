@@ -39,6 +39,48 @@ public sealed class CanvasGesturePlannerTests
             BypassSnap: bypassSnap);
 
     [Fact]
+    public void ReduceDrag_BelowStartThreshold_DoesNotStartOrCommit()
+    {
+        var plan = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: new CanvasGesturePoint(10, 20),
+            CurrentScreen: new CanvasGesturePoint(12.9, 20),
+            DragStarted: false,
+            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
+
+        plan.DragStarted.Should().BeFalse();
+        plan.ShouldCommit.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ReduceDrag_CrossingStartThreshold_StartsAndCanCommit()
+    {
+        var plan = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: new CanvasGesturePoint(10, 20),
+            CurrentScreen: new CanvasGesturePoint(13, 20),
+            DragStarted: false,
+            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
+
+        plan.DragStarted.Should().BeTrue();
+        plan.ShouldCommit.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReduceDrag_StartedButBelowCommitThreshold_DoesNotCommit()
+    {
+        var plan = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: new CanvasGesturePoint(10, 20),
+            CurrentScreen: new CanvasGesturePoint(10.5, 20),
+            DragStarted: true,
+            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
+
+        plan.DragStarted.Should().BeTrue();
+        plan.ShouldCommit.Should().BeFalse();
+    }
+
+    [Fact]
     public void ComputeResizeBounds_SeHandle_GrowsWithoutMovingOrigin()
     {
         var result = CanvasGesturePlanner.ComputeResizeBounds(
@@ -176,17 +218,23 @@ public sealed class CanvasGesturePlannerTests
 
         wpf.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
         wpf.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
+        wpf.Should().Contain("CanvasGesturePlanner.ReduceDrag");
         wpf.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
         wpf.Should().NotContain("ToCanvasGestureHandle");
         wpf.Should().NotContain("private const long MinEmu");
         wpf.Should().NotContain("SlideTransformCore.UnRotateDelta(dxDip, dyDip");
+        wpf.Should().NotContain("Math.Abs(ddxPx)");
+        wpf.Should().NotContain("Math.Abs(ddyPx)");
 
         avalonia.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
         avalonia.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
+        avalonia.Should().Contain("CanvasGesturePlanner.ReduceDrag");
         avalonia.Should().Contain("StartResize(uint shapeId, Slide slide, CanvasGestureHandleKind handle");
         avalonia.Should().NotContain("ToCanvasGestureHandle");
         avalonia.Should().NotContain("private const long MinEmu");
         avalonia.Should().NotContain("SlideTransformCore.UnRotateDelta(dxDip, dyDip");
+        avalonia.Should().NotContain("Math.Abs(ddxPx)");
+        avalonia.Should().NotContain("Math.Abs(ddyPx)");
     }
 
     private static (double X, double Y) Rotate(double px, double py, double cx, double cy, double degrees)

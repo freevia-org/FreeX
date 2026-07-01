@@ -20,6 +20,17 @@ public enum CanvasGestureHandleKind
 
 public readonly record struct CanvasGesturePoint(double X, double Y);
 
+public readonly record struct CanvasDragReducerRequest(
+    CanvasGesturePoint StartScreen,
+    CanvasGesturePoint CurrentScreen,
+    bool DragStarted,
+    double StartThresholdPx,
+    double CommitThresholdPx);
+
+public readonly record struct CanvasDragReducerPlan(
+    bool DragStarted,
+    bool ShouldCommit);
+
 public readonly record struct CanvasResizeState(
     uint ShapeId,
     long XEmu,
@@ -91,6 +102,21 @@ public readonly record struct CanvasMovePlan(
 public static class CanvasGesturePlanner
 {
     public const long MinimumShapeSizeEmu = DrawingMlCoordinateUnits.EmuPerInch / 10;
+    public const double DefaultDragStartThresholdPx = 3;
+    public const double MeaningfulDragCommitThresholdPx = 1;
+
+    public static CanvasDragReducerPlan ReduceDrag(CanvasDragReducerRequest request)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(request.StartThresholdPx);
+        ArgumentOutOfRangeException.ThrowIfNegative(request.CommitThresholdPx);
+
+        bool dragStarted = request.DragStarted ||
+            HasMovedAtLeast(request.StartScreen, request.CurrentScreen, request.StartThresholdPx);
+        bool shouldCommit = dragStarted &&
+            HasMovedAtLeast(request.StartScreen, request.CurrentScreen, request.CommitThresholdPx);
+
+        return new CanvasDragReducerPlan(dragStarted, shouldCommit);
+    }
 
     public static IReadOnlyList<CanvasMoveShapeState> CaptureMoveState(
         Slide slide,
@@ -474,4 +500,11 @@ public static class CanvasGesturePlanner
             CanvasGestureHandleKind.Rotate => DrawingObjectInteractionKind.Rotate,
             _ => DrawingObjectInteractionKind.None
         };
+
+    private static bool HasMovedAtLeast(
+        CanvasGesturePoint start,
+        CanvasGesturePoint current,
+        double thresholdPx)
+        => Math.Abs(current.X - start.X) >= thresholdPx ||
+           Math.Abs(current.Y - start.Y) >= thresholdPx;
 }
