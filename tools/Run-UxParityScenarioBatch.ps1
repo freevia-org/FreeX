@@ -5,7 +5,7 @@ param(
 
     [string]$FreeXExe,
 
-    [ValidateSet("smoke", "core", "dialogs", "all")]
+    [ValidateSet("smoke", "core", "dialogs", "status", "all")]
     [string]$Suite = "smoke",
 
     [switch]$SkipBuild,
@@ -194,6 +194,12 @@ function Get-ScenarioPairs {
             area = "Sheet tabs"
             excelScenario = "excel-sheet-tab-overflow-activate-dialog"
             freexScenario = "freex-sheet-tab-overflow-activate-dialog"
+        },
+        [ordered]@{
+            id = "status-footer-reference"
+            area = "Status bar"
+            excelScenario = "excel-status-footer-reference"
+            freexScenario = "freex-status-live-stats-accessibility"
         }
     )
 
@@ -201,6 +207,7 @@ function Get-ScenarioPairs {
         "smoke" { return $pairs | Where-Object { $_["id"] -in @("format-cells-dialog", "sheet-tab-context-menu") } }
         "core" { return $pairs | Where-Object { $_["id"] -in @("format-cells-dialog", "format-cells-context-dialog", "sheet-tab-context-menu", "sheet-tab-overflow-activate-dialog") } }
         "dialogs" { return $pairs | Where-Object { $_["area"] -in @("Dialogs", "Native file dialogs") } }
+        "status" { return $pairs | Where-Object { $_["area"] -eq "Status bar" } }
         default { return $pairs }
     }
 }

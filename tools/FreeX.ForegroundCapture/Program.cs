@@ -1065,6 +1065,26 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 return BlockedWithGuard(scenario, guard, "before-capture");
             }
 
+            var resizeBlocked = ResizeForStableForegroundCapture(hwnd, pid.Value, "after-excel-status-window-resize", "Excel");
+            if (resizeBlocked is not null)
+            {
+                return resizeBlocked;
+            }
+
+            guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "after-window-resize");
+            }
+
+            if (!TryValidateExcelStatusFooterStatisticsViaContextMenu(pid.Value, hwnd, out var statusReadback))
+            {
+                return CaptureResult.Blocked(scenario, "status-footer-validation-unavailable", $"Could not validate Excel status/footer statistic text through the native status-bar context menu before capture. Last visible text readback: '{statusReadback}'.", options.OutputRoot, "excel", guard);
+            }
+
+            SendKeys.SendWait("{ESC}");
+            Thread.Sleep(options.AfterInputDelay);
+
             var window = WindowFinder.GetWindowInfo(hwnd);
             if (window is null)
             {
@@ -1077,7 +1097,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
                 window,
                 guard,
                 "complete",
-                "Excel status/footer reference: workbook values in A1:A4 are selected with DisplayStatusBar enabled so the native footer/status bar can be paired with FreeX S6 captures.");
+                $"Excel status/footer reference: workbook values in A1:A4 are selected with DisplayStatusBar enabled and visible footer statistics validated ({statusReadback}) so the native footer/status bar can be paired with FreeX S6 captures.");
         }
         finally
         {
@@ -3324,7 +3344,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     private CaptureResult? ResizeForStatusStatisticReadback(IntPtr handle, int processId, ForegroundGuardResult guard)
         => ResizeForStableForegroundCapture(handle, processId, "after-status-stat-window-resize");
 
-    private CaptureResult? ResizeForStableForegroundCapture(IntPtr handle, int processId, string failureStage)
+    private CaptureResult? ResizeForStableForegroundCapture(IntPtr handle, int processId, string failureStage, string titleContains = "FreeX")
     {
         var workingArea = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1600, 900);
         var width = Math.Min(1600, Math.Max(1200, workingArea.Width));
@@ -3335,7 +3355,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
         NativeMethods.SetWindowPos(handle, NativeMethods.HWND_NOTOPMOST, x, y, width, height, NativeMethods.SWP_SHOWWINDOW);
         Thread.Sleep(options.AfterInputDelay);
 
-        var guard = ForegroundGuard.FocusAndVerify(handle, processId, "FreeX", options.FocusTimeout);
+        var guard = ForegroundGuard.FocusAndVerify(handle, processId, titleContains, options.FocusTimeout);
         return guard.Success
             ? null
             : BlockedWithGuard(options.Scenario, guard, failureStage);
@@ -5304,6 +5324,81 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             yield return textPattern.DocumentRange.GetText(256).TrimEnd('\r', '\n');
         }
 
+    }
+
+    private static bool TryFindProcessText(int processId, IReadOnlyCollection<string> expectedTexts, out string readback)
+    {
+        readback = string.Empty;
+        try
+        {
+            var names = AutomationElement.RootElement
+                .FindAll(TreeScope.Descendants, Condition.TrueCondition)
+                .Cast<AutomationElement>()
+                .Where(element =>
+                {
+                    try
+                    {
+                        return element.Current.ProcessId == processId && !IsOffscreen(element);
+                    }
+                    catch (COMException)
+                    {
+                        return false;
+                    }
+                    catch (ElementNotAvailableException)
+                    {
+                        return false;
+                    }
+                })
+                .SelectMany(ReadAutomationTextCandidatesSafely)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            readback = string.Join("; ", names.Where(name => name.Contains(":", StringComparison.Ordinal)).Take(20));
+            return expectedTexts.All(expected => names.Any(name => name.Contains(expected, StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryValidateExcelStatusFooterStatisticsViaContextMenu(int processId, IntPtr excelWindowHandle, out string readback)
+    {
+        readback = string.Empty;
+        var window = WindowFinder.GetWindowInfo(excelWindowHandle);
+        if (window is null)
+        {
+            return false;
+        }
+
+        RightClickScreenPoint(window.Bounds.Left + window.Bounds.Width / 2, window.Bounds.Bottom - 12);
+        Thread.Sleep(350);
+        return TryFindProcessText(processId, ["Average 5", "Count 4", "Sum 20"], out readback);
+    }
+
+    private static IEnumerable<string> ReadAutomationTextCandidatesSafely(AutomationElement element)
+    {
+        try
+        {
+            return ReadAutomationTextCandidates(element).ToList();
+        }
+        catch (COMException)
+        {
+            return [];
+        }
+        catch (ElementNotAvailableException)
+        {
+            return [];
+        }
+        catch (InvalidOperationException)
+        {
+            return [];
+        }
     }
 
     private static string GetElementName(AutomationElement element)

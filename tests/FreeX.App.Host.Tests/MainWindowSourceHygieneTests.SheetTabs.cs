@@ -644,6 +644,11 @@ public sealed partial class MainWindowSourceHygieneTests
         foregroundSource.Should().Contain("catch (Exception ex) when (ex is InvalidOperationException or ElementNotAvailableException or TimeoutException or COMException)");
         foregroundSource.Should().Contain("\"uia-rangevalue-set-failed\"");
         foregroundSource.Should().Contain("Last UIA candidate was");
+        foregroundSource.Should().Contain("\"excel-status-footer-reference\" => RunExcelStatusFooterReferenceScenario()");
+        foregroundSource.Should().Contain("TryValidateExcelStatusFooterStatisticsViaContextMenu");
+        foregroundSource.Should().Contain("\"Average 5\"");
+        foregroundSource.Should().Contain("\"Sum 20\"");
+        foregroundSource.Should().Contain("status-footer-validation-unavailable");
     }
 
     [Fact]
@@ -683,8 +688,12 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var batchSource = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
 
-        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"all\")]");
+        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"all\")]");
         batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
+        batchSource.Should().Contain("id = \"status-footer-reference\"");
+        batchSource.Should().Contain("excelScenario = \"excel-status-footer-reference\"");
+        batchSource.Should().Contain("freexScenario = \"freex-status-live-stats-accessibility\"");
+        batchSource.Should().Contain("\"status\" { return $pairs | Where-Object { $_[\"area\"] -eq \"Status bar\" } }");
         batchSource.Should().Contain("[switch]$MinimizeForeignForeground");
         batchSource.Should().Contain("Clear-ForeignForegroundWindow $Scenario");
         batchSource.Should().Contain("$title.IndexOf(\"Media Player\", [StringComparison]::OrdinalIgnoreCase) -ge 0");
