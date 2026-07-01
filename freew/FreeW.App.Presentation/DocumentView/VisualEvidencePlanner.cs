@@ -163,7 +163,7 @@ public static class FreeWVisualEvidencePlanner
             "F2 odd/even header/footer page composition.",
             ["f2", "page-composition", "print-layout", "header-footer", "odd-even-pages", "multi-page", "body-text"],
             "f2-hf-oddeven_p{page}.png",
-            3,
+            2,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsHeadersFooters = true }),
         new(
