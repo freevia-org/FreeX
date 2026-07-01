@@ -739,6 +739,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         // Load named ranges (best-effort; skip any we cannot map)
         try { XlsxNamedRangeMapper.Load(xlWorkbook, workbook, warnings); }
         catch (Exception ex) { warnings.Add($"[named-ranges]: {ex.Message}"); }
+        try
+        {
+            packageStream.Position = 0;
+            XlsxNamedRangeMapper.LoadWorkbookDefinedNameFormulasFromPackage(packageStream, workbook, warnings);
+        }
+        catch (Exception ex) { warnings.Add($"[named-ranges-xml]: {ex.Message}"); }
 
         foreach (var customView in xlsxCustomViews)
         {

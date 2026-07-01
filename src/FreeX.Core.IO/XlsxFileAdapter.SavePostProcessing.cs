@@ -32,6 +32,15 @@ public sealed partial class XlsxFileAdapter
             XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);
         }
 
+        if (workbook.NamedRanges.Count > 0 ||
+            workbook.NamedFormulas.Count > 0 ||
+            workbook.ScopedNamedRanges.Count > 0 ||
+            workbook.ScopedNamedFormulas.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxNamedRangeMapper.SaveToPackage(workbook, packageStream);
+        }
+
         if (featurePlan.HasNonDefaultDimensions)
         {
             packageStream.Position = 0;

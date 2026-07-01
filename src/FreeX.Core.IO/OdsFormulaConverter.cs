@@ -268,7 +268,8 @@ internal static class OdsFormulaConverter
             var left = ConvertSingleBracketRef(inner.Substring(0, colon));
             var right = ConvertSingleBracketRef(inner.Substring(colon + 1));
             // If both endpoints share the same sheet prefix, drop the redundant sheet on the right.
-            return left + ":" + StripSheet(right);
+            var rightEndpoint = ShouldStripRightEndpointSheet(left, right) ? StripSheet(right) : right;
+            return left + ":" + rightEndpoint;
         }
         return ConvertSingleBracketRef(inner);
     }
@@ -362,6 +363,48 @@ internal static class OdsFormulaConverter
     {
         var bang = a1.IndexOf('!');
         return bang >= 0 ? a1[(bang + 1)..] : a1;
+    }
+
+    private static bool ShouldStripRightEndpointSheet(string left, string right)
+    {
+        var leftSheet = TryGetA1SheetName(left);
+        var rightSheet = TryGetA1SheetName(right);
+
+        return rightSheet is null ||
+               (leftSheet is not null && string.Equals(leftSheet, rightSheet, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? TryGetA1SheetName(string a1)
+    {
+        var bang = FindA1SheetBang(a1);
+        if (bang < 0)
+            return null;
+
+        var sheet = a1.Substring(0, bang);
+        if (sheet.Length >= 2 && sheet[0] == '\'' && sheet[^1] == '\'')
+            return sheet[1..^1].Replace("''", "'", StringComparison.Ordinal);
+
+        return sheet;
+    }
+
+    private static int FindA1SheetBang(string a1)
+    {
+        var inQuote = false;
+        for (var i = 0; i < a1.Length; i++)
+        {
+            var c = a1[i];
+            if (c == '\'')
+            {
+                if (inQuote && i + 1 < a1.Length && a1[i + 1] == '\'') { i++; continue; }
+                inQuote = !inQuote;
+            }
+            else if (c == '!' && !inQuote)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     // ---- scanning helpers ------------------------------------------------------------------------
