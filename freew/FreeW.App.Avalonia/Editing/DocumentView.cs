@@ -111,6 +111,7 @@ public sealed class DocumentView : Control
     // Fill: IBrush? combines table-style fills (header/band) with per-cell ShadingColorHex.
     // Border: bool = table-level outer border; CellBorder: per-edge override from CellBorders model.
     private readonly List<(Rect Rect, IBrush? Fill, bool Border, CellBorders? CellBorder)> _rects = new();
+    private readonly List<(Rect Rect, string? ShadingHex, ParagraphBorder? Border)> _paragraphDecorations = new();
     private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
@@ -2676,6 +2677,7 @@ public sealed class DocumentView : Control
         _placed.Clear();
         _markers.Clear();
         _rects.Clear();
+        _paragraphDecorations.Clear();
         _images.Clear();
         _floatingImages.Clear();
         _floatingShapes.Clear();
@@ -4185,6 +4187,19 @@ public sealed class DocumentView : Control
         // segments are pinned absolutely to their stop positions.
         var x = contentOriginX + (lineHasTabs ? 0.0 : alignOffset);
 
+        if (!string.IsNullOrWhiteSpace(pf.ShadingColorHex) || pf.Border is not null)
+        {
+            const double decorationPad = 2.0;
+            _paragraphDecorations.Add((
+                new Rect(
+                    contentOriginX - decorationPad,
+                    pageSpaceY,
+                    Math.Max(1, effectiveWidth + decorationPad * 2),
+                    lineHeight),
+                pf.ShadingColorHex,
+                pf.Border));
+        }
+
         // AV-TAB: default tab interval for this line (from document page settings).
         var lineDefaultTabPx = Math.Max(1.0, _doc.Page.DefaultTabStopPt) * PxPerPoint;
 
@@ -5191,6 +5206,39 @@ public sealed class DocumentView : Control
         DrawCellEdgeLine(context, borders.Right,  new Point(rect.Right, rect.Top),   new Point(rect.Right, rect.Bottom));
     }
 
+    private void DrawParagraphDecoration(DrawingContext context, Rect rect, string? shadingHex, ParagraphBorder? border)
+    {
+        if (!string.IsNullOrWhiteSpace(shadingHex))
+            context.FillRectangle(BrushFor(shadingHex), rect);
+
+        if (border is null)
+            return;
+
+        var pen = ParagraphBorderPen(border);
+        if (border.Top)
+            context.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
+        if (border.Bottom || border.BottomOnly)
+            context.DrawLine(pen, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
+        if (border.Left && !border.BottomOnly)
+            context.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
+        if (border.Right && !border.BottomOnly)
+            context.DrawLine(pen, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+    }
+
+    private Pen ParagraphBorderPen(ParagraphBorder border)
+    {
+        DashStyle? dashStyle = border.LineStyle switch
+        {
+            BorderLineStyle.Dashed => new DashStyle([4, 3], 0),
+            BorderLineStyle.Dotted => new DashStyle([1, 2], 0),
+            _ => null,
+        };
+        var width = Math.Max(0.5, border.WidthPt * PxPerPoint);
+        return dashStyle is null
+            ? new Pen(BrushFor(border.ColorHex), width)
+            : new Pen(BrushFor(border.ColorHex), width, dashStyle);
+    }
+
     private void DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge, Point p1, Point p2)
     {
         if (edge is null) return;
@@ -5368,6 +5416,9 @@ public sealed class DocumentView : Control
         // AV-VIEW: horizontal + vertical ruler strips on the first page (Print Layout only).
         if (_showRuler && _viewMode == DocumentViewMode.PrintLayout)
             DrawRuler(context);
+
+        foreach (var (rect, shadingHex, border) in _paragraphDecorations)
+            DrawParagraphDecoration(context, rect, shadingHex, border);
 
         // Table fills + borders sit beneath the text.
         foreach (var (rect, fill, border, cellBorder) in _rects)
@@ -8444,6 +8495,101 @@ public sealed class DocumentView : Control
             .Select(i => (Paragraph)_doc.Blocks[i])
             .Any(p => !p.Formatting.KeepLinesTogether);
         FormatSelectedParagraphs(f => f with { KeepLinesTogether = enable });
+    }
+
+    public void ToggleWidowControl()
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => !p.Formatting.WidowControl);
+        FormatSelectedParagraphs(f => f with { WidowControl = enable });
+    }
+
+    public void SetParagraphBorder(ParagraphBorder? border) =>
+        FormatSelectedParagraphs(f => f with { Border = border });
+
+    public void ToggleParagraphBorder(string colorHex = "#000000", double widthPt = 0.5)
+    {
+        var indices = SelectedParagraphIndices();
+        var enable = indices
+            .Select(i => (Paragraph)_doc.Blocks[i])
+            .Any(p => p.Formatting.Border is null);
+        SetParagraphBorder(enable ? new ParagraphBorder(colorHex, widthPt) : null);
+    }
+
+    public void SetParagraphShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
+        FormatSelectedParagraphs(f => f with
+        {
+            ShadingColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
+            ShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
+        });
+
+    public void ToggleParagraphShading(string? colorHex = "#FFF2CC")
+    {
+        var indices = SelectedParagraphIndices();
+        var clear = string.IsNullOrWhiteSpace(colorHex)
+            || indices
+                .Select(i => (Paragraph)_doc.Blocks[i])
+                .All(p => string.Equals(p.Formatting.ShadingColorHex, colorHex, StringComparison.OrdinalIgnoreCase));
+        SetParagraphShading(clear ? null : colorHex, ShadingPattern.Clear);
+    }
+
+    public void SetParagraphTabStops(IReadOnlyList<TabStop> tabStops)
+    {
+        ArgumentNullException.ThrowIfNull(tabStops);
+        var normalized = tabStops.ToArray();
+        FormatSelectedParagraphs(f => f with { TabStops = normalized });
+    }
+
+    public bool IsCaretInTable() => CaretTableCell() is not null;
+
+    public void SortSelectedParagraphs(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
+    {
+        if (IsEditingLocked)
+            return;
+
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        var first = indices[0];
+        var last = indices[^1];
+        if (first < 0 || last >= _doc.Blocks.Count)
+            return;
+
+        var paragraphs = new List<Paragraph>();
+        for (var i = first; i <= last; i++)
+            if (_doc.Blocks[i] is Paragraph paragraph)
+                paragraphs.Add(paragraph);
+        if (paragraphs.Count < 2)
+            return;
+
+        var sorted = ParagraphSort.Sort(paragraphs, kind, ascending, caseSensitive, hasHeaderRow);
+        var replacement = new List<Block>(last - first + 1);
+        var nextSorted = 0;
+        for (var i = first; i <= last; i++)
+            replacement.Add(_doc.Blocks[i] is Paragraph ? sorted[nextSorted++] : _doc.Blocks[i]);
+
+        _bus.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+    }
+
+    public void SortCaretTableRows(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
+    {
+        if (IsEditingLocked || _cellCaret is not { } cc)
+            return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count ||
+            _doc.Blocks[cc.TableBlock] is not Table table ||
+            table.Rows.Count < 2)
+            return;
+
+        var keyColumn = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        if (keyColumn < 0)
+            keyColumn = 0;
+
+        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
+        var replacement = TableLayoutOperations.CopyTableWithRows(table, sorted);
+        _bus.Execute(new ReplaceBlocksCommand(cc.TableBlock, 1, new Block[] { replacement }));
     }
 
     /// <summary>

@@ -150,6 +150,12 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.space-after-toggle", new ActionRibbonCommand(() => ToggleSpaceAfter(editor)));
         r.Register("freew.keep-with-next", new ActionRibbonCommand(editor.ToggleKeepWithNext));
         r.Register("freew.keep-lines", new ActionRibbonCommand(editor.ToggleKeepLinesTogether));
+        r.Register("freew.widow-control", new ActionRibbonCommand(editor.ToggleWidowControl));
+        r.Register("freew.para-border", new ActionRibbonCommand(() => editor.ToggleParagraphBorder()));
+        r.Register("freew.para-shading", new ActionRibbonCommand(() => editor.ToggleParagraphShading()));
+        r.Register("freew.borders-shading", new ActionRibbonCommand(callbacks.OpenBordersAndShadingDialog ?? (() => { })));
+        r.Register("freew.tabs-dialog", new ActionRibbonCommand(callbacks.OpenTabsDialog ?? (() => { })));
+        r.Register("freew.sort", new ActionRibbonCommand(() => ExecuteSortCommand(editor, callbacks)));
         // Line-spacing commands — value = multiplier for Multiple. The fixed ids are compatibility
         // aliases for older Avalonia controls and are no longer used by the Home ribbon profile.
         r.Register("freew.line-spacing", new ValueRibbonCommand(value => SetLineSpacing(editor, value)));
@@ -408,9 +414,16 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.reject-change", rejectCurrentRevisionCommand);
         r.Register("freew.accept-all",    new ActionRibbonCommand(() => editor.AcceptAllRevisions()));
         r.Register("freew.reject-all",    new ActionRibbonCommand(() => editor.RejectAllRevisions()));
-        // Comments — new comment over the selection / delete the comment at the caret.
+        // Comments — expose the WPF Review > Comments command IDs in Avalonia. New/Delete/Resolve use
+        // existing editor primitives; navigation, reply, and comments pane are registered as safe
+        // placeholders until the Avalonia editor grows public navigation/pane flows.
         r.Register("freew.new-comment",    new ActionRibbonCommand(() => editor.NewComment()));
         r.Register("freew.delete-comment", new ActionRibbonCommand(() => editor.DeleteCommentAtCaret()));
+        r.Register("freew.previous-comment", new ActionRibbonCommand(() => { }));
+        r.Register("freew.next-comment", new ActionRibbonCommand(() => { }));
+        r.Register("freew.reply-comment", new ActionRibbonCommand(() => { }));
+        r.Register("freew.resolve-comment", new ActionRibbonCommand(() => editor.ToggleResolveCommentAtCaret()));
+        r.Register("freew.show-comments", new ActionRibbonCommand(() => { }));
         // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
         var statisticsCommand = new ActionRibbonCommand(callbacks.OpenWordCountDialog);
         r.Register("freew.statistics", statisticsCommand);
@@ -1221,5 +1234,19 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.page-color.light-green",  "#E2EFDA");
         Add(r, editor, "freew.page-color.light-yellow", "#FFF2CC");
         Add(r, editor, "freew.page-color.rose",         "#FCE4EC");
+    }
+
+    private static void ExecuteSortCommand(DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        if (callbacks.OpenSortDialog is not null)
+        {
+            callbacks.OpenSortDialog();
+            return;
+        }
+
+        if (editor.IsCaretInTable())
+            editor.SortCaretTableRows(SortKind.Text, ascending: true, caseSensitive: false, hasHeaderRow: false);
+        else
+            editor.SortSelectedParagraphs(SortKind.Text, ascending: true, caseSensitive: false, hasHeaderRow: false);
     }
 }

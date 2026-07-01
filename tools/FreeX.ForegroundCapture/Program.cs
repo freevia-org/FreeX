@@ -85,6 +85,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-number-format" => RunExcelNumberFormatScenario(),
             "excel-borders" => RunExcelPopupScenario("excel-borders", PrepareExcelBlankWorkbook, "%hb", "Net UI Tool Window"),
             "excel-cell-styles-gallery" => RunExcelCellStylesGalleryScenario(),
+            "excel-conditional-formatting-gallery" => RunExcelConditionalFormattingGalleryScenario(),
             "excel-context-menu" => RunExcelContextMenuScenario(),
             "excel-format-cells-dialog" => RunExcelFormatCellsDialogScenario(),
             "excel-format-cells-context-dialog" => RunExcelFormatCellsContextDialogScenario(),
@@ -97,6 +98,7 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             "excel-status-footer-reference" => RunExcelStatusFooterReferenceScenario(),
             "freex-open-dialog" => RunFreeXDialogScenario("freex-open-dialog", "^{F12}", "#32770", "Open"),
             "freex-save-as-dialog" => RunFreeXDialogScenario("freex-save-as-dialog", "{F12}", "#32770", "Save As"),
+            "freex-conditional-formatting-gallery" => RunFreeXConditionalFormattingGalleryScenario(),
             "freex-format-cells-dialog" => RunFreeXFormatCellsDialogScenario(),
             "freex-format-cells-context-dialog" => RunFreeXFormatCellsContextDialogScenario(),
             // S3 native-dialog continuation scenarios.
@@ -338,6 +340,48 @@ internal sealed class ScenarioRunner(CaptureOptions options)
             if (popup is null)
             {
                 return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect foreground Excel Cell Styles gallery popup after UIA open or Alt,H,J fallback.", options.OutputRoot, "excel", guard);
+            }
+
+            return CaptureWindow(scenario, "excel", popup, guard, "complete");
+        }
+        finally
+        {
+            CloseExcel(excel, workbook);
+            KillProcess(pid);
+        }
+    }
+
+    private CaptureResult RunExcelConditionalFormattingGalleryScenario()
+    {
+        const string scenario = "excel-conditional-formatting-gallery";
+        dynamic? excel = null;
+        dynamic? workbook = null;
+        int? pid = null;
+
+        try
+        {
+            (excel, workbook) = CreateExcel();
+            PrepareExcelBlankWorkbook(excel);
+
+            var hwnd = new IntPtr((int)excel.Hwnd);
+            pid = NativeMethods.GetProcessId(hwnd);
+            var guard = ForegroundGuard.FocusAndVerify(hwnd, pid.Value, "Excel", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-input");
+            }
+
+            if (!TryOpenRibbonGalleryByText(hwnd, "Conditional Formatting"))
+            {
+                SendKeys.SendWait("%hl");
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = FindExcelRibbonGalleryPopup(pid.Value, hwnd.ToInt64(), "Conditional Formatting", options.PopupTimeout);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect foreground Excel Conditional Formatting gallery popup after UIA open or Alt,H,L fallback.", options.OutputRoot, "excel", guard);
             }
 
             return CaptureWindow(scenario, "excel", popup, guard, "complete");
@@ -1088,6 +1132,52 @@ internal sealed class ScenarioRunner(CaptureOptions options)
 
             Thread.Sleep(options.AfterDialogDetectedDelay);
             return CaptureWindow(scenario, "freex", dialog, guard, "complete");
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
+    private CaptureResult RunFreeXConditionalFormattingGalleryScenario()
+    {
+        const string scenario = "freex-conditional-formatting-gallery";
+        Process? process = null;
+
+        try
+        {
+            var launch = LaunchFreeX(scenario);
+            if (launch.Result is not null)
+            {
+                return launch.Result;
+            }
+
+            process = launch.Process!;
+            var window = launch.Window!;
+            var handle = new IntPtr(window.Handle);
+            var guard = ForegroundGuard.FocusAndVerify(handle, process.Id, "FreeX", options.FocusTimeout);
+            if (!guard.Success)
+            {
+                return BlockedWithGuard(scenario, guard, "before-input");
+            }
+
+            if (!TryOpenRibbonGalleryByText(handle, "Conditional Formatting"))
+            {
+                SendKeys.SendWait("%hl");
+            }
+
+            Thread.Sleep(options.AfterInputDelay);
+
+            var popup = WindowFinder.FindProcessPopup(process.Id, window.Handle, options.PopupTimeout, 120, 80);
+            if (popup is null)
+            {
+                return CaptureResult.Blocked(scenario, "popup-not-found", "Did not detect foreground FreeX Conditional Formatting popup after UIA open or Alt,H,L fallback.", options.OutputRoot, "freex", guard);
+            }
+
+            return CaptureWindow(scenario, "freex", popup, guard, "complete");
         }
         finally
         {
@@ -5445,14 +5535,17 @@ internal sealed class ScenarioRunner(CaptureOptions options)
     }
 
     private static bool TryOpenExcelCellStylesGallery(IntPtr excelWindowHandle)
+        => TryOpenRibbonGalleryByText(excelWindowHandle, "Cell Styles");
+
+    private static bool TryOpenRibbonGalleryByText(IntPtr windowHandle, string labelText)
     {
         try
         {
-            var root = AutomationElement.FromHandle(excelWindowHandle);
+            var root = AutomationElement.FromHandle(windowHandle);
             var candidates = root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
                 .Cast<AutomationElement>()
                 .Where(IsVisibleElement)
-                .Where(element => ElementTextContains(element, "Cell Styles"))
+                .Where(element => ElementTextContains(element, labelText))
                 .OrderBy(element => element.Current.BoundingRectangle.Top)
                 .ThenByDescending(element => element.Current.BoundingRectangle.Width * element.Current.BoundingRectangle.Height)
                 .ToArray();

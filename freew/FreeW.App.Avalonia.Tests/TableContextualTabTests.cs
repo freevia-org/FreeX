@@ -110,6 +110,7 @@ public sealed class TableContextualTabTests
             "freew.cell-text-direction-rotate270",
             "freew.table-repeat-header",
             "freew.table-formula",
+            "freew.sort",
         };
 
         foreach (var id in tableCommands)
@@ -158,16 +159,16 @@ public sealed class TableContextualTabTests
     }
 
     [Fact]
-    public void Ribbon_definition_has_at_least_74_commands_after_table_layout_catchup()
+    public void Ribbon_definition_has_at_least_75_commands_after_table_layout_catchup()
     {
-        // Was >= 54 after AV-TBLTAB; table layout catch-up adds 20 direct controls.
+        // Was >= 54 after AV-TBLTAB; table layout catch-up adds 20 direct controls, then Sort.
         var definition = FreeWRibbon.BuildDefinition();
         var count = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
             .Count(c => GetCommandId(c) is not null);
 
-        count.Should().BeGreaterThanOrEqualTo(74,
+        count.Should().BeGreaterThanOrEqualTo(75,
             "table layout catch-up adds the remaining direct table controls");
     }
 
@@ -486,6 +487,42 @@ public sealed class TableContextualTabTests
         formulaRun.Should().NotBeNull();
         formulaRun!.TableFormula!.Expression.Should().Be(TableFormulaDialogPlanner.SumAboveFormula);
         formulaRun.Text.Should().Be("3");
+    }
+
+    [Fact]
+    public async Task Table_layout_sort_command_sorts_rows_by_caret_column()
+    {
+        IReadOnlyList<string>? sorted = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var doc = TextDocument.CreateEmpty();
+                doc.Blocks.Clear();
+                var tbl = new Table();
+                tbl.Rows.Add(new TableRow { Cells = { new TableCell("Bravo") } });
+                tbl.Rows.Add(new TableRow { Cells = { new TableCell("Alpha") } });
+                tbl.Rows.Add(new TableRow { Cells = { new TableCell("Charlie") } });
+                doc.Blocks.Add(tbl);
+
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(800, 4000));
+                view.PlaceCaretInCell(0, row: 0, col: 0, paraIdx: 0, offset: 0);
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+
+                Execute(registry, "freew.sort");
+
+                var result = (Table)view.Document.Blocks[0];
+                sorted = result.Rows.Select(row => row.Cells[0].PlainText).ToArray();
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        sorted.Should().Equal("Alpha", "Bravo", "Charlie");
     }
 
     [Fact]

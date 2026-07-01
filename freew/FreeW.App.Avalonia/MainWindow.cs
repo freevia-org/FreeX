@@ -270,6 +270,15 @@ public sealed class MainWindow : Window
     private Task OpenParagraphDialogAsync() =>
         ParagraphDialog.ShowAndApplyAsync(this, _editor);
 
+    private Task OpenTabsDialogAsync() =>
+        TabsDialog.ShowAndApplyAsync(this, _editor);
+
+    private Task OpenBordersAndShadingDialogAsync() =>
+        BordersAndShadingDialog.ShowAndApplyAsync(this, _editor);
+
+    private Task OpenSortDialogAsync() =>
+        SortDialog.ShowAndApplyAsync(this, _editor);
+
     /// <summary>
     /// Opens the Page Setup dialog (modal). Pre-populates from the document's current page
     /// geometry; on OK applies the changes as a single undoable step.
@@ -558,6 +567,9 @@ public sealed class MainWindow : Window
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
                 ApplyZoom(newScale);
             },
+            OpenTabsDialog: () => _ = OpenTabsDialogAsync(),
+            OpenBordersAndShadingDialog: () => _ = OpenBordersAndShadingDialogAsync(),
+            OpenSortDialog: () => _ = OpenSortDialogAsync(),
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
             OpenPrintPreview: () => _ = OpenPrintPreviewAsync(),
             NewWindow:       OpenNewWindow,
