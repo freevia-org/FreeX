@@ -101,6 +101,16 @@ public sealed class PptxPackageRetentionTests
     public static IEnumerable<object[]> CorpusDecks() =>
         ExpectedCorpusDeckNames.Select(name => new object[] { name });
 
+    public static IEnumerable<object[]> SemanticEditCorpusDecks()
+    {
+        yield return ["04-picture.pptx", new[] { "ppt/media/" }];
+        yield return ["06-charts.pptx", new[] { "ppt/charts/" }];
+        yield return ["14-smartart-live.pptx", new[] { "ppt/diagrams/" }];
+        yield return ["15-picture-crop.pptx", new[] { "ppt/media/" }];
+        yield return ["18-chart-types.pptx", new[] { "ppt/charts/" }];
+        yield return ["19-chart-labels.pptx", new[] { "ppt/charts/" }];
+    }
+
     [Fact]
     public void RenderCompareCorpus_TracksExpectedTwentyDecks()
     {
@@ -137,6 +147,41 @@ public sealed class PptxPackageRetentionTests
         AssertPreservedPackageEntries(sourceArchive, savedArchive, deckName);
         AssertPreservedContentTypes(sourceArchive, savedArchive, deckName);
         AssertPreservedRelationships(sourceArchive, savedArchive, deckName);
+    }
+
+    [Theory]
+    [MemberData(nameof(SemanticEditCorpusDecks))]
+    public void RenderCompareHighRiskCorpusDeck_SemanticEdit_RetainsPackageContract(
+        string deckName,
+        string[] featurePartPrefixes)
+    {
+        var sourcePath = Path.Combine(FindCorpusDirectory(), deckName);
+        var loaded = PptxPackageReader.Read(sourcePath);
+        loaded.PackageSnapshot.Should().NotBeNull($"{deckName} must be captured before semantic edits");
+        loaded.Slides.Should().NotBeEmpty($"{deckName} should load through shared Core.IO before edit");
+
+        var editShapeName = AddModeledShapeEdit(loaded, deckName);
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+        savedBytes.Should().NotBeEmpty($"{deckName} should save after a modeled edit");
+
+        using var reopenedStream = new MemoryStream(savedBytes);
+        var reopened = PptxPackageReader.Read(reopenedStream);
+        reopened.Slides.Should().HaveCount(loaded.Slides.Count, $"{deckName} should reopen after a modeled edit");
+        reopened.Slides[0].Shapes.Should().Contain(shape => shape.Name == editShapeName,
+            $"{deckName} should retain the writer-owned semantic edit after reopen");
+
+        using var sourceArchive = ZipFile.OpenRead(sourcePath);
+        using var savedArchive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read);
+
+        AssertPreservedPackageEntries(sourceArchive, savedArchive, deckName);
+        AssertPreservedContentTypes(sourceArchive, savedArchive, deckName);
+        AssertPreservedRelationships(sourceArchive, savedArchive, deckName);
+        AssertFeaturePackageEntriesStillPresent(sourceArchive, savedArchive, deckName, featurePartPrefixes);
+        AssertFeatureContentTypesStillPresent(sourceArchive, savedArchive, deckName, featurePartPrefixes);
+        AssertFeatureRelationshipsStillPresent(sourceArchive, savedArchive, deckName, featurePartPrefixes);
     }
 
     [Fact]
@@ -360,6 +405,26 @@ public sealed class PptxPackageRetentionTests
         return package;
     }
 
+    private static string AddModeledShapeEdit(Presentation presentation, string deckName)
+    {
+        var slide = presentation.Slides[0];
+        var shapeId = slide.Shapes.Select(shape => shape.Id).DefaultIfEmpty(0u).Max() + 1u;
+        var shapeName = $"Semantic corpus edit - {Path.GetFileNameWithoutExtension(deckName)}";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = shapeId,
+            Name = shapeName,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 457200,
+        });
+
+        return shapeName;
+    }
+
     private static void AssertPreservedPackageEntries(
         ZipArchive sourceArchive,
         ZipArchive savedArchive,
@@ -457,6 +522,110 @@ public sealed class PptxPackageRetentionTests
         }
     }
 
+    private static void AssertFeaturePackageEntriesStillPresent(
+        ZipArchive sourceArchive,
+        ZipArchive savedArchive,
+        string deckName,
+        string[] featurePartPrefixes)
+    {
+        var sourceFeatureEntries = FeatureDataEntries(sourceArchive, featurePartPrefixes)
+            .Select(entry => entry.FullName)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        sourceFeatureEntries.Should().NotBeEmpty($"{deckName} should exercise the requested feature package parts");
+
+        var savedFeatureEntries = FeatureDataEntries(savedArchive, featurePartPrefixes)
+            .Select(entry => entry.FullName)
+            .ToArray();
+        savedFeatureEntries.Should().HaveCountGreaterThanOrEqualTo(sourceFeatureEntries.Length,
+            $"{deckName} should keep the requested feature package part family after a modeled edit");
+
+        var sourceTypes = LoadXml(sourceArchive, "[Content_Types].xml");
+        var savedTypes = LoadXml(savedArchive, "[Content_Types].xml");
+        var savedFeatureContentTypes = savedFeatureEntries
+            .Select(entry => ContentTypeForPart(savedTypes, entry))
+            .Where(contentType => !string.IsNullOrWhiteSpace(contentType))
+            .ToLookup(contentType => contentType!, StringComparer.OrdinalIgnoreCase);
+        var sourceFeatureContentTypes = sourceFeatureEntries
+            .Select(entry => ContentTypeForPart(sourceTypes, entry))
+            .Where(contentType => !string.IsNullOrWhiteSpace(contentType))
+            .GroupBy(contentType => contentType!, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceContentType in sourceFeatureContentTypes)
+        {
+            savedFeatureContentTypes[sourceContentType.Key].Should().HaveCountGreaterThanOrEqualTo(
+                sourceContentType.Count(),
+                $"{deckName} should keep {sourceContentType.Count()} high-risk feature part(s) with content type {sourceContentType.Key}");
+        }
+    }
+
+    private static IEnumerable<ZipArchiveEntry> FeatureDataEntries(
+        ZipArchive archive,
+        string[] featurePartPrefixes) =>
+        archive.Entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.FullName) && !entry.FullName.EndsWith('/'))
+            .Where(entry => IsFeaturePart(entry.FullName, featurePartPrefixes))
+            .Where(entry => !entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            .Where(entry => !NormalizePartName(entry.FullName).Contains("/_rels/", StringComparison.OrdinalIgnoreCase));
+
+    private static void AssertFeatureContentTypesStillPresent(
+        ZipArchive sourceArchive,
+        ZipArchive savedArchive,
+        string deckName,
+        string[] featurePartPrefixes)
+    {
+        var sourceTypes = LoadXml(sourceArchive, "[Content_Types].xml");
+        var savedTypes = LoadXml(savedArchive, "[Content_Types].xml");
+        var sourceFeatureEntries = FeatureDataEntries(sourceArchive, featurePartPrefixes)
+            .Select(entry => entry.FullName)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var savedContentTypesByFamily = FeatureDataEntries(savedArchive, featurePartPrefixes)
+            .Select(entry => ContentTypeForPart(savedTypes, entry.FullName))
+            .Where(contentType => !string.IsNullOrWhiteSpace(contentType))
+            .ToLookup(contentType => contentType!, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceEntry in sourceFeatureEntries)
+        {
+            var sourceContentType = ContentTypeForPart(sourceTypes, sourceEntry);
+            sourceContentType.Should().NotBeNull($"{deckName} should have a source content type for {sourceEntry}");
+            savedContentTypesByFamily[sourceContentType!].Should().NotBeEmpty(
+                $"{deckName} should keep content type {sourceContentType} for the {FeatureFamilyForPart(sourceEntry, featurePartPrefixes)} package family after a modeled edit");
+        }
+    }
+
+    private static void AssertFeatureRelationshipsStillPresent(
+        ZipArchive sourceArchive,
+        ZipArchive savedArchive,
+        string deckName,
+        string[] featurePartPrefixes)
+    {
+        foreach (var sourceRelsEntry in sourceArchive.Entries
+                     .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+        {
+            var sourcePartPath = SourcePartPathFromRelationshipPath(sourceRelsEntry.FullName);
+            var featureRelationships = OpcRelationships.Load(sourceArchive, sourceRelsEntry.FullName)
+                .Where(relationship => IsFeatureRelationship(sourcePartPath, relationship, featurePartPrefixes))
+                .ToArray();
+            if (featureRelationships.Length == 0)
+                continue;
+
+            savedArchive.GetEntry(sourceRelsEntry.FullName).Should().NotBeNull(
+                $"{deckName} should keep relationship part {sourceRelsEntry.FullName} after a modeled edit");
+            var savedFeatureRelationships = OpcRelationships.Load(savedArchive, sourceRelsEntry.FullName)
+                .Where(relationship => IsFeatureRelationship(sourcePartPath, relationship, featurePartPrefixes))
+                .GroupBy(relationship => relationship.Type, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+            foreach (var sourceGroup in featureRelationships.GroupBy(relationship => relationship.Type, StringComparer.OrdinalIgnoreCase))
+            {
+                savedFeatureRelationships.Should().ContainKey(sourceGroup.Key,
+                    $"{deckName} should keep high-risk feature relationship type {sourceGroup.Key} in {sourceRelsEntry.FullName}");
+                savedFeatureRelationships[sourceGroup.Key].Should().BeGreaterThanOrEqualTo(sourceGroup.Count(),
+                    $"{deckName} should keep high-risk feature relationship count for {sourceGroup.Key} in {sourceRelsEntry.FullName}");
+            }
+        }
+    }
+
     private static string FindCorpusDirectory()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -521,6 +690,63 @@ public sealed class PptxPackageRetentionTests
 
     private static string NormalizePartName(string partName) =>
         OpcPathHelper.ToZipEntryPath(partName);
+
+    private static bool IsFeatureRelationship(
+        string sourcePartPath,
+        OpcRelationship relationship,
+        string[] featurePartPrefixes)
+    {
+        if (relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
+            return false;
+
+        var sourceDirectory = string.IsNullOrWhiteSpace(sourcePartPath)
+            ? string.Empty
+            : OpcPathHelper.GetDirectoryName(sourcePartPath);
+        var targetPath = OpcPathHelper.ResolveRelativeZipPath(sourceDirectory, relationship.Target);
+        return IsFeaturePart(targetPath, featurePartPrefixes);
+    }
+
+    private static bool IsFeaturePart(string partName, string[] featurePartPrefixes)
+    {
+        var normalized = NormalizePartName(partName);
+        return featurePartPrefixes.Any(prefix =>
+            normalized.StartsWith(NormalizePartName(prefix), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string FeatureFamilyForPart(string partName, string[] featurePartPrefixes)
+    {
+        var normalized = NormalizePartName(partName);
+        return featurePartPrefixes.First(prefix =>
+            normalized.StartsWith(NormalizePartName(prefix), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? ContentTypeForPart(XDocument contentTypes, string partName)
+    {
+        var normalizedPartName = "/" + NormalizePartName(partName);
+        var overrideType = contentTypes.Root?
+            .Elements(ContentTypesNs + "Override")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("PartName")?.Value,
+                normalizedPartName,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")
+            ?.Value;
+        if (!string.IsNullOrWhiteSpace(overrideType))
+            return overrideType;
+
+        var extension = Path.GetExtension(partName).TrimStart('.');
+        if (string.IsNullOrWhiteSpace(extension))
+            return null;
+
+        return contentTypes.Root?
+            .Elements(ContentTypesNs + "Default")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("Extension")?.Value,
+                extension,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")
+            ?.Value;
+    }
 
     private static readonly XNamespace RelsNs =
         "http://schemas.openxmlformats.org/package/2006/relationships";
